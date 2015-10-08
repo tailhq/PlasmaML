@@ -1,4 +1,4 @@
-#! /usr/bin/R
+#! /usr/bin/Rscript
 args <- commandArgs(trailingOnly = TRUE)
 year <- args[1]
 setwd("data/")
