@@ -1,0 +1,5 @@
+theano
+pyyaml
+
+[h5py]
+h5py
