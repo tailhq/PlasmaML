@@ -1,1 +1,3 @@
-omni/data/
+omni/data/*
+omni/.RData
+omni/.Rhistory
