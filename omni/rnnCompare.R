@@ -32,16 +32,16 @@ colnames(te) <- c("Bz", "SigmaBz", "Vsw")
 colnames(teL) <- c("Dst")
 
 modelJordan <- jordan(tr, trL, size = c(4),
-                  learnFuncParams = c(0.005), maxit = 300,
-                  inputsTest = te,
-                  targetsTest = teL,
-                  linOut = TRUE)
-
-modelEL <- elman(tr, trL, size = c(4),
-                      learnFuncParams = c(0.005), maxit = 300,
+                      learnFuncParams = c(0.005, 1.3, 0.0005, 2), maxit = 1000,
                       inputsTest = te,
                       targetsTest = teL,
-                      linOut = TRUE)
+                      linOut = TRUE, learnFunc = "QPTT")
+
+modelEL <- elman(tr, trL, size = c(4),
+                 learnFuncParams = c(0.005, 1.5, 0.00005, 2), maxit = 1000,
+                 inputsTest = te,
+                 targetsTest = teL,
+                 linOut = TRUE, learnFunc = "QPTT")
 
 
 #Now train an MLP based model
@@ -51,7 +51,9 @@ modelMLP <- mlp(tr, trL, size = c(5, 3),
                 targetsTest = teL,
                 linOut = TRUE)
 
-plot(testTargets, type = 'l')
+plot(testTargets, type = 'l', main = "Dst prediction", sub = as.character(year), 
+     xlab = "Time (Hours)", ylab = "Dst")
+
 
 lines(denormalizeData(modelJordan$fittedTestValues, attr(trL, "normParams")), col="red")
 lines(denormalizeData(modelEL$fittedTestValues, attr(trL, "normParams")), col="green")
