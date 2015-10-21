@@ -3,22 +3,30 @@
 library(RSNNS)
 library(caret)
 
-trainFeatures <- preProcess(as.matrix(df[1:5000,c(17,22,25,26,27)]))
-trainTargets <- preProcess(as.matrix(df[1:5000,41]))
+trainFeatures <- df[1:5000,c(10, 17, 25)]
+trainTargets <- df[1:5000,41]
 
-testFeatures <- preProcess(as.matrix(df[5001:8760,c(17,22,25,26,27)]))
-testTargets <- preProcess(as.matrix(df[5001:8760,41]))
+testFeatures <- df[5001:8760,c(10, 17, 25)]
+testTargets <- df[5001:8760,41]
 
-modelEL <- jordan(x = trainFeatures$data, y = trainTargets,
-                 inputsTest = testFeatures, learnFunc = "JE_BP_Momentum",
-                 targetsTest = testTargets, size = 10, maxit = 500)
+modelEL <- elman(trainFeatures, trainTargets, size = c(8), 
+                 learnFuncParams = c(0.1), maxit = 500, 
+                 inputsTest = testFeatures, 
+                 targetsTest = testTargets, 
+                 linOut = FALSE)
+
+modelMLP <- mlp(x = trainFeatures, y = trainTargets, 
+                inputsTest = testFeatures, linOut = TRUE, maxit = 500, 
+                targetsTest = testTargets, size = 4, 
+                hiddenActFunc = "Act_Logistic")
 
 
-plot(x = as.double(1:length(testTargets)), y = testTargets, type = 'l')
 
-lines(as.double(1:length(testTargets)),modelEL$fittedTestValues,col="blue")
+plot(testTargets, type = 'l')
 
-
-plotRegressionError(testTargets, modelEL$fittedTestValues)
+lines(modelEL$fittedTestValues,col="blue")
 
 hist(modelEL$fittedTestValues - testTargets, col="lightblue", breaks=100)
+
+
+lines(modelMLP$fittedTestValues,col="red")
