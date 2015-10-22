@@ -32,13 +32,13 @@ colnames(te) <- c("Bz", "SigmaBz", "Vsw")
 colnames(teL) <- c("Dst")
 
 modelJordan <- jordan(tr, trL, size = c(4),
-                      learnFuncParams = c(0.005, 1.3, 0.0005, 2), maxit = 1000,
+                      learnFuncParams = c(0.005, 1.75, 0.0005, 4), maxit = 1000,
                       inputsTest = te,
                       targetsTest = teL,
                       linOut = TRUE, learnFunc = "QPTT")
 
 modelEL <- elman(tr, trL, size = c(4),
-                 learnFuncParams = c(0.005, 1.5, 0.00005, 2), maxit = 1000,
+                 learnFuncParams = c(0.005, 1.75, 0.0005, 4), maxit = 1000,
                  inputsTest = te,
                  targetsTest = teL,
                  linOut = TRUE, learnFunc = "QPTT")
