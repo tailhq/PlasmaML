@@ -40,7 +40,18 @@ layout <- navbarPage("Omni Explorer",
                               )
                      ),
                      tabPanel("Explore",
-                              verbatimTextOutput("summary")
+                              sidebarLayout(
+                                sidebarPanel(
+                                  selectInput("year1", "Year",
+                                              choices = c("2006" = "2006",
+                                                          "2007" = "2007"),
+                                              selected = "2006")
+                                  
+                                ),
+                                mainPanel(
+                                  plotOutput("eplot")
+                                )
+                              )
                      ),
                      navbarMenu("More",
                                 tabPanel("Table",
@@ -60,7 +71,9 @@ ui <- fluidPage(layout)
 
 
 server <- function(input, output, session) {
+  
   output$plot <- renderPlot({
+    
     df <- read.csv(paste(prefix, input$year, ".dat", sep = ""), 
                    header = FALSE, stringsAsFactors = FALSE, 
                    colClasses = rep("numeric",55), 
@@ -115,8 +128,19 @@ server <- function(input, output, session) {
     
   })
   
-  output$summary <- renderPrint({
-    summary(cars)
+  output$eplot <- renderPlot({
+    df <- read.csv(paste(prefix, input$year1, ".dat", sep = ""), 
+                   header = FALSE, stringsAsFactors = FALSE, 
+                   colClasses = rep("numeric",55), 
+                   na.strings = c("99", "999.9", 
+                                  "9999.", "9.999", "99.99", 
+                                  "9999", "999999.99", 
+                                  "99999.99", "9999999."))
+    
+    processedDF <- df[,c(17, 22, 25, 41)]
+    
+    colnames(processedDF) <- c("Bz", "SigmaBz", "Vsw", "Dst")
+    plot(processedDF$Vsw, processedDF$Dst)
   })
   
   output$table <- DT::renderDataTable({
