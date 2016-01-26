@@ -54,6 +54,10 @@ qplot(data = df, x = factor(order), y = corr,
       facets = stepAhead~modelSize, geom = "boxplot", 
       xlab = "Model Order", ylab = "Model Correlation")
 
+qplot(data = df, x = factor(order), y = yi,
+      facets = stepAhead~modelSize, geom = "boxplot", 
+      xlab = "Model Order", ylab = "Model Yield")
+
 #fill stepAhead
 
 qplot(data = df, x = factor(order), y = mae, fill = factor(stepAhead),
@@ -67,7 +71,7 @@ qplot(data = df, x = factor(order), y = corr, fill = factor(stepAhead),
 #fill model size
 qplot(data = df, x = factor(order), y = corr, fill = factor(modelSize),
       facets = .~stepAhead, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Prediction Correlation")
+      xlab = "Model Order", ylab = "Prediction-Output Correlation")
 
 qplot(data = df, x = factor(order), y = rsq, fill = factor(modelSize), 
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Order", 
@@ -77,15 +81,19 @@ qplot(data = df, x = factor(order), y = yi, fill = factor(modelSize),
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Order", 
       ylab = "Model Yield")
 
-#fill order
+#fill Model order
 
 qplot(data = df, x = factor(modelSize), y = rsq, fill = factor(order),
-      facets = .~stepAhead, geom = "boxplot", xlab = "Prediction: Steps Ahead", 
+      facets = .~stepAhead, geom = "boxplot", xlab = "Model Size", 
       ylab = "Model Predictive Effeciency")
 
 qplot(data = df, x = factor(modelSize), y = yi, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot",
-      xlab = "Prediction: Steps Ahead", ylab = "Model Yield")
+      xlab = "Model Size", ylab = "Model Yield")
+
+qplot(data = df, x = factor(modelSize), y = corr, fill = factor(order),
+      facets = .~stepAhead, geom = "boxplot",
+      xlab = "Model Size", ylab = "Prediction-Output Correlation")
 
 qplot(data = df, x = factor(modelSize), y = deltaT, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Size", ylab = "Timing Error")
