@@ -45,11 +45,11 @@ modelEL <- elman(tr, trL, size = c(4),
 
 
 #Now train an MLP based model
-modelMLP <- mlp(tr, trL, size = c(5, 3),
-                learnFuncParams = c(0.005), maxit = 300,
-                inputsTest = te,
-                targetsTest = teL,
-                linOut = TRUE)
+#modelMLP <- mlp(tr, trL, size = c(5, 3),
+#                learnFuncParams = c(0.005), maxit = 300,
+#                inputsTest = te,
+#                targetsTest = teL,
+#                linOut = TRUE)
 
 plot(testTargets, type = 'l', main = "Dst prediction", sub = as.character(year), 
      xlab = "Time (Hours)", ylab = "Dst")
@@ -57,7 +57,20 @@ plot(testTargets, type = 'l', main = "Dst prediction", sub = as.character(year),
 
 lines(denormalizeData(modelJordan$fittedTestValues, attr(trL, "normParams")), col="red")
 lines(denormalizeData(modelEL$fittedTestValues, attr(trL, "normParams")), col="green")
-lines(denormalizeData(modelMLP$fittedTestValues, attr(trL, "normParams")), col="blue")
+#lines(denormalizeData(modelMLP$fittedTestValues, attr(trL, "normParams")), col="blue")
 
 hist(modelJordan$fittedTestValues - teL, col="lightblue", breaks=100)
 hist(modelMLP$fittedTestValues - teL, col="lightblue", breaks=100)
+
+#Show predictions on training set
+plot(trainTargets, type = 'l', main = "Dst prediction", sub = as.character(year), 
+     xlab = "Time (Hours)", ylab = "Dst")
+
+
+lines(denormalizeData(modelJordan$fitted.values, attr(trL, "normParams")), col="red")
+lines(denormalizeData(modelEL$fitted.values, attr(trL, "normParams")), col="green")
+
+#Plot Iterative Error
+
+plotIterativeError(modelEL)
+plotIterativeError(modelJordan)
