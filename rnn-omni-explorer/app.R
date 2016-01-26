@@ -59,6 +59,8 @@ layout <- navbarPage("Omni Explorer",
                                              selectInput("yaxis", "Y Axis",
                                                          choices = c("Dst" = "Dst",
                                                                      "AE" = "AE",
+                                                                     "Solar Wind Speed" = "Vsw",
+                                                                     "Interplanetary Magnetic Field Bz" = "Bz",
                                                                      "Proton Temperature" = "T",
                                                                      "Flow Pressure" = "P"),
                                                          selected = "Dst")
@@ -146,8 +148,12 @@ server <- function(input, output, session) {
     colnames(te) <- c("Bz", "SigmaBz", "Vsw")
     colnames(teL) <- c("Dst")
     
+    timeIndex <- (trainingLength + 1):nrow(df)
+    resDF <- cbind(timeIndex, testTargets)
+    colnames(resDF) <- c("time", "target")
     plot(testTargets, type = 'l', main = "Dst prediction", sub = as.character(year), 
          xlab = "Time (Hours)", ylab = "Dst")
+    
     
     if("j" %in% input$netType) {
       modelJordan <- jordan(tr, trL, size = c(4),
@@ -157,7 +163,7 @@ server <- function(input, output, session) {
                             targetsTest = teL,
                             linOut = TRUE, learnFunc = "QPTT")
       lines(denormalizeData(modelJordan$fittedTestValues, attr(trL, "normParams")), col="red")
-      
+      #resDF$jordan <- denormalizeData(modelJordan$fittedTestValues, attr(trL, "normParams")) 
     } 
     
     if("e" %in% input$netType) {
@@ -168,11 +174,14 @@ server <- function(input, output, session) {
                        targetsTest = teL,
                        linOut = TRUE, learnFunc = "QPTT")
       
-      
       lines(denormalizeData(modelEL$fittedTestValues, attr(trL, "normParams")), col="green")
-      
+      #resDF$elman <- denormalizeData(modelEL$fittedTestValues, attr(trL, "normParams"))
     }
+    #resPlot <- ggplot(as.data.frame(resDF), aes(x=time, y=target)) + geom_line()
+    #resPlot <- ggplot() + geom_line(aes(y = denormalizeData(modelJordan$fittedTestValues, attr(trL, "normParams"))), colour="blue")
+    #resPlot <- resPlot + geom_line(aes(y = denormalizeData(modelEL$fittedTestValues, attr(trL, "normParams"))), colour="green")
     
+    #resPlot
   })
   
   output$eplot <- renderPlot({
