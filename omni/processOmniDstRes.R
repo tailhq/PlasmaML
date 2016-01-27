@@ -1,5 +1,6 @@
 #! /usr/bin/Rscript
 library(ggplot2)
+library(gridExtra)
 setwd("~/Development/DynaML/data/")
 
 df <- read.csv("OmniRes.csv", 
@@ -13,87 +14,103 @@ df <- read.csv("OmniRes.csv",
 df <- df[df$modelSize > 25,]
 
 
-qplot(data = df, x = modelSize, y = yi, fill = factor(stepAhead), 
-      facets = .~order, geom = "smooth", xlab = "Model Size", 
+p1 <- qplot(data = df, x = modelSize, y = yi, fill = factor(order), 
+      facets = .~stepAhead, geom = "smooth", xlab = "Model Size", 
       ylab = "Model Yield")
 
-qplot(data = df, x = modelSize, y = corr, fill = factor(stepAhead), 
-      facets = .~order, geom = "smooth", xlab = "Model Size", 
+p2 <- qplot(data = df, x = modelSize, y = corr, fill = factor(order), 
+      facets = .~stepAhead, geom = "smooth", xlab = "Model Size", 
       ylab = "Model Correlation")
 
-qplot(data = df, x = modelSize, y = rsq, fill = factor(stepAhead), 
-      facets = .~order, 
+p3 <- qplot(data = df, x = modelSize, y = rsq, fill = factor(order), 
+      facets = .~stepAhead, 
       geom = "smooth", xlab = "Model Size", 
       ylab = "Model Predictive Effeciency")
 
-qplot(data = df, x = modelSize, y = mae, fill = factor(stepAhead),
-      facets = .~order, geom = "smooth", xlab = "Model Size", 
+p4 <- qplot(data = df, x = modelSize, y = mae, fill = factor(order),
+      facets = .~stepAhead, geom = "smooth", xlab = "Model Size", 
       ylab = "Mean Absolute Error")
 
-qplot(data = df, x = modelSize, y = rmse, fill = factor(stepAhead), 
-      facets = .~order, geom = "smooth", xlab = "Model Size", 
+p5 <- qplot(data = df, x = modelSize, y = rmse, fill = factor(order), 
+      facets = .~stepAhead, geom = "smooth", xlab = "Model Size", 
       ylab = "Root Mean Sq. Error")
 
+grid.arrange(p1, p2, p4, p5, nrow = 2, ncol=2)
 #scatter plots
-qplot(data = df, x = yi, y = corr, color = factor(order), 
+p6 <- qplot(data = df, x = yi, y = corr, color = factor(order), 
       facets = stepAhead~modelSize, geom = "point", xlab = "Model Yield", 
       ylab = "Model Correlation")
 
-qplot(data = df, x = mae, y = yi, color = factor(order), facets = stepAhead~modelSize, 
+p7 <- qplot(data = df, x = mae, y = yi, color = factor(order), facets = stepAhead~modelSize, 
       geom = "point", xlab = "Mean Abs. Error", 
       ylab = "Model Yield")
 
 
 
 #colorless box plots
-qplot(data = df, x = factor(order), y = mae,
+
+p8 <- qplot(data = df, x = factor(order), y = mae,
       facets = stepAhead~modelSize, geom = "boxplot", 
       xlab = "Model Order", ylab = "Mean Abs. Error")
 
-qplot(data = df, x = factor(order), y = corr,
+p9 <- qplot(data = df, x = factor(order), y = corr,
       facets = stepAhead~modelSize, geom = "boxplot", 
       xlab = "Model Order", ylab = "Model Correlation")
 
-qplot(data = df, x = factor(order), y = yi,
+p10 <- qplot(data = df, x = factor(order), y = yi,
       facets = stepAhead~modelSize, geom = "boxplot", 
       xlab = "Model Order", ylab = "Model Yield")
 
+p1x <- qplot(data = df, x = factor(order), y = rmse,
+             facets = stepAhead~modelSize, geom = "boxplot", 
+             xlab = "Model Order", ylab = "Root Mean Sq. Error")
+
+grid.arrange(p8, p9, p10, p1x, nrow = 2, ncol=2)
+
 #fill stepAhead
 
-qplot(data = df, x = factor(order), y = mae, fill = factor(stepAhead),
+p11 <- qplot(data = df, x = factor(order), y = mae, fill = factor(stepAhead),
       facets = .~modelSize, geom = "boxplot", 
       xlab = "Model Order", ylab = "Mean Abs. Error")
 
-qplot(data = df, x = factor(order), y = corr, fill = factor(stepAhead),
+p12 <- qplot(data = df, x = factor(order), y = corr, fill = factor(stepAhead),
       facets = .~modelSize, geom = "boxplot", 
       xlab = "Model Order", ylab = "Model Correlation")
 
 #fill model size
-qplot(data = df, x = factor(order), y = corr, fill = factor(modelSize),
+p13 <- qplot(data = df, x = factor(order), y = corr, fill = factor(modelSize),
       facets = .~stepAhead, geom = "boxplot", 
       xlab = "Model Order", ylab = "Prediction-Output Correlation")
 
-qplot(data = df, x = factor(order), y = rsq, fill = factor(modelSize), 
+p14 <- qplot(data = df, x = factor(order), y = rsq, fill = factor(modelSize), 
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Order", 
       ylab = "Prediction Efficiency")
 
-qplot(data = df, x = factor(order), y = yi, fill = factor(modelSize), 
+p15 <- qplot(data = df, x = factor(order), y = yi, fill = factor(modelSize), 
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Order", 
       ylab = "Model Yield")
 
+p15x <- qplot(data = df, x = factor(order), y = mae, fill = factor(modelSize), 
+             facets = .~stepAhead, geom = "boxplot", xlab = "Model Order", 
+             ylab = "Mean Abs. Error")
+
+grid.arrange(p13, p14, p15, p15x, nrow = 2, ncol=2)
+
 #fill Model order
 
-qplot(data = df, x = factor(modelSize), y = rsq, fill = factor(order),
+p16 <- qplot(data = df, x = factor(modelSize), y = rsq, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Size", 
       ylab = "Model Predictive Effeciency")
 
-qplot(data = df, x = factor(modelSize), y = yi, fill = factor(order),
+p17 <- qplot(data = df, x = factor(modelSize), y = yi, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot",
       xlab = "Model Size", ylab = "Model Yield")
 
-qplot(data = df, x = factor(modelSize), y = corr, fill = factor(order),
+p18 <- qplot(data = df, x = factor(modelSize), y = corr, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot",
       xlab = "Model Size", ylab = "Prediction-Output Correlation")
 
-qplot(data = df, x = factor(modelSize), y = deltaT, fill = factor(order),
+p19 <- qplot(data = df, x = factor(modelSize), y = deltaT, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Size", ylab = "Timing Error")
+
+grid.arrange(p16, p17, p18, p19, nrow = 2, ncol=2)
