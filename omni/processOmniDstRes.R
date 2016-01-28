@@ -18,42 +18,42 @@ dfone <- df[df$stepAhead == 1.0 ,]
 dfthree <- df[df$stepAhead == 3.0 ,]
 #colorless box plots
 
-p8 <- qplot(data = dfone, x = factor(order), y = mae,
-      facets = .~modelSize, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Mean Abs. Error")
+p8 <- qplot(data = dfone, x = factor(modelSize), y = mae,
+      facets = .~order, geom = "boxplot", 
+      xlab = "Model Size", ylab = "Mean Abs. Error")
 
-p9 <- qplot(data = dfone, x = factor(order), y = corr,
-      facets = .~modelSize, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Prediction-Output Correlation")
+p9 <- qplot(data = dfone, x = factor(modelSize), y = corr,
+      facets = .~order, geom = "boxplot", 
+      xlab = "Model Size", ylab = "Cross Correlation")
 
-p10 <- qplot(data = dfone, x = factor(order), y = yi,
-      facets = .~modelSize, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Model Yield")
+p10 <- qplot(data = dfone, x = factor(modelSize), y = yi,
+      facets = .~order, geom = "boxplot", 
+      xlab = "Model Size", ylab = "Model Yield")
 
-p1x <- qplot(data = dfone, x = factor(order), y = deltaT,
-             facets = .~modelSize, geom = "boxplot", 
-             xlab = "Model Order", ylab = "Timing Error")
+p1x <- qplot(data = dfone, x = factor(modelSize), y = deltaT,
+             facets = .~order, geom = "boxplot", 
+             xlab = "Model Size", ylab = "Timing Error")
 
 grid.arrange(p8, p9, p10, p1x, nrow = 2, ncol=2)
 
 #three hours ahead
 
 
-p8 <- qplot(data = dfthree, x = factor(order), y = mae,
-            facets = .~modelSize, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Mean Abs. Error")
+p8 <- qplot(data = dfthree, x = factor(modelSize), y = mae,
+            facets = .~order, geom = "boxplot", 
+            xlab = "Model Size", ylab = "Mean Abs. Error")
 
-p9 <- qplot(data = dfthree, x = factor(order), y = corr,
-            facets = .~modelSize, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Prediction-Output Correlation")
+p9 <- qplot(data = dfthree, x = factor(modelSize), y = corr,
+            facets = .~order, geom = "boxplot", 
+            xlab = "Model Size", ylab = "Cross Correlation")
 
-p10 <- qplot(data = dfthree, x = factor(order), y = yi,
-             facets = .~modelSize, geom = "boxplot", 
-             xlab = "Model Order", ylab = "Model Yield")
+p10 <- qplot(data = dfthree, x = factor(modelSize), y = yi,
+             facets = .~order, geom = "boxplot", 
+             xlab = "Model Size", ylab = "Model Yield")
 
-p1x <- qplot(data = dfthree, x = factor(order), y = deltaT,
-             facets = .~modelSize, geom = "boxplot", 
-             xlab = "Model Order", ylab = "Timing Error")
+p1x <- qplot(data = dfthree, x = factor(modelSize), y = deltaT,
+             facets = .~order, geom = "boxplot", 
+             xlab = "Model Size", ylab = "Timing Error")
 
 grid.arrange(p8, p9, p10, p1x, nrow = 2, ncol=2)
 
@@ -67,7 +67,7 @@ p11 <- qplot(data = df, x = factor(order), y = mae, fill = factor(stepAhead),
 
 p12 <- qplot(data = df, x = factor(order), y = corr, fill = factor(stepAhead),
       facets = .~modelSize, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Prediction-Output Correlation")
+      xlab = "Model Order", ylab = "Cross Correlation")
 
 p12x <- qplot(data = df, x = factor(order), y = yi, fill = factor(stepAhead),
              facets = .~modelSize, geom = "boxplot", 
@@ -82,7 +82,7 @@ grid.arrange(p11, p12, p12x, p12y, nrow = 2, ncol=2)
 #fill model size
 p13 <- qplot(data = df, x = factor(order), y = corr, fill = factor(modelSize),
       facets = .~stepAhead, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Prediction-Output Correlation")
+      xlab = "Model Order", ylab = "Cross Correlation")
 
 p14 <- qplot(data = df, x = factor(order), y = deltaT, fill = factor(modelSize), 
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Order", 
@@ -110,7 +110,7 @@ p17 <- qplot(data = df, x = factor(modelSize), y = yi, fill = factor(order),
 
 p18 <- qplot(data = df, x = factor(modelSize), y = corr, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot",
-      xlab = "Model Size", ylab = "Prediction-Output Correlation")
+      xlab = "Model Size", ylab = "Cross Correlation")
 
 p19 <- qplot(data = df, x = factor(modelSize), y = deltaT, fill = factor(order),
       facets = .~stepAhead, geom = "boxplot", xlab = "Model Size", ylab = "Timing Error")

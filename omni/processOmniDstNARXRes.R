@@ -13,20 +13,20 @@ df <- read.csv("OmniNARXRes.csv" ,
 
 
 #colorless box plots
-p9 <- qplot(data = df, x = factor(order), y = corr,
-      facets = .~modelSize, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Cross Correlation")
+p9 <- qplot(data = df, x = factor(modelSize), y = corr,
+      facets = .~order, geom = "boxplot", 
+      xlab = "Model Size", ylab = "Cross Correlation")
 
-p10 <- qplot(data = df, x = factor(order), y = yi,
-      facets = .~modelSize, geom = "boxplot", 
-      xlab = "Model Order", ylab = "Model Yield")
+p10 <- qplot(data = df, x = factor(modelSize), y = yi,
+      facets = .~order, geom = "boxplot", 
+      xlab = "Model Size", ylab = "Model Yield")
 
 
-p11 <- qplot(data = df, x = factor(order), y = mae, geom = "boxplot", 
-      facets = .~modelSize, xlab = "Model Order", ylab = "Mean Abs. Error")
+p11 <- qplot(data = df, x = factor(modelSize), y = mae, geom = "boxplot", 
+      facets = .~order, xlab = "Model Size", ylab = "Mean Abs. Error")
 
-p12 <- qplot(data = df, x = factor(order), y = deltaT, geom = "boxplot", 
-      facets = .~modelSize, xlab = "Model Order", ylab = "Timing Error")
+p12 <- qplot(data = df, x = factor(modelSize), y = deltaT, geom = "boxplot", 
+      facets = .~order, xlab = "Model Size", ylab = "Timing Error")
 
 grid.arrange(p11, p9, p10, p12, nrow = 2, ncol=2)
 
