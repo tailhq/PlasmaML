@@ -8,7 +8,14 @@ library(reshape2)
 prefix <- "omni2_"
 year <- 2006
 
-layout <- navbarPage("Omni Explorer",
+layout <- navbarPage("Space Weather Wiki",
+                     tabPanel("Home",
+                              fluidRow(
+                                column(6,
+                                       includeMarkdown("home.md")
+                                )
+                              )
+                     ),
                      tabPanel("Test Models",
                               sidebarLayout(
                                 sidebarPanel(
@@ -103,10 +110,10 @@ layout <- navbarPage("Omni Explorer",
                                 
                      ),
                      navbarMenu("More",
-                                tabPanel("Table",
+                                tabPanel("Sample Omni Dst Data",
                                          DT::dataTableOutput("table")
                                 ),
-                                tabPanel("About",
+                                tabPanel("About Omni Dst Models",
                                          fluidRow(
                                            column(6,
                                                   includeMarkdown("about.md")
