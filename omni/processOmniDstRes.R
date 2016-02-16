@@ -43,19 +43,19 @@ grid.arrange(p8, p9, p10, p1x, nrow = 2, ncol=2)
 
 p8 <- qplot(data = dfthree, x = factor(modelSize), y = mae,
             facets = .~order, geom = "boxplot", 
-            xlab = "Model Size", ylab = "Mean Abs. Error")
+            xlab = "Model Size", ylab = "Mean Abs. Error")  + theme_grey(base_size = 18) 
 
 p9 <- qplot(data = dfthree, x = factor(modelSize), y = corr,
             facets = .~order, geom = "boxplot", 
-            xlab = "Model Size", ylab = "Cross Correlation")
+            xlab = "Model Size", ylab = "Cross Correlation") + theme_grey(base_size = 18) 
 
 p10 <- qplot(data = dfthree, x = factor(modelSize), y = yi,
              facets = .~order, geom = "boxplot", 
-             xlab = "Model Size", ylab = "Model Yield")
+             xlab = "Model Size", ylab = "Model Yield")  + theme_grey(base_size = 18) 
 
-p1x <- qplot(data = dfthree, x = factor(modelSize), y = deltaT,
-             facets = .~order, geom = "boxplot", 
-             xlab = "Model Size", ylab = "Timing Error")
+p1x <- qplot(data = dfthree, x = deltaT, geom = "histogram", 
+             facets = modelSize~order, xlab = "Timing Error", ylab = "Frequency")  + 
+  theme_grey(base_size = 18) 
 
 grid.arrange(p8, p9, p10, p1x, nrow = 2, ncol=2)
 
