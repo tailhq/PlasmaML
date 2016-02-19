@@ -1,6 +1,7 @@
 #! /usr/bin/Rscript
 library(ggplot2)
 library(gridExtra)
+library(ggthemes)
 setwd("~/Development/DynaML/data/")
 
 df <- read.csv("OmniRes.csv", 
@@ -31,26 +32,79 @@ dfN <- read.csv("OmniNARXRes.csv" ,
 dfN$model <- rep("NARX", nrow(dfN))
 
 bindDF <- rbind(dfone, dfthree, dfN)
+bindDF <- bindDF[bindDF$modelSize %in% c(100, 150, 200),]
 
-p9 <- qplot(data = bindDF, x = factor(modelSize), y = corr,
-            facets = .~order, fill = model, geom = "boxplot", 
-            xlab = "Model Size", ylab = "Cross Correlation") + theme_grey(base_size = 18) 
+order_labeller <- function(variable,value){
+  if(is.numeric(value) && value < 100){
+    return(paste("AR(",value,")"))  
+  } else {
+    value
+  }
+  
+}
 
-p10 <- qplot(data = bindDF, x = factor(modelSize), y = yi,
-             facets = .~order, fill = model, geom = "boxplot", 
-             xlab = "Model Size", ylab = "Model Yield") + theme_grey(base_size = 18)
+p9 <- qplot(data = bindDF, x = factor(model), y = corr,
+             geom = "boxplot", 
+            xlab = "Model", 
+            ylab = "Cross Correlation", color = factor(modelSize)) + 
+  theme_gray(base_size = 14) + scale_colour_tableau("colorblind10", name="Size of Training Data")+ 
+  facet_grid(.~order, labeller = order_labeller)
 
-p11 <- qplot(data = bindDF, x = factor(modelSize), y = mae, geom = "boxplot", 
-             facets = .~order, fill = model, xlab = "Model Size", 
-             ylab = "Mean Abs. Error")  + theme_grey(base_size = 18)
+p10 <- qplot(data = bindDF, x = factor(model), y = yi,
+             geom = "boxplot", 
+             xlab = "Model", ylab = "Model Yield",color = factor(modelSize)) + 
+  theme_gray(base_size = 14)+
+  scale_colour_tableau("colorblind10", name="Size of Training Data")+ 
+  facet_grid(.~order, labeller = order_labeller)
+
+p11 <- qplot(data = bindDF, x = factor(model), y = mae, geom = "boxplot", 
+             xlab = "Model", 
+             ylab = "Mean Abs. Error",color = factor(modelSize))  + 
+  theme_gray(base_size = 14)+ 
+  scale_colour_tableau("colorblind10", name="Size of Training Data")+
+  facet_grid(.~order, labeller = order_labeller)
 
 p12 <- qplot(data = bindDF, x = deltaT, geom = "histogram", 
-             facets = modelSize~order, fill = model, 
              xlab = "Timing Error", ylab = "Frequency")  + 
-  theme_grey(base_size = 18)
+  theme_gray(base_size = 16) + 
+  facet_grid(model~order, labeller = order_labeller)
 
-prsq <- qplot(data = bindDF, x = factor(modelSize), y = rsq, geom = "boxplot", 
-             facets = .~order, fill = model, xlab = "Model Size", 
-             ylab = "R SQ")  + theme_grey(base_size = 18)
+prsq <- qplot(data = bindDF, x = factor(model), y = rsq, geom = "boxplot", 
+              xlab = "Model", 
+             ylab = bquote(R^2), 
+             color = factor(modelSize))  + 
+  theme_gray(base_size = 16) + 
+  scale_colour_tableau("colorblind10", name="Size of Training Data")+
+  facet_grid(.~order, labeller = order_labeller)
 
-grid.arrange(p11, p9, p10, p12, nrow = 2, ncol=2)
+grid.arrange(p11, p9, p10, prsq, nrow = 2, ncol=2)
+
+
+
+p1 <- qplot(data = bindDF, x = factor(model), y = corr,
+            geom = "boxplot", 
+            xlab = "Model", 
+            ylab = "Cross Correlation") + 
+  theme_gray(base_size = 18)+
+  facet_grid(.~order, labeller = order_labeller)
+
+p2 <- qplot(data = bindDF, x = factor(model), y = yi,
+             geom = "boxplot", 
+             xlab = "Model", ylab = "Model Yield") + 
+  theme_gray(base_size = 18)+
+  facet_grid(.~order, labeller = order_labeller)
+
+p3 <- qplot(data = bindDF, x = factor(model), y = mae, geom = "boxplot", 
+             xlab = "Model", 
+             ylab = "Mean Abs. Error")  + 
+  theme_gray(base_size = 18)+ 
+  facet_grid(.~order, labeller = order_labeller)
+
+
+p4 <- qplot(data = bindDF, x = factor(model), y = rsq, geom = "boxplot", 
+              xlab = "Model", 
+              ylab = bquote(R^2))  + 
+  theme_gray(base_size = 18) + 
+  facet_grid(.~order, labeller = order_labeller)
+
+grid.arrange(p1, p2, p3, p4, nrow = 2, ncol=2)
