@@ -12,66 +12,6 @@ df <- read.csv("PolyOmniARXStormsRes.csv",
                              "deltaT"))
 
 
-p8 <- qplot(data = df, x = factor(order), y = rmse,
-            facets = .~stormCat, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Root Mean Sq. Error")
-
-p9 <- qplot(data = df, x = factor(order), y = corr,
-            facets = .~stormCat, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Cross Correlation")
-
-p10 <- qplot(data = df, x = factor(order), y = deltaDstMin,
-             facets = .~stormCat, geom = "boxplot", 
-             xlab = "Model Size", ylab = "Delta Dst Min")
-
-p11 <- qplot(data = df, x = factor(order), y = deltaT,
-             facets = .~stormCat, geom = "boxplot", 
-             xlab = "Model Order", ylab = "Timing Error")
-
-
-qplot(data = df, x = factor(order), y = rmse,
-      geom = "boxplot", 
-      xlab = "Model Order", ylab = "Root Mean Sq. Error")
-
-qplot(data = df, x = factor(order), y = corr,
-      geom = "boxplot", 
-      xlab = "Model Order", ylab = "Cross Correlation")
-
-
-df1 <- read.csv("OmniARStormsRes.csv", 
-               header = FALSE, stringsAsFactors = TRUE, 
-               col.names = c("eventID","stormCat","order", "modelSize",
-                             "rmse", "corr", "deltaDstMin", "DstMin",
-                             "deltaT"))
-
-
-p12 <- qplot(data = df1, x = factor(order), y = rmse,
-            facets = .~stormCat, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Root Mean Sq. Error")
-
-p13 <- qplot(data = df1, x = factor(order), y = corr,
-            facets = .~stormCat, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Cross Correlation")
-
-p14 <- qplot(data = df1, x = factor(order), y = deltaDstMin,
-             facets = .~stormCat, geom = "boxplot", 
-             xlab = "Model Size", ylab = "Delta Dst Min")
-
-
-p15 <- qplot(data = df1, x = factor(order), y = deltaT,
-             facets = .~stormCat, geom = "boxplot", 
-             xlab = "Model Order", ylab = "Timing Error")
-
-
-qplot(data = df1, x = factor(order), y = rmse,
-      geom = "boxplot", 
-      xlab = "Model Order", ylab = "Root Mean Sq. Error")
-
-qplot(data = df1, x = factor(order), y = corr,
-      geom = "boxplot", 
-      xlab = "Model Order", 
-      ylab = "Cross Correlation")
-
 df2 <- read.csv("PolyNAROmniARStormsRes.csv", 
                 header = FALSE, stringsAsFactors = TRUE, 
                 col.names = c("eventID","stormCat","order", "modelSize",
@@ -102,78 +42,14 @@ df2$model <- rep("NAR-Poly", nrow(df2))
 
 df$model <- rep("NARX-Poly", nrow(df))
 
-df1$model <- rep("NAR-FBM", nrow(df1))
-
 dfVBz$model <-rep("NARX-Poly-VBz", nrow(dfVBz))
 
 dfPVBz$model <- rep("NARX-Poly-PVBz", nrow(dfPVBz))
 
-bindDF <- rbind(df, df1, df2, dfPer, dfVBz, dfPVBz)
+bindDF <- rbind(df, df2, dfPer, dfVBz, dfPVBz)
 
 
-
-qplot(data = bindDF, x = factor(order), y = rmse,
-      geom = "boxplot", fill = model, facets = .~stormCat,
-      xlab = "Model Order", ylab = "Root Mean Sq. Error")
-
-qplot(data = bindDF, x = factor(order), y = corr,
-      geom = "boxplot", fill = model, facets = .~stormCat,
-      xlab = "Model Order", ylab = "Cross Correlation")
-
-qplot(data = bindDF, x = factor(order), y = deltaDstMin,
-      geom = "boxplot", fill = model, facets = .~stormCat,
-      xlab = "Model Order", ylab = "Delta Dst Min")
-
-
-
-qplot(data = bindDF, x = factor(order), y = deltaDstMin,
-      geom = "boxplot", fill = model,
-      xlab = "Model Order", ylab = "Delta Dst Min")
-
-qplot(data = bindDF, x = factor(order), y = rmse,
-      geom = "boxplot", fill = model,
-      xlab = "Model Order", ylab = "Root Mean Sq. Error")
-
-
-qplot(data = bindDF, x = factor(order), y = corr,
-      geom = "boxplot", fill = model, 
-      xlab = "Model Order", ylab = "Cross Correlation")
-
-qplot(data = bindDF, x = factor(order), y = deltaT,
-      geom = "boxplot", fill = model, 
-      xlab = "Model Order", ylab = "Timing Error")
-
-
-
-df3 <- read.csv("PolyDstPVOmniARXStormsRes.csv", 
-                header = FALSE, stringsAsFactors = TRUE, 
-                col.names = c("eventID","stormCat","order", "modelSize",
-                              "rmse", "corr", "deltaDstMin", "DstMin",
-                              "deltaT"))
-
-p8 <- qplot(data = df3, x = factor(order), y = rmse,
-            facets = .~stormCat, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Root Mean Sq. Error")
-
-p9 <- qplot(data = df3, x = factor(order), y = corr,
-            facets = .~stormCat, geom = "boxplot", 
-            xlab = "Model Order", ylab = "Cross Correlation")
-
-p10 <- qplot(data = df3, x = factor(order), y = deltaDstMin,
-             facets = .~stormCat, geom = "boxplot", 
-             xlab = "Model Size", ylab = "Delta Dst Min")
-
-p11 <- qplot(data = df3, x = factor(order), y = deltaT,
-             facets = .~stormCat, geom = "boxplot", 
-             xlab = "Model Order", ylab = "Timing Error")
-
-
-qplot(data = bindDF[bindDF$order == 1 & bindDF$model != "NAR-FBM",], x = deltaDstMin,
-      geom = "histogram", facets = model~.,
-      xlab = "delta Dst min", ylab = "Frequency")
-
-
-meltedDF <- melt(bindDF[(bindDF$order == 1 | bindDF$model == "Persist(1)") & bindDF$model != "NAR-FBM",],
+meltedDF <- melt(bindDF[(bindDF$order == 4 | bindDF$model == "Persist(1)") & bindDF$model != "NAR-FBM",],
                  id.vars=c("model", "stormCat", "eventID"))
 
 meltedDF1 <- meltedDF[meltedDF$variable != "order" & 
@@ -224,21 +100,25 @@ finalDF <- rbind(dfother,
 
 barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3))) + 
+  geom_text(aes(label = round(meanValue, digits = 3)), size = 7) + 
+  theme_gray(base_size = 14) +
   xlab("Model") + ylab("delta(Dst min)")
 
 barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3))) + 
+  geom_text(aes(label = round(meanValue, digits = 3)), size = 7) + 
+  theme_gray(base_size = 14) +
   xlab("Model") + ylab("Timing Error")
 
 barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3))) + 
+  geom_text(aes(label = round(meanValue, digits = 3)), size = 7) + 
+  theme_gray(base_size = 14) +
   xlab("Model") + ylab("Mean RMSE")
 
 barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3))) + 
+  geom_text(aes(label = round(meanValue, digits = 3)), size = 7) + 
+  theme_gray(base_size = 14) + 
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
