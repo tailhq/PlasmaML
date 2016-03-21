@@ -77,7 +77,7 @@ barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], aes(x=model, y=mea
 
 barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 1.25) + 
+  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 0.1) + 
   theme_gray(base_size = 14) +
   xlab("Model") + ylab("Timing Error")
 
@@ -89,7 +89,7 @@ barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], aes(x=model, y=meanValue)
 
 barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 1.25) + 
+  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 0.025) + 
   theme_gray(base_size = 14) + 
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
