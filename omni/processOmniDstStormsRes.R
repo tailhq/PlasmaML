@@ -12,7 +12,7 @@ df <- read.csv("PolyOmniARXStormsRes.csv",
                              "deltaT"))
 
 
-df2 <- read.csv("PolyNAROmniARStormsRes.csv", 
+df2 <- read.csv("PolyOmniARStormsRes.csv", 
                 header = FALSE, stringsAsFactors = TRUE, 
                 col.names = c("eventID","stormCat","order", "modelSize",
                               "rmse", "corr", "deltaDstMin", "DstMin",
@@ -72,24 +72,24 @@ finalDF <- rbind(dfother,
 barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 14) +
+  theme_gray(base_size = 18) +
   xlab("Model") + ylab("delta(Dst min)")
 
 barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 0.1) + 
-  theme_gray(base_size = 14) +
+  theme_gray(base_size = 18) +
   xlab("Model") + ylab("Timing Error")
 
 barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 14) +
+  theme_gray(base_size = 18) +
   xlab("Model") + ylab("Mean RMSE")
 
 barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 0.025) + 
-  theme_gray(base_size = 14) + 
+  theme_gray(base_size = 18) + 
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
