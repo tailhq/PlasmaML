@@ -42,7 +42,7 @@ dfVBz$model <-rep("NARX-Poly-VBz", nrow(dfVBz))
 bindDF <- rbind(df, df2, dfPer, dfVBz)
 
 
-meltedDF <- melt(bindDF[bindDF$order == 1,],
+meltedDF <- melt(bindDF[bindDF$order == 6 | bindDF$model != "NAR-Poly",],
                  id.vars=c("model", "stormCat", "eventID"))
 
 meltedDF1 <- meltedDF[meltedDF$variable != "order" & 
@@ -71,25 +71,25 @@ finalDF <- rbind(dfother,
 
 barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 1.25) + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
   theme_gray(base_size = 18) +
   xlab("Model") + ylab("delta(Dst min)")
 
 barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 0.1) + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 0.1) + 
   theme_gray(base_size = 18) +
   xlab("Model") + ylab("Timing Error")
 
 barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 1.25) + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
   theme_gray(base_size = 18) +
   xlab("Model") + ylab("Mean RMSE")
 
 barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 3)), size = 7, nudge_y = 0.025) + 
+  geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 0.025) + 
   theme_gray(base_size = 18) + 
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
