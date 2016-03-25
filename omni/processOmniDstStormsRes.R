@@ -6,7 +6,7 @@ library(reshape2)
 library(latex2exp)
 setwd("~/Development/DynaML/data/")
 
-df <- read.csv("Poly_6_1_1OmniARXStormsRes.csv", 
+df <- read.csv("Poly_6_1_1_OmniARXStormsRes.csv", 
                header = FALSE, stringsAsFactors = TRUE, 
                col.names = c("eventID","stormCat","order", "modelSize",
                              "rmse", "corr", "deltaDstMin", "DstMin",
@@ -25,7 +25,7 @@ dfPer <- read.csv("OmniPerStormsRes.csv",
                              "rmse", "corr", "deltaDstMin", "DstMin",
                              "deltaT"))
 
-dfVBz <- read.csv("Poly_6_1_1_1_OmniARXStormsRes.csv", 
+dfVBz <- read.csv("Poly_6_1_1_1_OmniARXStormsRes.csv ", 
                   header = FALSE, stringsAsFactors = TRUE, 
                   col.names = c("eventID","stormCat","order", "modelSize",
                                 "rmse", "corr", "deltaDstMin", "DstMin",
@@ -74,7 +74,7 @@ barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], aes(x=model, y=mea
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
   theme_gray(base_size = 18) +
-  xlab("Model") + ylab(TeX('$min(D_{st})$'))
+  xlab("Model") + ylab(TeX('$\\Delta (D_{st})_{min}$'))
 
 barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=model, y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
