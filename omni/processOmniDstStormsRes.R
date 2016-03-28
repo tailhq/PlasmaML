@@ -6,14 +6,14 @@ library(reshape2)
 library(latex2exp)
 setwd("~/Development/DynaML/data/")
 
-df <- read.csv("Poly_6_1_1_OmniARXStormsRes.csv", 
+df <- read.csv("Final_NARXOmniARXStormsRes.csv", 
                header = FALSE, stringsAsFactors = TRUE, 
                col.names = c("eventID","stormCat","order", "modelSize",
                              "rmse", "corr", "deltaDstMin", "DstMin",
                              "deltaT"))
 
 
-df2 <- read.csv("PolyOmniARStormsRes.csv", 
+df2 <- read.csv("FinalOmniARStormsRes.csv", 
                 header = FALSE, stringsAsFactors = TRUE, 
                 col.names = c("eventID","stormCat","order", "modelSize",
                               "rmse", "corr", "deltaDstMin", "DstMin",
@@ -25,7 +25,7 @@ dfPer <- read.csv("OmniPerStormsRes.csv",
                              "rmse", "corr", "deltaDstMin", "DstMin",
                              "deltaT"))
 
-dfVBz <- read.csv("Poly_6_1_1_1_OmniARXStormsRes.csv ", 
+dfVBz <- read.csv("Final_NARXVBzOmniARXStormsRes.csv", 
                   header = FALSE, stringsAsFactors = TRUE, 
                   col.names = c("eventID","stormCat","order", "modelSize",
                                 "rmse", "corr", "deltaDstMin", "DstMin",
