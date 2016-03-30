@@ -1,7 +1,7 @@
 #! /usr/bin/Rscript
+library(plyr)
 library(ggplot2)
 library(gridExtra)
-library(plyr)
 library(reshape2)
 library(latex2exp)
 setwd("~/Development/DynaML/data/")
@@ -70,25 +70,94 @@ finalDF <- rbind(dfother,
                                   meansGlobalAbs$model %in% c("NAR-Poly", "Persist(1)",
                                                               "NARX-Poly-VBz", "NARX-Poly"),])
 
-barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], aes(x=model, y=meanValue)) + 
-  geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 18) +
-  xlab("Model") + ylab(TeX('$\\Delta (D_{st})_{min}$'))
+finalDF$colorVal <- with(finalDF, ifelse(!(model %in% c("Persist(1)", "NAR-Poly", "NARX-Poly-VBz")), 0, 
+                                     match(model, c("Persist(1)", "NAR-Poly", "NARX-Poly-VBz"))))
 
-barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=model, y=meanValue)) + 
-  geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 0.1) + 
-  theme_gray(base_size = 18) +
-  xlab("Model") + ylab("Timing Error")
 
-barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], aes(x=model, y=meanValue)) + 
+barplrmse1 <- ggplot(dfother[dfother$variable == "rmse",], 
+                 aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
   theme_gray(base_size = 18) +
   xlab("Model") + ylab("Mean RMSE")
 
-barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x=model, y=meanValue)) + 
+colourPalette <- c("0" = "grey38", "1" = "firebrick2", 
+                   "2" = "steelblue3", "3" = "steelblue2")
+
+barplrmse2 <- ggplot(finalDF[finalDF$variable == "rmse" & 
+                               !(finalDF$model %in% c("NARX-Poly", "NAR-Poly", "NARX-Poly-VBz")),], 
+                     aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
+  scale_fill_manual(values = colourPalette, guide=FALSE) +
+  theme_gray(base_size = 20) + 
+  xlab("Model") + ylab("Mean RMSE")
+
+
+barplrmse3 <- ggplot(finalDF[finalDF$variable == "rmse" & !(finalDF$model %in% c("NARX-Poly")),], 
+                     aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
+  theme_gray(base_size = 20) +
+  scale_fill_manual(values = colourPalette, guide=FALSE) +
+  xlab("Model") + ylab("Mean RMSE")
+
+
+
+barplcc1 <- ggplot(dfother[dfother$variable == "corr",], 
+                     aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
+  theme_gray(base_size = 18) +
+  xlab("Model") + ylab("Mean RMSE")
+
+
+barplcc2 <- ggplot(finalDF[finalDF$variable == "corr" & 
+                               !(finalDF$model %in% c("NARX-Poly", "NAR-Poly", "NARX-Poly-VBz")),], 
+                     aes(x = reorder(model, meanValue), y=meanValue, fill=factor(colorVal))) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 1.25) + 
+  scale_fill_manual(values = colourPalette, guide=FALSE) +
+  theme_gray(base_size = 20) + 
+  xlab("Model") + ylab("Mean RMSE")
+
+
+barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("NARX-Poly")),], 
+                     aes(x = reorder(model, meanValue), y=meanValue, fill=factor(colorVal))) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 1.25) + 
+  theme_gray(base_size = 20) +
+  scale_fill_manual(values = colourPalette, guide=FALSE) +
+  xlab("Model") + ylab("Mean RMSE")
+
+
+
+
+
+
+
+
+barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], 
+                 aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
+  theme_gray(base_size = 18) +
+  xlab("Model") + ylab(TeX('$\\Delta (D_{st})_{min}$'))
+
+barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=reorder(model, desc(meanValue)), y=meanValue)) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 0.1) + 
+  theme_gray(base_size = 18) +
+  xlab("Model") + ylab("Timing Error")
+
+barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], 
+                 aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
+  theme_gray(base_size = 18) +
+  xlab("Model") + ylab("Mean RMSE")
+
+barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x = reorder(model, meanValue), y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 0.025) + 
   theme_gray(base_size = 18) + 
