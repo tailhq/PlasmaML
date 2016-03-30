@@ -81,8 +81,8 @@ barplrmse1 <- ggplot(dfother[dfother$variable == "rmse",],
   theme_gray(base_size = 18) +
   xlab("Model") + ylab("Mean RMSE")
 
-colourPalette <- c("0" = "grey38", "1" = "firebrick2", 
-                   "2" = "steelblue3", "3" = "steelblue2")
+colourPalette <- c("0" = "grey38", "1" = "steelblue3", 
+                   "2" = "firebrick2", "3" = "firebrick3")
 
 barplrmse2 <- ggplot(finalDF[finalDF$variable == "rmse" & 
                                !(finalDF$model %in% c("NARX-Poly", "NAR-Poly", "NARX-Poly-VBz")),], 
