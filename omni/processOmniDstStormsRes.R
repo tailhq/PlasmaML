@@ -33,11 +33,11 @@ dfVBz <- read.csv("Final_NARXVBzOmniARXStormsRes.csv",
 
 dfPer$model <- rep("Persist(1)", nrow(dfPer))
 
-df2$model <- rep("NAR-Poly", nrow(df2))
+df2$model <- rep("GP-AR", nrow(df2))
 
-df$model <- rep("NARX-Poly", nrow(df))
+df$model <- rep("GP-ARX1", nrow(df))
 
-dfVBz$model <-rep("NARX-Poly-VBz", nrow(dfVBz))
+dfVBz$model <-rep("GP-ARX", nrow(dfVBz))
 
 
 bindDF <- rbind(df, df2, dfPer, dfVBz)
@@ -64,14 +64,14 @@ dfother <- read.csv("resultsModels.csv",
 
 finalDF <- rbind(dfother, 
                  meansGlobal[meansGlobal$variable != "deltaT" & 
-                                        meansGlobal$model %in% c("NAR-Poly", "Persist(1)",
-                                                                 "NARX-Poly-VBz", "NARX-Poly"),], 
+                                        meansGlobal$model %in% c("GP-AR", "Persist(1)",
+                                                                 "GP-ARX", "GP-ARX1"),], 
                  meansGlobalAbs[meansGlobalAbs$variable == "deltaT" & 
-                                  meansGlobalAbs$model %in% c("NAR-Poly", "Persist(1)",
-                                                              "NARX-Poly-VBz", "NARX-Poly"),])
+                                  meansGlobalAbs$model %in% c("GP-AR", "Persist(1)",
+                                                              "GP-ARX", "GP-ARX1"),])
 
-finalDF$colorVal <- with(finalDF, ifelse(!(model %in% c("Persist(1)", "NAR-Poly", "NARX-Poly-VBz")), 0, 
-                                     match(model, c("Persist(1)", "NAR-Poly", "NARX-Poly-VBz"))))
+finalDF$colorVal <- with(finalDF, ifelse(!(model %in% c("Persist(1)", "GP-AR", "GP-ARX")), 0, 
+                                     match(model, c("Persist(1)", "GP-AR", "GP-ARX"))))
 
 
 barplrmse1 <- ggplot(dfother[dfother$variable == "rmse",], 
@@ -85,7 +85,7 @@ colourPalette <- c("0" = "grey38", "1" = "steelblue3",
                    "2" = "firebrick2", "3" = "firebrick3")
 
 barplrmse2 <- ggplot(finalDF[finalDF$variable == "rmse" & 
-                               !(finalDF$model %in% c("NARX-Poly", "NAR-Poly", "NARX-Poly-VBz")),], 
+                               !(finalDF$model %in% c("GP-ARX1", "GP-AR", "GP-ARX")),], 
                      aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
@@ -94,11 +94,11 @@ barplrmse2 <- ggplot(finalDF[finalDF$variable == "rmse" &
   xlab("Model") + ylab("Mean RMSE")
 
 
-barplrmse3 <- ggplot(finalDF[finalDF$variable == "rmse" & !(finalDF$model %in% c("NARX-Poly")),], 
+barplrmse3 <- ggplot(finalDF[finalDF$variable == "rmse" & !(finalDF$model %in% c("GP-ARX1")),], 
                      aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 20) +
+  theme_gray(base_size = 22) +
   scale_fill_manual(values = colourPalette, guide=FALSE) +
   xlab("Model") + ylab("Mean RMSE")
 
@@ -113,7 +113,7 @@ barplcc1 <- ggplot(dfother[dfother$variable == "corr",],
 
 
 barplcc2 <- ggplot(finalDF[finalDF$variable == "corr" & 
-                               !(finalDF$model %in% c("NARX-Poly", "NAR-Poly", "NARX-Poly-VBz")),], 
+                               !(finalDF$model %in% c("GP-ARX1", "GP-AR", "GP-ARX")),], 
                      aes(x = reorder(model, meanValue), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 1.25) + 
@@ -122,13 +122,13 @@ barplcc2 <- ggplot(finalDF[finalDF$variable == "corr" &
   xlab("Model") + ylab("Mean RMSE")
 
 
-barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("NARX-Poly")),], 
+barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("GP-ARX1")),], 
                      aes(x = reorder(model, meanValue), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 20) +
+  geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 0.05) + 
+  theme_gray(base_size = 22) +
   scale_fill_manual(values = colourPalette, guide=FALSE) +
-  xlab("Model") + ylab("Mean RMSE")
+  xlab("Model") + ylab("Mean Corr. Coefficient")
 
 
 
@@ -137,18 +137,21 @@ barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("
 
 
 
-barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin",], 
-                 aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
+barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin" & !(finalDF$model %in% c("GP-ARX1")),], 
+                 aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
-  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 18) +
-  xlab("Model") + ylab(TeX('$\\Delta (D_{st})_{min}$'))
+  geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) +
+  scale_fill_manual(values = colourPalette, guide=FALSE) +
+  theme_gray(base_size = 22) +
+  xlab("Model") + ylab(TeX('$\\bar{\\Delta Dst_{min}}$'))
 
-barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT",], aes(x=reorder(model, desc(meanValue)), y=meanValue)) + 
+barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT" & !(finalDF$model %in% c("GP-ARX1")),], 
+                 aes(x=reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 0.1) + 
-  theme_gray(base_size = 18) +
-  xlab("Model") + ylab("Timing Error")
+  scale_fill_manual(values = colourPalette, guide=FALSE) +
+  theme_gray(base_size = 22) +
+  xlab("Model") + ylab(TeX('$\\bar{| \\Delta t_{peak} |$'))
 
 barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], 
                  aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
