@@ -31,6 +31,22 @@ dfVBz <- read.csv("Final_NARXVBzOmniARXStormsRes.csv",
                                 "rmse", "corr", "deltaDstMin", "DstMin",
                                 "deltaT"))
 
+dfNM <- read.csv("OmniNMStormsRes.csv", 
+                  header = FALSE, stringsAsFactors = TRUE, 
+                  col.names = c("eventID","stormCat","order", "modelSize",
+                                "rmse", "corr", "deltaDstMin", "DstMin",
+                                "deltaT"), na.strings = c("NaN"))
+
+dfTL <- read.csv("OmniTLStormsRes.csv", 
+                 header = FALSE, stringsAsFactors = TRUE, 
+                 col.names = c("eventID","stormCat","order", "modelSize",
+                               "rmse", "corr", "deltaDstMin", "DstMin",
+                               "deltaT"))
+
+dfNM$model <- rep("NM(CWI)", nrow(dfNM))
+
+dfTL$model <- rep("TL(CWI)", nrow(dfTL))
+
 dfPer$model <- rep("Persist(1)", nrow(dfPer))
 
 df2$model <- rep("GP-AR", nrow(df2))
@@ -40,11 +56,11 @@ df$model <- rep("GP-ARX1", nrow(df))
 dfVBz$model <-rep("GP-ARX", nrow(dfVBz))
 
 
-bindDF <- rbind(df, df2, dfPer, dfVBz)
+bindDF <- rbind(df, df2, dfPer, dfVBz, dfNM, dfTL)
 
 
-meltedDF <- melt(bindDF[bindDF$order == 6 | bindDF$model != "NAR-Poly",],
-                 id.vars=c("model", "stormCat", "eventID"))
+meltedDF <- melt(bindDF[bindDF$order == 6 | bindDF$model != "GP-AR1",],
+                 id.vars=c("model", "stormCat", "eventID"), na.rm = TRUE)
 
 meltedDF1 <- meltedDF[meltedDF$variable != "order" & 
                         meltedDF$variable != "modelSize" &
@@ -64,10 +80,10 @@ dfother <- read.csv("resultsModels.csv",
 
 finalDF <- rbind(dfother, 
                  meansGlobal[meansGlobal$variable != "deltaT" & 
-                                        meansGlobal$model %in% c("GP-AR", "Persist(1)",
+                                        meansGlobal$model %in% c("TL(CWI)","NM(CWI)","GP-AR", "Persist(1)",
                                                                  "GP-ARX", "GP-ARX1"),], 
                  meansGlobalAbs[meansGlobalAbs$variable == "deltaT" & 
-                                  meansGlobalAbs$model %in% c("GP-AR", "Persist(1)",
+                                  meansGlobalAbs$model %in% c("TL(CWI)","NM(CWI)","GP-AR", "Persist(1)",
                                                               "GP-ARX", "GP-ARX1"),])
 
 finalDF$colorVal <- with(finalDF, ifelse(!(model %in% c("Persist(1)", "GP-AR", "GP-ARX")), 0, 
