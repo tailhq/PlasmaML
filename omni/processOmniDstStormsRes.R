@@ -6,6 +6,54 @@ library(reshape2)
 library(latex2exp)
 setwd("~/Development/DynaML/data/")
 
+dfPredNAR <- read.csv("PredOmniARStormsRes.csv", 
+                      header = FALSE, col.names = c("Dst", "NAR"))
+
+dfPredNARX <- read.csv("PredOmniARXStormsRes.csv", 
+                      header = FALSE, col.names = c("Dst", "NARX"))
+
+dfPredTL <- read.csv("OmniTLPredStormsRes.csv", 
+                       header = FALSE, col.names = c("Dst", "TL"))
+
+dfPredNM <- read.csv("OmniNMPredStormsRes.csv", 
+                       header = FALSE, col.names = c("Dst", "NM"), na.strings = c("NAN"))
+
+cumDF <- data.frame(absErr = c(abs(dfPredNAR$Dst - dfPredNAR$NAR), 
+                               abs(dfPredNARX$Dst - dfPredNARX$NAR), 
+                               abs(dfPredTL$Dst - dfPredTL$TL), 
+                               abs(dfPredNM$Dst - dfPredNM$NM)), 
+                    model = c(rep("GP-AR", nrow(dfPredNAR)), 
+                              rep("GP-ARX", nrow(dfPredNARX)), 
+                              rep("TL", nrow(dfPredTL)), 
+                              rep("NM", nrow(dfPredNM))))
+
+cumDFRel <- data.frame(absErr = c(abs((dfPredNAR$Dst - dfPredNAR$NAR)/abs(dfPredNAR$Dst)), 
+                               abs((dfPredNARX$Dst - dfPredNARX$NAR)/abs(dfPredNARX$Dst)), 
+                               abs((dfPredTL$Dst - dfPredTL$TL)/abs(dfPredTL$Dst)), 
+                               abs((dfPredNM$Dst - dfPredNM$NM)/abs(dfPredNM$Dst))), 
+                    model = c(rep("GP-AR", nrow(dfPredNAR)), 
+                              rep("GP-ARX", nrow(dfPredNARX)), 
+                              rep("TL", nrow(dfPredTL)), 
+                              rep("NM", nrow(dfPredNM))))
+
+ggplot(cumDF, aes(absErr, colour = model)) + stat_ecdf() +
+  theme_gray(base_size = 22) +
+  xlab(TeX('$|Dst - \\hat{D}st|$')) + ylab("Cumulative Probability") + 
+  scale_x_continuous(breaks = round(seq(min(cumDF$absErr, na.rm = TRUE), 
+                                        max(cumDF$absErr, na.rm = TRUE), 
+                                        by = 5),1)) +
+  scale_y_continuous(breaks = round(seq(0, 1.0, by = 0.1), 2)) + 
+  coord_cartesian(xlim = c(0, 80))
+
+ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf() +
+  theme_gray(base_size = 22)  + 
+  scale_x_continuous(breaks = round(seq(0.0, 
+                                        2.5, 
+                                        by = 0.05),1)) +
+  scale_y_continuous(breaks = round(seq(0, 1.0, by = 0.1), 2)) + 
+  xlab(TeX('$|Dst - \\hat{D}st|/|Dst|$')) + ylab("Cumulative Probability") + 
+  coord_cartesian(xlim = c(0, 2.5))
+
 df <- read.csv("Final_NARXOmniARXStormsRes.csv", 
                header = FALSE, stringsAsFactors = TRUE, 
                col.names = c("eventID","stormCat","order", "modelSize",
