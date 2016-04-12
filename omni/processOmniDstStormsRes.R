@@ -10,13 +10,15 @@ dfPredNAR <- read.csv("PredOmniARStormsRes.csv",
                       header = FALSE, col.names = c("Dst", "NAR"))
 
 dfPredNARX <- read.csv("PredOmniARXStormsRes.csv", 
-                      header = FALSE, col.names = c("Dst", "NARX"))
+                       header = FALSE, col.names = c("Dst", "NARX"))
 
 dfPredTL <- read.csv("OmniTLPredStormsRes.csv", 
-                       header = FALSE, col.names = c("Dst", "TL"))
+                     header = FALSE, col.names = c("Dst", "TL"))
 
-dfPredNM <- read.csv("OmniNMPredStormsRes.csv", 
-                       header = FALSE, col.names = c("Dst", "NM"), na.strings = c("NAN"))
+dfPredNM <- read.csv("OmniNMPredStormsRes.csv",
+                     header = FALSE, 
+                     col.names = c("Dst", "NM"), 
+                     na.strings = c("NAN"))
 
 cumDF <- data.frame(absErr = c(abs(dfPredNAR$Dst - dfPredNAR$NAR), 
                                abs(dfPredNARX$Dst - dfPredNARX$NAR), 
@@ -48,11 +50,11 @@ ggplot(cumDF, aes(absErr, colour = model)) + stat_ecdf() +
 ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf() +
   theme_gray(base_size = 22)  + 
   scale_x_continuous(breaks = round(seq(0.0, 
-                                        2.5, 
+                                        2.0, 
                                         by = 0.05),1)) +
   scale_y_continuous(breaks = round(seq(0, 1.0, by = 0.1), 2)) + 
   xlab(TeX('$|Dst - \\hat{D}st|/|Dst|$')) + ylab("Cumulative Probability") + 
-  coord_cartesian(xlim = c(0, 2.5))
+  coord_cartesian(xlim = c(0, 2.0))
 
 df <- read.csv("Final_NARXOmniARXStormsRes.csv", 
                header = FALSE, stringsAsFactors = TRUE, 
@@ -127,10 +129,10 @@ dfother <- read.csv("resultsModels.csv",
                 col.names = c("model","variable","meanValue"))
 
 finalDF <- rbind(dfother, 
-                 meansGlobal[meansGlobal$variable != "deltaT" & 
+                 meansGlobal[!(meansGlobalAbs$variable %in% c("deltaT", "deltaDstMin")) & 
                                         meansGlobal$model %in% c("TL(CWI)","NM(CWI)","GP-AR", "Persist(1)",
                                                                  "GP-ARX", "GP-ARX1"),], 
-                 meansGlobalAbs[meansGlobalAbs$variable == "deltaT" & 
+                 meansGlobalAbs[meansGlobalAbs$variable %in% c("deltaT", "deltaDstMin") & 
                                   meansGlobalAbs$model %in% c("TL(CWI)","NM(CWI)","GP-AR", "Persist(1)",
                                                               "GP-ARX", "GP-ARX1"),])
 
@@ -193,10 +195,6 @@ barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("
   theme_gray(base_size = 22) +
   scale_fill_manual(values = colourPalette, guide=FALSE) +
   xlab("Model") + ylab("Mean Corr. Coefficient")
-
-
-
-
 
 
 
