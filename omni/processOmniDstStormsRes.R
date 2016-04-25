@@ -50,11 +50,11 @@ ggplot(cumDF, aes(absErr, colour = model)) + stat_ecdf() +
 ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf() +
   theme_gray(base_size = 22)  + 
   scale_x_continuous(breaks = round(seq(0.0, 
-                                        2.0, 
+                                        1.0, 
                                         by = 0.05),1)) +
   scale_y_continuous(breaks = round(seq(0, 1.0, by = 0.1), 2)) + 
   xlab(TeX('$|Dst - \\hat{D}st|/|Dst|$')) + ylab("Cumulative Probability") + 
-  coord_cartesian(xlim = c(0, 2.0))
+  coord_cartesian(xlim = c(0, 1.0))
 
 df <- read.csv("Final_NARXOmniARXStormsRes.csv", 
                header = FALSE, stringsAsFactors = TRUE, 
@@ -144,7 +144,7 @@ barplrmse1 <- ggplot(dfother[dfother$variable == "rmse",],
                  aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 18) +
+  theme_gray(base_size = 22) +
   xlab("Model") + ylab("Mean RMSE")
 
 colourPalette <- c("0" = "grey38", "1" = "steelblue3", 
@@ -174,7 +174,7 @@ barplcc1 <- ggplot(dfother[dfother$variable == "corr",],
                      aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 18) +
+  theme_gray(base_size = 22) +
   xlab("Model") + ylab("Mean RMSE")
 
 
@@ -219,16 +219,16 @@ barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",],
                  aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
-  theme_gray(base_size = 18) +
+  theme_gray(base_size = 22) +
   xlab("Model") + ylab("Mean RMSE")
 
 barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x = reorder(model, meanValue), y=meanValue)) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 0.025) + 
-  theme_gray(base_size = 18) + 
+  theme_gray(base_size = 22) + 
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
 deltaDstPlot <- ggplot(dfVBz, aes(x=DstMin, y=deltaDstMin/DstMin)) + 
-  geom_point(aes(color=as.factor(stormCat))) + theme_gray(base_size = 18) + 
+  geom_point(aes(color=as.factor(stormCat))) + theme_gray(base_size = 22) + 
   labs(x = TeX('$min(D_{st})$'), 
        y=TeX('$\\frac{\\Delta D_{st}}{min(D_{st})}$'), color="Storm Category")
