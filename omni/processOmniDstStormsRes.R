@@ -56,6 +56,37 @@ ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf() +
   xlab(TeX('$|Dst - \\hat{D}st|/|Dst|$')) + ylab("Cumulative Probability") + 
   coord_cartesian(xlim = c(0, 1.0))
 
+tlP <- read.csv("TLFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
+arxP <- read.csv("ARXFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
+nmP <- read.csv("NMFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
+
+dstDF <- data.frame(cbind(tlP$actual, 1:nrow(tlP)))
+colnames(dstDF) <- c("Dst", "timestamp")
+dstDF$model <- rep("Dst", nrow(tlP))
+
+tlP$actual <- NULL
+tlP$timestamp <- 1:nrow(tlP)
+tlP$model <- rep("TL", nrow(tlP))
+
+nmP$actual <- NULL
+nmP$timestamp <- 1:nrow(nmP)
+nmP$model <- rep("NM", nrow(nmP))
+
+arxP$actual <- NULL
+arxP$timestamp <- 1:nrow(arxP)
+arxP$model <- rep("GP-ARX", nrow(arxP))
+
+dfP <- rbind(dstDF, tlP, nmP, arxP)
+
+colnames(dfP) <- c("Dst", "time", "model")
+
+cbPalette <- c("#000000", "firebrick3", "mediumorchid4", "steelblue3")
+
+ggplot(dfP, aes(x = time, y = Dst)) + 
+  geom_line(aes(colour=model), size=2) + 
+  theme_gray(base_size = 22) + 
+  scale_colour_manual(values=cbPalette) + xlab("Time (hours)") + ylab("Dst (nT)")
+
 df <- read.csv("Final_NARXOmniARXStormsRes.csv", 
                header = FALSE, stringsAsFactors = TRUE, 
                col.names = c("eventID","stormCat","order", "modelSize",
