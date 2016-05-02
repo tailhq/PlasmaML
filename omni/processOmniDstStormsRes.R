@@ -47,7 +47,7 @@ ggplot(cumDF, aes(absErr, colour = model)) + stat_ecdf() +
   scale_y_continuous(breaks = round(seq(0, 1.0, by = 0.1), 2)) + 
   coord_cartesian(xlim = c(0, 80))
 
-ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf() +
+ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf(size = 1.25) +
   theme_gray(base_size = 22)  + 
   scale_x_continuous(breaks = round(seq(0.0, 
                                         1.0, 
@@ -85,7 +85,8 @@ cbPalette <- c("#000000", "firebrick3", "mediumorchid4", "steelblue3")
 ggplot(dfP, aes(x = time, y = Dst)) + 
   geom_line(aes(colour=model), size=2) + 
   theme_gray(base_size = 22) + 
-  scale_colour_manual(values=cbPalette) + xlab("Time (hours)") + ylab("Dst (nT)")
+  scale_colour_manual(values=cbPalette) + 
+  xlab("Time (hours)") + ylab("Dst (nT)")
 
 df <- read.csv("Final_NARXOmniARXStormsRes.csv", 
                header = FALSE, stringsAsFactors = TRUE, 
