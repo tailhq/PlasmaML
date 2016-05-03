@@ -29,3 +29,10 @@ After installing all the pre-requisites,
 4. At the sbt prompt, choose appropriate sub-project ```project omni```
 5. Compile the sources ```compile```
 6. Run the scala console ```console```
+
+Try an example program 
+
+```scala
+scala>TestOmniNarmax("2004/11/09/08", "2004/11/11/09", "predict")
+```
+
