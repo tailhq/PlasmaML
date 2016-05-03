@@ -13,13 +13,10 @@ resolvers in ThisBuild ++= Seq("jitpack" at "https://jitpack.io", "jzy3d-release
 
 libraryDependencies in ThisBuild += "com.github.mandar2812" % "DynaML" % "master-SNAPSHOT"
 
-initialCommands in console := "import breeze.linalg._,import io.github.mandar2812.dynaml.models._,"+
-  "import io.github.mandar2812.dynaml.models.neuralnets._,import io.github.mandar2812.dynaml.models.svm._,"+
-  "import io.github.mandar2812.dynaml.models.lm._,import io.github.mandar2812.dynaml.utils,"+
-  "import io.github.mandar2812.dynaml.kernels._,"+
-  "import org.apache.spark.{SparkContext,SparkConf},"+
-  "import io.github.mandar2812.dynaml.pipes._,import org.openml.apiconnector.io._"
-
 lazy val root = (project in file(".")).settings(commonSettings: _*).aggregate(omni)
 
-lazy val omni = (project in file("omni")).settings(commonSettings: _*)
+lazy val omni = (project in file("omni")).settings(commonSettings: _*).settings(
+    initialCommands in console :=
+      """import io.github.mandar2812.PlasmaML.omni._;"""+
+      """import io.github.mandar2812.dynaml.kernels._"""
+)
