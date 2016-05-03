@@ -1,17 +1,20 @@
 import sbt._
 
+val dynaMLVersion = settingKey[String]("The version of Scala used for building.")
+
 lazy val commonSettings = Seq(
   name := "PlasmaML",
   organization := "io.github.mandar2812",
   version := "0.1.0",
-  scalaVersion := "2.11.8"
+  scalaVersion in ThisBuild := "2.11.8",
+  dynaMLVersion := "master-SNAPSHOT",
+  libraryDependencies in ThisBuild += "com.github.mandar2812" % "DynaML" % dynaMLVersion.value
 )
 
-scalaVersion in ThisBuild := "2.11.8"
-
-resolvers in ThisBuild ++= Seq("jitpack" at "https://jitpack.io", "jzy3d-releases" at "http://maven.jzy3d.org/releases")
-
-libraryDependencies in ThisBuild += "com.github.mandar2812" % "DynaML" % "master-SNAPSHOT"
+resolvers in ThisBuild ++= Seq(
+  "jitpack" at "https://jitpack.io",
+  "jzy3d-releases" at "http://maven.jzy3d.org/releases"
+)
 
 lazy val root = (project in file(".")).settings(commonSettings: _*).aggregate(omni)
 
