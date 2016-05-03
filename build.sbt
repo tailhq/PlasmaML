@@ -18,5 +18,6 @@ lazy val root = (project in file(".")).settings(commonSettings: _*).aggregate(om
 lazy val omni = (project in file("omni")).settings(commonSettings: _*).settings(
     initialCommands in console :=
       """import io.github.mandar2812.PlasmaML.omni._;"""+
-      """import io.github.mandar2812.dynaml.kernels._"""
+      """import io.github.mandar2812.dynaml.kernels._;"""+
+      """import com.quantifind.charts.Highcharts._"""
 )
