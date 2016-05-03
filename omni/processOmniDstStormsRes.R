@@ -58,7 +58,39 @@ ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf(size = 1.25) +
 
 tlP <- read.csv("TLFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
 arxP <- read.csv("ARXFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
+
 nmP <- read.csv("NMFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
+
+
+arx_errorbars_pred <- read.csv("ARXErrorBarsFinalPredRes.csv", header = FALSE, col.names = c("Dst", "predicted", "lower", "upper"))
+arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
+
+palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
+lines1 <- c("solid", "solid", "4C88C488", "12345678")
+
+meltedPred <- melt(arx_errorbars_pred, id="time")
+
+ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
+  geom_line(size=1.35) +
+  theme_gray(base_size = 22) + 
+  scale_colour_manual(values=palette1) + 
+  scale_linetype_manual(values = lines1, guide=FALSE) +
+  xlab("Time (hours)") + ylab("Dst (nT)")
+
+ar_errorbars_pred <- read.csv("ARErrorBarsFinalPredRes.csv", header = FALSE, col.names = c("Dst", "predicted", "lower", "upper"))
+ar_errorbars_pred$time <- 1:nrow(ar_errorbars_pred)
+
+meltedPred1 <- melt(ar_errorbars_pred, id="time")
+
+ggplot(meltedPred1, aes(x=time,y=value, colour=variable, linetype=variable)) +
+  geom_line(size=1.35) +
+  theme_gray(base_size = 22) + 
+  scale_colour_manual(values=palette1) + 
+  scale_linetype_manual(values = lines1, guide=FALSE) +
+  xlab("Time (hours)") + ylab("Dst (nT)")
+
+
+
 
 dstDF <- data.frame(cbind(tlP$actual, 1:nrow(tlP)))
 colnames(dstDF) <- c("Dst", "timestamp")
@@ -80,12 +112,17 @@ dfP <- rbind(dstDF, tlP, nmP, arxP)
 
 colnames(dfP) <- c("Dst", "time", "model")
 
-cbPalette <- c("#000000", "firebrick3", "mediumorchid4", "steelblue3")
+cbPalette <- c("#000000", "firebrick3", "olivedrab3", "steelblue3")
+lt <- c("Dst"="solid", "GP-ARX"="solid", "NM"="4C88C488", "TL"="12345678")
+l <- c("4C88C488", "12345678", "solid", "solid")
 
-ggplot(dfP, aes(x = time, y = Dst)) + 
+dfP$ltype <- with(dfP, lt[model])
+
+ggplot(dfP, aes(x = time, y = Dst, linetype=factor(ltype), legend=FALSE)) +
   geom_line(aes(colour=model), size=2) + 
   theme_gray(base_size = 22) + 
   scale_colour_manual(values=cbPalette) + 
+  scale_linetype_manual(values = l, guide=FALSE) +
   xlab("Time (hours)") + ylab("Dst (nT)")
 
 df <- read.csv("Final_NARXOmniARXStormsRes.csv", 
