@@ -26,9 +26,8 @@ Gemfile.lock
 index*.html
 javascripts
 stylesheets
-omni/data/*Res.csv
-omni/data/.RData
-omni/data/.Rhistory
+data/.RData
+data/.Rhistory
 rnn-omni-explorer/rsconnect
 logs
 project/project

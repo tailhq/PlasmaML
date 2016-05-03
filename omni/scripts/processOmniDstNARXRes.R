@@ -1,7 +1,7 @@
 #! /usr/bin/Rscript
 library(ggplot2)
 library(gridExtra)
-setwd("~/Development/DynaML/data/")
+setwd("../../../DynaML/data/")
 
 df <- read.csv("OmniNARXRes.csv" ,
                header = FALSE, stringsAsFactors = FALSE, 

@@ -353,7 +353,7 @@ object TestOmniARX {
       DynaMLPipe.trainTestGaussianStandardization >
       DataPipe(modelTrainTest)
 
-    val dataRoot = "omni/data/"
+    val dataRoot = "./omni/data/"
 
     trainTestPipe.run((dataRoot+"omni2_"+yearTrain+".csv",
       dataRoot+"omni2_"+yearTest+".csv"))

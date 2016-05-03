@@ -4,7 +4,7 @@ library(RSNNS)
 
 args <- commandArgs(trailingOnly = TRUE)
 year <- args[1]
-setwd("~/Development/PlasmaML/omni/data/")
+setwd("../../data/")
 prefix <- "omni2_"
 
 df <- read.csv(paste(prefix, year, ".dat", sep = ""), 

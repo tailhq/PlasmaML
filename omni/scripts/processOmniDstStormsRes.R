@@ -4,7 +4,7 @@ library(ggplot2)
 library(gridExtra)
 library(reshape2)
 library(latex2exp)
-setwd("~/Development/DynaML/data/")
+setwd("../../../DynaML/data/")
 
 dfPredNAR <- read.csv("PredOmniARStormsRes.csv", 
                       header = FALSE, col.names = c("Dst", "NAR"))
@@ -191,7 +191,7 @@ meansGlobal <- ddply(meltedDF1, c("model", "variable"), summarise,
 meansGlobalAbs <- ddply(meltedDF1, c("model", "variable"), summarise,
                      meanValue=mean(abs(value)))
 
-setwd("~/Development/PlasmaML/omni/data")
+setwd("data")
 
 dfother <- read.csv("resultsModels.csv", 
                 header = FALSE, stringsAsFactors = TRUE, 
