@@ -66,7 +66,7 @@ arx_errorbars_pred <- read.csv("ARXErrorBarsFinalPredRes.csv", header = FALSE, c
 arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
 
 palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
-lines1 <- c("solid", "solid", "4C88C488", "12345678")
+lines1 <- c("solid", "solid", "dotdash", "dotdash")
 
 meltedPred <- melt(arx_errorbars_pred, id="time")
 
