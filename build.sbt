@@ -1,6 +1,6 @@
 import sbt._
 
-val dynaMLVersion = settingKey[String]("The version of Scala used for building.")
+val dynaMLVersion = settingKey[String]("The version of DynaML used.")
 
 lazy val commonSettings = Seq(
   name := "PlasmaML",
