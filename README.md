@@ -2,7 +2,9 @@
 
 Machine Learning tools for Space Weather and Plasma Physics
 ---------------------------
-![Image courtesy NASA](http://www.nasa.gov/images/content/607990main1_FAQ13-670.jpg)
+> ![Image courtesy NASA](http://www.nasa.gov/images/content/607990main1_FAQ13-670.jpg)
+>
+> courtesy [NASA](www.nasa.gov)
 
 *PlasmaML* is a collection of data analysis and machine learning tools in the domain of space physics, more specifically in modelling of space plasmas & space weather prediction.
 
