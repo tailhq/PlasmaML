@@ -8,7 +8,10 @@ lazy val commonSettings = Seq(
   version := "0.1.0",
   scalaVersion in ThisBuild := "2.11.8",
   dynaMLVersion := "master-SNAPSHOT",
-  libraryDependencies in ThisBuild += "com.github.mandar2812" % "DynaML" % dynaMLVersion.value
+  libraryDependencies in ThisBuild ++= Seq(
+    "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
+    "org.jsoup" % "jsoup" % "1.9.1"
+  )
 )
 
 resolvers in ThisBuild ++= Seq(
@@ -29,5 +32,6 @@ lazy val vanAllen = (project in file("vanAllen")).settings(commonSettings: _*).s
   initialCommands in console :=
     """import io.github.mandar2812.PlasmaML.vanAllen._;"""+
       """import io.github.mandar2812.dynaml.kernels._;"""+
-      """import com.quantifind.charts.Highcharts._"""
+      """import com.quantifind.charts.Highcharts._;"""+
+      """import scalaj.http._"""
 )
