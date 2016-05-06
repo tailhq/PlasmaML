@@ -141,6 +141,18 @@ object VanAllenData {
     })
   }
 
+  /**
+    * Performs a bulk download action.
+    *
+    * @param start The starting date
+    * @param end End date
+    * @param dataRoot The root directory to store the downloaded files
+    * @param categories A list containing the data categories required,
+    *                   defaults to all the data categories.
+    * @param probesSelected A list containing the probes for which the
+    *                       data is required. Defaults to Seq("A", "B")
+    *
+    * */
   def bulkDownload(start: String = "2012/01/01",
                    end: String = "2015/12/31",
                    dataRoot: String = "data/",
