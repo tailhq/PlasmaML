@@ -1,5 +1,7 @@
 # PlasmaML
 
+[![Build Status](https://travis-ci.org/mandar2812/PlasmaML.svg?branch=master)](https://travis-ci.org/mandar2812/PlasmaML)
+
 Machine Learning tools for Space Weather and Plasma Physics
 ---------------------------
 > ![Image courtesy NASA](http://www.nasa.gov/images/content/607990main1_FAQ13-670.jpg)
