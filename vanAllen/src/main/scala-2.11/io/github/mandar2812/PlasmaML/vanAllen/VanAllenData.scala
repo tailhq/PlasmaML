@@ -3,6 +3,7 @@ package io.github.mandar2812.PlasmaML.vanAllen
 import java.text.SimpleDateFormat
 import java.util.GregorianCalendar
 
+import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
 import org.jsoup.Jsoup
 
@@ -84,13 +85,18 @@ object VanAllenData {
   val sw_data_uri = "sw_data_browser"
 
   /**
+    * Download text data files for a given day
     *
+    * @param year Year number ex: 2013
     *
+    * @param doy Day of year as integer (1-365)
+    *
+    * @param dataRoot Directory in which the files will be downloaded
     *
     * */
-  def download(year: Int = 2016, doy: Int = 112) = {
+  def download(year: Int = 2016, doy: Int = 112, dataRoot: String = "data/") = {
 
-    val categoryBuffer = dataCategories.map(couple => (couple._1, ML[String]()))
+    val categoryBuffer = dataCategories.map(couple => (couple._1, probes.map(p => (p, ML[String]() )).toMap))
 
     //Retrieve the relevant web page corresponding to the
     //given year and date
@@ -103,12 +109,27 @@ object VanAllenData {
     val elements = doc.select("table[style]").select("a[href]").iterator().asScala
     val hrefs = elements.map(_.attr("href")).filterNot(_.contains(".cdf"))
     hrefs.foreach(link => {
-      //logger.info(link)
       dataCategorySpecs.foreach(categorySpec =>
-        if(link.contains(categorySpec._1)) categoryBuffer(categorySpec._2) += link
+        if(link.contains(categorySpec._1+"A")) {
+          categoryBuffer(categorySpec._2)("A") += link
+        } else if(link.contains(categorySpec._1+"B")) {
+          categoryBuffer(categorySpec._2)("B") += link
+        }
       )
     })
-    logger.info(categoryBuffer)
+
+    logger.info("--Downloading files for year: "+year+" day of year: "+doy+". --")
+
+    categoryBuffer.foreach(pair => {
+      //for each category download
+      logger.info(pair._1+": ")
+      pair._2.foreach(probe => {
+        logger.info("Probe "+probe._1)
+        probe._2.foreach(hypLink =>
+          utils.downloadURL(jhuapl_baseurl+hypLink,
+            dataRoot+pair._1+"_"+probe._1+"_"+year+"_"+doy+".txt"))
+      })
+    })
   }
 
   def bulkDownload(start: String = "2012/01/01",
