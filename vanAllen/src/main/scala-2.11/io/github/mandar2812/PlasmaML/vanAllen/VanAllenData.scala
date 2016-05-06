@@ -108,6 +108,7 @@ object VanAllenData {
     val doc = Jsoup.connect(jhuapl_baseurl+sw_data_uri)
       .data("Year", year.toString)
       .data("Doy", "%03d".format(doy))
+      .timeout(0)
       .post()
 
     //Extract the elements containing the data file urls
