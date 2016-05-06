@@ -158,6 +158,7 @@ object VanAllenData {
 
     while(greg.before(calendar)) {
 
+      logger.info("Date: "+greg.getTime)
       download(greg.get(Calendar.YEAR),
         greg.get(Calendar.DAY_OF_YEAR),
         dataRoot, categories,
