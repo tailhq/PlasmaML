@@ -10,7 +10,8 @@ lazy val commonSettings = Seq(
   dynaMLVersion := "master-SNAPSHOT",
   libraryDependencies in ThisBuild ++= Seq(
     "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
-    "org.jsoup" % "jsoup" % "1.9.1"
+    "org.jsoup" % "jsoup" % "1.9.1",
+    "joda-time" % "joda-time" % "2.9.3"
   )
 )
 

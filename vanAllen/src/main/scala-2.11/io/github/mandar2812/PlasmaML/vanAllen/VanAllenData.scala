@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
 import java.text.SimpleDateFormat
-import java.util.GregorianCalendar
+import java.util.{Calendar, Date, GregorianCalendar}
 
 import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
@@ -94,20 +94,26 @@ object VanAllenData {
     * @param dataRoot Directory in which the files will be downloaded
     *
     * */
-  def download(year: Int = 2016, doy: Int = 112, dataRoot: String = "data/") = {
+  def download(year: Int = 2016,
+               doy: Int = 112,
+               dataRoot: String = "data/",
+               categories: Seq[String] = dataCategories.keys.toSeq,
+               probesSelected: Seq[String] = probes) = {
 
-    val categoryBuffer = dataCategories.map(couple => (couple._1, probes.map(p => (p, ML[String]() )).toMap))
+    val categoryBuffer = dataCategories.map(couple =>
+      (couple._1, probes.map(p => (p, ML[String]() )).toMap))
 
     //Retrieve the relevant web page corresponding to the
     //given year and date
     val doc = Jsoup.connect(jhuapl_baseurl+sw_data_uri)
       .data("Year", year.toString)
-      .data("Doy", doy.toString)
+      .data("Doy", "%03d".format(doy))
       .post()
 
     //Extract the elements containing the data file urls
     val elements = doc.select("table[style]").select("a[href]").iterator().asScala
     val hrefs = elements.map(_.attr("href")).filterNot(_.contains(".cdf"))
+
     hrefs.foreach(link => {
       dataCategorySpecs.foreach(categorySpec =>
         if(link.contains(categorySpec._1+"A")) {
@@ -118,12 +124,14 @@ object VanAllenData {
       )
     })
 
-    logger.info("--Downloading files for year: "+year+" day of year: "+doy+". --")
+    logger.info("Downloading files for year: "+year+" day of year: "+doy+".")
 
-    categoryBuffer.foreach(pair => {
+    categoryBuffer.filterKeys(categories.contains(_))
+      .foreach(pair => {
       //for each category download
       logger.info(pair._1+": ")
-      pair._2.foreach(probe => {
+      pair._2.filterKeys(probesSelected.contains(_))
+        .foreach(probe => {
         logger.info("Probe "+probe._1)
         probe._2.foreach(hypLink =>
           utils.downloadURL(jhuapl_baseurl+hypLink,
@@ -133,10 +141,30 @@ object VanAllenData {
   }
 
   def bulkDownload(start: String = "2012/01/01",
-                   end: String = "2015/12/31"): Unit = {
+                   end: String = "2015/12/31",
+                   dataRoot: String = "data/",
+                   categories: Seq[String] = dataCategories.keys.toSeq,
+                   probesSelected: Seq[String] = probes): Unit = {
     val greg: GregorianCalendar = new GregorianCalendar()
+    val calendar = Calendar.getInstance()
+
     val sdf: SimpleDateFormat = new SimpleDateFormat("yyyy/MM/dd")
 
+    val dateS: Date = sdf.parse(start)
+    val dateE: Date = sdf.parse(end)
+
+    calendar.setTime(dateE)
+    greg.setTime(dateS)
+
+    while(greg.before(calendar)) {
+
+      download(greg.get(Calendar.YEAR),
+        greg.get(Calendar.DAY_OF_YEAR),
+        dataRoot, categories,
+        probesSelected)
+
+      greg.add(Calendar.DAY_OF_YEAR, 1)
+    }
   }
 
   /**
