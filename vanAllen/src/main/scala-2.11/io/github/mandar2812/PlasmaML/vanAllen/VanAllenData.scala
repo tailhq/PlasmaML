@@ -30,11 +30,14 @@ object VanAllenData {
         " around Earth and determine how that ring current supplies and "+
         "supports the creation of radiation populations.")),
 
-    "HOPE" -> Map("abstract" -> "Helium Oxygen Proton Electron",
+    "HOPE" -> Map(
+      "abstract" -> "Helium Oxygen Proton Electron",
+
       "summary" -> ("Helium Oxygen Proton Electron :\n"+
-        "HOPE uses an electrostatic top-hat analyzer and time-gated coincidence detectors to measure electrons, "+
-          "protons, and helium and oxygen ions with energies from less than or equal to 20 eV or spacecraft potential"+
-          " (whichever is greater) to greater than or equal to 45 keV while rejecting penetrating backgrounds.")),
+        "HOPE uses an electrostatic top-hat analyzer and time-gated coincidence detectors "+
+        "to measure electrons, protons, and helium and oxygen ions with energies from less than "+
+        "or equal to 20 eV or spacecraft potential (whichever is greater) to greater than or "+
+        "equal to 45 keV while rejecting penetrating backgrounds.")),
 
 
     "EMFISIS" -> Map(
@@ -72,7 +75,7 @@ object VanAllenData {
   )
 
   val dataCategorySpecs = Map(
-    "LShell_GSM_GSE" -> "position",
+    "_LShell_GSM_GSE" -> "position",
     "SW_ECTHOPE_RBSP" -> "HOPE",
     "SW_EMFISIS_RBSP" -> "EMFISIS",
     "SW_RBSPICE_RBSP" -> "RBSPICE",
@@ -112,15 +115,24 @@ object VanAllenData {
       .post()
 
     //Extract the elements containing the data file urls
-    val elements = doc.select("table[style]").select("a[href]").iterator().asScala
+    val elements = doc.select("a[href]")
+      .iterator()
+      .asScala
+
     val hrefs = elements.map(_.attr("href")).filterNot(_.contains(".cdf"))
 
     hrefs.foreach(link => {
       dataCategorySpecs.foreach(categorySpec =>
-        if(link.contains(categorySpec._1+"A")) {
+        if(link.contains(categorySpec._1+"A") ||
+          link.contains("A"+categorySpec._1)) {
+
           categoryBuffer(categorySpec._2)("A") += link
-        } else if(link.contains(categorySpec._1+"B")) {
+
+        } else if(link.contains(categorySpec._1+"B") ||
+          link.contains("B"+categorySpec._1)) {
+
           categoryBuffer(categorySpec._2)("B") += link
+
         }
       )
     })
