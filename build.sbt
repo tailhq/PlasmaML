@@ -11,7 +11,8 @@ lazy val commonSettings = Seq(
   libraryDependencies in ThisBuild ++= Seq(
     "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
-    "joda-time" % "joda-time" % "2.9.3"
+    "joda-time" % "joda-time" % "2.9.3",
+    "org.json4s" % "json4s-native_2.11" % "3.3.0"
   )
 )
 
@@ -36,7 +37,10 @@ lazy val omni = (project in file("omni")).settings(commonSettings: _*).settings(
 lazy val vanAllen = (project in file("vanAllen")).settings(commonSettings: _*).settings(
   initialCommands in console :=
     """import io.github.mandar2812.PlasmaML.vanAllen._;"""+
+      """import org.json4s._;"""+
+      """import org.json4s.jackson.JsonMethods._;"""+
       """import io.github.mandar2812.dynaml.kernels._;"""+
+      """import io.github.mandar2812.dynaml.pipes._;"""+
       """import com.quantifind.charts.Highcharts._;"""+
       """import org.jsoup._"""
 )
