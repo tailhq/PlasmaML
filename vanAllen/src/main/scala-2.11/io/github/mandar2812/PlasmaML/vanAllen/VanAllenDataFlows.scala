@@ -1,13 +1,14 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
-import scala.collection.mutable.{MutableList => ML}
+import java.nio.file.{Files, Paths}
 import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, GregorianCalendar}
-import java.nio.file.{Files, Paths}
 
+import scala.collection.mutable.{MutableList => ML}
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
+import org.apache.spark.{SparkConf, SparkContext}
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
@@ -30,6 +31,12 @@ object VanAllenDataFlows {
   val headerEndStr:String = " End JSON"
 
   val cleanRegex = """\}(\"\w)""".r
+
+  val sparkHost = "local[*]"
+
+  private val greg = new GregorianCalendar()
+
+  val sc = new SparkContext(new SparkConf().setMaster(sparkHost).setAppName("Van Allen Data Models"))
 
   /**
     * Returns a DynaML [[DataPipe]] that takes a [[Stream]] of lines
@@ -67,8 +74,39 @@ object VanAllenDataFlows {
     }
   })
 
-  def combineFileStreams(streams: Stream[String]*) =
-    streams.reduceLeft[Stream[String]]((coup1, coup2) => coup1 ++ coup2)
+  def fileToRDDOption = DataPipe((relativePath: String) => {
+    Files.exists(Paths.get(dataRoot+relativePath)) match {
+      case false => None
+      case true => Some(sc.textFile(dataRoot+relativePath))
+    }
+  })
+
+  def processDateString(d: String, sep: Char = '/'): (Int, Int, Int) = {
+    val spl = d.split(sep).map(_.toInt)
+    (spl.head, spl(1), spl(2))
+  }
+
+  def dateRange(start: String,
+                end: String,
+                format: String = "yyyy/MM/dd"): Stream[Date] = {
+
+    val dates = ML[Date]()
+
+    val sdf = new SimpleDateFormat("yyyy/MM/dd")
+
+    val dateS = sdf.parse(start)
+    val dateE = sdf.parse(end)
+    val calendar = Calendar.getInstance()
+    calendar.setTime(dateE)
+
+    greg.setTime(dateS)
+
+    while(greg.before(calendar)) {
+      dates += greg.getTime
+      greg.add(Calendar.DAY_OF_YEAR, 1)
+    }
+    dates.toStream
+  }
 
   /**
     * Extract data from a particular category
@@ -81,42 +119,32 @@ object VanAllenDataFlows {
                   probes: Seq[String] = VanAllenData.probes,
                   columns: Seq[String] = Seq()) = {
 
-    val greg: GregorianCalendar = new GregorianCalendar()
-    val calendar = Calendar.getInstance()
-
-    val sdf: SimpleDateFormat = new SimpleDateFormat("yyyy/MM/dd")
-
-    val dateS: Date = sdf.parse(startDate)
-    val dateE: Date = sdf.parse(endDate)
-
-    calendar.setTime(dateE)
-    greg.setTime(dateS)
 
     var columnData: Option[JValue] = None
-    val content = ML[Stream[String]]()
 
+    val dates = dateRange(startDate, endDate)
 
-    while(greg.before(calendar)) {
-      val year = greg.get(Calendar.YEAR)
-      val doy = greg.get(Calendar.DAY_OF_YEAR)
+    probes.map(probe => {
+      val data = dates.map(date => {
+        greg.setTime(date)
+        val doy = greg.get(Calendar.DAY_OF_YEAR)
+        val year = greg.get(Calendar.YEAR)
 
-      probes.foreach(probe => {
-        val fileContent = fileToStreamOption.run(category+"_"+probe+"_"+year+"_"+doy+".txt")
+        val fileContent = fileToStreamOption.run(category + "_" + probe + "_" + year + "_" + doy + ".txt")
         fileContent match {
           case Some(cont) =>
-            val (buff, json) = stripFileHeader().run(cont)
-            if(columnData.isEmpty & json.isDefined) {
+            val (buff, json) = stripFileHeader(true).run(cont)
+            if (columnData.isEmpty & json.isDefined) {
               columnData = json
             }
-            content += buff
+            buff
 
           case None =>
-            logger.info("No file found: "+category+" probe "+probe+" for "+year+"/"+doy)
+            logger.info("No file found: " + category + " probe " + probe + " for " + year + "/" + doy)
+            Stream()
         }
-      })
-      greg.add(Calendar.DAY_OF_YEAR, 1)
-    }
-
-    combineFileStreams(content:_*)
+      }).reduceLeft[Stream[String]](_++_)
+      (probe, data)
+    }).toMap
   }
 }
