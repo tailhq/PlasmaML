@@ -228,7 +228,10 @@ object VanAllenDataFlows {
         fileContent match {
           case Some(cont) =>
             val (buff, json) = stripRDDHeader(columnData.isEmpty).run(cont)
-            columnData = json
+            if(columnData.isEmpty && json.isDefined) {
+              columnData = json
+            }
+
             buff
 
           case None =>
