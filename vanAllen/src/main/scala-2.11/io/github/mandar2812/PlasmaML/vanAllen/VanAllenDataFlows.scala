@@ -48,12 +48,13 @@ object VanAllenDataFlows {
     case _ => Seq("LShELL", "LAT", "LON") //Defaults to L-Shell coordinate frame
   }
 
-  val sparkHost = "local[*]"
+  var sparkCores = 4
+  val sparkHost = "local["+sparkCores+"]"
 
   val sc = new SparkContext(
     new SparkConf().setMaster(sparkHost)
       .setAppName("Van Allen Data Models")
-      .set("spark.executor.memory", "4g"))
+      .set("spark.executor.memory", "3g"))
 
   implicit class RDDOps[T](rdd: RDD[T]) {
 
@@ -101,14 +102,14 @@ object VanAllenDataFlows {
     val processedHeader = header.map(line =>
       line.takeRight(line.length-2)
         .trim
-        .replace(headerEndStr, "")).collect()
+        .replace(headerEndStr, ""))
 
     keepHeader match {
       case false =>
         (content, None)
       case true =>
         val jsonParsed = try {
-          Some(parse(cleanRegex.replaceAllIn(processedHeader.mkString(""), """\}\,$1"""), false))
+          Some(parse(cleanRegex.replaceAllIn(processedHeader.collect().mkString(""), """\}\,$1"""), false))
         } catch {
           case e: Exception => None
         }
@@ -226,10 +227,8 @@ object VanAllenDataFlows {
         val fileContent = fileToRDDOption.run(category + "_" + probe + "_" + year + "_" + doy + ".txt")
         fileContent match {
           case Some(cont) =>
-            val (buff, json) = stripRDDHeader(true).run(cont)
-            if (columnData.isEmpty & json.isDefined) {
-              columnData = json
-            }
+            val (buff, json) = stripRDDHeader(columnData.isEmpty).run(cont)
+            columnData = json
             buff
 
           case None =>
@@ -247,9 +246,11 @@ object VanAllenDataFlows {
           List(1,2,3,4,5,6)
       }
 
-      val processPartition = DataPipe((s: Iterator[String]) => s.toStream) >
-        DynaMLPipe.trimLines >
-        DynaMLPipe.replaceWhiteSpaces >
+      logger.info("Columns selected: "+columnsSelected)
+
+      val processPartition =
+        DataPipe((s: Iterator[String]) => s.toStream) >
+        DynaMLPipe.trimLines > DynaMLPipe.replaceWhiteSpaces >
         DynaMLPipe.extractTrainingFeatures(
           columnsSelected,
           columnsSelected.map(c => (c, " ")).toMap
