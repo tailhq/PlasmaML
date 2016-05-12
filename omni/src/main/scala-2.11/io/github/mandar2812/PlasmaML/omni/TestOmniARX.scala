@@ -258,7 +258,7 @@ object TestOmniARX {
           case "GS" => new GridSearch[model.type](model)
             .setGridSize(grid)
             .setStepSize(step)
-            .setLogScale(false)
+            .setLogScale(opt("logScale").toBoolean)
 
           case "ML" => new GPMLOptimizer[DenseVector[Double],
             Seq[(DenseVector[Double], Double)],
