@@ -40,6 +40,8 @@ import org.apache.log4j.Logger
   */
 object TestOmniARX {
 
+  val logger = Logger.getLogger(this.getClass)
+
   def apply(trainstart: String = "2008/01/01/00",
             trainend: String = "2008/01/10/23",
             start: String = "2006/12/28/00",
@@ -77,8 +79,6 @@ object TestOmniARX {
                     step: Double = 0.2, globalOpt: String = "ML",
                     opt: Map[String, String],
                     action: String = "test"): Seq[Seq[Double]] = {
-
-    val logger = Logger.getLogger(this.getClass)
 
     val names = Map(
       24 -> "Solar Wind Speed",
@@ -355,8 +355,9 @@ object TestOmniARX {
 
     val dataRoot = "data/"
 
-    trainTestPipe.run((dataRoot+"omni2_"+yearTrain+".csv",
-      dataRoot+"omni2_"+yearTest+".csv"))
+    trainTestPipe run
+      (dataRoot+"omni2_"+yearTrain+".csv",
+      dataRoot+"omni2_"+yearTest+".csv")
   }
 }
 

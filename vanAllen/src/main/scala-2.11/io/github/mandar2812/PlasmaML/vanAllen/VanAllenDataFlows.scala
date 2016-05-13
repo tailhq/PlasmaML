@@ -4,13 +4,16 @@ import java.nio.file.{Files, Paths}
 import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, GregorianCalendar}
 
+import breeze.linalg.DenseVector
+
 import scala.collection.mutable.{MutableList => ML}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
 import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.json4s
+import org.joda.time.DateTime
+import org.joda.time.chrono.GregorianChronology
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
@@ -26,6 +29,8 @@ object VanAllenDataFlows {
 
   private val greg = new GregorianCalendar()
 
+  val chrono = GregorianChronology.getInstance()
+
   val logger = Logger.getLogger(this.getClass)
 
   var dataRoot: String = "data/"
@@ -38,16 +43,29 @@ object VanAllenDataFlows {
 
   val timeColumns: Seq[String] = Seq("Year", "Month", "Day", "Hour", "Minute", "Second")
 
-  val positionReferenceFrame: String = "LShell"
+  val positionReferenceFrame: String = "LSHELL"
 
+  /**
+    * The column names corresponding to the probe's position. This is determined
+    * using the [[positionReferenceFrame]] variable, available reference frames are
+    * LSHELL, GSM, GSE, GEI.
+    * */
   val positionColumns: Seq[String] = positionReferenceFrame.capitalize match {
-    case "LSHELL" => Seq("LShELL", "LAT", "LON")
+    case "LSHELL" => Seq("LSHELL", "LAT", "LON")
     case "GSE" => Seq("GSEX", "GSEY", "GSEZ")
     case "GSM" => Seq("GSMX", "GSEM", "GSEM")
     case "GEI" => Seq("GSMX", "GSEM", "GSEM")
-    case _ => Seq("LShELL", "LAT", "LON") //Defaults to L-Shell coordinate frame
+    case _ => Seq("LSHELL", "LAT", "LON") //Defaults to L-Shell coordinate frame
   }
 
+  val columnsCategories = Map(
+    "position" -> positionColumns,
+    "HOPE" -> Seq("Flux_H_e0", "Flux_H_e1", "Flux_H_e2", "Flux_H_e3"))
+
+  /**
+    * The number of spark executors that can be spawned, which can be
+    * the number of cores available on the machine at maximum.
+    * */
   var sparkCores = 4
   val sparkHost = "local["+sparkCores+"]"
 
@@ -55,6 +73,32 @@ object VanAllenDataFlows {
     new SparkConf().setMaster(sparkHost)
       .setAppName("Van Allen Data Models")
       .set("spark.executor.memory", "3g"))
+
+  /**
+    * Calculate the time stamp from the date which is
+    * given as an array of numbers <code>Array(year, month, date)</code> or
+    * <code>Array(year, month, date, hour, minute, second)</code>
+    * */
+  val getTimeStamp: Array[Double] => Long = {
+    case Array(year, month, date, hour, minute, second) =>
+      new DateTime(
+        year.toInt, month.toInt, date.toInt,
+        hour.toInt, minute.toInt, second.toInt).getMillis/1000
+
+    case Array(year, month, date) =>
+      new DateTime(
+        year.toInt, month.toInt, date.toInt,
+        0, 0, 0).getMillis/1000
+    case _ => 0
+  }
+
+  val extractTimeSeriesVec = (Tfunc: Array[Double] => Long) =>
+    DataPipe((lines: Iterator[String]) => lines.map{line =>
+      val splits = line.split(",")
+      val timestamp = Tfunc(splits.slice(0, timeColumns.length).map(_.toDouble))
+      val feat = DenseVector(splits.slice(timeColumns.length, splits.length).map(_.toDouble))
+      (timestamp, feat)
+    })
 
   implicit class RDDOps[T](rdd: RDD[T]) {
 
@@ -95,7 +139,14 @@ object VanAllenDataFlows {
       }
     })
 
-
+  /**
+    * Split an <code>RDD[String]</code> into its content and header.
+    *
+    * @param keepHeader true if header should be returned as a [[JValue]] Option.
+    *
+    * @return A [[Tuple2]] value containing the content <code>RDD[String]</code> and header json
+    *
+    * */
   def stripRDDHeader(keepHeader: Boolean = false) = DataPipe((rdd: RDD[String]) => {
     val (content, header) = rdd.partitionBy(_.head != headerLead)
 
@@ -251,16 +302,50 @@ object VanAllenDataFlows {
 
       logger.info("Columns selected: "+columnsSelected)
 
-      val processPartition =
+      val processPartition = (
         DataPipe((s: Iterator[String]) => s.toStream) >
         DynaMLPipe.trimLines > DynaMLPipe.replaceWhiteSpaces >
         DynaMLPipe.extractTrainingFeatures(
           columnsSelected,
           columnsSelected.map(c => (c, " ")).toMap
-        ) > DataPipe((s: Stream[String]) => s.toIterator) run _
+        ) > DataPipe((s: Stream[String]) => s.toIterator)) run _
 
 
       (probe, data.mapPartitions(processPartition))
     }).toMap
+  }
+
+
+
+
+  def collateDataRDD(startDate: String,
+                     endDate: String,
+                     probes: Seq[String] = VanAllenData.probes,
+                     columnsByCategory: Map[String, Seq[String]] = columnsCategories) = {
+    //Get files for each category divided by probe and join them
+
+    val mapFunc = extractTimeSeriesVec(getTimeStamp) run _
+
+    val categoryRDDs: Map[String, Map[String, RDD[(Long, DenseVector[Double])]]] =
+      columnsByCategory.map((categoryCouple) => {
+      val dat = extractDataRDD(
+        startDate, endDate,
+        categoryCouple._1, probes,
+        categoryCouple._2
+      ).mapValues(_.mapPartitions(mapFunc))
+
+      (categoryCouple._1, dat)
+    })
+
+    categoryRDDs.reduce[(String, Map[String, RDD[(Long, DenseVector[Double])]])](
+      (first, other) => (
+        "collated",
+        (first._2.toSeq ++ other._2.toSeq).groupBy(_._1)
+          .map(_._2 match {
+            case Seq((probeStr1, probeData1), (probeStr2, probeData2)) =>
+              (probeStr1,
+                probeData1.join(probeData2).mapValues(couple1 => DenseVector.vertcat(couple1._1, couple1._2)))
+          })))._2
+
   }
 }
