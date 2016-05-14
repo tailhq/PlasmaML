@@ -25,9 +25,8 @@ resolvers in ThisBuild ++= Seq(
 
 lazy val root = (project in file(".")).settings(commonSettings: _*)
   .aggregate(omni, vanAllen)
-  .settings(
-    aggregate in update := false
-  )
+  .settings(aggregate in update := false)
+  .settings(initialCommands in console := """import io.github.mandar2812.PlasmaML""")
 
 lazy val omni = (project in file("omni")).settings(commonSettings: _*).settings(
   initialCommands in console :=
@@ -35,6 +34,8 @@ lazy val omni = (project in file("omni")).settings(commonSettings: _*).settings(
     """import io.github.mandar2812.dynaml.kernels._;"""+
     """import com.quantifind.charts.Highcharts._"""
 )
+
+//lazy val jCDF = RootProject(uri("https://github.com/mandar2812/jcdf.git"))
 
 lazy val vanAllen = (project in file("vanAllen")).settings(commonSettings: _*).settings(
   initialCommands in console :=

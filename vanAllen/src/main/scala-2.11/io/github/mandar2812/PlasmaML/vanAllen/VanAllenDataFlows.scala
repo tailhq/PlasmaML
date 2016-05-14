@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
+import java.io.File
 import java.nio.file.{Files, Paths}
 import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, GregorianCalendar}
@@ -12,7 +13,7 @@ import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.chrono.GregorianChronology
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
@@ -43,14 +44,14 @@ object VanAllenDataFlows {
 
   val timeColumns: Seq[String] = Seq("Year", "Month", "Day", "Hour", "Minute", "Second")
 
-  val positionReferenceFrame: String = "LSHELL"
+  var positionReferenceFrame: String = "LSHELL"
 
   /**
     * The column names corresponding to the probe's position. This is determined
     * using the [[positionReferenceFrame]] variable, available reference frames are
     * LSHELL, GSM, GSE, GEI.
     * */
-  val positionColumns: Seq[String] = positionReferenceFrame.capitalize match {
+  def positionColumns: Seq[String] = positionReferenceFrame.capitalize match {
     case "LSHELL" => Seq("LSHELL", "LAT", "LON")
     case "GSE" => Seq("GSEX", "GSEY", "GSEZ")
     case "GSM" => Seq("GSMX", "GSEM", "GSEM")
@@ -58,7 +59,7 @@ object VanAllenDataFlows {
     case _ => Seq("LSHELL", "LAT", "LON") //Defaults to L-Shell coordinate frame
   }
 
-  val columnsCategories = Map(
+  def columnsCategories = Map(
     "position" -> positionColumns,
     "HOPE" -> Seq("Flux_H_e0", "Flux_H_e1", "Flux_H_e2", "Flux_H_e3"))
 
@@ -304,25 +305,22 @@ object VanAllenDataFlows {
 
       val processPartition = (
         DataPipe((s: Iterator[String]) => s.toStream) >
-        DynaMLPipe.trimLines > DynaMLPipe.replaceWhiteSpaces >
-        DynaMLPipe.extractTrainingFeatures(
-          columnsSelected,
-          columnsSelected.map(c => (c, " ")).toMap
-        ) > DataPipe((s: Stream[String]) => s.toIterator)) run _
+          DynaMLPipe.trimLines > DynaMLPipe.replaceWhiteSpaces >
+          DynaMLPipe.extractTrainingFeatures(columnsSelected, Map()) >
+          DataPipe((s: Stream[String]) => s.toIterator)) run _
 
 
       (probe, data.mapPartitions(processPartition))
     }).toMap
   }
 
-
-
-
   def collateDataRDD(startDate: String,
                      endDate: String,
                      probes: Seq[String] = VanAllenData.probes,
                      columnsByCategory: Map[String, Seq[String]] = columnsCategories) = {
     //Get files for each category divided by probe and join them
+
+    DateTimeZone.setDefault(DateTimeZone.UTC)
 
     val mapFunc = extractTimeSeriesVec(getTimeStamp) run _
 
@@ -347,5 +345,9 @@ object VanAllenDataFlows {
                 probeData1.join(probeData2).mapValues(couple1 => DenseVector.vertcat(couple1._1, couple1._2)))
           })))._2
 
+  }
+
+  def convertCDF(file: String) = {
+    //val r = new CdfReader(new File(file))
   }
 }
