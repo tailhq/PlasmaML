@@ -301,3 +301,23 @@ deltaDstPlot <- ggplot(dfVBz, aes(x=DstMin, y=deltaDstMin/DstMin)) +
   geom_point(aes(color=as.factor(stormCat))) + theme_gray(base_size = 22) + 
   labs(x = TeX('$min(D_{st})$'), 
        y=TeX('$\\frac{\\Delta D_{st}}{min(D_{st})}$'), color="Storm Category")
+
+library(directlabels)
+setwd("../../PlasmaML/data")
+lDF <- read.csv("OmniARXLandscapeRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
+contDF <- lDF[lDF$b <= 1.5, c("rmse", "b", "sigma")]
+
+c <- ggplot(contDF, aes(x = b, y = sigma, z=rmse)) + 
+  stat_contour(aes(colour = ..level..), binwidth  = 0.04, size = 1.0) + 
+  theme_gray(base_size = 22) +
+  xlab("b") + ylab(TeX('$\\sigma$'))
+direct.label(c, "top.points")
+
+lDF1 <- read.csv("OmniARXLandscapeMLRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
+contDF1 <- lDF1[lDF1$b <= 1.0, c("rmse", "b", "sigma")]
+
+ggplot(contDF1, aes(x = b, y = sigma, z=rmse)) + stat_contour(aes(colour = ..level..), binwidth  = 10.0, size = 1.0)
+
+lDF2 <- read.csv("OmniARXLandscapeFBMRes.csv", col.names=c("rmse", "hurst", "sigma"))
+
+ggplot(lDF2, aes(x = hurst, y = sigma, z=rmse)) + stat_contour(aes(colour = ..level..), binwidth  = 0.02, size = 1.0)

@@ -179,7 +179,11 @@ object TestOmniARX {
       (trainTest: ((Stream[(DenseVector[Double], Double)],
         Stream[(DenseVector[Double], Double)]),
         (DenseVector[Double], DenseVector[Double]))) => {
-        kernel.blocked_hyper_parameters = opt("block").split(',').toList
+
+        kernel.blocked_hyper_parameters =
+          if (!opt.contains("block") || opt("block").isEmpty) List()
+          else opt("block").split(',').toList
+
         val model = new GPNarXModel(deltaT.max, ex.length,
           kernel, noise, trainTest._1._1)
         val num_training = trainTest._1._1.length
