@@ -346,8 +346,4 @@ object VanAllenDataFlows {
           })))._2
 
   }
-
-  def convertCDF(file: String) = {
-    //val r = new CdfReader(new File(file))
-  }
 }
