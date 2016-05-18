@@ -137,6 +137,15 @@ object VanAllenData {
       )
     })
 
+    //Ugly hack for getting probe B position file
+    if(probesSelected.contains("B") &&
+      categoryBuffer("position")("B").isEmpty) {
+      categoryBuffer("position")("B") +=
+        ("sites/default/files/SpaceWeather/data/KpDst/"+
+          year+"/"+"%03d".format(doy)+"/RBSPB_LShell_GSM_GSE_"+
+          year+"%03d".format(doy)+".txt")
+    }
+
     logger.info("Downloading files for year: "+year+" day of year: "+doy+".")
 
     categoryBuffer.filterKeys(categories.contains(_))

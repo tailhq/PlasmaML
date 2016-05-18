@@ -54,13 +54,14 @@ object VanAllenDataFlows {
   def positionColumns: Seq[String] = positionReferenceFrame.capitalize match {
     case "LSHELL" => Seq("LSHELL", "LAT", "LON")
     case "GSE" => Seq("GSEX", "GSEY", "GSEZ")
-    case "GSM" => Seq("GSMX", "GSEM", "GSEM")
-    case "GEI" => Seq("GSMX", "GSEM", "GSEM")
+    case "GSM" => Seq("GSMX", "GSMY", "GSMZ")
+    case "GEI" => Seq("GEIX", "GEIY", "GEIZ")
     case _ => Seq("LSHELL", "LAT", "LON") //Defaults to L-Shell coordinate frame
   }
 
   def columnsCategories = Map(
     "position" -> positionColumns,
+    "EMFISIS" -> Seq("MagField"),
     "HOPE" -> Seq("Flux_H_e0", "Flux_H_e1", "Flux_H_e2", "Flux_H_e3"))
 
   /**
@@ -212,6 +213,17 @@ object VanAllenDataFlows {
     dates.toStream
   }
 
+  def extractFeatures(columnsSelected: List[Int], sep:String = ",") =
+    DataPipe((lines: Stream[String]) =>
+      lines.filter(l => {
+        val spl = l.split(",")
+        spl.length > columnsSelected.max && columnsSelected.forall(spl(_) != "")
+        }).map{l =>
+        val splits = l.split(",")
+        columnsSelected.map(splits(_)).mkString(sep)
+      }
+    )
+
   /**
     * Extract data from a particular category
     * within a specified date range
@@ -306,7 +318,7 @@ object VanAllenDataFlows {
       val processPartition = (
         DataPipe((s: Iterator[String]) => s.toStream) >
           DynaMLPipe.trimLines > DynaMLPipe.replaceWhiteSpaces >
-          DynaMLPipe.extractTrainingFeatures(columnsSelected, Map()) >
+          extractFeatures(columnsSelected) >
           DataPipe((s: Stream[String]) => s.toIterator)) run _
 
 
