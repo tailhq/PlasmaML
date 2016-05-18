@@ -1,6 +1,5 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
-import java.io.File
 import java.nio.file.{Files, Paths}
 import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, GregorianCalendar}
@@ -19,10 +18,10 @@ import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
 /**
-  * @author mandar on 10/5/16.
+  * @author mandar2812 on 10/5/16.
   *
   * A utility object that contains many
-  * reusable data workflows that are required
+  * reusable data work flows that are required
   * for pre-processing of the van allen probe
   * data files.
   */
@@ -94,7 +93,7 @@ object VanAllenDataFlows {
     case _ => 0
   }
 
-  val extractTimeSeriesVec = (Tfunc: Array[Double] => Long) =>
+  val extractTimeIndexedFeatures = (Tfunc: Array[Double] => Long) =>
     DataPipe((lines: Iterator[String]) => lines.map{line =>
       val splits = line.split(",")
       val timestamp = Tfunc(splits.slice(0, timeColumns.length).map(_.toDouble))
@@ -145,7 +144,6 @@ object VanAllenDataFlows {
     * Split an <code>RDD[String]</code> into its content and header.
     *
     * @param keepHeader true if header should be returned as a [[JValue]] Option.
-    *
     * @return A [[Tuple2]] value containing the content <code>RDD[String]</code> and header json
     *
     * */
@@ -162,7 +160,12 @@ object VanAllenDataFlows {
         (content, None)
       case true =>
         val jsonParsed = try {
-          Some(parse(cleanRegex.replaceAllIn(processedHeader.collect().mkString(""), """\}\,$1"""), false))
+          Some(
+            parse(
+              cleanRegex.replaceAllIn(
+                processedHeader.collect().mkString(""),
+                """\}\,$1"""),
+              false))
         } catch {
           case e: Exception => None
         }
@@ -213,7 +216,7 @@ object VanAllenDataFlows {
     dates.toStream
   }
 
-  def extractFeatures(columnsSelected: List[Int], sep:String = ",") =
+  def extractColumns(columnsSelected: List[Int], sep:String = ",") =
     DataPipe((lines: Stream[String]) =>
       lines.filter(l => {
         val spl = l.split(",")
@@ -246,10 +249,10 @@ object VanAllenDataFlows {
         val doy = greg.get(Calendar.DAY_OF_YEAR)
         val year = greg.get(Calendar.YEAR)
 
-        val fileContent = fileToStreamOption.run(category + "_" + probe + "_" + year + "_" + doy + ".txt")
+        val fileContent = fileToStreamOption(category + "_" + probe + "_" + year + "_" + doy + ".txt")
         fileContent match {
           case Some(cont) =>
-            val (buff, json) = stripFileHeader(true).run(cont)
+            val (buff, json) = stripFileHeader(true)(cont)
             if (columnData.isEmpty & json.isDefined) {
               columnData = json
             }
@@ -288,10 +291,10 @@ object VanAllenDataFlows {
         val doy = greg.get(Calendar.DAY_OF_YEAR)
         val year = greg.get(Calendar.YEAR)
 
-        val fileContent = fileToRDDOption.run(category + "_" + probe + "_" + year + "_" + doy + ".txt")
+        val fileContent = fileToRDDOption(category + "_" + probe + "_" + year + "_" + doy + ".txt")
         fileContent match {
           case Some(cont) =>
-            val (buff, json) = stripRDDHeader(columnData.isEmpty).run(cont)
+            val (buff, json) = stripRDDHeader(columnData.isEmpty)(cont)
             if(columnData.isEmpty && json.isDefined) {
               columnData = json
             }
@@ -318,7 +321,7 @@ object VanAllenDataFlows {
       val processPartition = (
         DataPipe((s: Iterator[String]) => s.toStream) >
           DynaMLPipe.trimLines > DynaMLPipe.replaceWhiteSpaces >
-          extractFeatures(columnsSelected) >
+          extractColumns(columnsSelected) >
           DataPipe((s: Stream[String]) => s.toIterator)) run _
 
 
@@ -334,7 +337,7 @@ object VanAllenDataFlows {
 
     DateTimeZone.setDefault(DateTimeZone.UTC)
 
-    val mapFunc = extractTimeSeriesVec(getTimeStamp) run _
+    val mapFunc = extractTimeIndexedFeatures(getTimeStamp) run _
 
     val categoryRDDs: Map[String, Map[String, RDD[(Long, DenseVector[Double])]]] =
       columnsByCategory.map((categoryCouple) => {
@@ -347,6 +350,7 @@ object VanAllenDataFlows {
       (categoryCouple._1, dat)
     })
 
+    //Collate data from different categories using join function in Spark RDDs
     categoryRDDs.reduce[(String, Map[String, RDD[(Long, DenseVector[Double])]])](
       (first, other) => (
         "collated",
@@ -354,8 +358,11 @@ object VanAllenDataFlows {
           .map(_._2 match {
             case Seq((probeStr1, probeData1), (probeStr2, probeData2)) =>
               (probeStr1,
-                probeData1.join(probeData2).mapValues(couple1 => DenseVector.vertcat(couple1._1, couple1._2)))
+                probeData1.join(probeData2)
+                  .mapValues(couple1 => DenseVector.vertcat(couple1._1, couple1._2)))
           })))._2
+      .reduce((first, other) =>
+        ("collated", first._2 union other._2))._2
 
   }
 }

@@ -85,6 +85,8 @@ object VanAllenData {
 
   val jhuapl_baseurl = "http://rbspgway.jhuapl.edu/"
 
+  val uiowaphysics_baseurl = "http://emfisis.physics.uiowa.edu/Flight/"
+
   val sw_data_uri = "sw_data_browser"
 
   /**
