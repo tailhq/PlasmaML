@@ -15,7 +15,7 @@ object PlasmaML {
 
   var leapSecondsFile: String = dataDir+"CDFLeapSeconds.txt"
 
-  def convertCDF(writeToFile: String) = DataPipe((file: String) => {
+  def fileAttributesCDF(writeToFile: String) = DataPipe((file: String) => {
     val r = new CdfContent(new CdfReader(new File(file)))
     new CdfList(r, System.out, false).run()
   })
