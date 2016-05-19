@@ -39,7 +39,7 @@ public class EpochFormatter {
      * have incorrectly applied leap seconds.
      * If true, a RuntimeException is thrown, if false a log message is written.
      */
-    public static boolean FAIL_ON_LEAP_ERROR = true;
+    public static boolean FAIL_ON_LEAP_ERROR = false;
 
     /** 0 A.D. in Unix milliseconds as used by EPOCH/EPOCH16 data types. */
     public static final long AD0_UNIX_MILLIS = getAd0UnixMillis();

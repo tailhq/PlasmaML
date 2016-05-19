@@ -26,7 +26,7 @@ resolvers in ThisBuild ++= Seq(
 lazy val root = (project in file(".")).settings(commonSettings: _*)
   .aggregate(omni, vanAllen)
   .settings(aggregate in update := false)
-  .settings(initialCommands in console := """import io.github.mandar2812.PlasmaML""")
+  .settings(initialCommands in console := """import io.github.mandar2812.PlasmaML.PlasmaML""")
 
 lazy val omni = (project in file("omni")).settings(commonSettings: _*).settings(
   initialCommands in console :=

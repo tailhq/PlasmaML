@@ -11,7 +11,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+import io.github.mandar2812.PlasmaML.PlasmaML;
 /**
  * Handles conversions between TT_TIME2000 (TT since J2000.0)
  * and Unix (UTC since 1970-01-01) times.
@@ -230,7 +230,7 @@ public abstract class TtScaler {
      * for one that covers a given point in time.
      *
      * @param   tt2kMillis  TT time in milliseconds since J2000
-     * @param   orderedScalers  list of TtScaler instances ordered in time
+     * @param   scalers  list of TtScaler instances ordered in time
      * @param   i0  initial guess at index of the right answer
      * @param   imin  minimum possible value of the right answer
      * @parma   imax  maximum possible value of the right answer
@@ -420,7 +420,7 @@ public abstract class TtScaler {
     private static LtEntry[] readLtEntriesFile() throws IOException {
         String ltLoc;
         try {
-            ltLoc = System.getenv( LEAP_FILE_ENV );
+            ltLoc = PlasmaML.leapSecondsFile();
         }
         catch ( SecurityException e ) {
             logger_.config( "Can't access external leap seconds file: " + e );
