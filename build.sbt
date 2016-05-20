@@ -32,23 +32,25 @@ lazy val core = (project in file("core")).settings(
     """import io.github.mandar2812.PlasmaML._;"""+
     """import io.github.mandar2812.PlasmaML.cdf.CDFUtils""")
 
-lazy val omni = (project in file("omni")).settings(commonSettings: _*).settings(
-  initialCommands in console :=
-  """import io.github.mandar2812.PlasmaML.omni._;"""+
-    """import io.github.mandar2812.dynaml.kernels._;"""+
-    """import io.github.mandar2812.dynaml.pipes.DynaMLPipe;"""+
-    """import com.quantifind.charts.Highcharts._"""
-)
+lazy val omni =
+  (project in file("omni")).settings(commonSettings: _*)
+    .settings(
+      initialCommands in console :=
+        """import io.github.mandar2812.PlasmaML.omni._;"""+
+          """import io.github.mandar2812.dynaml.kernels._;"""+
+          """import io.github.mandar2812.dynaml.pipes.DynaMLPipe;"""+
+          """import com.quantifind.charts.Highcharts._"""
+    ).dependsOn(core)
 
 lazy val vanAllen =
   (project in file("vanAllen")).settings(commonSettings: _*)
-  .settings(
-    initialCommands in console :=
-      """import io.github.mandar2812.PlasmaML.vanAllen._;"""+
-        """import org.json4s._;"""+
-        """import org.json4s.jackson.JsonMethods._;"""+
-        """import io.github.mandar2812.dynaml.kernels._;"""+
-        """import io.github.mandar2812.dynaml.pipes._;"""+
-        """import com.quantifind.charts.Highcharts._;"""+
-        """import org.jsoup._"""
-  ).dependsOn(core)
+    .settings(
+      initialCommands in console :=
+        """import io.github.mandar2812.PlasmaML.vanAllen._;"""+
+          """import org.json4s._;"""+
+          """import org.json4s.jackson.JsonMethods._;"""+
+          """import io.github.mandar2812.dynaml.kernels._;"""+
+          """import io.github.mandar2812.dynaml.pipes._;"""+
+          """import com.quantifind.charts.Highcharts._;"""+
+          """import org.jsoup._"""
+    ).dependsOn(core)

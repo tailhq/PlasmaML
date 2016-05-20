@@ -12,7 +12,6 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
 import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.chrono.GregorianChronology
 import org.json4s._
