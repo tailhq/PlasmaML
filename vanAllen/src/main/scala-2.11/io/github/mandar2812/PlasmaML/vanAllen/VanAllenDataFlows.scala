@@ -5,6 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, GregorianCalendar}
 
 import breeze.linalg.DenseVector
+import io.github.mandar2812.PlasmaML.PlasmaML
 
 import scala.collection.mutable.{MutableList => ML}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
@@ -63,17 +64,6 @@ object VanAllenDataFlows {
     "EMFISIS" -> Seq("MagField"),
     "HOPE" -> Seq("Flux_H_e0", "Flux_H_e1", "Flux_H_e2", "Flux_H_e3"))
 
-  /**
-    * The number of spark executors that can be spawned, which can be
-    * the number of cores available on the machine at maximum.
-    * */
-  var sparkCores = 4
-  val sparkHost = "local["+sparkCores+"]"
-
-  val sc = new SparkContext(
-    new SparkConf().setMaster(sparkHost)
-      .setAppName("Van Allen Data Models")
-      .set("spark.executor.memory", "3g"))
 
   /**
     * Calculate the time stamp from the date which is
@@ -185,7 +175,7 @@ object VanAllenDataFlows {
   def fileToRDDOption = DataPipe((relativePath: String) => {
     Files.exists(Paths.get(dataRoot+relativePath)) match {
       case false => None
-      case true => Some(sc.textFile(dataRoot+relativePath))
+      case true => Some(PlasmaML.sc.textFile(dataRoot+relativePath))
     }
   })
 
@@ -303,7 +293,7 @@ object VanAllenDataFlows {
 
           case None =>
             logger.info("No file found: " + category + " probe " + probe + " for " + year + "/" + doy)
-            sc.emptyRDD[String]
+            PlasmaML.sc.emptyRDD[String]
         }
       }).reduceLeft[RDD[String]]((a, b) => a.union(b))
 

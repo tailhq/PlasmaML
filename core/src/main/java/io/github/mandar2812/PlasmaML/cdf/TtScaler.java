@@ -420,7 +420,7 @@ public abstract class TtScaler {
     private static LtEntry[] readLtEntriesFile() throws IOException {
         String ltLoc;
         try {
-            ltLoc = PlasmaML.leapSecondsFile();
+            ltLoc = CDFUtils.leapSecondsFile();
         }
         catch ( SecurityException e ) {
             logger_.config( "Can't access external leap seconds file: " + e );
