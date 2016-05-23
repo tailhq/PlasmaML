@@ -89,9 +89,6 @@ ggplot(meltedPred1, aes(x=time,y=value, colour=variable, linetype=variable)) +
   scale_linetype_manual(values = lines1, guide=FALSE) +
   xlab("Time (hours)") + ylab("Dst (nT)")
 
-
-
-
 dstDF <- data.frame(cbind(tlP$actual, 1:nrow(tlP)))
 colnames(dstDF) <- c("Dst", "timestamp")
 dstDF$model <- rep("Dst", nrow(tlP))
@@ -190,8 +187,6 @@ meansGlobal <- ddply(meltedDF1, c("model", "variable"), summarise,
 
 meansGlobalAbs <- ddply(meltedDF1, c("model", "variable"), summarise,
                      meanValue=mean(abs(value)))
-
-setwd("data")
 
 dfother <- read.csv("resultsModels.csv", 
                 header = FALSE, stringsAsFactors = TRUE, 
@@ -305,10 +300,10 @@ deltaDstPlot <- ggplot(dfVBz, aes(x=DstMin, y=deltaDstMin/DstMin)) +
 library(directlabels)
 setwd("../../PlasmaML/data")
 lDF <- read.csv("OmniARXLandscapeRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
-contDF <- lDF[lDF$b <= 1.5, c("rmse", "b", "sigma")]
+contDF <- lDF[lDF$b <= 1.0, c("rmse", "b", "sigma")]
 
 c <- ggplot(contDF, aes(x = b, y = sigma, z=rmse)) + 
-  stat_contour(aes(colour = ..level..), binwidth  = 0.04, size = 1.0) + 
+  stat_contour(aes(colour = ..level..), binwidth  = 0.045, size = 0.75) + 
   theme_gray(base_size = 22) +
   xlab("b") + ylab(TeX('$\\sigma$'))
 direct.label(c, "top.points")
