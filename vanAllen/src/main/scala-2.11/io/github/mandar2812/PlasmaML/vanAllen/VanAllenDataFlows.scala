@@ -120,7 +120,10 @@ object VanAllenDataFlows {
           (content, None)
         case true =>
           val jsonParsed = try {
-            Some(parse(cleanRegex.replaceAllIn(processedHeader.mkString(""), """\}\,$1"""), false))
+            Some(parse(
+              cleanRegex.replaceAllIn(processedHeader.mkString(""), """\}\,$1"""),
+              false)
+            )
           } catch {
             case e: Exception => None
           }

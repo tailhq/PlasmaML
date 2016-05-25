@@ -19,6 +19,12 @@ object CDFUtils {
 
   var epochFormat: String = "TT2000"
 
+
+  /**
+    * Takes an epoch value of milliseconds
+    * starting from 0 AD (Julian date)
+    * and returns a date string.
+    * */
   def epochProcessor = epochFormat match {
     case "TT2000" => new EpochFormatter().formatTimeTt2000 _
     case _ => new EpochFormatter().formatTimeTt2000 _
@@ -35,6 +41,11 @@ object CDFUtils {
       ).toMap)
     ).toMap
 
+  /**
+    * Get the variable metadata of a CDf file as a [[Map]]
+    *
+    * @param file The path of the CDF file on disk
+    * */
   def cdfAttributes(file: String) = getVariableAttributes(new CdfContent(new CdfReader(new File(file))))
 
   def readCDF = DataPipe((file: String) => {
@@ -42,6 +53,14 @@ object CDFUtils {
     (content, getVariableAttributes(content))
   })
 
+  /**
+    * Read a CDF file into an Apache Spark RDD
+    * @param columns A list of columns to be selected from the file
+    *
+    * @param missingValueKey The attribute name in the CDF column metadata
+    *                        which holds the missing value string for each
+    *                        column, defaults to "FILLVAL".
+    * */
   def cdfToRDD(columns: Seq[String], missingValueKey: String = "FILLVAL") = DataPipe(
     (cdfContentAndAttributes: (CdfContent, Map[String, Map[String, String]])) => {
       val (content, columnData) = cdfContentAndAttributes
