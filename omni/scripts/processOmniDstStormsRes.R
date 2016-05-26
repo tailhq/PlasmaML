@@ -62,7 +62,9 @@ arxP <- read.csv("ARXFinalPredRes.csv", header = FALSE, col.names = c("actual", 
 nmP <- read.csv("NMFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
 
 
-arx_errorbars_pred <- read.csv("ARXErrorBarsFinalPredRes.csv", header = FALSE, col.names = c("Dst", "predicted", "lower", "upper"))
+arx_errorbars_pred <- read.csv("ARXErrorBarsFinalPredRes.csv", 
+                               header = FALSE, 
+                               col.names = c("Dst", "predicted", "lower", "upper"))
 arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
 
 palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
@@ -77,7 +79,10 @@ ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
   scale_linetype_manual(values = lines1, guide=FALSE) +
   xlab("Time (hours)") + ylab("Dst (nT)")
 
-ar_errorbars_pred <- read.csv("ARErrorBarsFinalPredRes.csv", header = FALSE, col.names = c("Dst", "predicted", "lower", "upper"))
+ar_errorbars_pred <- read.csv("ARErrorBarsFinalPredRes.csv", 
+                              header = FALSE, 
+                              col.names = c("Dst", "predicted", 
+                                            "lower", "upper"))
 ar_errorbars_pred$time <- 1:nrow(ar_errorbars_pred)
 
 meltedPred1 <- melt(ar_errorbars_pred, id="time")
@@ -300,18 +305,20 @@ deltaDstPlot <- ggplot(dfVBz, aes(x=DstMin, y=deltaDstMin/DstMin)) +
 library(directlabels)
 setwd("../../PlasmaML/data")
 lDF <- read.csv("OmniARXLandscapeRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
-contDF <- lDF[lDF$b <= 1.0, c("rmse", "b", "sigma")]
+contDF <- lDF[lDF$b <= 0.1, c("rmse", "b", "sigma")]
 
 c <- ggplot(contDF, aes(x = b, y = sigma, z=rmse)) + 
-  stat_contour(aes(colour = ..level..), binwidth  = 0.045, size = 0.75) + 
-  theme_gray(base_size = 22) +
+  stat_contour(aes(colour = ..level..), binwidth  = 0.02, size = 0.75) + 
+  theme_gray(base_size = 22) + 
+  scale_x_continuous(breaks = round(seq(0.0, 0.1, by = 0.02),2)) + #scale_y_log10() +
   xlab("b") + ylab(TeX('$\\sigma$'))
 direct.label(c, "top.points")
 
 lDF1 <- read.csv("OmniARXLandscapeMLRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
-contDF1 <- lDF1[lDF1$b <= 1.0, c("rmse", "b", "sigma")]
+contDF1 <- lDF1[, c("rmse", "b", "sigma")]
 
-ggplot(contDF1, aes(x = b, y = sigma, z=rmse)) + stat_contour(aes(colour = ..level..), binwidth  = 10.0, size = 1.0)
+ggplot(contDF1, aes(x = b, y = sigma, z=rmse)) + 
+  stat_contour(aes(colour = ..level..), binwidth  = 10.0, size = 1.0)
 
 lDF2 <- read.csv("OmniARXLandscapeFBMRes.csv", col.names=c("rmse", "hurst", "sigma"))
 

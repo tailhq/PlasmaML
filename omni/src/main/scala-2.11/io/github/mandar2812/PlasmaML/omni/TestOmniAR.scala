@@ -77,7 +77,8 @@ object TestOmniAR {
     //Load Omni data into a stream
     //Extract the time and Dst values
 
-    val names = Map(24 -> "Solar Wind Speed",
+    val names = Map(
+      24 -> "Solar Wind Speed",
       16 -> "I.M.F Bz",
       40 -> "Dst",
       41 -> "AE",

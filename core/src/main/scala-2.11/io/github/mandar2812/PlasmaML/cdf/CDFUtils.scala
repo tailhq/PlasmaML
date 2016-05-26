@@ -41,6 +41,17 @@ object CDFUtils {
       ).toMap)
     ).toMap
 
+  def anyRefToArray(obj: Any) = obj match {
+    case a: Array[_] => a
+    case _ => Array()
+  }
+
+  def anyRefToDecimal(obj: Any) = obj match {
+    case x: Float => x
+    case y: Double => y
+    case _ => null
+  }
+
   /**
     * Get the variable metadata of a CDf file as a [[Map]]
     *
@@ -72,10 +83,29 @@ object CDFUtils {
         val rawValueArray = v.createRawValueArray()
         (0 until v.getRecordCount).grouped(cdfBufferSize)
           .map(buffer => PlasmaML.sc.parallelize(
-            buffer.map(index => Seq(v.readShapedRecord(index, false, rawValueArray).toString))
+            buffer.map(index => Seq(v.readShapedRecord(index, false, rawValueArray)))
           )).reduceLeft((a, b) => a union b)
       }).reduceLeft((rddL, rddR) =>
         (rddL zip rddR) mapPartitions (_.map(couple => couple._1 ++ couple._2)))
+    })
+
+  def cdfToStream(columns: Seq[String],
+                  missingValueKey: String = "FILLVAL") = DataPipe(
+    (cdfContentAndAttributes: (CdfContent, Map[String, Map[String, String]])) => {
+      val (content, columnData) = cdfContentAndAttributes
+      val variablesSelected = content.getVariables
+        .filter(v => columns.contains(v.getName))
+        .sortBy(v => columns.indexOf(v.getName))
+
+      val dataStream = variablesSelected.map(v => {
+        val rawValueArray = v.createRawValueArray()
+        (0 until v.getRecordCount).grouped(cdfBufferSize)
+          .map(_.map(index => Seq(v.readShapedRecord(index, false, rawValueArray))).toStream
+          ).reduceLeft((a, b) => a ++ b)
+      }).reduceLeft((rddL, rddR) =>
+        (rddL zip rddR) map (couple => couple._1 ++ couple._2))
+
+      (dataStream, columnData.filterKeys(columns.contains(_)))
     })
 
   def processEpochs(position: Int = 0) =
