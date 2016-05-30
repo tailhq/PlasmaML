@@ -11,7 +11,7 @@ import scala.collection.mutable.{MutableList => ML}
 import collection.JavaConverters._
 
 /**
-  * @author mandar 4/5/16.
+  * @author mandar2812 date: 4/5/16.
   *
   * Utility to download and pre-process van allen data sets
   * from the John's Hopkins Applied Physics laboratory web pages.
@@ -215,7 +215,7 @@ object VanAllenData {
     * */
   def help(topic: String = "about"): Unit = topic match {
     case "about" =>
-      println("Van Allen probes data pre-processing service")
+      println("Van Allen probes data download service")
       println("\nType VanAllenData.help(\"data\") for a summary of the Van Allen probes data set or "+
         "\nVanAllenData.help(\"categories\") for an explaination of the various types of data files")
     case "data" =>

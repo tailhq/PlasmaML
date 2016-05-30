@@ -6,29 +6,33 @@ import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels.{CovarianceFunction, DiracKernel, RBFKernel}
 import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.models.neuralnets.{FFNeuralGraph, FeedForwardNetwork}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe, GPRegressionPipe}
+import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe, GLMPipe, GPRegressionPipe}
 
 /**
-  * Created by mandar on 26/5/16.
+  * @author mandar2812 date: 26/5/16.
   */
 object CRRESTest {
 
-  var columns = Seq("FLUX", "MLT", "L")
+  var columns = Seq("FLUX", "MLT", "L", "Local_Time")
 
   def preProcess(num_train: Int, num_test: Int) = CDFUtils.readCDF >
     CDFUtils.cdfToStream(columns) >
     DataPipe((couple: (Stream[Seq[AnyRef]], Map[String, Map[String, String]])) => {
       val (data, metadata) = couple
       data.filter(record => {
-        val (mlt, lshell) = (record(1).toString, record(2).toString)
-        mlt != metadata("MLT")("FILLVAL") && lshell != metadata("L")("FILLVAL")
+        val (mlt, lshell, local_time) = (record(1).toString, record(2).toString, record(3).toString)
+        mlt != metadata("MLT")("FILLVAL") &&
+          lshell != metadata("L")("FILLVAL") //&&
+          //local_time != metadata("Local_Time")("FILLVAL")
       }).map(record => {
-        val (flux, mlt, lshell) = (
+        val (flux, mlt, lshell, local_time) = (
           record.head.asInstanceOf[Array[Float]],
           record(1).asInstanceOf[Float],
-          record(2).asInstanceOf[Float])
+          record(2).asInstanceOf[Float],
+          record(3).asInstanceOf[Float])
         val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")("FILLVAL")).map(_.toDouble)
-        (DenseVector(mlt.toDouble, lshell.toDouble), filteredFlux.sum/filteredFlux.length)
+        (DenseVector(mlt.toDouble, lshell.toDouble),
+          filteredFlux.sum/filteredFlux.length)
       })
     }) >
     DataPipe((data: Stream[(DenseVector[Double], Double)]) => {
@@ -86,7 +90,7 @@ object CRRESTest {
         val transform = DataPipe((d: Stream[(DenseVector[Double], Double)]) =>
           d.map(el => (el._1, DenseVector(el._2))))
 
-        val model = new FeedForwardNetwork[Stream[(DenseVector[Double], Double)]](trainTest._1._1, gr, transform)
+        val model = new FeedForwardNetwork(trainTest._1._1, gr, transform)
 
         model.setLearningRate(stepSize)
           .setMaxIterations(maxIt)
@@ -114,6 +118,42 @@ object CRRESTest {
 
     val finalPipe = preProcess(num_train, num_test) > DataPipe(modelTrainTest)
 
-    finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910201_v01.cdf")
+    finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910122_v01.cdf")
   }
+
+  /*def apply(phi: (DenseVector[Double]) => DenseVector[Double] =
+            identity[DenseVector[Double]],
+            num_train: Int, num_test: Int, stepSize: Double,
+            maxIt: Int, regularization: Double,
+            mini: Double) = {
+    val modelPipe = new GLMPipe[
+      (DenseMatrix[Double], DenseVector[Double]),
+      Stream[(DenseVector[Double], Double)]](identity _, phi) >
+      DynaMLPipe.trainParametricModel(regularization, stepSize, maxIt)
+
+    val modelTrainTest =
+      (trainTest: ((Stream[(DenseVector[Double], Double)],
+        Stream[(DenseVector[Double], Double)]),
+        (DenseVector[Double], DenseVector[Double]))) => {
+
+        val model = modelPipe(trainTest._1._1)
+
+        val scoresAndLabels = trainTest._1._2.map(testpattern => {
+          (model.predict(testpattern._1), testpattern._2)
+        }).map(scoAndLab => {
+          val (score, target) = scoAndLab
+          (score * trainTest._2._2(-1) + trainTest._2._2(-1),
+            target * trainTest._2._2(-1) + trainTest._2._2(-1))
+        }).toList
+
+        val metrics = new RegressionMetrics(scoresAndLabels, scoresAndLabels.length)
+        metrics.print()
+        metrics.generateFitPlot()
+      }
+
+    val finalPipe = preProcess(num_train, num_test) > DataPipe(modelTrainTest)
+
+    finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910201_v01.cdf")
+  }*/
+
 }

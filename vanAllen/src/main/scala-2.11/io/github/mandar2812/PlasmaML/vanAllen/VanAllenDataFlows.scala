@@ -121,9 +121,10 @@ object VanAllenDataFlows {
         case true =>
           val jsonParsed = try {
             Some(parse(
-              cleanRegex.replaceAllIn(processedHeader.mkString(""), """\}\,$1"""),
-              false)
-            )
+              cleanRegex.replaceAllIn(
+                processedHeader.mkString(""),
+                """\}\,$1"""),
+              useBigDecimalForDouble = false))
           } catch {
             case e: Exception => None
           }
