@@ -5,6 +5,7 @@ import io.github.mandar2812.PlasmaML.cdf.CDFUtils
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels.{CovarianceFunction, DiracKernel, RBFKernel}
 import io.github.mandar2812.dynaml.models.gp.GPRegression
+import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
 import io.github.mandar2812.dynaml.models.neuralnets.{FFNeuralGraph, FeedForwardNetwork}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe, GLMPipe, GPRegressionPipe}
 
@@ -121,15 +122,17 @@ object CRRESTest {
     finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910122_v01.cdf")
   }
 
-  /*def apply(phi: (DenseVector[Double]) => DenseVector[Double] =
-            identity[DenseVector[Double]],
+  def apply(phi: (DenseVector[Double]) => DenseVector[Double],
             num_train: Int, num_test: Int, stepSize: Double,
             maxIt: Int, regularization: Double,
             mini: Double) = {
     val modelPipe = new GLMPipe[
       (DenseMatrix[Double], DenseVector[Double]),
       Stream[(DenseVector[Double], Double)]](identity _, phi) >
-      DynaMLPipe.trainParametricModel(regularization, stepSize, maxIt)
+      DynaMLPipe.trainParametricModel[Stream[(DenseVector[Double], Double)],
+        DenseVector[Double], DenseVector[Double], Double,
+        (DenseMatrix[Double], DenseVector[Double]),
+        GeneralizedLinearModel[(DenseMatrix[Double], DenseVector[Double])]](regularization, stepSize, maxIt)
 
     val modelTrainTest =
       (trainTest: ((Stream[(DenseVector[Double], Double)],
@@ -154,6 +157,6 @@ object CRRESTest {
     val finalPipe = preProcess(num_train, num_test) > DataPipe(modelTrainTest)
 
     finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910201_v01.cdf")
-  }*/
+  }
 
 }

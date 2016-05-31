@@ -52,5 +52,6 @@ lazy val vanAllen =
           """import io.github.mandar2812.dynaml.kernels._;"""+
           """import io.github.mandar2812.dynaml.pipes._;"""+
           """import com.quantifind.charts.Highcharts._;"""+
-          """import org.jsoup._"""
+          """import org.jsoup._;"""+
+          """import breeze.linalg.{DenseMatrix, DenseVector}"""
     ).dependsOn(core)
