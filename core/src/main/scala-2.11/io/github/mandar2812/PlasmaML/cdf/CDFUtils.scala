@@ -79,7 +79,7 @@ object CDFUtils {
         .filter(v => columns.contains(v.getName))
         .sortBy(v => columns.indexOf(v.getName))
 
-      variablesSelected.map(v => {
+      val dataRDD = variablesSelected.map(v => {
         val rawValueArray = v.createRawValueArray()
         (0 until v.getRecordCount).grouped(cdfBufferSize)
           .map(buffer => PlasmaML.sc.parallelize(
@@ -87,6 +87,7 @@ object CDFUtils {
           )).reduceLeft((a, b) => a union b)
       }).reduceLeft((rddL, rddR) =>
         (rddL zip rddR) mapPartitions (_.map(couple => couple._1 ++ couple._2)))
+      (dataRDD, columnData.filterKeys(columns.contains(_)))
     })
 
   def cdfToStream(columns: Seq[String],

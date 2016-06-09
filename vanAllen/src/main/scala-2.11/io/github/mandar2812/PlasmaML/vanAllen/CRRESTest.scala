@@ -7,7 +7,10 @@ import io.github.mandar2812.dynaml.kernels.{CovarianceFunction, DiracKernel, RBF
 import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
 import io.github.mandar2812.dynaml.models.neuralnets.{FFNeuralGraph, FeedForwardNetwork}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe, GLMPipe, GPRegressionPipe}
+import io.github.mandar2812.dynaml.pipes._
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.stat.Statistics
+import org.apache.spark.rdd.RDD
 
 /**
   * @author mandar2812 date: 26/5/16.
@@ -41,14 +44,33 @@ object CRRESTest {
     }) >
     DynaMLPipe.trainTestGaussianStandardization
 
+  def preProcessRDD() = CDFUtils.readCDF >
+    CDFUtils.cdfToRDD(columns) >
+    DataPipe((couple: (RDD[Seq[AnyRef]], Map[String, Map[String, String]])) => {
+      val (data, metadata) = couple
+      data.filter(record => {
+        val (mlt, lshell, local_time) = (record(1).toString, record(2).toString, record(3).toString)
+        mlt != metadata("MLT")("FILLVAL") &&
+          lshell != metadata("L")("FILLVAL") //&&
+        // local_time != metadata("Local_Time")("FILLVAL")
+      }).map(record => {
+        val (flux, mlt, lshell, local_time) = (
+          record.head.asInstanceOf[Array[Float]],
+          record(1).asInstanceOf[Float],
+          record(2).asInstanceOf[Float],
+          record(3).asInstanceOf[Float])
+        val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")("FILLVAL")).map(_.toDouble)
+        (DenseVector(mlt.toDouble, lshell.toDouble),
+        filteredFlux.sum/filteredFlux.length)
+      })
+    })
+
   def apply(kernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]] =
             new RBFKernel(2.0),
             noiseKernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]] =
             new DiracKernel(2.0),
             num_train: Int = 500, num_test: Int = 1000,
             grid: Int = 5, step: Double = 0.2) = {
-
-
 
     val modelPipe = new GPRegressionPipe[GPRegression,
       ((Stream[(DenseVector[Double], Double)],
@@ -59,7 +81,6 @@ object CRRESTest {
       DynaMLPipe.modelTuning(
         kernel.state ++ noiseKernel.state,
         "GS", grid, step)
-
 
     val modelTrainTest =
       (trainTest: ((Stream[(DenseVector[Double], Double)],
@@ -158,5 +179,27 @@ object CRRESTest {
 
     finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910201_v01.cdf")
   }
+
+  /*def apply(committeeSize: Int, fraction: Double) = {
+    // From the original RDD construct pipes for subsampling
+    // and give them as inputs to a LSSVM Committee
+    val rddPipe = preProcessRDD() >
+      DataPipe((data: RDD[(DenseVector[Double], Double)]) => {
+        val colStats = Statistics.colStats(data.map(pattern =>
+          Vectors.dense(pattern._1.toArray ++ Array(pattern._2))))
+
+        val pre = (d: RDD[(DenseVector[Double], Double)]) =>
+          d.sample(fraction = fraction, withReplacement = true).collect().toStream
+
+        val pipes = (1 to committeeSize).map(i => {
+          val kernel = new RBFKernel(1.0)
+          new DLSSVMPipe[RDD[(DenseVector[Double], Double)]](pre, kernel)
+        })
+
+      })
+
+
+
+  }*/
 
 }
