@@ -5,7 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, GregorianCalendar}
 
 import breeze.linalg.DenseVector
-import io.github.mandar2812.PlasmaML.PlasmaML
+import io.github.mandar2812.PlasmaML.PlasmaMLSpark
 
 import scala.collection.mutable.{MutableList => ML}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
@@ -178,7 +178,7 @@ object VanAllenDataFlows {
   def fileToRDDOption = DataPipe((relativePath: String) => {
     Files.exists(Paths.get(dataRoot+relativePath)) match {
       case false => None
-      case true => Some(PlasmaML.sc.textFile(dataRoot+relativePath))
+      case true => Some(PlasmaMLSpark.sc.textFile(dataRoot+relativePath))
     }
   })
 
@@ -296,7 +296,7 @@ object VanAllenDataFlows {
 
           case None =>
             logger.info("No file found: " + category + " probe " + probe + " for " + year + "/" + doy)
-            PlasmaML.sc.emptyRDD[String]
+            PlasmaMLSpark.sc.emptyRDD[String]
         }
       }).reduceLeft[RDD[String]]((a, b) => a.union(b))
 

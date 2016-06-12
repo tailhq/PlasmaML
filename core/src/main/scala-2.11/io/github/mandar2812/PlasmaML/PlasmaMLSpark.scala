@@ -5,7 +5,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 /**
   * Created by mandar on 14/5/16.
   */
-object PlasmaML {
+object PlasmaMLSpark {
 
   /**
     * The number of spark executors that can be spawned, which can be

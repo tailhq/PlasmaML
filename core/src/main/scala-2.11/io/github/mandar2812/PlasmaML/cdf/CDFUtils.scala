@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.cdf
 
 import java.io.File
 
-import io.github.mandar2812.PlasmaML.PlasmaML
+import io.github.mandar2812.PlasmaML.PlasmaMLSpark
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import org.apache.spark.rdd.RDD
 
@@ -66,8 +66,8 @@ object CDFUtils {
 
   /**
     * Read a CDF file into an Apache Spark RDD
+ *
     * @param columns A list of columns to be selected from the file
-    *
     * @param missingValueKey The attribute name in the CDF column metadata
     *                        which holds the missing value string for each
     *                        column, defaults to "FILLVAL".
@@ -82,7 +82,7 @@ object CDFUtils {
       val dataRDD = variablesSelected.map(v => {
         val rawValueArray = v.createRawValueArray()
         (0 until v.getRecordCount).grouped(cdfBufferSize)
-          .map(buffer => PlasmaML.sc.parallelize(
+          .map(buffer => PlasmaMLSpark.sc.parallelize(
             buffer.map(index => Seq(v.readShapedRecord(index, false, rawValueArray)))
           )).reduceLeft((a, b) => a union b)
       }).reduceLeft((rddL, rddR) =>
