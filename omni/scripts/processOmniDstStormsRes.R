@@ -303,7 +303,7 @@ deltaDstPlot <- ggplot(dfVBz, aes(x=DstMin, y=deltaDstMin/DstMin)) +
        y=TeX('$\\frac{\\Delta D_{st}}{min(D_{st})}$'), color="Storm Category")
 
 library(directlabels)
-setwd("../../PlasmaMLSpark/data")
+setwd("../../PlasmaML/data")
 lDF <- read.csv("OmniARXLandscapeRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
 contDF <- lDF[lDF$b <= 0.1, c("rmse", "b", "sigma")]
 
