@@ -4,7 +4,6 @@ library(ggplot2)
 library(gridExtra)
 library(reshape2)
 library(latex2exp)
-setwd("../../../DynaML/data/")
 
 dfPredNAR <- read.csv("PredOmniARStormsRes.csv", 
                       header = FALSE, col.names = c("Dst", "NAR"))
@@ -20,23 +19,32 @@ dfPredNM <- read.csv("OmniNMPredStormsRes.csv",
                      col.names = c("Dst", "NM"), 
                      na.strings = c("NAN"))
 
+dfPredPer <- read.csv("PredOmniPerStormsRes.csv",
+                      header = FALSE, 
+                      col.names = c("Dst", "Persist"), 
+                      na.strings = c("NAN"))
+
 cumDF <- data.frame(absErr = c(abs(dfPredNAR$Dst - dfPredNAR$NAR), 
                                abs(dfPredNARX$Dst - dfPredNARX$NAR), 
                                abs(dfPredTL$Dst - dfPredTL$TL), 
-                               abs(dfPredNM$Dst - dfPredNM$NM)), 
+                               abs(dfPredNM$Dst - dfPredNM$NM),
+                               abs(dfPredPer$Dst - dfPredPer$Persist)), 
                     model = c(rep("GP-AR", nrow(dfPredNAR)), 
                               rep("GP-ARX", nrow(dfPredNARX)), 
                               rep("TL", nrow(dfPredTL)), 
-                              rep("NM", nrow(dfPredNM))))
+                              rep("NM", nrow(dfPredNM)), 
+                              rep("Persist(1)", nrow(dfPredPer))))
 
 cumDFRel <- data.frame(absErr = c(abs((dfPredNAR$Dst - dfPredNAR$NAR)/abs(dfPredNAR$Dst)), 
                                abs((dfPredNARX$Dst - dfPredNARX$NAR)/abs(dfPredNARX$Dst)), 
                                abs((dfPredTL$Dst - dfPredTL$TL)/abs(dfPredTL$Dst)), 
-                               abs((dfPredNM$Dst - dfPredNM$NM)/abs(dfPredNM$Dst))), 
-                    model = c(rep("GP-AR", nrow(dfPredNAR)), 
+                               abs((dfPredNM$Dst - dfPredNM$NM)/abs(dfPredNM$Dst)), 
+                               abs(dfPredPer$Dst - dfPredPer$Persist)/abs(dfPredPer$Dst)), 
+                      model = c(rep("GP-AR", nrow(dfPredNAR)), 
                               rep("GP-ARX", nrow(dfPredNARX)), 
                               rep("TL", nrow(dfPredTL)), 
-                              rep("NM", nrow(dfPredNM))))
+                              rep("NM", nrow(dfPredNM)), 
+                              rep("Persist(1)", nrow(dfPredPer))))
 
 ggplot(cumDF, aes(absErr, colour = model)) + stat_ecdf() +
   theme_gray(base_size = 22) +
@@ -134,7 +142,7 @@ df <- read.csv("Final_NARXOmniARXStormsRes.csv",
                              "deltaT"))
 
 
-df2 <- read.csv("FinalOmniARStormsRes.csv", 
+df2 <- read.csv("Exp_Set3_OmniARStormsRes.csv", 
                 header = FALSE, stringsAsFactors = TRUE, 
                 col.names = c("eventID","stormCat","order", "modelSize",
                               "rmse", "corr", "deltaDstMin", "DstMin",
@@ -146,7 +154,7 @@ dfPer <- read.csv("OmniPerStormsRes.csv",
                              "rmse", "corr", "deltaDstMin", "DstMin",
                              "deltaT"))
 
-dfVBz <- read.csv("Exp_Set2_OmniARXStormsRes.csv", 
+dfVBz <- read.csv("Exp_Set3_OmniARXStormsRes.csv", 
                   header = FALSE, stringsAsFactors = TRUE, 
                   col.names = c("eventID","stormCat","order", "modelSize",
                                 "rmse", "corr", "deltaDstMin", "DstMin",
@@ -344,4 +352,10 @@ c <- ggplot(contDF4, aes(x = b, y = sigma, z=rmse)) +
   scale_x_continuous(breaks = round(seq(0.0, 0.1, by = 0.05),2)) + #scale_y_log10() +
   xlab("b") + ylab(TeX('$\\sigma$'))
 direct.label(c, "top.points")
+
+lDF5 <- read.csv("LandscapeARXOneDimRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
+contDF5 <- lDF5[, c("rmse", "sigma")]
+
+ggplot(contDF5, aes(x = sigma, y = rmse)) + geom_line()
+
 

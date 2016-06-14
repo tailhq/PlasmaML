@@ -428,11 +428,13 @@ object DstNMTLExperiment {
           val res = model match {
             case "NM" => TestOmniNarmax(
               startDate+"/"+startHour,
-              endDate+"/"+endHour, action)
+              endDate+"/"+endHour,
+              action = action)
 
             case "TL" => TestOmniTL(
               startDate+"/"+startHour,
-              endDate+"/"+endHour, action)
+              endDate+"/"+endHour,
+              action = action)
           }
 
           if(action == "test") {

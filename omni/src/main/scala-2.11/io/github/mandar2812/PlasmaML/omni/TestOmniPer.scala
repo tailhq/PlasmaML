@@ -18,7 +18,8 @@ import org.apache.log4j.Logger
 object TestOmniPer {
   def apply(start: String = "2006/12/28/00",
             end: String = "2006/12/29/23",
-            column:Int = 40): Seq[Seq[Double]] = {
+            column:Int = 40,
+            action: String = "test"): Seq[Seq[Double]] = {
 
     //Load Omni data into a stream
     //Extract the time and Dst values
@@ -120,14 +121,20 @@ object TestOmniPer {
         hold()
         line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._1))
         unhold()
-        Seq(
-          Seq(yearTest.toDouble, 1.0, scoresAndLabels.length.toDouble,
-            metrics.mae, metrics.rmse, metrics.Rsq,
-            metrics.corr, metrics.modelYield,
-            timeObs.toDouble - timeModel.toDouble,
-            peakValuePred,
-            peakValueAct)
-        )
+
+        action match {
+          case "test" =>
+            Seq(
+              Seq(yearTest.toDouble, 1.0, scoresAndLabels.length.toDouble,
+                metrics.mae, metrics.rmse, metrics.Rsq,
+                metrics.corr, metrics.modelYield,
+                timeObs.toDouble - timeModel.toDouble,
+                peakValuePred,
+                peakValueAct)
+            )
+          case "predict" =>
+            scoresAndLabels.map(c => Seq(c._2, c._1))
+        }
 
       }
 
@@ -148,10 +155,10 @@ object TestOmniPer {
 
 object DstPersistExperiment {
 
-  def apply() = {
+  def apply(task: String = "test", fileID: String = "") = {
     val writer =
       CSVWriter.open(
-        new File("data/OmniPerStormsRes.csv"),
+        new File("data/"+fileID+"OmniPerStormsRes.csv"),
         append = true)
 
       val stormsPipe =
@@ -172,16 +179,22 @@ object DstPersistExperiment {
             val stormCategory = stormMetaFields(6)
 
             val res = TestOmniPer(
-              startDate+"/"+startHour, endDate+"/"+endHour)
+              startDate+"/"+startHour,
+              endDate+"/"+endHour,
+              action = task)
 
-            val row = Seq(
-              eventId, stormCategory, 1.0,
-              0.0, res.head(4), res.head(6),
-              res.head(9)-res.head(10),
-              res.head(10), res.head(8)
-            )
+            if(task == "test") {
+              val row = Seq(
+                eventId, stormCategory, 1.0,
+                0.0, res.head(4), res.head(6),
+                res.head(9)-res.head(10),
+                res.head(10), res.head(8)
+              )
 
-            writer.writeRow(row)
+              writer.writeRow(row)
+            } else {
+              writer.writeAll(res)
+            }
           })
 
       stormsPipe.run("data/geomagnetic_storms.csv")
