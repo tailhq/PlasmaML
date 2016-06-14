@@ -146,7 +146,7 @@ dfPer <- read.csv("OmniPerStormsRes.csv",
                              "rmse", "corr", "deltaDstMin", "DstMin",
                              "deltaT"))
 
-dfVBz <- read.csv("Final_NARXVBzOmniARXStormsRes.csv", 
+dfVBz <- read.csv("Exp_Set2_OmniARXStormsRes.csv", 
                   header = FALSE, stringsAsFactors = TRUE, 
                   col.names = c("eventID","stormCat","order", "modelSize",
                                 "rmse", "corr", "deltaDstMin", "DstMin",
@@ -229,7 +229,7 @@ barplrmse2 <- ggplot(finalDF[finalDF$variable == "rmse" &
   xlab("Model") + ylab("Mean RMSE")
 
 
-barplrmse3 <- ggplot(finalDF[finalDF$variable == "rmse" & !(finalDF$model %in% c("GP-ARX1")),], 
+barplrmse3 <- ggplot(finalDF[finalDF$variable == "rmse" & !(finalDF$model %in% c("GP-ARX1", "TL(CWI)", "NM(CWI)")),], 
                      aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
@@ -257,7 +257,7 @@ barplcc2 <- ggplot(finalDF[finalDF$variable == "corr" &
   xlab("Model") + ylab("Mean RMSE")
 
 
-barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("GP-ARX1")),], 
+barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("GP-ARX1", "TL(CWI)", "NM(CWI)")),], 
                      aes(x = reorder(model, meanValue), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 0.05) + 
@@ -266,9 +266,7 @@ barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
 
-
-
-barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin" & !(finalDF$model %in% c("GP-ARX1")),], 
+barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin" & !(finalDF$model %in% c("GP-ARX1", "TL(CWI)", "NM(CWI)")),], 
                  aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) +
@@ -276,7 +274,7 @@ barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin" & !(finalDF$model %in
   theme_gray(base_size = 22) +
   xlab("Model") + ylab(TeX('$\\bar{\\Delta Dst_{min}}$'))
 
-barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT" & !(finalDF$model %in% c("GP-ARX1")),], 
+barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT" & !(finalDF$model %in% c("GP-ARX1", "TL(CWI)", "NM(CWI)")),], 
                  aes(x=reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 0.1) + 
@@ -298,7 +296,7 @@ barpl8 <- ggplot(finalDF[finalDF$variable == "corr",], aes(x = reorder(model, me
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
 deltaDstPlot <- ggplot(dfVBz, aes(x=DstMin, y=deltaDstMin/DstMin)) + 
-  geom_point(aes(color=as.factor(stormCat))) + theme_gray(base_size = 22) + 
+  geom_point(aes(color=as.factor(stormCat)), size = 4.5) + theme_gray(base_size = 22) + 
   labs(x = TeX('$min(D_{st})$'), 
        y=TeX('$\\frac{\\Delta D_{st}}{min(D_{st})}$'), color="Storm Category")
 
@@ -322,4 +320,28 @@ ggplot(contDF1, aes(x = b, y = sigma, z=rmse)) +
 
 lDF2 <- read.csv("OmniARXLandscapeFBMRes.csv", col.names=c("rmse", "hurst", "sigma"))
 
-ggplot(lDF2, aes(x = hurst, y = sigma, z=rmse)) + stat_contour(aes(colour = ..level..), binwidth  = 0.02, size = 1.0)
+ggplot(lDF2, aes(x = hurst, y = sigma, z=rmse)) + 
+  stat_contour(aes(colour = ..level..), 
+               binwidth  = 0.02, size = 1.0)
+
+
+lDF3 <- read.csv("LandscapeARXRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
+contDF3 <- lDF3[, c("rmse", "b", "sigma")]
+
+c <- ggplot(contDF3, aes(x = b, y = sigma, z=rmse)) + 
+  stat_contour(aes(colour = ..level..), binwidth  = 0.02, size = 0.75) + 
+  theme_gray(base_size = 22) + 
+  scale_x_continuous(breaks = round(seq(0.0, 0.1, by = 0.02),2)) + #scale_y_log10() +
+  xlab("b") + ylab(TeX('$\\sigma$'))
+direct.label(c, "top.points")
+
+lDF4 <- read.csv("LandscapeARRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
+contDF4 <- lDF4[, c("rmse", "b", "sigma")]
+
+c <- ggplot(contDF4, aes(x = b, y = sigma, z=rmse)) + 
+  stat_contour(aes(colour = ..level..), binwidth  = 0.02, size = 0.75) + 
+  theme_gray(base_size = 22) + 
+  scale_x_continuous(breaks = round(seq(0.0, 0.1, by = 0.05),2)) + #scale_y_log10() +
+  xlab("b") + ylab(TeX('$\\sigma$'))
+direct.label(c, "top.points")
+

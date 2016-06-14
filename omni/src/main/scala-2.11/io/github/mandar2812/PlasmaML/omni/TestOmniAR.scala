@@ -153,6 +153,11 @@ object TestOmniAR {
       (trainTest: ((Stream[(DenseVector[Double], Double)],
         Stream[(DenseVector[Double], Double)]),
         (DenseVector[Double], DenseVector[Double]))) => {
+
+        kernel.blocked_hyper_parameters =
+          if (!opt.contains("block") || opt("block").isEmpty) List()
+          else opt("block").split(',').toList
+
         val model = new GPNarModel(deltaT, kernel, noise, trainTest._1._1)
         val num_training = trainTest._1._1.length
 
@@ -219,144 +224,157 @@ object TestOmniAR {
           case "GS" => new GridSearch[model.type](model)
             .setGridSize(grid)
             .setStepSize(step)
-            .setLogScale(false)
+            .setLogScale(opt("logScale").toBoolean)
 
           case "ML" => new GPMLOptimizer[DenseVector[Double],
             Seq[(DenseVector[Double], Double)],
             GPRegression](model)
         }
 
-        val startConf = kernel.state ++ noise.state
-        val (_, conf) = gs.optimize(startConf, opt)
+        val startConf = kernel.effective_state ++ noise.effective_state
 
-        model.setState(conf)
-        model.persist()
+        if (action != "energyLandscape") {
+          val (_, conf) = gs.optimize(startConf, opt)
 
-        val res = model.test(trainTest._1._2)
+          model.setState(conf)
+          model.persist()
 
-        val deNormalize = DataPipe((list: List[(Double, Double, Double, Double)]) =>
-          list.map{l => (l._1*trainTest._2._2(-1) + trainTest._2._1(-1),
-            l._2*trainTest._2._2(-1) + trainTest._2._1(-1),
-            l._3*trainTest._2._2(-1) + trainTest._2._1(-1),
-            l._4*trainTest._2._2(-1) + trainTest._2._1(-1))})
+          val res = model.test(trainTest._1._2)
 
-        val deNormalize1 = DataPipe((list: List[(Double, Double)]) =>
-          list.map{l => (l._1*trainTest._2._2(-1) + trainTest._2._1(-1),
-            l._2*trainTest._2._2(-1) + trainTest._2._1(-1))})
+          val deNormalize = DataPipe((list: List[(Double, Double, Double, Double)]) =>
+            list.map{l => (l._1*trainTest._2._2(-1) + trainTest._2._1(-1),
+              l._2*trainTest._2._2(-1) + trainTest._2._1(-1),
+              l._3*trainTest._2._2(-1) + trainTest._2._1(-1),
+              l._4*trainTest._2._2(-1) + trainTest._2._1(-1))})
 
-        val scoresAndLabelsPipe =
-          DataPipe(
-            (res: Seq[(DenseVector[Double], Double, Double, Double, Double)]) =>
-              res.map(i => (i._3, i._2, i._4, i._5)).toList) > deNormalize
+          val deNormalize1 = DataPipe((list: List[(Double, Double)]) =>
+            list.map{l => (l._1*trainTest._2._2(-1) + trainTest._2._1(-1),
+              l._2*trainTest._2._2(-1) + trainTest._2._1(-1))})
 
-        val scoresAndLabels = scoresAndLabelsPipe.run(res)
+          val scoresAndLabelsPipe =
+            DataPipe(
+              (res: Seq[(DenseVector[Double], Double, Double, Double, Double)]) =>
+                res.map(i => (i._3, i._2, i._4, i._5)).toList) > deNormalize
 
-        val metrics = new RegressionMetrics(scoresAndLabels.map(i => (i._1, i._2)),
-          scoresAndLabels.length)
+          val scoresAndLabels = scoresAndLabelsPipe.run(res)
 
-        val (name, name1) =
-          if(names.contains(column)) (names(column), names(column))
-          else ("Value","Time Series")
+          val metrics = new RegressionMetrics(scoresAndLabels.map(i => (i._1, i._2)),
+            scoresAndLabels.length)
 
-        metrics.setName(name)
+          val (name, name1) =
+            if(names.contains(column)) (names(column), names(column))
+            else ("Value","Time Series")
 
-        //Model Predicted Output, only in stepPred > 0
-        var mpoRes: Seq[Double] = Seq()
-        if(stepPred > 0) {
-          //Now test the Model Predicted Output and its performance.
-          val mpo = model.modelPredictedOutput(stepPred) _
-          val testData = trainTest._1._2
+          metrics.setName(name)
+
+          //Model Predicted Output, only in stepPred > 0
+          var mpoRes: Seq[Double] = Seq()
+          if(stepPred > 0) {
+            //Now test the Model Predicted Output and its performance.
+            val mpo = model.modelPredictedOutput(stepPred) _
+            val testData = trainTest._1._2
 
 
-          val predictedOutput:List[Double] = testData.grouped(stepPred).map((partition) => {
-            val preds = mpo(partition.head._1).map(_._1)
-            if(preds.length == partition.length) {
-              preds.toList
-            } else {
-              preds.take(partition.length).toList
-            }
-          }).foldRight(List[Double]())(_++_)
+            val predictedOutput:List[Double] = testData.grouped(stepPred).map((partition) => {
+              val preds = mpo(partition.head._1).map(_._1)
+              if(preds.length == partition.length) {
+                preds.toList
+              } else {
+                preds.take(partition.length).toList
+              }
+            }).foldRight(List[Double]())(_++_)
 
-          val outputs = testData.map(_._2).toList
+            val outputs = testData.map(_._2).toList
 
-          val res2 = predictedOutput zip outputs
-          val scoresAndLabels2 = deNormalize1.run(res2)
+            val res2 = predictedOutput zip outputs
+            val scoresAndLabels2 = deNormalize1.run(res2)
 
-          val mpoMetrics = new RegressionMetrics(scoresAndLabels2,
-            scoresAndLabels2.length)
+            val mpoMetrics = new RegressionMetrics(scoresAndLabels2,
+              scoresAndLabels2.length)
 
-          logger.info("Printing Model Predicted Output (MPO) Performance Metrics")
-          mpoMetrics.print()
+            logger.info("Printing Model Predicted Output (MPO) Performance Metrics")
+            mpoMetrics.print()
 
-          val timeObsMPO = scoresAndLabels2.map(_._2).zipWithIndex.min._2
-          val timeModelMPO = scoresAndLabels2.map(_._1).zipWithIndex.min._2
-          logger.info("Timing Error; MPO, "+stepPred+
-            " hours ahead Prediction: "+(timeObsMPO-timeModelMPO))
+            val timeObsMPO = scoresAndLabels2.map(_._2).zipWithIndex.min._2
+            val timeModelMPO = scoresAndLabels2.map(_._1).zipWithIndex.min._2
+            logger.info("Timing Error; MPO, "+stepPred+
+              " hours ahead Prediction: "+(timeObsMPO-timeModelMPO))
 
-          mpoMetrics.generateFitPlot()
+            mpoMetrics.generateFitPlot()
+            //Plotting time series prediction comparisons
+            line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._2))
+            hold()
+            line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._1))
+            line((1 to scoresAndLabels2.length).toList, scoresAndLabels2.map(_._1))
+            legend(List("Time Series", "Predicted Time Series (one hour ahead)",
+              "Predicted Time Series ("+stepPred+" hours ahead)"))
+            unhold()
+
+            mpoRes = Seq(yearTrain.toDouble, yearTest.toDouble, deltaT.toDouble,
+              stepPred.toDouble, num_training.toDouble,
+              trainTest._1._2.length.toDouble,
+              mpoMetrics.mae, mpoMetrics.rmse, mpoMetrics.Rsq,
+              mpoMetrics.corr, mpoMetrics.modelYield,
+              timeObsMPO.toDouble - timeModelMPO.toDouble,
+              scoresAndLabels2.map(_._1).min)
+
+          }
+
+          metrics.generateFitPlot()
           //Plotting time series prediction comparisons
           line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._2))
           hold()
           line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._1))
-          line((1 to scoresAndLabels2.length).toList, scoresAndLabels2.map(_._1))
-          legend(List("Time Series", "Predicted Time Series (one hour ahead)",
-            "Predicted Time Series ("+stepPred+" hours ahead)"))
+          spline((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._3))
+          hold()
+          spline((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._4))
+          legend(List(name1, "Predicted "+name1+" (one hour ahead)", "Lower Bar", "Higher Bar"))
           unhold()
 
-          mpoRes = Seq(yearTrain.toDouble, yearTest.toDouble, deltaT.toDouble,
-            stepPred.toDouble, num_training.toDouble,
-            trainTest._1._2.length.toDouble,
-            mpoMetrics.mae, mpoMetrics.rmse, mpoMetrics.Rsq,
-            mpoMetrics.corr, mpoMetrics.modelYield,
-            timeObsMPO.toDouble - timeModelMPO.toDouble,
-            scoresAndLabels2.map(_._1).min)
+          val (timeObs, timeModel, peakValuePred, peakValueAct) = names(column) match {
+            case "Dst" =>
+              (scoresAndLabels.map(_._2).zipWithIndex.min._2,
+                scoresAndLabels.map(_._1).zipWithIndex.min._2,
+                scoresAndLabels.map(_._1).min,
+                scoresAndLabels.map(_._2).min)
+            case _ =>
+              (scoresAndLabels.map(_._2).zipWithIndex.max._2,
+                scoresAndLabels.map(_._1).zipWithIndex.max._2,
+                scoresAndLabels.map(_._1).max,
+                scoresAndLabels.map(_._2).max)
+          }
 
+          logger.info("Timing Error; OSA Prediction: "+(timeObs-timeModel))
+
+          logger.info("Printing One Step Ahead (OSA) Performance Metrics")
+          metrics.print()
+
+          action match {
+            case "test" =>
+              Seq(
+                Seq(yearTrain.toDouble, yearTest.toDouble, deltaT.toDouble,
+                  1.0, num_training.toDouble, trainTest._1._2.length.toDouble,
+                  metrics.mae, metrics.rmse, metrics.Rsq,
+                  metrics.corr, metrics.modelYield,
+                  timeObs.toDouble - timeModel.toDouble,
+                  peakValuePred,
+                  peakValueAct),
+                mpoRes
+              )
+
+            case "predict" => scoresAndLabels.map(i => Seq(i._2, i._1))
+
+            case "predict_error_bars" => scoresAndLabels.map(i => Seq(i._2, i._1, i._3, i._4))
+          }
+
+        } else {
+          gs.getEnergyLandscape(startConf, opt).map(k => {
+            Seq(k._1) ++ kernel.blocked_hyper_parameters.map(p => kernel.state(p)) ++
+              kernel.hyper_parameters.filter(l => !kernel.blocked_hyper_parameters.contains(l)).map(k._2(_)) ++
+              noise.hyper_parameters.map(k._2(_))
+          })
         }
 
-        metrics.generateFitPlot()
-        //Plotting time series prediction comparisons
-        line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._2))
-        hold()
-        line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._1))
-        spline((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._3))
-        hold()
-        spline((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._4))
-        legend(List(name1, "Predicted "+name1+" (one hour ahead)", "Lower Bar", "Higher Bar"))
-        unhold()
-
-        val (timeObs, timeModel, peakValuePred, peakValueAct) = names(column) match {
-          case "Dst" =>
-            (scoresAndLabels.map(_._2).zipWithIndex.min._2,
-              scoresAndLabels.map(_._1).zipWithIndex.min._2,
-              scoresAndLabels.map(_._1).min,
-              scoresAndLabels.map(_._2).min)
-          case _ =>
-            (scoresAndLabels.map(_._2).zipWithIndex.max._2,
-              scoresAndLabels.map(_._1).zipWithIndex.max._2,
-              scoresAndLabels.map(_._1).max,
-              scoresAndLabels.map(_._2).max)
-        }
-
-        logger.info("Timing Error; OSA Prediction: "+(timeObs-timeModel))
-
-        logger.info("Printing One Step Ahead (OSA) Performance Metrics")
-        metrics.print()
-
-        action match {
-          case "test" =>
-            Seq(
-              Seq(yearTrain.toDouble, yearTest.toDouble, deltaT.toDouble,
-                1.0, num_training.toDouble, trainTest._1._2.length.toDouble,
-                metrics.mae, metrics.rmse, metrics.Rsq,
-                metrics.corr, metrics.modelYield,
-                timeObs.toDouble - timeModel.toDouble,
-                peakValuePred,
-                peakValueAct),
-              mpoRes
-            )
-
-          case "predict" => scoresAndLabels.map(i => Seq(i._2, i._1))
-        }
       }
 
 
@@ -412,6 +430,8 @@ object DstARExperiment {
   def apply(trainstart: String, trainend: String,
             kernel: CovarianceFunction[DenseVector[Double],
               Double, DenseMatrix[Double]],
+            noise: CovarianceFunction[DenseVector[Double],
+              Double, DenseMatrix[Double]],
             deltas: List[Int],
             options: Map[String, String]) = {
     val writer =
@@ -421,6 +441,7 @@ object DstARExperiment {
         append = true)
 
     val initialKernelState = kernel.state
+    val initialNoiseState = noise.state
 
     deltas.foreach(modelOrder => {
       val stormsPipe =
@@ -440,9 +461,10 @@ object DstARExperiment {
 
             val stormCategory = stormMetaFields(6)
             kernel.setHyperParameters(initialKernelState)
+            noise.setHyperParameters(initialNoiseState)
             val res = TestOmniAR.runExperiment(trainstart, trainend,
               startDate+"/"+startHour, endDate+"/"+endHour,
-              kernel, modelOrder, 0, 0, new DiracKernel(2.0),
+              kernel, modelOrder, 0, 0, noise,
               40, options("grid").toInt, options("step").toDouble,
               options("globalOpt"), options, action = options("action"))
 
