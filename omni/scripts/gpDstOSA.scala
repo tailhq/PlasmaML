@@ -49,16 +49,16 @@ val pred2004ARXErr = TestOmniARX.runExperiment(trainingStart, trainingEnd, start
     "logScale" -> "true"),
   "predict_error_bars")
 
-pipeARXErr(pred2004ARXErr)
+pipeARXErr(pred2004ARXErr.toStream)
 
 val pipeARErr = DynaMLPipe.valuesToFile("data/ARErrorBarsFinalPredRes.csv")
-pred2004ARErr = TestOmniAR.runExperiment(trainingStart, trainingEnd, start2004Storm, end2004Storm,
+val pred2004ARErr = TestOmniAR.runExperiment(trainingStart, trainingEnd, start2004Storm, end2004Storm,
   new PolynomialKernel(1, 0.0), 6, 0, 0, new DiracKernel(1.75), 40,
   2, 0.2, "GS", Map(
     "validationStart" -> validationStart, "validationEnd" -> validationEnd,
-    "block" -> "degree", "logScale" -> "true"),
+    "block" -> "degree,offset", "logScale" -> "true"),
   "predict_error_bars")
-pipeARErr(pred2004ARErr)
+pipeARErr(pred2004ARErr.toStream)
 
 
 val pipeNM = DynaMLPipe.valuesToFile("data/NMFinalPredRes.csv")

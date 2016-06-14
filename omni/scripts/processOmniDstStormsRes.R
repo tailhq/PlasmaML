@@ -64,6 +64,8 @@ ggplot(cumDFRel, aes(absErr, colour = model)) + stat_ecdf(size = 1.25) +
   xlab(TeX('$|Dst - \\hat{D}st|/|Dst|$')) + ylab("Cumulative Probability") + 
   coord_cartesian(xlim = c(0, 1.0))
 
+ggsave(filename = "Compare_RelProb.png", scale = 2.0)
+
 tlP <- read.csv("TLFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
 arxP <- read.csv("ARXFinalPredRes.csv", header = FALSE, col.names = c("actual", "Dst"))
 
@@ -86,6 +88,8 @@ ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
   scale_colour_manual(values=palette1) + 
   scale_linetype_manual(values = lines1, guide=FALSE) +
   xlab("Time (hours)") + ylab("Dst (nT)")
+
+ggsave(filename = "Compare_PredErrBars.png", scale = 2.0)
 
 ar_errorbars_pred <- read.csv("ARErrorBarsFinalPredRes.csv", 
                               header = FALSE, 
@@ -245,7 +249,7 @@ barplrmse3 <- ggplot(finalDF[finalDF$variable == "rmse" & !(finalDF$model %in% c
   scale_fill_manual(values = colourPalette, guide=FALSE) +
   xlab("Model") + ylab("Mean RMSE")
 
-
+ggsave(filename = "Compare_RMSE.png", scale = 2.0)
 
 barplcc1 <- ggplot(dfother[dfother$variable == "corr",], 
                      aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
@@ -273,6 +277,7 @@ barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("
   scale_fill_manual(values = colourPalette, guide=FALSE) +
   xlab("Model") + ylab("Mean Corr. Coefficient")
 
+ggsave(filename = "Compare_CC.png", scale = 2.0)
 
 barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin" & !(finalDF$model %in% c("GP-ARX1", "TL(CWI)", "NM(CWI)")),], 
                  aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
@@ -282,6 +287,8 @@ barpl5 <- ggplot(finalDF[finalDF$variable == "deltaDstMin" & !(finalDF$model %in
   theme_gray(base_size = 22) +
   xlab("Model") + ylab(TeX('$\\bar{\\Delta Dst_{min}}$'))
 
+ggsave(filename = "Compare_deltaDst.png", scale = 2.0)
+
 barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT" & !(finalDF$model %in% c("GP-ARX1", "TL(CWI)", "NM(CWI)")),], 
                  aes(x=reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
@@ -289,6 +296,9 @@ barpl6 <- ggplot(finalDF[finalDF$variable == "deltaT" & !(finalDF$model %in% c("
   scale_fill_manual(values = colourPalette, guide=FALSE) +
   theme_gray(base_size = 22) +
   xlab("Model") + ylab(TeX('$\\bar{| \\Delta t_{peak} |$'))
+
+ggsave(filename = "Compare_timingerr.png", scale = 2.0)
+
 
 barpl7 <- ggplot(finalDF[finalDF$variable == "rmse",], 
                  aes(x = reorder(model, desc(meanValue)), y=meanValue)) + 
