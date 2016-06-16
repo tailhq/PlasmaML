@@ -5,10 +5,11 @@ import java.io.File
 import breeze.linalg.{DenseMatrix, DenseVector}
 import com.github.tototoshi.csv.CSVWriter
 import com.quantifind.charts.Highcharts._
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.neuralnets.{FFNeuralGraph, FeedForwardNetwork}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
+import io.github.mandar2812.dynaml.pipes.DataPipe
 import org.apache.log4j.Logger
 
 

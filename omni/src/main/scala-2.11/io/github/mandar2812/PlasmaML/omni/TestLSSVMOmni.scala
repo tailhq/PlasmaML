@@ -2,10 +2,11 @@ package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.DenseVector
 import com.quantifind.charts.Highcharts._
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels.LocalSVMKernel
 import io.github.mandar2812.dynaml.models.svm.DLSSVM
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
+import io.github.mandar2812.dynaml.pipes.DataPipe
 import org.apache.log4j.Logger
 
 /**

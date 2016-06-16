@@ -1,9 +1,10 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
 import io.github.mandar2812.PlasmaML.SPDFData
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe, StreamDataPipe}
-import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import org.apache.log4j.Logger
+
 import scala.io.Source
 
 /**

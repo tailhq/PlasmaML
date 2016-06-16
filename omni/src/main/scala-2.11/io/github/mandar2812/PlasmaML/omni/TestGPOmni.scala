@@ -1,11 +1,12 @@
 package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.{DenseMatrix, DenseVector}
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.optimization.{GPMLOptimizer, GridSearch}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
+import io.github.mandar2812.dynaml.pipes.DataPipe
 
 import scala.util.Random
 

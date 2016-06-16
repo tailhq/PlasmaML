@@ -8,8 +8,8 @@ import breeze.linalg.DenseVector
 import io.github.mandar2812.PlasmaML.PlasmaMLSpark
 
 import scala.collection.mutable.{MutableList => ML}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe}
-import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.pipes.DataPipe
+import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import org.apache.log4j.Logger
 import org.apache.spark.rdd.RDD
 import org.joda.time.{DateTime, DateTimeZone}

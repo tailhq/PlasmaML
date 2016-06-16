@@ -26,10 +26,11 @@ import breeze.linalg.{DenseMatrix, DenseVector}
 import com.github.tototoshi.csv.CSVWriter
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.{GPNarModel, GPRegression}
 import io.github.mandar2812.dynaml.optimization.{GPMLOptimizer, GridSearch}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import org.apache.log4j.Logger
 
 

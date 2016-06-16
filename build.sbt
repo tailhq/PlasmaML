@@ -7,7 +7,7 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := "0.1.0",
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.4-beta.7",
+  dynaMLVersion := "v1.4-beta.9",
   libraryDependencies in ThisBuild ++= Seq(
     "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
@@ -38,7 +38,7 @@ lazy val omni =
       initialCommands in console :=
         """import io.github.mandar2812.PlasmaML.omni._;"""+
           """import io.github.mandar2812.dynaml.kernels._;"""+
-          """import io.github.mandar2812.dynaml.pipes.DynaMLPipe;"""+
+          """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
           """import com.quantifind.charts.Highcharts._"""
     ).dependsOn(core)
 

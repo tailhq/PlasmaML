@@ -16,8 +16,8 @@ import breeze.linalg.DenseVector
 import com.github.tototoshi.csv.CSVWriter
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DynaMLPipe, StreamDataPipe}
-import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import org.apache.log4j.Logger
 
 /**
