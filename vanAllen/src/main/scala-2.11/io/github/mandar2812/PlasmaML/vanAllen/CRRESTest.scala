@@ -3,12 +3,13 @@ package io.github.mandar2812.PlasmaML.vanAllen
 import breeze.linalg.{DenseMatrix, DenseVector}
 import io.github.mandar2812.PlasmaML.cdf.CDFUtils
 import io.github.mandar2812.dynaml.DynaMLPipe
-import io.github.mandar2812.dynaml.models.{GPRegressionPipe, GLMPipe}
+import io.github.mandar2812.dynaml.models.{GLMPipe, GPRegressionPipe}
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.kernels.{CovarianceFunction, DiracKernel, RBFKernel}
 import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
-import io.github.mandar2812.dynaml.models.neuralnets.{FFNeuralGraph, FeedForwardNetwork}
+import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.pipes._
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.Statistics
