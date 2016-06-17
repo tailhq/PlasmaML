@@ -14,7 +14,7 @@ import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
   */
 object OmniWaveletModels {
 
-  var (orderFeat, orderTarget) = (3,2)
+  var (orderFeat, orderTarget) = (3,3)
 
   var (trainingStart, trainingEnd) = ("2014/10/15/00", "2014/12/01/23")
 
