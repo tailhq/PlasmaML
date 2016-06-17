@@ -21,7 +21,7 @@ object OmniWaveletModels {
 
   var (validationStart, validationEnd) = ("2008/01/30/00", "2008/06/30/00")
 
-  var (testStart, testEnd) = ("2004/11/09/11", "2004/12/15/09")
+  var (testStart, testEnd) = ("2004/07/21/20", "2004/09/01/00")
 
   def apply(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
@@ -98,7 +98,7 @@ object OmniWaveletModels {
     val testPipe = StreamDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
-    val postPipe = deltaOperationMult(math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt) >
+    val postPipe = deltaOperationMult(pF,pT) >
       StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
         (hFeat*hTarg)(featAndTarg._1, featAndTarg._2))
 
@@ -134,7 +134,7 @@ object OmniWaveletModels {
             val metrics = new MultiRegressionMetrics(
               scoresAndLabels.toList,
               scoresAndLabels.length)
-            metrics.setName("Dst 8 hour forecast").print()
+            metrics.setName("Dst "+pT+" hour forecast").print()
           })
 
         testSetToResult(trainTest._2)
