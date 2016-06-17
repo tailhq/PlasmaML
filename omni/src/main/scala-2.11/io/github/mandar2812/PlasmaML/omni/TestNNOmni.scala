@@ -56,7 +56,9 @@ object TestNNOmni {
         Stream[(DenseVector[Double], Double)]),
         (DenseVector[Double], DenseVector[Double]))) => {
 
-        val gr = FFNeuralGraph(trainTest._1._1.head._1.length, 1, hidden,
+        val gr = FFNeuralGraph(
+          trainTest._1._1.head._1.length,
+          1, hidden,
           act, nCounts)
 
         val transform = DataPipe((d: Stream[(DenseVector[Double], Double)]) =>

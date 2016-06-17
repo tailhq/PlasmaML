@@ -2,6 +2,7 @@ package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.DynaMLPipe._
+import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
@@ -128,7 +129,13 @@ object OmniWaveletModels {
         val testSetToResult = DataPipe(
           (testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => model.test(testSet)) >
           StreamDataPipe(
-            (tuple: (DenseVector[Double], DenseVector[Double])) => (hTarg.i*hTarg.i)(tuple))
+            (tuple: (DenseVector[Double], DenseVector[Double])) => (hTarg.i*hTarg.i)(tuple)) >
+          DataPipe((scoresAndLabels: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+            val metrics = new MultiRegressionMetrics(
+              scoresAndLabels.toList,
+              scoresAndLabels.length)
+            metrics.setName("Dst 8 hour forecast").print()
+          })
 
         testSetToResult(trainTest._2)
       })
