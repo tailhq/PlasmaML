@@ -1,11 +1,11 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.{DenseMatrix, DenseVector}
+import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.models.neuralnets.{FFNeuralGraph, FeedForwardNetwork}
+import io.github.mandar2812.dynaml.graph.FFNeuralGraph
+import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
-import io.github.mandar2812.dynaml.utils
-import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 
@@ -14,19 +14,27 @@ import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
   */
 object OmniWaveletModels {
 
-  def apply() = {
-    val (orderFeat, orderTarget) = (5,3)
-    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
-    val (hFeat, hTarg) = (waveletFilter(orderFeat), waveletFilter(orderTarget))
+  var (orderFeat, orderTarget) = (4,3)
 
-    val (invHFeat, invHTarg) = (utils.haarMatrix(pF).t, utils.haarMatrix(pT).t)
+  var (trainingStart, trainingEnd) = ("2014/10/15/00", "2014/12/01/23")
+
+  var (validationStart, validationEnd) = ("2008/01/30/00", "2008/06/30/00")
+
+  var (testStart, testEnd) = ("2004/11/09/11", "2004/12/15/09")
+
+  def apply(alpha: Double = 0.01, reg: Double = 0.001,
+            momentum: Double = 0.02, maxIt: Int = 20,
+            mini: Double = 1.0) = {
+
+
+    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
     DateTimeZone.setDefault(DateTimeZone.UTC)
     val formatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/MM/dd/HH")
 
     val dayofYearformat = DateTimeFormat.forPattern("yyyy/D/H")
 
-    val (trainingStart, trainingEnd) = ("2008/01/30/00", "2008/03/30/00")
     val (trainingStartDate, trainingEndDate) =
       (formatter.parseDateTime(trainingStart).minusHours(pF+pT),
         formatter.parseDateTime(trainingEnd))
@@ -34,13 +42,10 @@ object OmniWaveletModels {
     val (trStampStart, trStampEnd) =
       (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-
-    val (validationStart, validationEnd) = ("2014/11/15/00", "2014/12/01/23")
     val (validationStartDate, validationEndDate) =
       (formatter.parseDateTime(validationStart).minusHours(pF+pT),
         formatter.parseDateTime(validationEnd))
 
-    val (testStart, testEnd) = ("2004/11/09/11", "2004/12/15/09")
     val (testStartDate, testEndDate) =
       (formatter.parseDateTime(testStart).minusHours(pF+pT),
         formatter.parseDateTime(testEnd))
@@ -94,7 +99,7 @@ object OmniWaveletModels {
 
     val postPipe = deltaOperationMult(math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt) >
       StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-        (hFeat(featAndTarg._1), hTarg(featAndTarg._2)))
+        (hFeat*hTarg)(featAndTarg._1, featAndTarg._2))
 
     val modelTrainTest =
       DataPipe((trainTest:
@@ -113,15 +118,17 @@ object OmniWaveletModels {
           Stream[(DenseVector[Double], DenseVector[Double])]
           ](trainTest._1, gr, transform)
 
-        model.setLearningRate(0.001)
-          .setMaxIterations(20)
-          .setRegParam(0.001)
-          .setMomentum(0.5).learn()
+        model.setLearningRate(alpha)
+          .setMaxIterations(maxIt)
+          .setRegParam(reg)
+          .setMomentum(momentum)
+          .setBatchFraction(mini)
+          .learn()
 
         val testSetToResult = DataPipe(
           (testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => model.test(testSet)) >
           StreamDataPipe(
-            (tuple: (DenseVector[Double], DenseVector[Double])) => (invHTarg*tuple._1, invHTarg*tuple._2))
+            (tuple: (DenseVector[Double], DenseVector[Double])) => (hTarg.i*hTarg.i)(tuple))
 
         testSetToResult(trainTest._2)
       })
