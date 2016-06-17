@@ -16,7 +16,7 @@ object OmniWaveletModels {
 
   var (orderFeat, orderTarget) = (3,3)
 
-  var (trainingStart, trainingEnd) = ("2014/10/15/00", "2014/12/01/23")
+  var (trainingStart, trainingEnd) = ("2014/09/15/00", "2014/12/15/00")
 
   var (validationStart, validationEnd) = ("2008/01/30/00", "2008/06/30/00")
 
