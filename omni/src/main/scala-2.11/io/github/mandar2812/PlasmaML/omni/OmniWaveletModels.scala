@@ -143,29 +143,6 @@ object OmniWaveletModels {
         testSetToResult(trainTest._2)
       })
 
-    val scaling = DataPipe((trainTest: (Stream[(DenseVector[Double], DenseVector[Double])],
-      Stream[(DenseVector[Double], DenseVector[Double])])) => {
-
-      val (num_features, num_targets) = (trainTest._1.head._1.length, trainTest._1.head._2.length)
-
-      val (mean, variance) = utils.getStats(trainTest._1.map(tup =>
-        DenseVector(tup._1.toArray ++ tup._2.toArray)).toList)
-
-      val stdDev: DenseVector[Double] = variance.map(v =>
-        math.sqrt(v/(trainTest._1.length.toDouble - 1.0)))
-
-
-      val featuresScaler = new GaussianScaler(mean(0 until num_features), stdDev(0 until num_features))
-
-      val targetsScaler = new GaussianScaler(
-        mean(num_features until num_features + num_targets),
-        stdDev(num_features until num_features + num_targets))
-
-      val scaler: ReversibleScaler[(DenseVector[Double], DenseVector[Double])] = featuresScaler * targetsScaler
-
-      (scaler(trainTest._1), scaler(trainTest._2), (featuresScaler, targetsScaler))
-    })
-
     val modelTrainTest =
       DataPipe((trainTest:
                 (Stream[(DenseVector[Double], DenseVector[Double])],
@@ -202,7 +179,6 @@ object OmniWaveletModels {
               scoresAndLabels.toList,
               scoresAndLabels.length)
             metrics.setName(names(column)+" "+pT+" hour forecast").print()
-            scoresAndLabels
           })
 
         testSetToResult(trainTest._2)
@@ -220,7 +196,7 @@ object OmniWaveletModels {
         duplicate(preProcessPipe) >
           DataPipe(trainPipe, testPipe) >
           duplicate(postPipe) >
-          scaling >
+          gaussianScalingTrainTest >
           modelTrainTest
 
     }
