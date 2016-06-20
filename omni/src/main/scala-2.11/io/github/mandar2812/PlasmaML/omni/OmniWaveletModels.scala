@@ -5,7 +5,9 @@ import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes.{DataPipe, ReversibleScaler, StreamDataPipe}
+import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.utils.GaussianScaler
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
@@ -25,7 +27,7 @@ object OmniWaveletModels {
 
   def apply(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
-            mini: Double = 1.0) = {
+            mini: Double = 1.0, useWaveletBasis: Boolean = true) = {
 
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
@@ -98,11 +100,12 @@ object OmniWaveletModels {
     val testPipe = StreamDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
-    val postPipe = deltaOperationMult(pF,pT) >
-      StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-        (hFeat*hTarg)(featAndTarg._1, featAndTarg._2))
+    val postPipe = deltaOperationMult(pF,pT)
 
-    val modelTrainTest =
+    val waveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+      (hFeat*hTarg)(featAndTarg))
+
+    val modelTrainTestWavelet =
       DataPipe((trainTest:
                 (Stream[(DenseVector[Double], DenseVector[Double])],
                   Stream[(DenseVector[Double], DenseVector[Double])])) => {
@@ -134,16 +137,95 @@ object OmniWaveletModels {
             val metrics = new MultiRegressionMetrics(
               scoresAndLabels.toList,
               scoresAndLabels.length)
-            metrics.setName("Dst "+pT+" hour forecast").print()
+            metrics.setName(names(column)+" "+pT+" hour forecast").print()
           })
 
         testSetToResult(trainTest._2)
       })
 
-    val finalPipe = duplicate(preProcessPipe) >
-      DataPipe(trainPipe, testPipe) >
-      duplicate(postPipe) >
-      modelTrainTest
+    val scaling = DataPipe((trainTest: (Stream[(DenseVector[Double], DenseVector[Double])],
+      Stream[(DenseVector[Double], DenseVector[Double])])) => {
+
+      val (num_features, num_targets) = (trainTest._1.head._1.length, trainTest._1.head._2.length)
+
+      val (mean, variance) = utils.getStats(trainTest._1.map(tup =>
+        DenseVector(tup._1.toArray ++ tup._2.toArray)).toList)
+
+      val stdDev: DenseVector[Double] = variance.map(v =>
+        math.sqrt(v/(trainTest._1.length.toDouble - 1.0)))
+
+
+      val featuresScaler = new GaussianScaler(mean(0 until num_features), stdDev(0 until num_features))
+
+      val targetsScaler = new GaussianScaler(
+        mean(num_features until num_features + num_targets),
+        stdDev(num_features until num_features + num_targets))
+
+      val scaler: ReversibleScaler[(DenseVector[Double], DenseVector[Double])] = featuresScaler * targetsScaler
+
+      (scaler(trainTest._1), scaler(trainTest._2), (featuresScaler, targetsScaler))
+    })
+
+    val modelTrainTest =
+      DataPipe((trainTest:
+                (Stream[(DenseVector[Double], DenseVector[Double])],
+                  Stream[(DenseVector[Double], DenseVector[Double])],
+                  (GaussianScaler, GaussianScaler))) => {
+
+
+        val reverseTargetsScaler = trainTest._3._2.i * trainTest._3._2.i
+
+        val gr = FFNeuralGraph(
+          trainTest._1.head._1.length,
+          trainTest._1.head._2.length,
+          0, List("linear"), List())
+
+        val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
+
+        val model = new FeedForwardNetwork[
+          Stream[(DenseVector[Double], DenseVector[Double])]
+          ](trainTest._1, gr, transform)
+
+        model.setLearningRate(alpha)
+          .setMaxIterations(maxIt)
+          .setRegParam(reg)
+          .setMomentum(momentum)
+          .setBatchFraction(mini)
+          .learn()
+
+        val testSetToResult = DataPipe(
+          (testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => model.test(testSet)) >
+          StreamDataPipe(
+            (tuple: (DenseVector[Double], DenseVector[Double])) => reverseTargetsScaler(tuple)) >
+          DataPipe((scoresAndLabels: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+            val metrics = new MultiRegressionMetrics(
+              scoresAndLabels.toList,
+              scoresAndLabels.length)
+            metrics.setName(names(column)+" "+pT+" hour forecast").print()
+            scoresAndLabels
+          })
+
+        testSetToResult(trainTest._2)
+      })
+
+
+    val finalPipe = useWaveletBasis match {
+      case true =>
+        duplicate(preProcessPipe) >
+          DataPipe(trainPipe, testPipe) >
+          duplicate(postPipe > waveletPipe) >
+          modelTrainTestWavelet
+
+      case false =>
+        duplicate(preProcessPipe) >
+          DataPipe(trainPipe, testPipe) >
+          duplicate(postPipe) >
+          scaling >
+          modelTrainTest
+
+    }
+
+
 
     finalPipe((
       "data/omni2_"+trainingStartDate.getYear+".csv",
