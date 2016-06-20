@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.DenseVector
+import breeze.linalg.{DenseMatrix, DenseVector}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
@@ -102,14 +102,16 @@ object OmniWaveletModels {
 
     val postPipe = deltaOperationMult(pF,pT)
 
-    val waveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
       (hFeat*hTarg)(featAndTarg))
 
     val modelTrainTestWavelet =
       DataPipe((trainTest:
                 (Stream[(DenseVector[Double], DenseVector[Double])],
-                  Stream[(DenseVector[Double], DenseVector[Double])])) => {
+                  Stream[(DenseVector[Double], DenseVector[Double])],
+                  (GaussianScaler, GaussianScaler))) => {
 
+        val reverseTargetsScaler = trainTest._3._2.i * trainTest._3._2.i
 
         val gr = FFNeuralGraph(
           trainTest._1.head._1.length,
@@ -132,12 +134,27 @@ object OmniWaveletModels {
         val testSetToResult = DataPipe(
           (testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => model.test(testSet)) >
           StreamDataPipe(
+            (tuple: (DenseVector[Double], DenseVector[Double])) => reverseTargetsScaler(tuple)) >
+          StreamDataPipe(
             (tuple: (DenseVector[Double], DenseVector[Double])) => (hTarg.i*hTarg.i)(tuple)) >
           DataPipe((scoresAndLabels: Stream[(DenseVector[Double], DenseVector[Double])]) => {
             val metrics = new MultiRegressionMetrics(
               scoresAndLabels.toList,
               scoresAndLabels.length)
             metrics.setName(names(column)+" "+pT+" hour forecast").print()
+
+            val synapses = gr.getLayerSynapses(1)
+
+            val m =
+              synapses.map(sy =>
+                ((sy.getPreSynapticNeuron().getNID(),
+                  sy.getPostSynapticNeuron().getNID()),
+                  sy.getWeight())).toMap
+
+            DenseMatrix.tabulate[Double](
+              trainTest._1.head._1.length,
+              trainTest._1.head._2.length)((i, j) => m((i+1,j+1)))
+
           })
 
         testSetToResult(trainTest._2)
@@ -179,6 +196,18 @@ object OmniWaveletModels {
               scoresAndLabels.toList,
               scoresAndLabels.length)
             metrics.setName(names(column)+" "+pT+" hour forecast").print()
+
+            val synapses = gr.getLayerSynapses(1)
+
+            val m =
+              synapses.map(sy =>
+                ((sy.getPreSynapticNeuron().getNID(),
+                  sy.getPostSynapticNeuron().getNID()),
+                  sy.getWeight())).toMap
+
+            DenseMatrix.tabulate[Double](
+              trainTest._1.head._1.length,
+              trainTest._1.head._2.length)((i, j) => m((i+1,j+1)))
           })
 
         testSetToResult(trainTest._2)
@@ -189,7 +218,8 @@ object OmniWaveletModels {
       case true =>
         duplicate(preProcessPipe) >
           DataPipe(trainPipe, testPipe) >
-          duplicate(postPipe > waveletPipe) >
+          duplicate(postPipe > haarWaveletPipe) >
+          gaussianScalingTrainTest >
           modelTrainTestWavelet
 
       case false =>
