@@ -418,52 +418,52 @@ object DstARXExperiment {
 
     val initialKernelState = kernel.state
     val initialNoiseState = noise.state
-      val stormsPipe =
-        DynaMLPipe.fileToStream >
-          DynaMLPipe.replaceWhiteSpaces >
-          StreamDataPipe((stormEventData: String) => {
-            val stormMetaFields = stormEventData.split(',')
+    val stormsPipe =
+      DynaMLPipe.fileToStream >
+        DynaMLPipe.replaceWhiteSpaces >
+        StreamDataPipe((stormEventData: String) => {
+          val stormMetaFields = stormEventData.split(',')
 
-            val eventId = stormMetaFields(0)
-            val startDate = stormMetaFields(1)
-            val startHour = stormMetaFields(2).take(2)
+          val eventId = stormMetaFields(0)
+          val startDate = stormMetaFields(1)
+          val startHour = stormMetaFields(2).take(2)
 
-            val endDate = stormMetaFields(3)
-            val endHour = stormMetaFields(4).take(2)
+          val endDate = stormMetaFields(3)
+          val endHour = stormMetaFields(4).take(2)
 
-            val minDst = stormMetaFields(5).toDouble
+          val minDst = stormMetaFields(5).toDouble
 
-            val stormCategory = stormMetaFields(6)
-            kernel.setHyperParameters(initialKernelState)
-            noise.setHyperParameters(initialNoiseState)
-            val res = TestOmniARX.runExperiment(
-              trainstart, trainend,
-              startDate+"/"+startHour,
-              endDate+"/"+endHour,
-              kernel, deltas, 0,
-              noise,
-              column, ex,
-              options("grid").toInt,
-              options("step").toDouble,
-              options("globalOpt"),
-              options, action = options("action"))
+          val stormCategory = stormMetaFields(6)
+          kernel.setHyperParameters(initialKernelState)
+          noise.setHyperParameters(initialNoiseState)
+          val res = TestOmniARX.runExperiment(
+            trainstart, trainend,
+            startDate+"/"+startHour,
+            endDate+"/"+endHour,
+            kernel, deltas, 0,
+            noise,
+            column, ex,
+            options("grid").toInt,
+            options("step").toDouble,
+            options("globalOpt"),
+            options, action = options("action"))
 
-            if(options("action") == "test") {
-              val row = Seq(
-                eventId, stormCategory,
-                deltas.head.toDouble,
-                res.head(5), res.head(8),
-                res.head(10), res.head(13)-res.head(14),
-                res.head(14), res.head(12))
+          if(options("action") == "test") {
+            val row = Seq(
+              eventId, stormCategory,
+              deltas.head.toDouble,
+              res.head(5), res.head(8),
+              res.head(10), res.head(13)-res.head(14),
+              res.head(14), res.head(12))
 
-              writer.writeRow(row)
-            } else {
-              writer.writeAll(res)
-            }
+            writer.writeRow(row)
+          } else {
+            writer.writeAll(res)
+          }
 
 
-          })
+        })
 
-      stormsPipe.run("data/geomagnetic_storms.csv")
+    stormsPipe.run("data/geomagnetic_storms.csv")
   }
 }
