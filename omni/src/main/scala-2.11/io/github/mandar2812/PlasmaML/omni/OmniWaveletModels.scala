@@ -32,7 +32,7 @@ object OmniWaveletModels {
 
   val dayofYearformat = DateTimeFormat.forPattern("yyyy/D/H")
 
-  val preProcessPipe = fileToStream >
+  val preProcess = fileToStream >
     replaceWhiteSpaces >
     extractTrainingFeatures(
       List(0,1,2,column),
@@ -80,33 +80,64 @@ object OmniWaveletModels {
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
     val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
-    val (trainingStartDate, trainingEndDate) =
-      (formatter.parseDateTime(trainingStart).minusHours(pF+pT),
-        formatter.parseDateTime(trainingEnd))
-
-    val (trStampStart, trStampEnd) =
-      (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
-
-    val (validationStartDate, validationEndDate) =
-      (formatter.parseDateTime(validationStart).minusHours(pF+pT),
-        formatter.parseDateTime(validationEnd))
-
-
-
-    val trainPipe = StreamDataPipe((couple: (Double, Double)) =>
-      couple._1 >= trStampStart && couple._1 <= trStampEnd)
-
-    val postPipe = deltaOperationMult(pF,pT)
-
     val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-      (hFeat*hTarg)(featAndTarg))
+      if (useWaveletBasis) (hFeat*hTarg)(featAndTarg) else featAndTarg)
 
-    val modelTrainTestWavelet =
+
+    val prepareTrainingData = DataPipe((n: Int) => {
+
+      val stormsPipe =
+        fileToStream >
+          replaceWhiteSpaces >
+          StreamDataPipe((stormEventData: String) => {
+            val stormMetaFields = stormEventData.split(',')
+
+            val eventId = stormMetaFields(0)
+            val startDate = stormMetaFields(1)
+            val startHour = stormMetaFields(2).take(2)
+
+            val endDate = stormMetaFields(3)
+            val endHour = stormMetaFields(4).take(2)
+
+            (startDate+"/"+startHour,
+            endDate+"/"+endHour)
+          }) >
+          DataPipe((s: Stream[(String, String)]) =>
+            s.takeRight(n) ++ Stream(("2014/11/01/00", "2014/12/31/00"))) >
+          StreamDataPipe((storm: (String, String)) => {
+            // for each storm construct a data set
+
+            val (trainingStartDate, trainingEndDate) =
+              (formatter.parseDateTime(storm._1).minusHours(pF),
+                formatter.parseDateTime(storm._2).plusHours(pT))
+
+            val (trStampStart, trStampEnd) =
+              (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
+
+            val filterTrainingData = StreamDataPipe((couple: (Double, Double)) =>
+              couple._1 >= trStampStart && couple._1 <= trStampEnd)
+
+            val postPipe = deltaOperationMult(pF,pT)
+
+            val getTraining = preProcess >
+              filterTrainingData >
+              deltaOperationMult(pF,pT) >
+              haarWaveletPipe
+
+            getTraining("data/omni2_"+trainingStartDate.getYear+".csv")
+
+          }) >
+          DataPipe((s: Stream[Stream[(DenseVector[Double], DenseVector[Double])]]) => {
+            s.reduce((p,q) => p ++ q)
+          })
+
+      stormsPipe("data/geomagnetic_storms2.csv")
+    })
+
+    val modelTrain =
       DataPipe((trainTest:
                 (Stream[(DenseVector[Double], DenseVector[Double])],
                   (GaussianScaler, GaussianScaler))) => {
-
-        val reverseTargetsScaler = trainTest._2._2.i * trainTest._2._2.i
 
         val gr = FFNeuralGraph(
           trainTest._1.head._1.length,
@@ -129,54 +160,18 @@ object OmniWaveletModels {
         (model, trainTest._2)
       })
 
-    val modelTrainTest =
-      DataPipe((trainTest:
-                (Stream[(DenseVector[Double], DenseVector[Double])],
-                  (GaussianScaler, GaussianScaler))) => {
+    /*val finalPipe = preProcess >
+      filterTrainingData >
+      deltaOperationMult(pF,pT) >
+      haarWaveletPipe >
+      gaussianScaling >
+      modelTrain*/
 
+    val finalPipe = prepareTrainingData >
+      gaussianScaling >
+      modelTrain
 
-        val reverseTargetsScaler = trainTest._2._2.i * trainTest._2._2.i
-
-        val gr = FFNeuralGraph(
-          trainTest._1.head._1.length,
-          trainTest._1.head._2.length,
-          0, List("linear"), List())
-
-        val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
-
-        val model = new FeedForwardNetwork[
-          Stream[(DenseVector[Double], DenseVector[Double])]
-          ](trainTest._1, gr, transform)
-
-        model.setLearningRate(alpha)
-          .setMaxIterations(maxIt)
-          .setRegParam(reg)
-          .setMomentum(momentum)
-          .setBatchFraction(mini)
-          .learn()
-
-        (model, trainTest._2)
-      })
-
-
-    val finalPipe = useWaveletBasis match {
-      case true =>
-        preProcessPipe >
-          trainPipe >
-          postPipe > haarWaveletPipe >
-          gaussianScaling >
-          modelTrainTestWavelet
-
-      case false =>
-        preProcessPipe >
-          trainPipe >
-          postPipe >
-          gaussianScaling >
-          modelTrainTest
-
-    }
-
-    finalPipe("data/omni2_"+trainingStartDate.getYear+".csv")
+    finalPipe(11)
 
   }
 
@@ -221,7 +216,7 @@ object OmniWaveletModels {
 
     })
 
-    val finalPipe = preProcessPipe >
+    val finalPipe = preProcess >
       testPipe >
       postPipe >
       haarWaveletPipe >
@@ -356,14 +351,14 @@ object OmniWaveletModels {
 
     val finalPipe = useWaveletBasis match {
       case true =>
-        duplicate(preProcessPipe) >
+        duplicate(preProcess) >
           DataPipe(trainPipe, testPipe) >
           duplicate(postPipe > haarWaveletPipe) >
           gaussianScalingTrainTest >
           modelTrainTestWavelet
 
       case false =>
-        duplicate(preProcessPipe) >
+        duplicate(preProcess) >
           DataPipe(trainPipe, testPipe) >
           duplicate(postPipe) >
           gaussianScalingTrainTest >
