@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.{DenseMatrix, DenseVector}
+import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
@@ -22,7 +22,7 @@ object OmniWaveletModels {
 
   var (orderFeat, orderTarget) = (3,3)
 
-  var (trainingStart, trainingEnd) = ("2014/09/15/00", "2014/12/15/00")
+  var (trainingStart, trainingEnd) = ("2011/08/05/20", "2011/10/25/14")
 
   var (validationStart, validationEnd) = ("2008/01/30/00", "2008/06/30/00")
 
@@ -187,8 +187,8 @@ object OmniWaveletModels {
     val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
     val (testStartDate, testEndDate) =
-      (formatter.parseDateTime(testStart).minusHours(pF+pT),
-        formatter.parseDateTime(testEnd))
+      (formatter.parseDateTime(testStart).minusHours(pF),
+        formatter.parseDateTime(testEnd).plusHours(pT))
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
