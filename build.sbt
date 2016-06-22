@@ -7,7 +7,7 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := "0.1.0",
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.4-beta.14",
+  dynaMLVersion := "v1.4-beta.15",
   libraryDependencies in ThisBuild ++= Seq(
     "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
