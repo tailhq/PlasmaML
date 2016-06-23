@@ -21,27 +21,36 @@ import org.apache.spark.rdd.RDD
   */
 object CRRESTest {
 
-  var columns = Seq("FLUX", "MLT", "L", "Local_Time", "J_ave")
+  var columns = Seq("FLUX", "MLT", "L", "Local_Time", "N", "B", "Bmin")
 
   def prepareData = CDFUtils.readCDF >
     CDFUtils.cdfToStream(columns) >
     DataPipe((couple: (Stream[Seq[AnyRef]], Map[String, Map[String, String]])) => {
       val (data, metadata) = couple
       data.filter(record => {
-        val (mlt, lshell, local_time) = (record(1).toString, record(2).toString, record(3).toString)
+        val (mlt, lshell, local_time, b, bmin) = (
+          record(1).toString, record(2).toString,
+          record(3).toString, record(5).toString,
+          record(6).toString)
+
         mlt != metadata("MLT")("FILLVAL") &&
-          lshell != metadata("L")("FILLVAL") //&&
-        //local_time != metadata("Local_Time")("FILLVAL")
+          lshell != metadata("L")("FILLVAL") &&
+          b != metadata("B")("FILLVAL") &&
+          bmin != metadata("Bmin")("FILLVAL")
       }).map(record => {
-        val (flux, mlt, lshell, local_time, j) = (
+        val (flux, mlt, lshell, local_time, n, b, bmin) = (
           record.head.asInstanceOf[Array[Float]],
           record(1).asInstanceOf[Float],
           record(2).asInstanceOf[Float],
           record(3).asInstanceOf[Float],
-          record.last.asInstanceOf[Array[Float]])
+          record(4).asInstanceOf[Array[Float]],
+          record(5).asInstanceOf[Float],
+          record(6).asInstanceOf[Float])
         val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")("FILLVAL")).map(_.toDouble)
-        val filteredJ = j.filter(f => f.toString != metadata("J_ave")("FILLVAL")).map(_.toDouble)
-        (DenseVector(mlt.toDouble, lshell.toDouble, filteredJ.sum/filteredJ.length),
+        val filteredJ = n.filter(f => f.toString != metadata("N")("FILLVAL")).map(_.toDouble)
+        (DenseVector(
+          mlt.toDouble, lshell.toDouble, b.toDouble,
+          bmin.toDouble),
           filteredFlux.sum/filteredFlux.length)
       })
     })
@@ -144,7 +153,7 @@ object CRRESTest {
 
 
         val results = new RegressionMetrics(res, res.length)
-        results.generateFitPlot()
+        //results.generateFitPlot()
         results.print()
       })
 
