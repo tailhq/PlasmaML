@@ -1,5 +1,7 @@
 
 // Test a GP model
+val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
+
 CRRESTest(
   new WaveletKernel(waveletF)(1.1) * new RBFKernel(1.5),
   new DiracKernel(0.6), 1000, 2000,
