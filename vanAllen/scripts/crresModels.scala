@@ -1,9 +1,9 @@
 
 // Test a GP model
 CRRESTest(
-  new RBFKernel(1.5), new DiracKernel(0.6),
-  1000, 2000, 2, 0.01
-)
+  new WaveletKernel(waveletF)(1.1) * new RBFKernel(1.5),
+  new DiracKernel(0.6), 1000, 2000,
+  1, 0.02)
 
 // Test a feed forward neural network
 CRRESTest(
