@@ -153,7 +153,7 @@ object CRRESTest {
 
 
         val results = new RegressionMetrics(res, res.length)
-        //results.generateFitPlot()
+        results.generateFitPlot()
         results.print()
       })
 

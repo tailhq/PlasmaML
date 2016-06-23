@@ -8,6 +8,6 @@ CRRESTest(
 // Test a feed forward neural network
 CRRESTest(
   1, List("tansig", "linear"), List(12),
-  7000, 3000, 0.2, 70,
+  7000, 3000, 0.2, 120,
   0.5, 0.00, 0.75
 )
