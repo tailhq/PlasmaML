@@ -103,7 +103,7 @@ object OmniWaveletModels {
             endDate+"/"+endHour)
           }) >
           DataPipe((s: Stream[(String, String)]) =>
-            s.takeRight(n) ++ Stream(("2014/11/01/00", "2014/12/31/00"))) >
+            s.takeRight(n) ++ Stream(("2014/11/15/00", "2014/12/15/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
@@ -131,7 +131,7 @@ object OmniWaveletModels {
             s.reduce((p,q) => p ++ q)
           })
 
-      stormsPipe("data/geomagnetic_storms2.csv")
+      stormsPipe("data/geomagnetic_storms.csv")
     })
 
     val modelTrain =
@@ -160,18 +160,11 @@ object OmniWaveletModels {
         (model, trainTest._2)
       })
 
-    /*val finalPipe = preProcess >
-      filterTrainingData >
-      deltaOperationMult(pF,pT) >
-      haarWaveletPipe >
-      gaussianScaling >
-      modelTrain*/
-
     val finalPipe = prepareTrainingData >
       gaussianScaling >
       modelTrain
 
-    finalPipe(11)
+    finalPipe(20)
 
   }
 
@@ -401,6 +394,7 @@ object DstWaveletExperiment {
     val stormsPipe =
       fileToStream >
         replaceWhiteSpaces >
+        DataPipe((st: Stream[String]) => st.take(43)) >
         StreamDataPipe((stormEventData: String) => {
           val stormMetaFields = stormEventData.split(',')
 
@@ -411,9 +405,9 @@ object DstWaveletExperiment {
           val endDate = stormMetaFields(3)
           val endHour = stormMetaFields(4).take(2)
 
-          val minDst = stormMetaFields(5).toDouble
+          //val minDst = stormMetaFields(5).toDouble
 
-          val stormCategory = stormMetaFields(6)
+          //val stormCategory = stormMetaFields(6)
 
 
           OmniWaveletModels.testStart = startDate+"/"+startHour
