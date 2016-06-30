@@ -6,7 +6,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.models.{GLMPipe, GPRegressionPipe}
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
-import io.github.mandar2812.dynaml.kernels.{CovarianceFunction, DiracKernel, RBFKernel}
+import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
@@ -16,41 +16,82 @@ import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.Statistics
 import org.apache.spark.rdd.RDD
 
+class CRRESKernel(th: Double, s: Double) extends SVMKernel[DenseMatrix[Double]]
+with LocalSVMKernel[DenseVector[Double]] {
+
+  val waveletK = new WaveletKernel((x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0))(th)
+  //new WaveKernel(th)
+
+  val rbfK = new RBFKernel(s)
+
+  override val hyper_parameters = waveletK.hyper_parameters ++ rbfK.hyper_parameters
+
+  state = waveletK.state ++ rbfK.state
+
+
+  override def setHyperParameters(h: Map[String, Double]): CRRESKernel.this.type = {
+    waveletK.setHyperParameters(h.filterKeys(waveletK.hyper_parameters.contains(_)))
+    rbfK.setHyperParameters(h.filterKeys(rbfK.hyper_parameters.contains(_)))
+    state = waveletK.state ++ rbfK.state
+    this
+  }
+
+  override def evaluate(x: DenseVector[Double], y: DenseVector[Double]): Double = {
+    val (x_mlt, y_mlt) = (x(0 until 2), y(0 until 2 ))
+    val (x_rest, y_rest) = (x(2 to -1), y(2 to -1))
+    waveletK.evaluate(x_mlt, y_mlt)*rbfK.evaluate(x_rest, y_rest)
+  }
+}
+
+
+
+
 /**
   * @author mandar2812 date: 26/5/16.
   */
 object CRRESTest {
 
-  var columns = Seq("FLUX", "MLT", "L", "Local_Time", "N", "B", "Bmin")
+  var columns = Seq(
+    "FLUX", "MLT", "L", "Local_Time", "N",
+    "B", "Bmin", "Latitude", "Altitude")
+
+  val fillValKey = "FILLVAL"
 
   def prepareData = CDFUtils.readCDF >
     CDFUtils.cdfToStream(columns) >
     DataPipe((couple: (Stream[Seq[AnyRef]], Map[String, Map[String, String]])) => {
       val (data, metadata) = couple
       data.filter(record => {
-        val (mlt, lshell, local_time, b, bmin) = (
+        val (mlt, lshell, local_time, b, bmin, lat, alt) = (
           record(1).toString, record(2).toString,
           record(3).toString, record(5).toString,
-          record(6).toString)
+          record(6).toString, record(7).toString,
+          record(8).toString)
 
-        mlt != metadata("MLT")("FILLVAL") &&
-          lshell != metadata("L")("FILLVAL") &&
-          b != metadata("B")("FILLVAL") &&
-          bmin != metadata("Bmin")("FILLVAL")
+        mlt != metadata("MLT")(fillValKey) &&
+          lshell != metadata("L")(fillValKey) &&
+          b != metadata("B")(fillValKey) &&
+          bmin != metadata("Bmin")(fillValKey) &&
+          lat != metadata("Latitude")(fillValKey) /*&&
+          alt != metadata("Altitude")(fillValKey)*/
       }).map(record => {
-        val (flux, mlt, lshell, local_time, n, b, bmin) = (
+        val (flux, mlt, lshell,
+        local_time, n, b,
+        bmin, lat, alt) = (
           record.head.asInstanceOf[Array[Float]],
           record(1).asInstanceOf[Float],
           record(2).asInstanceOf[Float],
           record(3).asInstanceOf[Float],
           record(4).asInstanceOf[Array[Float]],
           record(5).asInstanceOf[Float],
-          record(6).asInstanceOf[Float])
-        val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")("FILLVAL")).map(_.toDouble)
-        val filteredJ = n.filter(f => f.toString != metadata("N")("FILLVAL")).map(_.toDouble)
+          record(6).asInstanceOf[Float],
+          record(7).asInstanceOf[Float],
+          record(8).asInstanceOf[Float])
+        val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")(fillValKey)).map(_.toDouble)
+        val filteredJ = n.filter(f => f.toString != metadata("N")(fillValKey)).map(_.toDouble)
         (DenseVector(
           mlt.toDouble, lshell.toDouble, b.toDouble,
-          bmin.toDouble),
+          bmin.toDouble, lat.toDouble),
           filteredFlux.sum/filteredFlux.length)
       })
     })
@@ -69,16 +110,16 @@ object CRRESTest {
       val (data, metadata) = couple
       data.filter(record => {
         val (mlt, lshell, local_time) = (record(1).toString, record(2).toString, record(3).toString)
-        mlt != metadata("MLT")("FILLVAL") &&
-          lshell != metadata("L")("FILLVAL") //&&
-        // local_time != metadata("Local_Time")("FILLVAL")
+        mlt != metadata("MLT")(fillValKey) &&
+          lshell != metadata("L")(fillValKey) //&&
+        // local_time != metadata("Local_Time")(fillValKey)
       }).map(record => {
         val (flux, mlt, lshell, local_time) = (
           record.head.asInstanceOf[Array[Float]],
           record(1).asInstanceOf[Float],
           record(2).asInstanceOf[Float],
           record(3).asInstanceOf[Float])
-        val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")("FILLVAL")).map(_.toDouble)
+        val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")(fillValKey)).map(_.toDouble)
         (DenseVector(mlt.toDouble, lshell.toDouble),
         filteredFlux.sum/filteredFlux.length)
       })
