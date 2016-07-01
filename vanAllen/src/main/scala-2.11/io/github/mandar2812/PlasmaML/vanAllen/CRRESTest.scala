@@ -8,9 +8,9 @@ import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.GPRegression
-import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
-import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
-import io.github.mandar2812.dynaml.pipes._
+import io.github.mandar2812.dynaml.models.lm.{GeneralizedLinearModel, RegularizedGLM}
+import io.github.mandar2812.dynaml.models.neuralnets.{AutoEncoder, FeedForwardNetwork}
+import io.github.mandar2812.dynaml.pipes.{StreamDataPipe, _}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.Statistics
@@ -20,7 +20,6 @@ class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5) exten
 with LocalSVMKernel[DenseVector[Double]] {
 
   val waveletK = new WaveletKernel((x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0))(th)
-  //new WaveKernel(th)
 
   val rbfK = new RBFKernel(s)
 
@@ -30,11 +29,11 @@ with LocalSVMKernel[DenseVector[Double]] {
 
   state = waveletK.state ++ rbfK.state ++ Map("rbf" -> math.abs(a), "wavelet" -> math.abs(b))
 
-  /*override def setHyperParameters(h: Map[String, Double]): CRRESKernel.this.type = {
+  override def setHyperParameters(h: Map[String, Double]): CRRESKernel.this.type = {
     waveletK.setHyperParameters(h)
     rbfK.setHyperParameters(h)
     super.setHyperParameters(h)
-  }*/
+  }
 
   override def evaluate(x: DenseVector[Double], y: DenseVector[Double]): Double = {
     val (x_mlt, y_mlt) = (x(0 until 2), y(0 until 2 ))
@@ -56,6 +55,12 @@ object CRRESTest {
     "B", "Bmin", "Latitude", "Altitude")
 
   val fillValKey = "FILLVAL"
+
+  var dataRoot = "/var/Datasets/space-weather/crres/"
+
+  def traintestFile = dataRoot+"crres_h0_mea_19910201_v01.cdf"
+
+  def validationFile = dataRoot+"crres_h0_mea_19910601_v01.cdf"
 
   def prepareData = CDFUtils.readCDF >
     CDFUtils.cdfToStream(columns) >
@@ -93,7 +98,8 @@ object CRRESTest {
           bmin.toDouble, lat.toDouble),
           filteredFlux.sum/filteredFlux.length)
       })
-    })
+    }) >
+    StreamDataPipe((p: (DenseVector[Double], Double)) => p._1(1) <= 7.0 && p._1(1) >= 3.0)
 
 
   def preProcess(num_train: Int, num_test: Int) =
@@ -164,7 +170,7 @@ object CRRESTest {
             DataPipe((s: Stream[(DenseVector[Double], DenseVector[Double])]) => sc(s.takeRight(num_test))) >
             StreamDataPipe((s: (DenseVector[Double], DenseVector[Double])) => (s._1, s._2(0)))
 
-          model.validationSet = validationPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910601_v01.cdf")
+          model.validationSet = validationPipe(validationFile)
 
           model
         }) > modelTuning(
@@ -179,7 +185,7 @@ object CRRESTest {
 
     val finalPipe = preProcess(num_train, num_test) > DataPipe(modelTrainTest)
 
-    finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910201_v01.cdf")
+    finalPipe(traintestFile)
   }
 
   def apply(hidden: Int, acts: List[String], nCounts: List[Int],
@@ -223,7 +229,7 @@ object CRRESTest {
         results.print()
       })
 
-    trainTest("/var/Datasets/space-weather/crres/crres_h0_mea_19910122_v01.cdf")
+    trainTest(traintestFile)
 
   }
 
@@ -259,9 +265,81 @@ object CRRESTest {
         metrics.generateFitPlot()
       }
 
-    val finalPipe = preProcess(num_train, num_test) > DataPipe(modelTrainTest)
+    val finalPipe = preProcess(num_train, num_test) >
+      DataPipe(modelTrainTest)
 
-    finalPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910201_v01.cdf")
+    finalPipe(traintestFile)
+  }
+
+  //Test AutoEncoder Idea
+  def apply(numExtractedFeatures: Int,
+            num_train: Int,
+            num_test: Int) = {
+
+    val finalPipe = prepareData >
+      DataPipe((data: Stream[(DenseVector[Double], Double)]) => {
+        (data.take(num_train), data.takeRight(num_test))
+      }) >
+      DataPipe((tt: (Stream[(DenseVector[Double], Double)], Stream[(DenseVector[Double], Double)])) => {
+        //train the autoencoder
+        val autoEncoder = new AutoEncoder(tt._1.head._1.length, numExtractedFeatures)
+
+        autoEncoder.optimizer
+          .setMomentum(0.5)
+          .setRegParam(0.001)
+          .setNumIterations(50)
+          .setStepSize(0.05)
+
+        autoEncoder.learn(tt._1.map(p => (p._1, p._1)))
+
+        //transform inputs for train and test
+
+        val new_tt = (
+          tt._1.map(pattern => (autoEncoder(pattern._1), pattern._2)),
+          tt._2.map(pattern => (autoEncoder(pattern._1), pattern._2))
+          )
+
+        val glm = new RegularizedGLM(new_tt._1,
+          new_tt._1.length,
+          identity[DenseVector[Double]] _)
+
+        glm.setState(Map("regularization" -> 0.001))
+
+        val res = new_tt._2.map(pattern => (glm.predict(pattern._1), pattern._2)).toList
+        val metrics = new RegressionMetrics(res, res.length)
+        metrics.generateFitPlot()
+        metrics.print()
+      })
+
+    finalPipe(traintestFile)
+  }
+
+
+  //Test Sheeleys model
+  def apply(num_test: Int) = {
+    val pipe = prepareData >
+      DataPipe((s: Stream[(DenseVector[Double], Double)]) => s.takeRight(num_test)) >
+      StreamDataPipe((p: (DenseVector[Double], Double)) => {
+        val (mlt, lshell, flux) = (p._1(0), p._1(1), p._2)
+        val n_threshold = 10*math.pow(lshell/6.6, 4.0)
+        flux >= n_threshold match {
+          case true =>
+            (1390*math.pow(3.0/lshell, 4.83), flux)
+          case false =>
+            (124*math.pow(3.0/lshell, 4.0) +
+              30*math.pow(3.0/lshell, 3.5)*math.cos((mlt - (7.7*math.pow(3.0/lshell, 2.0) + 12))*math.Pi/12.0),
+              flux)
+        }
+
+      }) >
+      DataPipe((s: Stream[(Double, Double)]) => {
+        val metrics = new RegressionMetrics(s.toList, s.length)
+        metrics.generateFitPlot()
+        metrics.print()
+      })
+
+    pipe(traintestFile)
+
   }
 
   /*def apply(committeeSize: Int, fraction: Double) = {
