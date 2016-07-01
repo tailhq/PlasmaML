@@ -16,7 +16,7 @@ import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.Statistics
 import org.apache.spark.rdd.RDD
 
-class CRRESKernel(th: Double, s: Double) extends SVMKernel[DenseMatrix[Double]]
+class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5) extends SVMKernel[DenseMatrix[Double]]
 with LocalSVMKernel[DenseVector[Double]] {
 
   val waveletK = new WaveletKernel((x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0))(th)
@@ -24,22 +24,22 @@ with LocalSVMKernel[DenseVector[Double]] {
 
   val rbfK = new RBFKernel(s)
 
-  override val hyper_parameters = waveletK.hyper_parameters ++ rbfK.hyper_parameters
+  val coefficients = List("rbf", "wavelet")
 
-  state = waveletK.state ++ rbfK.state
+  override val hyper_parameters = coefficients ++ waveletK.hyper_parameters ++ rbfK.hyper_parameters
 
+  state = waveletK.state ++ rbfK.state ++ Map("rbf" -> math.abs(a), "wavelet" -> math.abs(b))
 
-  override def setHyperParameters(h: Map[String, Double]): CRRESKernel.this.type = {
-    waveletK.setHyperParameters(h.filterKeys(waveletK.hyper_parameters.contains(_)))
-    rbfK.setHyperParameters(h.filterKeys(rbfK.hyper_parameters.contains(_)))
-    state = waveletK.state ++ rbfK.state
-    this
-  }
+  /*override def setHyperParameters(h: Map[String, Double]): CRRESKernel.this.type = {
+    waveletK.setHyperParameters(h)
+    rbfK.setHyperParameters(h)
+    super.setHyperParameters(h)
+  }*/
 
   override def evaluate(x: DenseVector[Double], y: DenseVector[Double]): Double = {
     val (x_mlt, y_mlt) = (x(0 until 2), y(0 until 2 ))
     val (x_rest, y_rest) = (x(2 to -1), y(2 to -1))
-    waveletK.evaluate(x_mlt, y_mlt)*rbfK.evaluate(x_rest, y_rest)
+    state("wavelet")*waveletK.evaluate(x_mlt, y_mlt)+ state("rbf")*rbfK.evaluate(x_rest, y_rest)
   }
 }
 
@@ -72,8 +72,7 @@ object CRRESTest {
           lshell != metadata("L")(fillValKey) &&
           b != metadata("B")(fillValKey) &&
           bmin != metadata("Bmin")(fillValKey) &&
-          lat != metadata("Latitude")(fillValKey) /*&&
-          alt != metadata("Altitude")(fillValKey)*/
+          lat != metadata("Latitude")(fillValKey)
       }).map(record => {
         val (flux, mlt, lshell,
         local_time, n, b,
@@ -132,22 +131,48 @@ object CRRESTest {
             num_train: Int = 500, num_test: Int = 1000,
             grid: Int = 5, step: Double = 0.2) = {
 
-    val modelPipe = new GPRegressionPipe[GPRegression,
+    val gpPipe = new GPRegressionPipe[GPRegression,
       ((Stream[(DenseVector[Double], Double)],
         Stream[(DenseVector[Double], Double)]),
         (DenseVector[Double], DenseVector[Double]))](
       (dataCouple) => dataCouple._1._1,
-      kernel, noiseKernel) >
-      modelTuning(
-        kernel.state ++ noiseKernel.state,
-        "GS", grid, step)
+      kernel, noiseKernel)
 
     val modelTrainTest =
       (trainTest: ((Stream[(DenseVector[Double], Double)],
         Stream[(DenseVector[Double], Double)]),
         (DenseVector[Double], DenseVector[Double]))) => {
 
-        val (tunedModel, config) = modelPipe(trainTest)
+        val m = gpPipe(trainTest)
+
+        val tunePipe = DataPipe((model: GPRegression) => {
+
+          val scalerFeatures = new GaussianScaler(
+            trainTest._2._1(0 until trainTest._2._1.length - 1),
+            trainTest._2._2(0 until trainTest._2._2.length - 1))
+
+          val scaleTargets = new GaussianScaler(
+            DenseVector(trainTest._2._1(-1)),
+            DenseVector(trainTest._2._2(-1)))
+
+          val sc = scalerFeatures * scaleTargets
+
+          val validationPipe = prepareData > StreamDataPipe(
+            (s: (DenseVector[Double], Double)) => {
+              (s._1, DenseVector(s._2))
+            }) >
+            DataPipe((s: Stream[(DenseVector[Double], DenseVector[Double])]) => sc(s.takeRight(num_test))) >
+            StreamDataPipe((s: (DenseVector[Double], DenseVector[Double])) => (s._1, s._2(0)))
+
+          model.validationSet = validationPipe("/var/Datasets/space-weather/crres/crres_h0_mea_19910601_v01.cdf")
+
+          model
+        }) > modelTuning(
+          kernel.effective_state ++ noiseKernel.effective_state,
+          "GS", grid, step)
+
+        val (tunedModel, config) = tunePipe(m)
+
         tunedModel.setState(config)
         GPRegressionTest(tunedModel)((trainTest._1._2, trainTest._2))
       }
