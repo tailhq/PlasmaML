@@ -10,11 +10,14 @@ import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.models.lm.{GeneralizedLinearModel, RegularizedGLM}
 import io.github.mandar2812.dynaml.models.neuralnets.{AutoEncoder, FeedForwardNetwork}
+import io.github.mandar2812.dynaml.models.neuralnets.TransferFunctions._
 import io.github.mandar2812.dynaml.pipes.{StreamDataPipe, _}
-import io.github.mandar2812.dynaml.utils.GaussianScaler
+import io.github.mandar2812.dynaml.utils.{GaussianScaler, MinMaxScaler}
+import io.github.mandar2812.dynaml.utils._
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.Statistics
 import org.apache.spark.rdd.RDD
+import com.quantifind.charts.Highcharts._
 
 class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5) extends SVMKernel[DenseMatrix[Double]]
 with LocalSVMKernel[DenseVector[Double]] {
@@ -54,13 +57,43 @@ object CRRESTest {
     "FLUX", "MLT", "L", "Local_Time", "N",
     "B", "Bmin", "Latitude", "Altitude")
 
+  var columnDataTypes = Seq()
+
   val fillValKey = "FILLVAL"
 
-  var dataRoot = "/var/Datasets/space-weather/crres/"
+  var dataRoot = "/var/Datasets/space-weather/"
 
-  def traintestFile = dataRoot+"crres_h0_mea_19910201_v01.cdf"
+  val crresScale = DataPipe((trainTest: (Stream[(DenseVector[Double], DenseVector[Double])],
+    Stream[(DenseVector[Double], DenseVector[Double])])) => {
 
-  def validationFile = dataRoot+"crres_h0_mea_19910601_v01.cdf"
+    val (num_features, num_targets) = (trainTest._1.head._1.length, trainTest._1.head._2.length)
+
+    val (min, max) = getMinMax(trainTest._1.map(tup =>
+      DenseVector(tup._1.toArray ++ tup._2.toArray)).toList)
+
+    val featuresScaler = new MinMaxScaler(min(0 until num_features), max(0 until num_features))
+
+    val targetsScaler = new MinMaxScaler(
+      min(num_features until num_features + num_targets),
+      max(num_features until num_features + num_targets))
+
+    val scaler: ReversibleScaler[(DenseVector[Double], DenseVector[Double])] = featuresScaler * targetsScaler
+
+    (scaler(trainTest._1), scaler(trainTest._2), (featuresScaler, targetsScaler))
+  })
+
+  def traintestFile = dataRoot+"crres/crres_h0_mea_19910201_v01.cdf"
+
+  def validationFile = dataRoot+"crres/crres_h0_mea_19910601_v01.cdf"
+
+
+  object OptConfig {
+    var stepSize = 1.0
+    var reg = 0.00
+    var maxIt = 100
+    var momentum = 0.5
+    var sparsity = 0.2
+  }
 
   def prepareData = CDFUtils.readCDF >
     CDFUtils.cdfToStream(columns) >
@@ -104,6 +137,7 @@ object CRRESTest {
 
   def preProcess(num_train: Int, num_test: Int) =
     prepareData >
+    StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
     DataPipe((data: Stream[(DenseVector[Double], Double)]) => {
       (data.take(num_train), data.takeRight(num_test))
     }) >
@@ -163,19 +197,22 @@ object CRRESTest {
 
           val sc = scalerFeatures * scaleTargets
 
-          val validationPipe = prepareData > StreamDataPipe(
-            (s: (DenseVector[Double], Double)) => {
-              (s._1, DenseVector(s._2))
-            }) >
+          val validationPipe = prepareData >
+            StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
+            StreamDataPipe(
+              (s: (DenseVector[Double], Double)) => {
+                (s._1, DenseVector(s._2))
+              }) >
             DataPipe((s: Stream[(DenseVector[Double], DenseVector[Double])]) => sc(s.takeRight(num_test))) >
             StreamDataPipe((s: (DenseVector[Double], DenseVector[Double])) => (s._1, s._2(0)))
 
           model.validationSet = validationPipe(validationFile)
 
           model
-        }) > modelTuning(
-          kernel.effective_state ++ noiseKernel.effective_state,
-          "GS", grid, step)
+        }) >
+          modelTuning(
+            kernel.effective_state ++ noiseKernel.effective_state,
+            "GS", grid, step)
 
         val (tunedModel, config) = tunePipe(m)
 
@@ -225,7 +262,7 @@ object CRRESTest {
 
 
         val results = new RegressionMetrics(res, res.length)
-        results.generateFitPlot()
+        //results.generateFitPlot()
         results.print()
       })
 
@@ -262,7 +299,7 @@ object CRRESTest {
 
         val metrics = new RegressionMetrics(scoresAndLabels, scoresAndLabels.length)
         metrics.print()
-        metrics.generateFitPlot()
+        //metrics.generateFitPlot()
       }
 
     val finalPipe = preProcess(num_train, num_test) >
@@ -277,18 +314,28 @@ object CRRESTest {
             num_test: Int) = {
 
     val finalPipe = prepareData >
-      DataPipe((data: Stream[(DenseVector[Double], Double)]) => {
+      StreamDataPipe(
+        (couple: (DenseVector[Double], Double)) =>
+          (couple._1, DenseVector(math.log(couple._2)))) >
+      DataPipe((data: Stream[(DenseVector[Double], DenseVector[Double])]) => {
         (data.take(num_train), data.takeRight(num_test))
       }) >
-      DataPipe((tt: (Stream[(DenseVector[Double], Double)], Stream[(DenseVector[Double], Double)])) => {
+      crresScale >
+      DataPipe((tt: (Stream[(DenseVector[Double], DenseVector[Double])],
+        Stream[(DenseVector[Double], DenseVector[Double])],
+        (MinMaxScaler, MinMaxScaler))) => {
         //train the autoencoder
-        val autoEncoder = new AutoEncoder(tt._1.head._1.length, numExtractedFeatures)
+        val autoEncoder = new AutoEncoder(
+          tt._1.head._1.length,
+          numExtractedFeatures,
+          List(SIGMOID, LIN))
 
         autoEncoder.optimizer
-          .setMomentum(0.5)
-          .setRegParam(0.001)
-          .setNumIterations(50)
-          .setStepSize(0.05)
+          .setMomentum(OptConfig.momentum)
+          .setNumIterations(OptConfig.maxIt)
+          .setStepSize(OptConfig.stepSize)
+          .setRegParam(0.0)
+          .setSparsityWeight(OptConfig.sparsity)
 
         autoEncoder.learn(tt._1.map(p => (p._1, p._1)))
 
@@ -299,13 +346,18 @@ object CRRESTest {
           tt._2.map(pattern => (autoEncoder(pattern._1), pattern._2))
           )
 
-        val glm = new RegularizedGLM(new_tt._1,
+        val glm = new RegularizedGLM(new_tt._1.map(t => (t._1, t._2(0))),
           new_tt._1.length,
           identity[DenseVector[Double]] _)
 
-        glm.setState(Map("regularization" -> 0.001))
+        glm.setState(Map("regularization" -> OptConfig.reg))
 
-        val res = new_tt._2.map(pattern => (glm.predict(pattern._1), pattern._2)).toList
+        glm.learn()
+
+        val res = new_tt._2.map(pattern =>
+          (tt._3._2.i(DenseVector(glm.predict(pattern._1)))(0), tt._3._2.i(pattern._2)(0)))
+          .toList
+
         val metrics = new RegressionMetrics(res, res.length)
         metrics.generateFitPlot()
         metrics.print()
@@ -334,12 +386,23 @@ object CRRESTest {
       }) >
       DataPipe((s: Stream[(Double, Double)]) => {
         val metrics = new RegressionMetrics(s.toList, s.length)
-        metrics.generateFitPlot()
+        //metrics.generateFitPlot()
         metrics.print()
       })
 
     pipe(traintestFile)
 
+  }
+
+  def getAvgMEAFluxHist() = {
+
+    val pipe = prepareData >
+      StreamDataPipe((rec: (DenseVector[Double], Double)) => math.log(rec._2)) >
+      DataPipe((s: Stream[Double]) => {
+        histogram(s.toList)
+      })
+
+    pipe(traintestFile)
   }
 
   /*def apply(committeeSize: Int, fraction: Double) = {

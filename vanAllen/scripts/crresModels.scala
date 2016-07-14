@@ -8,7 +8,7 @@ val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
 
 CRRESTest(
   new RBFKernel(1.5),
-  new DiracKernel(0.9), 1000, 1000,
+  new DiracKernel(0.9), 1000, 2000,
   3, 0.2)
 
 CRRESTest(
@@ -57,9 +57,23 @@ CRRESTest(
 
 // Test a feed forward neural network
 CRRESTest(
-  1, List("logsig", "linear"), List(8),
-  5000, 1000, 0.05, 40,
-  0.6, 0.00, 0.75
+  1, List("logsig", "linear"), List(2),
+  8000, 2000, 0.1, 150,
+  0.5, 0.001, 1.0
 )
+
+
+CRRESTest(
+  0, List("logsig"), List(),
+  8000, 2000, 0.05, 200,
+  0.5, 0.0001, 1.0
+)
+
+CRRESTest(
+  0, List("linear"), List(),
+  6000, 1000, 0.02, 150,
+  0.5, 0.0001, 1.0
+)
+
 
 CRRESTest(1000)

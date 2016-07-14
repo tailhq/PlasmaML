@@ -20,13 +20,19 @@ object OmniWaveletModels {
   DateTimeZone.setDefault(DateTimeZone.UTC)
   val formatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/MM/dd/HH")
 
-  var (orderFeat, orderTarget) = (3,3)
+  var (orderFeat, orderTarget) = (4,3)
 
   var (trainingStart, trainingEnd) = ("2011/08/05/20", "2011/10/25/14")
 
   var (validationStart, validationEnd) = ("2008/01/30/00", "2008/06/30/00")
 
   var (testStart, testEnd) = ("2004/07/21/20", "2004/09/01/00")
+
+  var hidden_layers:Int = 1
+
+  var neuronCounts: List[Int] = List(6)
+
+  var neuronActivations: List[String] = List("logsig", "linear")
 
   var column: Int = 40
 
@@ -142,7 +148,8 @@ object OmniWaveletModels {
         val gr = FFNeuralGraph(
           trainTest._1.head._1.length,
           trainTest._1.head._2.length,
-          0, List("linear"), List())
+          hidden_layers, neuronActivations,
+          neuronCounts)
 
         val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
 
@@ -269,7 +276,8 @@ object OmniWaveletModels {
         val gr = FFNeuralGraph(
           trainTest._1.head._1.length,
           trainTest._1.head._2.length,
-          0, List("linear"), List())
+          hidden_layers, neuronActivations,
+          neuronCounts)
 
         val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
 
@@ -312,7 +320,8 @@ object OmniWaveletModels {
         val gr = FFNeuralGraph(
           trainTest._1.head._1.length,
           trainTest._1.head._2.length,
-          0, List("linear"), List())
+          1, List("logsig","linear"),
+          List(4))
 
         val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
 
@@ -375,13 +384,13 @@ object DstWaveletExperiment {
 
   val logger = Logger.getLogger(this.getClass)
 
-  var learningRate: Double = 4e-1
+  var learningRate: Double = 1.0
 
-  var reg: Double = 0.01
+  var reg: Double = 0.0005
 
   var momentum: Double = 0.6
 
-  var it:Int = 15
+  var it:Int = 150
 
   def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true) = {
 
