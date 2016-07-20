@@ -394,15 +394,43 @@ object CRRESTest {
 
   }
 
-  def getAvgMEAFluxHist() = {
+  def getAvgMEAFluxHist(logFlag: Boolean = true) = {
 
-    val pipe = prepareData >
-      StreamDataPipe((rec: (DenseVector[Double], Double)) => math.log(rec._2)) >
+    val mapF = (rec: (DenseVector[Double], Double)) => if(logFlag) math.log(rec._2) else rec._2
+
+    /*val pipe = prepareData >
+      StreamDataPipe(mapF) >
       DataPipe((s: Stream[Double]) => {
         histogram(s.toList)
       })
 
-    pipe(traintestFile)
+    pipe(traintestFile)*/
+
+    val cumulativeDist = (s: Stream[Double]) => (x: Double) => {
+      s.count(_ <= x).toDouble/s.length.toDouble
+    }
+
+    val prepPipe = prepareData >
+    StreamDataPipe((p: (DenseVector[Double], Double)) => p._2)
+
+    val compositePipe =
+      StreamDataPipe((s: String) => dataRoot+"crres/crres_h0_mea_"+s+"_v01.cdf") >
+        StreamDataPipe((s: String) => prepPipe(s)) >
+        DataPipe((seq: Stream[Stream[Double]]) => seq.reduce((x,y) => x ++ y)) >
+        DataPipe((xs: Stream[Double]) => {
+          val F = cumulativeDist(xs)
+          xs.map(v => (math.log(v), math.log(-1.0 * math.log(1.0 - F(v)))))
+        }) >
+        StreamDataPipe((c: (Double, Double)) => c._2 != Double.PositiveInfinity)
+
+    val fileStrs = Stream(
+      "19900728","19900807", "19900817",
+      "19910112", "19910201", "19910122")
+
+    regression(compositePipe(fileStrs))
+    xAxis("log(n_average)")
+    yAxis("log(-log(1-F(n_average)))")
+
   }
 
   /*def apply(committeeSize: Int, fraction: Double) = {
