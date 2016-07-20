@@ -18,7 +18,7 @@ CRRESTest(
 
 CRRESTest(
   new LaplacianKernel(1.0),
-  new DiracKernel(0.9), 2000, 1000,
+  new DiracKernel(0.9), 1000, 1000,
   2, 0.2)
 
 
@@ -58,22 +58,16 @@ CRRESTest(
 // Test a feed forward neural network
 CRRESTest(
   1, List("logsig", "linear"), List(2),
-  8000, 2000, 0.1, 150,
-  0.5, 0.001, 1.0
-)
+  8000, 2000)
 
 
 CRRESTest(
   0, List("logsig"), List(),
-  8000, 2000, 0.05, 200,
-  0.5, 0.0001, 1.0
-)
+  8000, 2000)
 
 CRRESTest(
   0, List("linear"), List(),
-  6000, 1000, 0.02, 150,
-  0.5, 0.0001, 1.0
-)
+  6000, 1000)
 
 
 CRRESTest(1000)

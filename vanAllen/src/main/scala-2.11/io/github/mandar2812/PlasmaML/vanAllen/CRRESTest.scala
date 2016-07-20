@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
 import breeze.linalg.{DenseMatrix, DenseVector}
-import io.github.mandar2812.PlasmaML.cdf.CDFUtils
+import io.github.mandar2812.PlasmaML.cdf.{CDFUtils, EpochFormatter}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.models.{GLMPipe, GPRegressionPipe}
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
@@ -18,6 +18,9 @@ import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.Statistics
 import org.apache.spark.rdd.RDD
 import com.quantifind.charts.Highcharts._
+import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+
 
 class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5) extends SVMKernel[DenseMatrix[Double]]
 with LocalSVMKernel[DenseVector[Double]] {
@@ -53,9 +56,15 @@ with LocalSVMKernel[DenseVector[Double]] {
   */
 object CRRESTest {
 
+  DateTimeZone.setDefault(DateTimeZone.UTC)
+
+  val dateTimeFormatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
+
+  val epochFormatter = new EpochFormatter()
+
   var columns = Seq(
     "FLUX", "MLT", "L", "Local_Time", "N",
-    "B", "Bmin", "Latitude", "Altitude")
+    "B", "Bmin", "Latitude", "Altitude", "Epoch")
 
   var columnDataTypes = Seq()
 
@@ -93,6 +102,7 @@ object CRRESTest {
     var maxIt = 100
     var momentum = 0.5
     var sparsity = 0.2
+    var mini = 1.0
   }
 
   def prepareData = CDFUtils.readCDF >
@@ -114,7 +124,7 @@ object CRRESTest {
       }).map(record => {
         val (flux, mlt, lshell,
         local_time, n, b,
-        bmin, lat, alt) = (
+        bmin, lat, alt, epoch) = (
           record.head.asInstanceOf[Array[Float]],
           record(1).asInstanceOf[Float],
           record(2).asInstanceOf[Float],
@@ -123,12 +133,16 @@ object CRRESTest {
           record(5).asInstanceOf[Float],
           record(6).asInstanceOf[Float],
           record(7).asInstanceOf[Float],
-          record(8).asInstanceOf[Float])
+          record(8).asInstanceOf[Float],
+          record(9).asInstanceOf[Double].toLong)
+
+
         val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")(fillValKey)).map(_.toDouble)
+        val dt = new DateTime(epochFormatter.formatEpoch(epoch))
         val filteredJ = n.filter(f => f.toString != metadata("N")(fillValKey)).map(_.toDouble)
         (DenseVector(
           mlt.toDouble, lshell.toDouble, b.toDouble,
-          bmin.toDouble, lat.toDouble),
+          bmin.toDouble, lat.toDouble, dt.getMillis.toDouble),
           filteredFlux.sum/filteredFlux.length)
       })
     }) >
@@ -226,9 +240,7 @@ object CRRESTest {
   }
 
   def apply(hidden: Int, acts: List[String], nCounts: List[Int],
-            num_train: Int, num_test: Int, stepSize: Double,
-            maxIt: Int, alpha: Double, regularization: Double,
-            mini: Double) = {
+            num_train: Int, num_test: Int) = {
 
     val trainTest = prepareData >
       StreamDataPipe(
@@ -237,10 +249,10 @@ object CRRESTest {
       DataPipe((data: Stream[(DenseVector[Double], DenseVector[Double])]) => {
         (data.take(num_train), data.takeRight(num_test))
       }) >
-      gaussianScalingTrainTest >
+      crresScale >
       DataPipe((datSc: (Stream[(DenseVector[Double], DenseVector[Double])],
             Stream[(DenseVector[Double], DenseVector[Double])],
-            (GaussianScaler, GaussianScaler))) => {
+            (MinMaxScaler, MinMaxScaler))) => {
 
         val gr = FFNeuralGraph(
           datSc._1.head._1.length, 1,
@@ -250,11 +262,11 @@ object CRRESTest {
           datSc._1, gr,
           StreamDataPipe(identity[(DenseVector[Double], DenseVector[Double])] _))
 
-        model.setLearningRate(stepSize)
-          .setMaxIterations(maxIt)
-          .setBatchFraction(mini)
-          .setMomentum(alpha)
-          .setRegParam(regularization)
+        model.setLearningRate(OptConfig.stepSize)
+          .setMaxIterations(OptConfig.maxIt)
+          .setBatchFraction(OptConfig.mini)
+          .setMomentum(OptConfig.momentum)
+          .setRegParam(OptConfig.reg)
           .learn()
 
         val reverseScale = datSc._3._2.i * datSc._3._2.i
