@@ -91,7 +91,7 @@ object CRRESTest {
     (scaler(trainTest._1), scaler(trainTest._2), (featuresScaler, targetsScaler))
   })
 
-  def traintestFile = dataRoot+"crres/crres_h0_mea_19910112_v01.cdf"
+  def traintestFile = dataRoot+"crres/crres_h0_mea_19910601_v01.cdf"
 
   def validationFile = dataRoot+"crres/crres_h0_mea_19910601_v01.cdf"
 
@@ -184,7 +184,8 @@ object CRRESTest {
     DataPipe((lines: Stream[String]) => lines.map{line =>
       val splits = line.split(",")
       val timestamp = Tfunc(splits(0).toDouble, splits(1).toDouble, splits(2).toDouble, splits(3).toDouble)
-      (timestamp, splits(4).toDouble)
+      val feat = DenseVector(splits.slice(4, splits.length).map(_.toDouble))
+      (timestamp, feat)
     })
 
   val dayofYearformat = DateTimeFormat.forPattern("yyyy/D/H/m")
@@ -196,7 +197,7 @@ object CRRESTest {
   val prepPipeSymH = fileToStream >
     replaceWhiteSpaces >
     extractTrainingFeatures(
-      List(0,1,2,3,39),
+      List(0,1,2,3,40,41,42,43),
       Map(
         16 -> "999.9", 21 -> "999.9",
         24 -> "9999.", 23 -> "999.9",
@@ -220,11 +221,11 @@ object CRRESTest {
     StreamDataPipe((s: (String, String)) => {
       val (crresData, symhData) = (prepCRRES * prepPipeSymH)(s)
 
-      (crresData ++ symhData).groupBy(_._1).mapValues(_ match {
+      (crresData ++ symhData).groupBy(_._1).mapValues({
         case Stream((key1, value1), (key2, value2)) =>
-          val symh = value2.asInstanceOf[Double]
+          val symh = value2.asInstanceOf[DenseVector[Double]]
           val crresD = value1.asInstanceOf[(DenseVector[Double], Double)]
-          (DenseVector(crresD._1.toArray ++ Array(symh)), crresD._2)
+          (DenseVector(crresD._1.toArray ++ symh.toArray), crresD._2)
         case _ =>
           (DenseVector(0.0), Double.NaN)
       }).values
@@ -291,7 +292,7 @@ object CRRESTest {
 
     val finalPipe = preProcess(num_train, num_test) > DataPipe(modelTrainTest)
 
-    finalPipe(Stream("19910112"))
+    finalPipe(Stream("19910601"))
   }
 
   def apply(hidden: Int, acts: List[String], nCounts: List[Int],
@@ -456,7 +457,7 @@ object CRRESTest {
       }) >
       DataPipe((s: Stream[(Double, Double)]) => {
         val metrics = new RegressionMetrics(s.map(c => (math.log(c._1), math.log(c._2))).toList, s.length)
-        //metrics.generateFitPlot()
+        metrics.generateFitPlot()
         metrics.print()
       })
 
