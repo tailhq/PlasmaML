@@ -7,27 +7,27 @@ import io.github.mandar2812.dynaml.pipes.DataPipe
 val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
 
 CRRESTest(
-  new RBFKernel(1.5),
-  new DiracKernel(0.9), 1000, 2000,
-  3, 0.2)
+  new RBFKernel(0.75),
+  new DiracKernel(0.9), 1000, 5000,
+  2, 0.2)
 
 CRRESTest(
-  new CauchyKernel(1.5),
-  new DiracKernel(0.9), 1000, 1000,
-  3, 0.2)
+  new CauchyKernel(1.0),
+  new DiracKernel(0.9), 1000, 5000,
+  2, 0.2)
 
 CRRESTest(
   new LaplacianKernel(1.0),
-  new DiracKernel(0.9), 1000, 1000,
+  new DiracKernel(0.9), 1000, 2000,
   2, 0.2)
 
 
 val crresKern: CRRESKernel = new CRRESKernel(1.0, 0.9, 1.0, 1.0)
 
-crresKern.blocked_hyper_parameters =
-  crresKern.rbfK.hyper_parameters
+//crresKern.blocked_hyper_parameters =
+//  crresKern.rbfK.hyper_parameters
 
-crresKern.rbfK.blocked_hyper_parameters = crresKern.rbfK.hyper_parameters
+//crresKern.rbfK.blocked_hyper_parameters = crresKern.rbfK.hyper_parameters
 
 val noiseKern:DiracKernel = new DiracKernel(0.74)
 
@@ -35,7 +35,7 @@ noiseKern.blocked_hyper_parameters = noiseKern.hyper_parameters
 
 CRRESTest(
   crresKern,
-  noiseKern, 2000, 1000,
+  noiseKern, 1000, 5000,
   2, 0.2)
 
 
@@ -50,14 +50,14 @@ val crresKern1: CompositeCovariance[DenseVector[Double]] = (waveletKern * rbfKer
 crresKern1.blocked_hyper_parameters = waveletKern.hyper_parameters ++ rbfKern.hyper_parameters
 
 CRRESTest(
-  crresKern1,
-  new DiracKernel(0.84), 2000, 2000,
-  2, 0.02)
+  waveletKern,
+  new DiracKernel(0.84), 1000, 5000,
+  2, 0.2)
 
 
 // Test a feed forward neural network
 CRRESTest(
-  1, List("logsig", "linear"), List(2),
+  1, List("logsig", "linear"), List(4),
   8000, 2000)
 
 

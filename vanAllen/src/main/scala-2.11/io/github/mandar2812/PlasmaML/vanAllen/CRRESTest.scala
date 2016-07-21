@@ -23,7 +23,7 @@ import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 
 class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5) extends SVMKernel[DenseMatrix[Double]]
-with LocalSVMKernel[DenseVector[Double]] {
+  with LocalSVMKernel[DenseVector[Double]] {
 
   val waveletK = new WaveletKernel((x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0))(th)
 
@@ -44,7 +44,7 @@ with LocalSVMKernel[DenseVector[Double]] {
   override def evaluate(x: DenseVector[Double], y: DenseVector[Double]): Double = {
     val (x_mlt, y_mlt) = (x(0 until 2), y(0 until 2 ))
     val (x_rest, y_rest) = (x(2 to -1), y(2 to -1))
-    state("wavelet")*waveletK.evaluate(x_mlt, y_mlt)+ state("rbf")*rbfK.evaluate(x_rest, y_rest)
+    state("wavelet")*waveletK.evaluate(x_mlt, y_mlt) + state("rbf")*rbfK.evaluate(x_rest, y_rest)
   }
 }
 
@@ -91,7 +91,7 @@ object CRRESTest {
     (scaler(trainTest._1), scaler(trainTest._2), (featuresScaler, targetsScaler))
   })
 
-  def traintestFile = dataRoot+"crres/crres_h0_mea_19910201_v01.cdf"
+  def traintestFile = dataRoot+"crres/crres_h0_mea_19910112_v01.cdf"
 
   def validationFile = dataRoot+"crres/crres_h0_mea_19910601_v01.cdf"
 
@@ -105,7 +105,7 @@ object CRRESTest {
     var mini = 1.0
   }
 
-  def prepareData = CDFUtils.readCDF >
+  def processCRRESCDF = CDFUtils.readCDF >
     CDFUtils.cdfToStream(columns) >
     DataPipe((couple: (Stream[Seq[AnyRef]], Map[String, Map[String, String]])) => {
       val (data, metadata) = couple
@@ -138,11 +138,13 @@ object CRRESTest {
 
 
         val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")(fillValKey)).map(_.toDouble)
-        val dt = new DateTime(epochFormatter.formatEpoch(epoch))
+
+        val dt = new DateTime(epochFormatter.formatEpoch(epoch)).minuteOfHour().roundFloorCopy()
+
         val filteredJ = n.filter(f => f.toString != metadata("N")(fillValKey)).map(_.toDouble)
         (DenseVector(
           mlt.toDouble, lshell.toDouble, b.toDouble,
-          bmin.toDouble, lat.toDouble, dt.getMillis.toDouble),
+          bmin.toDouble, lat.toDouble, dt.getMillis.toDouble/1000.0),
           filteredFlux.sum/filteredFlux.length)
       })
     }) >
@@ -150,12 +152,12 @@ object CRRESTest {
 
 
   def preProcess(num_train: Int, num_test: Int) =
-    prepareData >
-    StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
-    DataPipe((data: Stream[(DenseVector[Double], Double)]) => {
-      (data.take(num_train), data.takeRight(num_test))
-    }) >
-    trainTestGaussianStandardization
+    collateData >
+      StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
+      DataPipe((data: Stream[(DenseVector[Double], Double)]) => {
+        (data.take(num_train), data.takeRight(num_test))
+      }) >
+      trainTestGaussianStandardization
 
   def preProcessRDD() = CDFUtils.readCDF >
     CDFUtils.cdfToRDD(columns) >
@@ -174,9 +176,62 @@ object CRRESTest {
           record(3).asInstanceOf[Float])
         val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")(fillValKey)).map(_.toDouble)
         (DenseVector(mlt.toDouble, lshell.toDouble),
-        filteredFlux.sum/filteredFlux.length)
+          filteredFlux.sum/filteredFlux.length)
       })
     })
+
+  val extractTimeSeriesSymh = (Tfunc: (Double, Double, Double, Double) => Long) =>
+    DataPipe((lines: Stream[String]) => lines.map{line =>
+      val splits = line.split(",")
+      val timestamp = Tfunc(splits(0).toDouble, splits(1).toDouble, splits(2).toDouble, splits(3).toDouble)
+      (timestamp, splits(4).toDouble)
+    })
+
+  val dayofYearformat = DateTimeFormat.forPattern("yyyy/D/H/m")
+
+  val prepCRRES = processCRRESCDF >
+    StreamDataPipe((p: (DenseVector[Double], Double)) =>
+      (p._1(p._1.length-1).toLong, (p._1(0 to -2), p._2)))
+
+  val prepPipeSymH = fileToStream >
+    replaceWhiteSpaces >
+    extractTrainingFeatures(
+      List(0,1,2,3,39),
+      Map(
+        16 -> "999.9", 21 -> "999.9",
+        24 -> "9999.", 23 -> "999.9",
+        40 -> "99999", 22 -> "9999999.",
+        25 -> "999.9", 28 -> "99.99",
+        27 -> "9.999", 39 -> "999",
+        45 -> "99999.99", 46 -> "99999.99",
+        47 -> "99999.99")
+    ) >
+    removeMissingLines >
+    extractTimeSeriesSymh((year,day,hour, minute) => {
+      val dt = dayofYearformat.parseDateTime(
+        year.toInt.toString + "/" + day.toInt.toString + "/" +
+          hour.toInt.toString + "/" + minute.toInt.toString)
+
+      (dt.getMillis/1000.0).toLong
+    })
+
+  val collateData = StreamDataPipe((s: String) =>
+    (dataRoot+"crres/crres_h0_mea_"+s+"_v01.cdf", "data/omni_min"+s.take(4)+".csv")) >
+    StreamDataPipe((s: (String, String)) => {
+      val (crresData, symhData) = (prepCRRES * prepPipeSymH)(s)
+
+      (crresData ++ symhData).groupBy(_._1).mapValues(_ match {
+        case Stream((key1, value1), (key2, value2)) =>
+          val symh = value2.asInstanceOf[Double]
+          val crresD = value1.asInstanceOf[(DenseVector[Double], Double)]
+          (DenseVector(crresD._1.toArray ++ Array(symh)), crresD._2)
+        case _ =>
+          (DenseVector(0.0), Double.NaN)
+      }).values
+        .filter(l => l._2 != Double.NaN && l._1.length > 2)
+        .toStream
+    }) >
+    DataPipe((seq: Stream[Stream[(DenseVector[Double], Double)]]) => seq.reduce((x,y) => x ++ y))
 
   def apply(kernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]] =
             new RBFKernel(2.0),
@@ -211,7 +266,7 @@ object CRRESTest {
 
           val sc = scalerFeatures * scaleTargets
 
-          val validationPipe = prepareData >
+          /*val validationPipe = processCRRESCDF >
             StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
             StreamDataPipe(
               (s: (DenseVector[Double], Double)) => {
@@ -220,7 +275,7 @@ object CRRESTest {
             DataPipe((s: Stream[(DenseVector[Double], DenseVector[Double])]) => sc(s.takeRight(num_test))) >
             StreamDataPipe((s: (DenseVector[Double], DenseVector[Double])) => (s._1, s._2(0)))
 
-          model.validationSet = validationPipe(validationFile)
+          model.validationSet = validationPipe(validationFile)*/
 
           model
         }) >
@@ -236,13 +291,14 @@ object CRRESTest {
 
     val finalPipe = preProcess(num_train, num_test) > DataPipe(modelTrainTest)
 
-    finalPipe(traintestFile)
+    finalPipe(Stream("19910112"))
   }
 
   def apply(hidden: Int, acts: List[String], nCounts: List[Int],
             num_train: Int, num_test: Int) = {
 
-    val trainTest = prepareData >
+    val trainTest = collateData >
+      //StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
       StreamDataPipe(
         (couple: (DenseVector[Double], Double)) =>
           (couple._1, DenseVector(couple._2))) >
@@ -251,8 +307,8 @@ object CRRESTest {
       }) >
       crresScale >
       DataPipe((datSc: (Stream[(DenseVector[Double], DenseVector[Double])],
-            Stream[(DenseVector[Double], DenseVector[Double])],
-            (MinMaxScaler, MinMaxScaler))) => {
+        Stream[(DenseVector[Double], DenseVector[Double])],
+        (MinMaxScaler, MinMaxScaler))) => {
 
         val gr = FFNeuralGraph(
           datSc._1.head._1.length, 1,
@@ -278,7 +334,7 @@ object CRRESTest {
         results.print()
       })
 
-    trainTest(traintestFile)
+    trainTest(Stream("19910112"))
 
   }
 
@@ -317,7 +373,7 @@ object CRRESTest {
     val finalPipe = preProcess(num_train, num_test) >
       DataPipe(modelTrainTest)
 
-    finalPipe(traintestFile)
+    finalPipe(Stream("19910112"))
   }
 
   //Test AutoEncoder Idea
@@ -325,10 +381,11 @@ object CRRESTest {
             num_train: Int,
             num_test: Int) = {
 
-    val finalPipe = prepareData >
+    val finalPipe = collateData >
+      StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
       StreamDataPipe(
         (couple: (DenseVector[Double], Double)) =>
-          (couple._1, DenseVector(math.log(couple._2)))) >
+          (couple._1, DenseVector(couple._2))) >
       DataPipe((data: Stream[(DenseVector[Double], DenseVector[Double])]) => {
         (data.take(num_train), data.takeRight(num_test))
       }) >
@@ -358,7 +415,8 @@ object CRRESTest {
           tt._2.map(pattern => (autoEncoder(pattern._1), pattern._2))
           )
 
-        val glm = new RegularizedGLM(new_tt._1.map(t => (t._1, t._2(0))),
+        val glm = new RegularizedGLM(
+          new_tt._1.map(t => (t._1, t._2(0))),
           new_tt._1.length,
           identity[DenseVector[Double]] _)
 
@@ -375,13 +433,13 @@ object CRRESTest {
         metrics.print()
       })
 
-    finalPipe(traintestFile)
+    finalPipe(Stream("19910112"))
   }
 
 
   //Test Sheeleys model
   def apply(num_test: Int) = {
-    val pipe = prepareData >
+    val pipe = processCRRESCDF >
       DataPipe((s: Stream[(DenseVector[Double], Double)]) => s.takeRight(num_test)) >
       StreamDataPipe((p: (DenseVector[Double], Double)) => {
         val (mlt, lshell, flux) = (p._1(0), p._1(1), p._2)
@@ -397,7 +455,7 @@ object CRRESTest {
 
       }) >
       DataPipe((s: Stream[(Double, Double)]) => {
-        val metrics = new RegressionMetrics(s.toList, s.length)
+        val metrics = new RegressionMetrics(s.map(c => (math.log(c._1), math.log(c._2))).toList, s.length)
         //metrics.generateFitPlot()
         metrics.print()
       })
@@ -410,7 +468,7 @@ object CRRESTest {
 
     val mapF = (rec: (DenseVector[Double], Double)) => if(logFlag) math.log(rec._2) else rec._2
 
-    /*val pipe = prepareData >
+    /*val pipe = processCRRESCDF >
       StreamDataPipe(mapF) >
       DataPipe((s: Stream[Double]) => {
         histogram(s.toList)
@@ -422,8 +480,8 @@ object CRRESTest {
       s.count(_ <= x).toDouble/s.length.toDouble
     }
 
-    val prepPipe = prepareData >
-    StreamDataPipe((p: (DenseVector[Double], Double)) => p._2)
+    val prepPipe = processCRRESCDF >
+      StreamDataPipe((p: (DenseVector[Double], Double)) => p._2)
 
     val compositePipe =
       StreamDataPipe((s: String) => dataRoot+"crres/crres_h0_mea_"+s+"_v01.cdf") >
