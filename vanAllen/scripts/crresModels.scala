@@ -6,10 +6,7 @@ import io.github.mandar2812.dynaml.pipes.DataPipe
 // Test a GP model
 val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
 
-CRRESTest(
-  new RBFKernel(1.0),
-  new DiracKernel(1.0), 1000, 1000,
-  3, 0.2)
+CRRESTest(new RBFKernel(1.0), new DiracKernel(1.0), 1000, 1000, 3, 0.2)
 
 CRRESTest(
   new CauchyKernel(1.0),
@@ -29,7 +26,7 @@ val crresKern: CRRESKernel = new CRRESKernel(1.0, 0.9, 1.0, 1.0)
 
 //crresKern.rbfK.blocked_hyper_parameters = crresKern.rbfK.hyper_parameters
 
-val noiseKern:DiracKernel = new DiracKernel(0.6)
+val noiseKern:DiracKernel = new DiracKernel(0.4)
 
 noiseKern.blocked_hyper_parameters = noiseKern.hyper_parameters
 
@@ -49,15 +46,12 @@ val crresKern1: CompositeCovariance[DenseVector[Double]] = (waveletKern * rbfKer
 
 crresKern1.blocked_hyper_parameters = waveletKern.hyper_parameters ++ rbfKern.hyper_parameters
 
-CRRESTest(
-  waveletKern,
-  new DiracKernel(0.84), 1000, 5000,
-  2, 0.2)
+CRRESTest(waveletKern, new DiracKernel(0.84), 1000, 1000, 2, 0.2)
 
 
 // Test a feed forward neural network
 CRRESTest(
-  1, List("logsig", "linear"), List(4),
+  1, List("tansig", "linear"), List(10),
   8000, 2000)
 
 
