@@ -22,6 +22,8 @@ import com.quantifind.charts.Highcharts._
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
+import scala.util.Random
+
 
 class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5) extends SVMKernel[DenseMatrix[Double]]
   with LocalSVMKernel[DenseVector[Double]] {
@@ -247,7 +249,7 @@ object CRRESTest {
       (Stream[(DenseVector[Double], DenseVector[Double])],
         Stream[(DenseVector[Double], DenseVector[Double])],
         (ReversibleScaler[DenseVector[Double]], ReversibleScaler[DenseVector[Double]]))](
-      (dataCouple) => dataCouple._1.map(c => (c._1, c._2(0))),
+      (dataCouple) => dataCouple._1.take(num_train).map(c => (c._1, c._2(0))),
       kernel, noiseKernel)
 
     val buildModel = DataPipe((trainTest: (
@@ -286,12 +288,21 @@ object CRRESTest {
         new RegressionMetrics(scoresAndLabels.toList, scoresAndLabels.length)
       })
 
-    val workflow = preProcess(num_train, num_test) > gaussianScalingTrainTest > buildModel > modelTest
+    val prepare = collateData >
+      StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, DenseVector(math.log(s._2)))) >
+      DataPipe((s: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+        val shuffledData = Random.shuffle(s)
+        val len = shuffledData.length
+        (shuffledData.take(len-num_test), shuffledData.takeRight(num_test))
+      })
+
+
+    val workflow = prepare > gaussianScalingTrainTest > buildModel > modelTest
 
     workflow(fileIds ++ testFileIds)
   }
 
-  def apply(hidden: Int, acts: List[String], nCounts: List[Int],
+  /*def apply(hidden: Int, acts: List[String], nCounts: List[Int],
             num_train: Int, num_test: Int) = {
 
     val trainTest = collateData >
@@ -333,7 +344,8 @@ object CRRESTest {
 
     trainTest(Stream("19910112"))
 
-  }
+  }*/
+  
   //Test AutoEncoder Idea
   def apply(numExtractedFeatures: Int,
             num_train: Int,
@@ -452,7 +464,7 @@ object CRRESTest {
         StreamDataPipe((c: (Double, Double)) => c._2 != Double.PositiveInfinity)
 
     val fileStrs = Stream(
-      "19900728","19900807", "19900817",
+      "19900728", "19900807", "19900817",
       "19910112", "19910201", "19910122")
 
     regression(compositePipe(fileStrs))
@@ -478,9 +490,6 @@ object CRRESTest {
         })
 
       })
-
-
-
   }*/
 
 }
@@ -503,7 +512,7 @@ object CRRESpsdModels {
     val fileProcess = fileToStream >
       dropHead >
       extractTrainingFeatures(
-        List(12,3,4,6,9,5,10),
+        List(12,3,4,6,8,5),
         Map(
           12 -> "", 3 -> "",
           4 -> "", 5 -> "",
@@ -513,9 +522,12 @@ object CRRESpsdModels {
       removeMissingLines >
       splitFeaturesAndTargets >
       StreamDataPipe((c: (DenseVector[Double], Double)) => (log(c._1), DenseVector(math.log(c._2)))) >
-      DataPipe((s: Stream[(DenseVector[Double], DenseVector[Double])]) => (s.take(200000), s.takeRight(num_test))) >
+      StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) => c._2(0) >= -15.0) >
+      DataPipe((s: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+        val shuffledData = Random.shuffle(s)
+        (shuffledData.take(200000), shuffledData.takeRight(num_test))
+        }) >
       gaussianScalingTrainTest
-
 
     val gpPipe = new GPRegressionPipe[GPRegression,
       (Stream[(DenseVector[Double], DenseVector[Double])],

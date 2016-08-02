@@ -8,7 +8,7 @@ val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
 
 CRRESTest(new RBFKernel(1.0), new DiracKernel(1.0), 1000, 1000, 3, 0.2)
 
-CRRESTest(
+  CRRESTest(
   new CauchyKernel(1.0),
   new DiracKernel(1.0), 1000, 1000,
   3, 0.2)
