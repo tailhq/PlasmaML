@@ -151,11 +151,11 @@ object OmniWaveletModels {
           hidden_layers, neuronActivations,
           neuronCounts)
 
-        val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
+        implicit val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
 
         val model = new FeedForwardNetwork[
           Stream[(DenseVector[Double], DenseVector[Double])]
-          ](trainTest._1, gr, transform)
+          ](trainTest._1, gr)
 
         model.setLearningRate(alpha)
           .setMaxIterations(maxIt)
@@ -279,11 +279,11 @@ object OmniWaveletModels {
           hidden_layers, neuronActivations,
           neuronCounts)
 
-        val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
+        implicit val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
 
         val model = new FeedForwardNetwork[
           Stream[(DenseVector[Double], DenseVector[Double])]
-          ](trainTest._1, gr, transform)
+          ](trainTest._1, gr)
 
         model.setLearningRate(alpha)
           .setMaxIterations(maxIt)
@@ -323,11 +323,11 @@ object OmniWaveletModels {
           1, List("logsig","linear"),
           List(4))
 
-        val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
+        implicit val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
 
         val model = new FeedForwardNetwork[
           Stream[(DenseVector[Double], DenseVector[Double])]
-          ](trainTest._1, gr, transform)
+          ](trainTest._1, gr)
 
         model.setLearningRate(alpha)
           .setMaxIterations(maxIt)
