@@ -66,7 +66,7 @@ object CRRESTest {
   val epochFormatter = new EpochFormatter()
 
   var columns = Seq(
-    "FLUX", "MLT", "L", "Latitude", "Epoch")
+    "FLUX", "MLT", "L", "Latitude", "Epoch", "energy", "angle")
 
   var columnDataTypes = Seq()
 
@@ -118,7 +118,7 @@ object CRRESTest {
     CDFUtils.cdfToStream(columns) >
     DataPipe((couple: (Stream[Seq[AnyRef]], Map[String, Map[String, String]])) => {
       val (data, metadata) = couple
-      data.filter(record => {
+      (data.filter(record => {
         val (mlt, lshell, lat) = (
           record(1).toString,
           record(2).toString,
@@ -127,25 +127,8 @@ object CRRESTest {
         mlt != metadata("MLT")(fillValKey) &&
           lshell != metadata("L")(fillValKey) &&
           lat != metadata("Latitude")(fillValKey)
-      }).map(record => {
-        val (flux, mlt, lshell, lat, epoch) = (
-          record.head.asInstanceOf[Array[Float]],
-          record(1).asInstanceOf[Float],
-          record(2).asInstanceOf[Float],
-          record(3).asInstanceOf[Float],
-          record(4).asInstanceOf[Double].toLong)
-
-        val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")(fillValKey)).map(_.toDouble)
-
-        val dt = new DateTime(epochFormatter.formatEpoch(epoch)).minuteOfHour().roundFloorCopy()
-
-        (DenseVector(
-          mlt.toDouble, lshell.toDouble,
-          lat.toDouble, dt.getMillis.toDouble/1000.0),
-          filteredFlux.sum/filteredFlux.length)
-      })
-    }) >
-    StreamDataPipe((p: (DenseVector[Double], Double)) => p._1(1) <= 7.0 && p._1(1) >= 3.0)
+      }), metadata)
+    })
 
 
   def preProcess(num_train: Int, num_test: Int) =
@@ -195,6 +178,27 @@ object CRRESTest {
   val dayofYearformat = DateTimeFormat.forPattern("yyyy/D/H/m")
 
   val prepCRRES = processCRRESCDF >
+    DataPipe((couple: (Stream[Seq[AnyRef]], Map[String, Map[String, String]])) => {
+      val (data, metadata) = couple
+      data.map(record => {
+        val (flux, mlt, lshell, lat, epoch) = (
+          record.head.asInstanceOf[Array[Float]],
+          record(1).asInstanceOf[Float],
+          record(2).asInstanceOf[Float],
+          record(3).asInstanceOf[Float],
+          record(4).asInstanceOf[Double].toLong)
+
+        val filteredFlux = flux.filter(f => f.toString != metadata("FLUX")(fillValKey)).map(_.toDouble)
+
+        val dt = new DateTime(epochFormatter.formatEpoch(epoch)).minuteOfHour().roundFloorCopy()
+
+        (DenseVector(
+          mlt.toDouble, lshell.toDouble,
+          lat.toDouble, dt.getMillis.toDouble/1000.0),
+          filteredFlux.sum/filteredFlux.length)
+      })
+    }) >
+    StreamDataPipe((p: (DenseVector[Double], Double)) => p._1(1) <= 7.0 && p._1(1) >= 3.0) >
     StreamDataPipe((p: (DenseVector[Double], Double)) =>
       (p._1(p._1.length-1).toLong, (p._1(0 to -2), p._2)))
 
@@ -450,8 +454,8 @@ object CRRESTest {
       s.count(_ <= x).toDouble/s.length.toDouble
     }
 
-    val prepPipe = processCRRESCDF >
-      StreamDataPipe((p: (DenseVector[Double], Double)) => p._2)
+    val prepPipe = prepCRRES >
+      StreamDataPipe((p: (Long, (DenseVector[Double], Double))) => p._2._2)
 
     val compositePipe =
       StreamDataPipe((s: String) => dataRoot+"crres/crres_h0_mea_"+s+"_v01.cdf") >
