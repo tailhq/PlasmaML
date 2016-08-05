@@ -17,19 +17,20 @@ OmniWaveletModels.useWaveletBasis = false
 OmniWaveletModels(4e-2, 0.0, 0.2, 20, 1.0)
 
 
-val rbf = new RBFKernel(2.0)
+val rbf = new PolynomialKernel(1, 1.0)
+val rat = new RationalQuadraticKernel(1.2, 1.0)
+rat.blocked_hyper_parameters = List("mu")
+rbf.blocked_hyper_parameters = List("degree")
 
-//rbf.blocked_hyper_parameters = List("degree")
+val d = new DiracKernel(1.0)
 
-val d = new DiracKernel(1.5)
-
-val n = new CoRegDiracKernel
+val n = new CoRegKernel
 val k = new CoRegKernel
 
-val kernel = k :*: rbf
+val kernel = (k :*: rbf) + (k :*: rat)
 val noise = n :*: d
 
-OmniWaveletModels.orderFeat = 2
+OmniWaveletModels.orderFeat = 4
 OmniWaveletModels.orderTarget = 2
 
 val (model, sc) = OmniWaveletModels.train(kernel, noise, 3, 0.2, false)

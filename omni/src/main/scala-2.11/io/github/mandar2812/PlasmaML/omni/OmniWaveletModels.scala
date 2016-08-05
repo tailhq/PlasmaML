@@ -48,7 +48,7 @@ object OmniWaveletModels {
 
   var (validationStart, validationEnd) = ("2008/01/30/00", "2008/06/30/00")
 
-  var (testStart, testEnd) = ("2004/07/21/20", "2004/08/15/00")
+  var (testStart, testEnd) = ("2004/07/21/20", "2004/08/02/00")
 
   var hidden_layers:Int = 1
 
@@ -173,9 +173,9 @@ object OmniWaveletModels {
             new RegressionMetrics(
               res._2.map(_._2).toList.map(c => {
                 val rescaler = (sc._2.mean(res._1), sc._2.sigma(res._1))
-                ((c._1 + rescaler._1) * rescaler._2, (c._2 + rescaler._1 ) * rescaler._2)
+                ((c._1 * rescaler._2) + rescaler._1, (c._2 * rescaler._2) + rescaler._1)
               }),
-              res._2.length)
+              res._2.length).setName("Dst Prediction "+(res._1+1).toString+" hours ahead")
           )
       })
 
