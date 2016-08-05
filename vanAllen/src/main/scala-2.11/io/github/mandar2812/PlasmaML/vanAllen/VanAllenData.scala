@@ -85,9 +85,25 @@ object VanAllenData {
 
   val jhuapl_baseurl = "http://rbspgway.jhuapl.edu/"
 
-  val uiowaphysics_baseurl = "http://emfisis.physics.uiowa.edu/Flight/"
-
   val sw_data_uri = "sw_data_browser"
+
+
+  /**
+    * A spearate inner object for the ENFISIS data
+    * which is stored at the U of Iowa gateway
+    *
+    * */
+  object EMFISIS {
+
+    val baseurl = "http://emfisis.physics.uiowa.edu/Flight/"
+
+    
+    val levels = List("L2", "L3", "L4")
+    val spaceCraftURIs = Map("A" -> "RBSP-A", "B" -> "RBSP-B")
+
+  }
+
+
 
   /**
     * Download text data files for a given day

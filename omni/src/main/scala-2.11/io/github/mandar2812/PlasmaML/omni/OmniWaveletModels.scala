@@ -1,16 +1,38 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.DenseVector
+import breeze.linalg.{DenseMatrix, DenseVector}
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
+import io.github.mandar2812.dynaml.evaluation.{MultiRegressionMetrics, RegressionMetrics}
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
+import io.github.mandar2812.dynaml.kernels.{CovarianceFunction, LocalSVMKernel, LocalScalarKernel}
+import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
+import io.github.mandar2812.dynaml.optimization.GridSearch
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import org.apache.log4j.Logger
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
+class CoRegKernel extends LocalSVMKernel[Int] {
+
+  override val hyper_parameters: List[String] = List()
+
+  override def gradient(x: Int, y: Int): Map[String, Double] = Map()
+
+  override def evaluate(x: Int, y: Int): Double = {
+    math.exp(-1.0*math.abs(x-y)/8.0)
+  }
+}
+
+class CoRegDiracKernel extends LocalSVMKernel[Int] {
+  override val hyper_parameters: List[String] = List()
+
+  override def gradient(x: Int, y: Int): Map[String, Double] = Map()
+
+  override def evaluate(x: Int, y: Int): Double = if(x == y) 1.0 else 0.0
+}
 
 /**
   * Created by mandar on 16/6/16.
@@ -20,13 +42,13 @@ object OmniWaveletModels {
   DateTimeZone.setDefault(DateTimeZone.UTC)
   val formatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/MM/dd/HH")
 
-  var (orderFeat, orderTarget) = (4,3)
+  var (orderFeat, orderTarget) = (4,2)
 
-  var (trainingStart, trainingEnd) = ("2011/08/05/20", "2011/10/25/14")
+  var (trainingStart, trainingEnd) = ("2011/08/05/20", "2011/08/15/14")
 
   var (validationStart, validationEnd) = ("2008/01/30/00", "2008/06/30/00")
 
-  var (testStart, testEnd) = ("2004/07/21/20", "2004/09/01/00")
+  var (testStart, testEnd) = ("2004/07/21/20", "2004/08/15/00")
 
   var hidden_layers:Int = 1
 
@@ -67,15 +89,98 @@ object OmniWaveletModels {
       }).toStream)
 
   val names = Map(
-    24 -> "Solar Wind Speed",
-    16 -> "I.M.F Bz",
-    40 -> "Dst",
-    41 -> "AE",
-    38 -> "Kp",
-    39 -> "Sunspot Number",
+    24 -> "Solar Wind Speed", 16 -> "I.M.F Bz",
+    40 -> "Dst", 41 -> "AE",
+    38 -> "Kp", 39 -> "Sunspot Number",
     28 -> "Plasma Flow Pressure")
 
   var useWaveletBasis: Boolean = true
+
+  def train(kernel: CovarianceFunction[(DenseVector[Double], Int), Double, DenseMatrix[Double]],
+            noise: CovarianceFunction[(DenseVector[Double], Int), Double, DenseMatrix[Double]],
+            grid: Int, step: Double, useLogSc: Boolean):
+  (MOGPRegressionModel[DenseVector[Double]], (GaussianScaler, GaussianScaler)) = {
+
+    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+
+    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+      if (useWaveletBasis) (hFeat*hTarg)(featAndTarg) else featAndTarg)
+
+    val (trainingStartDate, trainingEndDate) =
+        (formatter.parseDateTime(trainingStart).minusHours(pF),
+        formatter.parseDateTime(trainingEnd).plusHours(pT))
+
+    val (trStampStart, trStampEnd) =
+      (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
+
+    val filterTrainingData = StreamDataPipe((couple: (Double, Double)) =>
+      couple._1 >= trStampStart && couple._1 <= trStampEnd)
+
+    val flow = preProcess >
+      filterTrainingData >
+      deltaOperationMult(pF, pT) >
+      gaussianScaling >
+      DataPipe((dataAndScales: (
+        Stream[(DenseVector[Double], DenseVector[Double])],
+          (GaussianScaler, GaussianScaler))) => {
+
+        val training = dataAndScales._1
+
+        val model = new MOGPRegressionModel[DenseVector[Double]](
+          kernel, noise, dataAndScales._1,
+          dataAndScales._1.length, pT)
+
+        val gs = new GridSearch[model.type](model)
+          .setGridSize(grid)
+          .setStepSize(step)
+          .setLogScale(useLogSc)
+
+        val startConf = kernel.effective_state ++ noise.effective_state
+
+        val (tunedGP, _) = gs.optimize(startConf)
+
+        (tunedGP, dataAndScales._2)
+      })
+
+
+    flow("data/omni2_"+trainingStartDate.getYear+".csv")
+
+  }
+
+  def test(model: MOGPRegressionModel[DenseVector[Double]], sc: (GaussianScaler, GaussianScaler)) = {
+
+    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+
+    val (testStartDate, testEndDate) =
+      (formatter.parseDateTime(testStart).minusHours(pF),
+        formatter.parseDateTime(testEnd).plusHours(pT))
+
+    val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
+
+    val testPipe = StreamDataPipe((couple: (Double, Double)) =>
+      couple._1 >= tStampStart && couple._1 <= tStampEnd)
+
+    val flow = preProcess >
+      testPipe >
+      deltaOperationMult(pF, pT) >
+      DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
+      DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+        model.test(nTestDat)
+          .map(t => (t._1._2, (t._3, t._2)))
+          .groupBy(_._1)
+          .map(res =>
+            new RegressionMetrics(
+              res._2.map(_._2).toList.map(c => {
+                val rescaler = (sc._2.mean(res._1), sc._2.sigma(res._1))
+                ((c._1 + rescaler._1) * rescaler._2, (c._2 + rescaler._1 ) * rescaler._2)
+              }),
+              res._2.length)
+          )
+      })
+
+    flow("data/omni2_"+testStartDate.getYear+".csv")
+  }
 
   def train(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
@@ -122,8 +227,6 @@ object OmniWaveletModels {
 
             val filterTrainingData = StreamDataPipe((couple: (Double, Double)) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
-
-            val postPipe = deltaOperationMult(pF,pT)
 
             val getTraining = preProcess >
               filterTrainingData >
