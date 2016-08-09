@@ -1,5 +1,5 @@
-import io.github.mandar2812.PlasmaML.omni.{CoRegKernel, OmniWaveletModels}
-import io.github.mandar2812.dynaml.kernels.{DiracKernel, RBFKernel, RationalQuadraticKernel}
+import io.github.mandar2812.PlasmaML.omni.{CoRegDiracKernel, CoRegKernel, OmniWaveletModels}
+import io.github.mandar2812.dynaml.kernels.{CoRegDiracKernel, DiracKernel, RBFKernel, RationalQuadraticKernel}
 
 OmniWaveletModels.useWaveletBasis = false
 OmniWaveletModels(2e-1, 0.0, 0.0, 30, 1.0)
@@ -17,18 +17,22 @@ OmniWaveletModels.useWaveletBasis = false
 OmniWaveletModels(4e-2, 0.0, 0.2, 20, 1.0)
 
 
-val rbf = new PolynomialKernel(1, 1.0)
-val rat = new RationalQuadraticKernel(1.2, 1.0)
-rat.blocked_hyper_parameters = List("mu")
-rbf.blocked_hyper_parameters = List("degree")
+val linearK = new PolynomialKernel(1, 0.0)
+val rbfK = new RationalQuadraticKernel(2.0, 2.5)
+//rbfK.blocked_hyper_parameters = List("mu")
+linearK.blocked_hyper_parameters = List("degree", "offset")
 
-val d = new DiracKernel(1.0)
+val d = new DiracKernel(0.3)
+d.blocked_hyper_parameters = List("noiseLevel")
 
-val n = new CoRegKernel
-val k = new CoRegKernel
+val n = new CoRegRBFKernel(1.2)
+n.blocked_hyper_parameters = n.hyper_parameters
 
-val kernel = (k :*: rbf) + (k :*: rat)
-val noise = n :*: d
+val k = new CoRegRBFKernel(2.2)
+val k1 = new CoRegDiracKernel
+
+val kernel = (linearK :* k1) + (rbfK :* k)
+val noise = d :* n
 
 OmniWaveletModels.orderFeat = 4
 OmniWaveletModels.orderTarget = 2

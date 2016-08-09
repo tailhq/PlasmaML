@@ -5,7 +5,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.{MultiRegressionMetrics, RegressionMetrics}
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
-import io.github.mandar2812.dynaml.kernels.{CovarianceFunction, LocalSVMKernel, LocalScalarKernel}
+import io.github.mandar2812.dynaml.kernels.{CoRegDiracKernel, _}
 import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.optimization.GridSearch
@@ -15,18 +15,7 @@ import org.apache.log4j.Logger
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
-class CoRegKernel extends LocalSVMKernel[Int] {
-
-  override val hyper_parameters: List[String] = List()
-
-  override def gradient(x: Int, y: Int): Map[String, Double] = Map()
-
-  override def evaluate(x: Int, y: Int): Double = {
-    math.exp(-1.0*math.abs(x-y)/8.0)
-  }
-}
-
-class CoRegDiracKernel extends LocalSVMKernel[Int] {
+class CoRegOMNIKernel extends LocalSVMKernel[Int] {
   override val hyper_parameters: List[String] = List()
 
   override def gradient(x: Int, y: Int): Map[String, Double] = Map()
@@ -82,11 +71,19 @@ object OmniWaveletModels {
 
   val deltaOperationMult = (deltaT: Int, deltaTargets: Int) =>
     DataPipe((lines: Stream[(Double, Double)]) =>
-      lines.toList.sliding(deltaT+deltaTargets).map((history) => {
+      lines.toList.sliding(deltaT+deltaTargets+1).map((history) => {
         val features = DenseVector(history.take(deltaT).map(_._2).toArray)
         val outputs = DenseVector(history.takeRight(deltaTargets).map(_._2).toArray)
         (features, outputs)
       }).toStream)
+
+  /*val deltaOperationARXMult = (deltaT: List[Int], deltaTargets: Int) =>
+    DataPipe((lines: Stream[(Double, DenseVector[Double])]) =>
+      lines.toList.sliding(deltaT.max+deltaTargets).map((history) => {
+        val features = DenseVector(history.take(deltaT).map(_._2).toArray)
+        val outputs = DenseVector(history.takeRight(deltaTargets).map(_._2).toArray)
+        (features, outputs)
+      }).toStream)*/
 
   val names = Map(
     24 -> "Solar Wind Speed", 16 -> "I.M.F Bz",
@@ -102,10 +99,10 @@ object OmniWaveletModels {
   (MOGPRegressionModel[DenseVector[Double]], (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
-    val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+    val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
     val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-      if (useWaveletBasis) (hFeat*hTarg)(featAndTarg) else featAndTarg)
+      if (useWaveletBasis) (hFeat(featAndTarg._1), featAndTarg._2) else featAndTarg)
 
     val (trainingStartDate, trainingEndDate) =
         (formatter.parseDateTime(trainingStart).minusHours(pF),
@@ -120,12 +117,11 @@ object OmniWaveletModels {
     val flow = preProcess >
       filterTrainingData >
       deltaOperationMult(pF, pT) >
+      haarWaveletPipe >
       gaussianScaling >
       DataPipe((dataAndScales: (
         Stream[(DenseVector[Double], DenseVector[Double])],
           (GaussianScaler, GaussianScaler))) => {
-
-        val training = dataAndScales._1
 
         val model = new MOGPRegressionModel[DenseVector[Double]](
           kernel, noise, dataAndScales._1,
@@ -152,6 +148,10 @@ object OmniWaveletModels {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
 
+    val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+      if (useWaveletBasis) (hFeat(featAndTarg._1), featAndTarg._2) else featAndTarg)
+
     val (testStartDate, testEndDate) =
       (formatter.parseDateTime(testStart).minusHours(pF),
         formatter.parseDateTime(testEnd).plusHours(pT))
@@ -164,11 +164,13 @@ object OmniWaveletModels {
     val flow = preProcess >
       testPipe >
       deltaOperationMult(pF, pT) >
+      haarWaveletPipe >
       DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
       DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
         model.test(nTestDat)
           .map(t => (t._1._2, (t._3, t._2)))
-          .groupBy(_._1)
+          .groupBy(_._1).toSeq
+          .sortBy(_._1)
           .map(res =>
             new RegressionMetrics(
               res._2.map(_._2).toList.map(c => {
@@ -531,6 +533,83 @@ object DstWaveletExperiment {
         }) >
         DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
           metrics.reduce((m,n) => m++n))
+
+    stormsPipe("data/geomagnetic_storms.csv")
+
+  }
+}
+
+object DstMOGPExperiment {
+
+  val logger = Logger.getLogger(this.getClass)
+
+  var learningRate: Double = 1.0
+
+  var reg: Double = 0.0005
+
+  var momentum: Double = 0.6
+
+  var it:Int = 150
+
+  def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true) = {
+
+    OmniWaveletModels.orderFeat = orderF
+    OmniWaveletModels.orderTarget = orderT
+    OmniWaveletModels.useWaveletBasis = useWavelets
+
+    val linearK = new PolynomialKernel(1, 0.0)
+    val rbfK = new RationalQuadraticKernel(2.0, 2.5)
+    //rbfK.blocked_hyper_parameters = List("mu")
+    linearK.blocked_hyper_parameters = List("degree", "offset")
+
+    val d = new DiracKernel(0.3)
+    d.blocked_hyper_parameters = List("noiseLevel")
+
+    val n = new CoRegRBFKernel(1.2)
+    n.blocked_hyper_parameters = n.hyper_parameters
+
+    val k = new CoRegRBFKernel(2.2)
+    val k1 = new CoRegDiracKernel
+
+    val kernel = (linearK :* k1) + (rbfK :* k)
+    val noise = d :* n
+
+    OmniWaveletModels.orderFeat = 4
+    OmniWaveletModels.orderTarget = 2
+
+    val (model, scaler) = OmniWaveletModels.train(kernel, noise, 3, 0.2, false)
+
+    model.persist()
+
+    //val (model, scaler) = OmniWaveletModels.train(learningRate, reg, momentum, it, 1.0)
+
+    val stormsPipe =
+      fileToStream >
+        replaceWhiteSpaces >
+        DataPipe((st: Stream[String]) => st.take(43)) >
+        StreamDataPipe((stormEventData: String) => {
+          val stormMetaFields = stormEventData.split(',')
+
+          val eventId = stormMetaFields(0)
+          val startDate = stormMetaFields(1)
+          val startHour = stormMetaFields(2).take(2)
+
+          val endDate = stormMetaFields(3)
+          val endHour = stormMetaFields(4).take(2)
+
+          //val minDst = stormMetaFields(5).toDouble
+
+          //val stormCategory = stormMetaFields(6)
+
+          OmniWaveletModels.testStart = startDate+"/"+startHour
+          OmniWaveletModels.testEnd = endDate+"/"+endHour
+
+          logger.info("Testing on Storm: "+OmniWaveletModels.testStart+" to "+OmniWaveletModels.testEnd)
+
+          OmniWaveletModels.test(model, scaler)
+        }) >
+        DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>
+          metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2)))
 
     stormsPipe("data/geomagnetic_storms.csv")
 
