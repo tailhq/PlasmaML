@@ -25,6 +25,21 @@ class CoRegOMNIKernel extends LocalSVMKernel[Int] {
   override def evaluate(x: Int, y: Int): Double = if(x == y) 1.0 else 0.0
 }
 
+class CoRegLaplaceKernel(bandwidth: Double) extends LocalSVMKernel[Int] {
+
+  override val hyper_parameters: List[String] = List("coRegLB")
+
+  state = Map("coRegLB" -> bandwidth)
+
+  override def gradient(x: Int, y: Int): Map[String, Double] =
+    Map("coRegLB" -> 1.0*evaluate(x,y)*math.abs(x-y)/math.pow(state("coRegLB"), 2))
+
+  override def evaluate(x: Int, y: Int): Double = {
+    math.exp(-1.0*math.abs(x-y)/state("coRegLB"))
+  }
+}
+
+
 /**
   * Created by mandar on 16/6/16.
   */
@@ -229,7 +244,7 @@ object OmniWaveletModels {
                 val rescaler = (sc._2.mean(res._1), sc._2.sigma(res._1))
                 ((c._1 * rescaler._2) + rescaler._1, (c._2 * rescaler._2) + rescaler._1)
               }),
-              res._2.length).setName("Dst Prediction "+(res._1+1).toString+" hours ahead")
+              res._2.length).setName("Dst "+(res._1+1).toString+" hours ahead")
           )
       })
 
@@ -617,6 +632,7 @@ object DstMOGPExperiment {
   var gridStep = 0.2
   var logScale = false
 
+
   def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true) = {
 
     OmniWaveletModels.orderFeat = orderF
@@ -624,9 +640,9 @@ object DstMOGPExperiment {
     OmniWaveletModels.useWaveletBasis = useWavelets
 
     val linearK = new PolynomialKernel(1, 0.0)
-    val rbfK = new FBMKernel(1.2)
+    val fbmK = new DiracKernel(0.1)
 
-    //rbfK.blocked_hyper_parameters = rbfK.hyper_parameters
+    fbmK.blocked_hyper_parameters = fbmK.hyper_parameters
     linearK.blocked_hyper_parameters = List("degree", "offset")
 
     val d = new DiracKernel(0.3)
@@ -635,11 +651,11 @@ object DstMOGPExperiment {
     val n = new CoRegRBFKernel(0.5)
     n.blocked_hyper_parameters = n.hyper_parameters
 
-    val k = new CoRegRBFKernel(2.5)
+    val k = new CoRegLaplaceKernel(4.2)
     val k1 = new CoRegDiracKernel
 
-    val kernel = (linearK :* k) + (rbfK :* k)
-    val noise = d :* n
+    val kernel = (linearK :* k) + (fbmK :* k)
+    val noise = d :* k
 
     OmniWaveletModels.orderFeat = orderF
     OmniWaveletModels.orderTarget = orderT
