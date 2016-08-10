@@ -18,20 +18,20 @@ OmniWaveletModels(4e-2, 0.0, 0.2, 20, 1.0)
 
 
 val linearK = new PolynomialKernel(1, 0.0)
-val rbfK = new RationalQuadraticKernel(2.0, 2.5)
+val rbfK = new RationalQuadraticKernel(1.5, 1.5)
 //rbfK.blocked_hyper_parameters = List("mu")
 linearK.blocked_hyper_parameters = List("degree", "offset")
 
 val d = new DiracKernel(0.3)
 d.blocked_hyper_parameters = List("noiseLevel")
 
-val n = new CoRegRBFKernel(1.2)
+val n = new CoRegRBFKernel(0.5)
 n.blocked_hyper_parameters = n.hyper_parameters
 
-val k = new CoRegRBFKernel(2.2)
+val k = new CoRegRBFKernel(1.5)
 val k1 = new CoRegDiracKernel
 
-val kernel = (linearK :* k1) + (rbfK :* k)
+val kernel = (linearK :* k) + (rbfK :* k)
 val noise = d :* n
 
 OmniWaveletModels.orderFeat = 4
