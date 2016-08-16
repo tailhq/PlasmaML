@@ -9,12 +9,13 @@ import io.github.mandar2812.dynaml.kernels.{CoRegDiracKernel, _}
 import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.optimization.GridSearch
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes.{DataPipe, ReversibleScaler, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import org.apache.log4j.Logger
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
+import scala.collection.mutable
 import scala.collection.mutable.{MutableList => ML}
 
 class CoRegOMNIKernel extends LocalSVMKernel[Int] {
@@ -95,7 +96,7 @@ object OmniWaveletModels {
     DataPipe((lines: Stream[(Double, DenseVector[Double])]) =>
       lines.toList.sliding(deltaT.max+deltaTargets+1).map((history) => {
 
-        val hist = history.take(deltaT.max - 1).map(_._2)
+        val hist = history.take(deltaT.max).map(_._2)
         val histOut = history.takeRight(deltaTargets).map(_._2)
 
         val featuresAcc: ML[Double] = ML()
@@ -129,7 +130,16 @@ object OmniWaveletModels {
     val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
     val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-      if (useWaveletBasis) (hFeat(featAndTarg._1), featAndTarg._2) else featAndTarg)
+      if (useWaveletBasis)
+        (DenseVector(featAndTarg._1
+          .toArray
+          .grouped(pF)
+          .map(l => hFeat(DenseVector(l)).toArray)
+          .reduceLeft((a,b) => a ++ b)),
+          featAndTarg._2)
+      else
+        featAndTarg
+    )
 
     val (trainingStartDate, trainingEndDate) =
         (formatter.parseDateTime(trainingStart).minusHours(pF),
@@ -164,7 +174,7 @@ object OmniWaveletModels {
 
     val flow = preProcess >
       prepareFeaturesAndOutputs >
-      //haarWaveletPipe >
+      haarWaveletPipe >
       gaussianScaling >
       DataPipe((dataAndScales: (
         Stream[(DenseVector[Double], DenseVector[Double])],
@@ -196,8 +206,18 @@ object OmniWaveletModels {
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
 
     val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+
     val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-      if (useWaveletBasis) (hFeat(featAndTarg._1), featAndTarg._2) else featAndTarg)
+      if (useWaveletBasis)
+        (DenseVector(featAndTarg._1
+          .toArray
+          .grouped(pF)
+          .map(l => hFeat(DenseVector(l)).toArray)
+          .reduceLeft((a,b) => a ++ b)),
+          featAndTarg._2)
+      else
+        featAndTarg
+    )
 
     val (testStartDate, testEndDate) =
       (formatter.parseDateTime(testStart).minusHours(pF),
@@ -231,7 +251,7 @@ object OmniWaveletModels {
 
     val flow = preProcess >
       prepareFeaturesAndOutputs >
-      //haarWaveletPipe >
+      haarWaveletPipe >
       DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
       DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
         model.test(nTestDat)
@@ -633,29 +653,15 @@ object DstMOGPExperiment {
   var logScale = false
 
 
-  def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true) = {
+  def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true)(
+    kernel: CompositeCovariance[(DenseVector[Double], Int)],
+    noise: CompositeCovariance[(DenseVector[Double], Int)]) = {
 
     OmniWaveletModels.orderFeat = orderF
     OmniWaveletModels.orderTarget = orderT
     OmniWaveletModels.useWaveletBasis = useWavelets
 
-    val linearK = new PolynomialKernel(1, 0.0)
-    val fbmK = new DiracKernel(0.1)
 
-    fbmK.blocked_hyper_parameters = fbmK.hyper_parameters
-    linearK.blocked_hyper_parameters = List("degree", "offset")
-
-    val d = new DiracKernel(0.3)
-    d.blocked_hyper_parameters = List("noiseLevel")
-
-    val n = new CoRegRBFKernel(0.5)
-    n.blocked_hyper_parameters = n.hyper_parameters
-
-    val k = new CoRegLaplaceKernel(4.2)
-    val k1 = new CoRegDiracKernel
-
-    val kernel = (linearK :* k) + (fbmK :* k)
-    val noise = d :* k
 
     OmniWaveletModels.orderFeat = orderF
     OmniWaveletModels.orderTarget = orderT

@@ -1,5 +1,6 @@
-import io.github.mandar2812.PlasmaML.omni.{CoRegDiracKernel, CoRegKernel, OmniWaveletModels}
-import io.github.mandar2812.dynaml.kernels.{CoRegDiracKernel, DiracKernel, RBFKernel, RationalQuadraticKernel}
+import breeze.linalg.DenseVector
+import io.github.mandar2812.PlasmaML.omni.{DstMOGPExperiment, OmniWaveletModels}
+import io.github.mandar2812.dynaml.kernels._
 
 OmniWaveletModels.useWaveletBasis = false
 OmniWaveletModels(2e-1, 0.0, 0.0, 30, 1.0)
