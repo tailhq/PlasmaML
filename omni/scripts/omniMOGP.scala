@@ -12,15 +12,15 @@ linearK.blocked_hyper_parameters = List("degree", "offset")
 val d = new DiracKernel(0.92)
 //d.blocked_hyper_parameters = List("noiseLevel")
 
-val n = new CoRegRBFKernel(50)
+val n = new CoRegCauchyKernel(1.5)
 n.blocked_hyper_parameters = n.hyper_parameters
 
 val k = new CoRegLaplaceKernel(5.2)
 val k1 = new CoRegDiracKernel
 
-val kernel: CompositeCovariance[(DenseVector[Double], Int)] = (linearK :* n) //+ (rbfKernel :* n)
+val kernel: CompositeCovariance[(DenseVector[Double], Int)] = (linearK :* k) + (fbmK :* n)
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* k1
 
 OmniWaveletModels.exogenousInputs = List(16,24)
 
-DstMOGPExperiment(6,2,true)(kernel, noise)
+DstMOGPExperiment(4,2,false)(kernel, noise)
