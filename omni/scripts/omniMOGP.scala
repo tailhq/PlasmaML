@@ -19,7 +19,7 @@ val k1 = new CoRegDiracKernel
 
 val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
 
-val waveletKernel = new WaveletKernel(waveletF)(3.5)
+val waveletKernel = new WaveletKernel(waveletF)(1.5)
 
 
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] = (linearK :* coRegLaplaceMatrix) + (cauKernel :* coRegCauchyMatrix) + (waveletKernel :* coRegCauchyMatrix)
