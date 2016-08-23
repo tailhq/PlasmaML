@@ -16,11 +16,11 @@ val d = new DiracKernel(0.72)
 val mixedEffects = new MixedEffectRegularizer(1.0)
 mixedEffects.blocked_hyper_parameters = mixedEffects.hyper_parameters
 
-val coRegCauchyMatrix = new CoRegCauchyKernel(5.5)
+val coRegCauchyMatrix = new CoRegCauchyKernel(10.5)
 //coRegCauchyMatrix.blocked_hyper_parameters = coRegCauchyMatrix.hyper_parameters
 
-val coRegLaplaceMatrix = new CoRegLaplaceKernel(5.0)
-coRegLaplaceMatrix.blocked_hyper_parameters = coRegLaplaceMatrix.hyper_parameters
+val coRegLaplaceMatrix = new CoRegLaplaceKernel(10.0)
+//coRegLaplaceMatrix.blocked_hyper_parameters = coRegLaplaceMatrix.hyper_parameters
 
 val coRegRBFMatrix = new CoRegRBFKernel(1.0)
 coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
@@ -32,14 +32,15 @@ val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
 val waveletKernel = new WaveletKernel(waveletF)(6.2)
 
 
-val kernel: CompositeCovariance[(DenseVector[Double], Int)] = (linearK :* mixedEffects) + (tKernel :* coRegCauchyMatrix)
+val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
+  (linearK :* mixedEffects) + (tKernel :* coRegCauchyMatrix)
 
-val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
+val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegLaplaceMatrix
 
 OmniWaveletModels.exogenousInputs = List(24,16,41)
 
 DstMOGPExperiment.gridSize = 2
 OmniWaveletModels.globalOpt = "CSA"
-DstMOGPExperiment.maxIt = 25
+DstMOGPExperiment.maxIt = 20
 
 DstMOGPExperiment(3,2,true)(kernel, noise)

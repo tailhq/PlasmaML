@@ -190,6 +190,7 @@ object OmniWaveletModels {
               .setStepSize(step)
               .setLogScale(useLogSc)
               .setMaxIterations(maxIt)
+              .setVariant(CoupledSimulatedAnnealing.MwVC)
           case "GS" =>
             new GridSearch[model.type](model)
               .setGridSize(grid)
