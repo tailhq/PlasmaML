@@ -1,6 +1,5 @@
-import breeze.linalg.DenseVector
 import io.github.mandar2812.PlasmaML.omni.{DstMOGPExperiment, OmniWaveletModels}
-import io.github.mandar2812.dynaml.kernels._
+import io.github.mandar2812.dynaml.kernels.CoRegTStudentKernel
 
 val linearK = new PolynomialKernel(1, 0.0)
 val expKernel = new ExponentialKernel(1.5)
@@ -27,6 +26,8 @@ coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
 
 val coRegDiracMatrix = new CoRegDiracKernel
 
+val coRegTMatrix = new CoRegTStudentKernel(0.75)
+
 val waveletF = (x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0)
 
 val waveletKernel = new WaveletKernel(waveletF)(6.2)
@@ -41,6 +42,6 @@ OmniWaveletModels.exogenousInputs = List(24,16,41)
 
 DstMOGPExperiment.gridSize = 2
 OmniWaveletModels.globalOpt = "CSA"
-DstMOGPExperiment.maxIt = 20
+DstMOGPExperiment.maxIt = 25
 
 DstMOGPExperiment(3,2,true)(kernel, noise)

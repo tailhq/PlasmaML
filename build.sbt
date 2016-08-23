@@ -39,7 +39,8 @@ lazy val omni =
         """import io.github.mandar2812.PlasmaML.omni._;"""+
           """import io.github.mandar2812.dynaml.kernels._;"""+
           """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
-          """import com.quantifind.charts.Highcharts._"""
+          """import com.quantifind.charts.Highcharts._;"""+
+          """import breeze.linalg.DenseVector"""
     ).dependsOn(core)
 
 lazy val vanAllen =
