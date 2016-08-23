@@ -242,9 +242,9 @@ object CRRESTest {
     }) >
     DataPipe((seq: Stream[Stream[(DenseVector[Double], Double)]]) => seq.reduce((x,y) => x ++ y))
 
-  def apply(kernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]] =
+  def apply(kernel: LocalScalarKernel[DenseVector[Double]] =
             new RBFKernel(2.0),
-            noiseKernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]] =
+            noiseKernel: LocalScalarKernel[DenseVector[Double]] =
             new DiracKernel(2.0),
             num_train: Int = 500, num_test: Int = 1000,
             grid: Int = 5, step: Double = 0.2) = {
@@ -505,9 +505,9 @@ object CRRESExp {
 
 object CRRESpsdModels {
 
-  def apply(kernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]] =
+  def apply(kernel: LocalScalarKernel[DenseVector[Double]] =
             new RBFKernel(2.0),
-            noiseKernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]] =
+            noiseKernel: LocalScalarKernel[DenseVector[Double]] =
             new DiracKernel(2.0),
             num_train: Int = 500, num_test: Int = 1000,
             grid: Int = 5, step: Double = 0.2) = {

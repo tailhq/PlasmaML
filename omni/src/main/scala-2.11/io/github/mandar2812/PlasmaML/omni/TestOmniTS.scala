@@ -13,9 +13,9 @@ import io.github.mandar2812.dynaml.pipes.DataPipe
   */
 object TestOmniTS {
 
-  def apply(year: Int, kernel: CovarianceFunction[Double, Double, DenseMatrix[Double]],
+  def apply(year: Int, kernel: LocalScalarKernel[Double],
             bandwidth: Double,
-            noise: CovarianceFunction[Double, Double, DenseMatrix[Double]],
+            noise: LocalScalarKernel[Double],
             num_training: Int, num_test: Int,
             column: Int, grid: Int,
             step: Double, globalOpt: String,
@@ -28,9 +28,9 @@ object TestOmniTS {
         "maxIterations" -> maxIt.toString))
 
   def runExperiment(year: Int = 2006,
-                    kernel: CovarianceFunction[Double, Double, DenseMatrix[Double]],
+                    kernel: LocalScalarKernel[Double],
                     bandwidth: Double = 0.5,
-                    noise: CovarianceFunction[Double, Double, DenseMatrix[Double]],
+                    noise: LocalScalarKernel[Double],
                     num_training: Int = 200, num_test: Int = 50,
                     column: Int = 40, grid: Int = 5,
                     step: Double = 0.2, globalOpt: String = "ML",

@@ -18,10 +18,10 @@ import scala.util.Random
   */
 object TestGPOmni {
 
-  def apply (kernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]],
+  def apply (kernel: LocalScalarKernel[DenseVector[Double]],
              year: Int, yeartest: Int,
              bandwidth: Double,
-             noise: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]],
+             noise: LocalScalarKernel[DenseVector[Double]],
              num_training: Int,
              num_test: Int, columns: List[Int],
              grid: Int, step: Double,
@@ -40,9 +40,9 @@ object TestGPOmni {
   }
 
   def runExperiment(year: Int = 2006, yeartest: Int = 2007,
-                    kernel: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]],
+                    kernel: LocalScalarKernel[DenseVector[Double]],
                     bandwidth: Double = 0.5,
-                    noise: CovarianceFunction[DenseVector[Double], Double, DenseMatrix[Double]],
+                    noise: LocalScalarKernel[DenseVector[Double]],
                     num_training: Int = 200, num_test: Int = 50,
                     columns: List[Int] = List(40,16,21,23,24,22,25),
                     grid: Int = 5, step: Double = 0.2,

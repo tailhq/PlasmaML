@@ -1,21 +1,18 @@
 package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.{DenseMatrix, DenseVector}
-import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.{MultiRegressionMetrics, RegressionMetrics}
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.kernels.{CoRegDiracKernel, _}
 import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
-import io.github.mandar2812.dynaml.optimization.GridSearch
+import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, ReversibleScaler, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import org.apache.log4j.Logger
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
-
-import scala.collection.mutable
 import scala.collection.mutable.{MutableList => ML}
 
 class CoRegOMNIKernel extends LocalSVMKernel[Int] {
@@ -66,6 +63,8 @@ object OmniWaveletModels {
   var column: Int = 40
 
   var exogenousInputs: List[Int] = List()
+
+  var globalOpt: String = "GS"
 
   val dayofYearformat = DateTimeFormat.forPattern("yyyy/D/H")
 
@@ -121,9 +120,9 @@ object OmniWaveletModels {
 
   var useWaveletBasis: Boolean = true
 
-  def train(kernel: CovarianceFunction[(DenseVector[Double], Int), Double, DenseMatrix[Double]],
-            noise: CovarianceFunction[(DenseVector[Double], Int), Double, DenseMatrix[Double]],
-            grid: Int, step: Double, useLogSc: Boolean):
+  def train(kernel: LocalScalarKernel[(DenseVector[Double], Int)],
+            noise: LocalScalarKernel[(DenseVector[Double], Int)],
+            grid: Int, step: Double, useLogSc: Boolean, maxIt:Int):
   (MOGPRegressionModel[DenseVector[Double]], (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
@@ -184,10 +183,19 @@ object OmniWaveletModels {
           kernel, noise, dataAndScales._1,
           dataAndScales._1.length, pT)
 
-        val gs = new GridSearch[model.type](model)
-          .setGridSize(grid)
-          .setStepSize(step)
-          .setLogScale(useLogSc)
+        val gs = globalOpt match {
+          case "CSA" =>
+            new CoupledSimulatedAnnealing[model.type](model)
+              .setGridSize(grid)
+              .setStepSize(step)
+              .setLogScale(useLogSc)
+              .setMaxIterations(maxIt)
+          case "GS" =>
+            new GridSearch[model.type](model)
+              .setGridSize(grid)
+              .setStepSize(step)
+              .setLogScale(useLogSc)
+        }
 
         val startConf = kernel.effective_state ++ noise.effective_state
 
@@ -651,6 +659,7 @@ object DstMOGPExperiment {
   var gridSize = 3
   var gridStep = 0.2
   var logScale = false
+  var maxIt = 40
 
 
   def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true)(
@@ -666,7 +675,7 @@ object DstMOGPExperiment {
     OmniWaveletModels.orderFeat = orderF
     OmniWaveletModels.orderTarget = orderT
 
-    val (model, scaler) = OmniWaveletModels.train(kernel, noise, gridSize, gridStep, useLogSc = logScale)
+    val (model, scaler) = OmniWaveletModels.train(kernel, noise, gridSize, gridStep, useLogSc = logScale, maxIt)
 
     model.persist()
 

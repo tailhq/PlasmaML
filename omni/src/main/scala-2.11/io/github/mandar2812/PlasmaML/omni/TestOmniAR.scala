@@ -46,11 +46,9 @@ object TestOmniAR {
             trainend: String = "2008/01/10/23",
             start: String = "2006/12/28/00",
             end: String = "2006/12/29/23",
-            kernel: CovarianceFunction[DenseVector[Double],
-              Double, DenseMatrix[Double]],
+            kernel: LocalScalarKernel[DenseVector[Double]],
             delta: Int, timeLag:Int,
-            noise: CovarianceFunction[DenseVector[Double],
-              Double, DenseMatrix[Double]],
+            noise: LocalScalarKernel[DenseVector[Double]],
             column: Int, grid: Int,
             step: Double, globalOpt: String,
             stepSize: Double = 0.05,
@@ -65,12 +63,10 @@ object TestOmniAR {
 
   def runExperiment(trainstart: String = "", trainend: String = "",
                     start: String = "", end: String = "",
-                    kernel: CovarianceFunction[DenseVector[Double],
-                      Double, DenseMatrix[Double]],
+                    kernel: LocalScalarKernel[DenseVector[Double]],
                     deltaT: Int = 2, timelag:Int = 0,
                     stepPred: Int = 3,
-                    noise: CovarianceFunction[DenseVector[Double],
-                      Double, DenseMatrix[Double]],
+                    noise: LocalScalarKernel[DenseVector[Double]],
                     column: Int = 40, grid: Int = 5,
                     step: Double = 0.2, globalOpt: String = "ML",
                     opt: Map[String, String],
@@ -429,10 +425,8 @@ object DstARExperiment {
   }
 
   def apply(trainstart: String, trainend: String,
-            kernel: CovarianceFunction[DenseVector[Double],
-              Double, DenseMatrix[Double]],
-            noise: CovarianceFunction[DenseVector[Double],
-              Double, DenseMatrix[Double]],
+            kernel: LocalScalarKernel[DenseVector[Double]],
+            noise: LocalScalarKernel[DenseVector[Double]],
             deltas: List[Int],
             options: Map[String, String]) = {
     val writer =
