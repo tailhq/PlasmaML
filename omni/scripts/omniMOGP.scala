@@ -15,8 +15,8 @@ val d = new DiracKernel(0.72)
 val mixedEffects = new MixedEffectRegularizer(1.0)
 mixedEffects.blocked_hyper_parameters = mixedEffects.hyper_parameters
 
-val coRegCauchyMatrix = new CoRegCauchyKernel(10.5)
-//coRegCauchyMatrix.blocked_hyper_parameters = coRegCauchyMatrix.hyper_parameters
+val coRegCauchyMatrix = new CoRegCauchyKernel(6.5)
+coRegCauchyMatrix.blocked_hyper_parameters = coRegCauchyMatrix.hyper_parameters
 
 val coRegLaplaceMatrix = new CoRegLaplaceKernel(10.0)
 //coRegLaplaceMatrix.blocked_hyper_parameters = coRegLaplaceMatrix.hyper_parameters
@@ -42,6 +42,6 @@ OmniWaveletModels.exogenousInputs = List(24,16,41)
 
 DstMOGPExperiment.gridSize = 2
 OmniWaveletModels.globalOpt = "CSA"
-DstMOGPExperiment.maxIt = 25
+DstMOGPExperiment.maxIt = 40
 
-DstMOGPExperiment(3,2,true)(kernel, noise)
+DstMOGPExperiment(2,2,true)(kernel, noise)
