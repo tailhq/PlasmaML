@@ -120,12 +120,16 @@ object OmniWaveletModels {
 
   var useWaveletBasis: Boolean = true
 
+  var deltaT: List[Int] = List()
+
   def train(kernel: LocalScalarKernel[(DenseVector[Double], Int)],
             noise: LocalScalarKernel[(DenseVector[Double], Int)],
             grid: Int, step: Double, useLogSc: Boolean, maxIt:Int):
   (MOGPRegressionModel[DenseVector[Double]], (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
+
     val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
     val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
@@ -159,16 +163,14 @@ object OmniWaveletModels {
           year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
         dt.getMillis/1000.0 }) >
         filterData >
-        deltaOperationMult(pF, pT)
+        deltaOperationMult(arxOrders.head, pT)
     } else {
       extractTimeSeriesVec((year,day,hour) => {
         val dt = dayofYearformat.parseDateTime(
           year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
         dt.getMillis/1000.0 }) >
       filterDataARX >
-      deltaOperationARXMult(
-        List.fill[Int](exogenousInputs.length+1)(pF),
-        pT)
+      deltaOperationARXMult(arxOrders, pT)
     }
 
     val flow = preProcess >
@@ -213,6 +215,7 @@ object OmniWaveletModels {
   def test(model: MOGPRegressionModel[DenseVector[Double]], sc: (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
 
     val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
@@ -246,16 +249,14 @@ object OmniWaveletModels {
           year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
         dt.getMillis/1000.0 }) >
         filterData >
-        deltaOperationMult(pF, pT)
+        deltaOperationMult(arxOrders.head, pT)
     } else {
       extractTimeSeriesVec((year,day,hour) => {
         val dt = dayofYearformat.parseDateTime(
           year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
         dt.getMillis/1000.0 }) >
         filterDataARX >
-        deltaOperationARXMult(
-          List.fill[Int](exogenousInputs.length+1)(pF),
-          pT)
+        deltaOperationARXMult(arxOrders, pT)
     }
 
     val flow = preProcess >
@@ -438,6 +439,41 @@ object OmniWaveletModels {
 
   }
 
+  def test(): MultiRegressionMetrics = {
+
+    val (pF, pT) = (1,math.pow(2, orderTarget).toInt)
+
+    OmniWaveletModels.exogenousInputs = List()
+
+    val (testStartDate, testEndDate) =
+      (formatter.parseDateTime(testStart).minusHours(pF),
+        formatter.parseDateTime(testEnd).plusHours(pT))
+
+    val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
+
+    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+      couple._1 >= tStampStart && couple._1 <= tStampEnd)
+
+    val prepareFeaturesAndOutputs = extractTimeSeries((year,day,hour) => {
+      val dt = dayofYearformat.parseDateTime(
+        year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
+      dt.getMillis/1000.0 }) >
+      filterData >
+      deltaOperationMult(pF, pT)
+
+    val flow = preProcess >
+      prepareFeaturesAndOutputs >
+      StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) =>
+        (DenseVector.fill[Double](c._2.length)(c._1(c._1.length-1)), c._2)) >
+      DataPipe((d: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+        new MultiRegressionMetrics(d.toList, d.length)
+      })
+
+    flow("data/omni2_"+testStartDate.getYear+".csv")
+
+
+  }
+
   def apply(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
             mini: Double = 1.0): MultiRegressionMetrics = {
@@ -596,6 +632,46 @@ object OmniWaveletModels {
 
   }
 
+}
+
+object DstPersistenceMOExperiment {
+
+  val logger = Logger.getLogger(this.getClass)
+
+  def apply(orderT: Int) = {
+    OmniWaveletModels.orderTarget = orderT
+
+    val stormsPipe =
+      fileToStream >
+        replaceWhiteSpaces >
+        StreamDataPipe((stormEventData: String) => {
+          val stormMetaFields = stormEventData.split(',')
+
+          val eventId = stormMetaFields(0)
+          val startDate = stormMetaFields(1)
+          val startHour = stormMetaFields(2).take(2)
+
+          val endDate = stormMetaFields(3)
+          val endHour = stormMetaFields(4).take(2)
+
+          //val minDst = stormMetaFields(5).toDouble
+
+          //val stormCategory = stormMetaFields(6)
+
+
+          OmniWaveletModels.testStart = startDate+"/"+startHour
+          OmniWaveletModels.testEnd = endDate+"/"+endHour
+
+          logger.info("Testing on Storm: "+OmniWaveletModels.testStart+" to "+OmniWaveletModels.testEnd)
+
+          OmniWaveletModels.test()
+        }) >
+        DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
+          metrics.reduce((m,n) => m++n))
+
+    stormsPipe("data/geomagnetic_storms.csv")
+
+  }
 }
 
 
