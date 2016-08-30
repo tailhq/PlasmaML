@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.{DenseMatrix, DenseVector}
+import breeze.linalg.{DenseMatrix, DenseVector, pinv}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.{MultiRegressionMetrics, RegressionMetrics}
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
@@ -9,10 +9,12 @@ import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, ReversibleScaler, StreamDataPipe}
+import io.github.mandar2812.dynaml.utils
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import org.apache.log4j.Logger
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+
 import scala.collection.mutable.{MutableList => ML}
 
 class CoRegOMNIKernel extends LocalSVMKernel[Int] {
