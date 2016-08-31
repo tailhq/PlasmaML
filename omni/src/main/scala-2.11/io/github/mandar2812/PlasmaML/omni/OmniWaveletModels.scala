@@ -1,15 +1,14 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.{DenseMatrix, DenseVector, pinv}
+import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.{MultiRegressionMetrics, RegressionMetrics}
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
-import io.github.mandar2812.dynaml.kernels.{CoRegDiracKernel, _}
+import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, ReversibleScaler, StreamDataPipe}
-import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import org.apache.log4j.Logger
 import org.joda.time.DateTimeZone
@@ -739,7 +738,7 @@ object DstMOGPExperiment {
   var gridStep = 0.2
   var logScale = false
   var maxIt = 40
-
+  var stormAverages: Boolean = false
 
   def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true)(
     kernel: CompositeCovariance[(DenseVector[Double], Int)],
@@ -759,6 +758,15 @@ object DstMOGPExperiment {
     model.persist()
 
     //val (model, scaler) = OmniWaveletModels.train(learningRate, reg, momentum, it, 1.0)
+
+    val processResults = if(!stormAverages) {
+      DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>
+        metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2)))
+    } else {
+      StreamDataPipe((m: Iterable[RegressionMetrics]) => m.map(_.kpi():/63.0)) >
+      DataPipe((metrics: Stream[Iterable[DenseVector[Double]]]) =>
+        metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 + pair._2)))
+    }
 
     val stormsPipe =
       fileToStream >
@@ -785,8 +793,7 @@ object DstMOGPExperiment {
 
           OmniWaveletModels.test(model, scaler)
         }) >
-        DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>
-          metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2)))
+        processResults
 
     stormsPipe("data/geomagnetic_storms.csv")
 

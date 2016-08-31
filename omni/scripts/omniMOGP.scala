@@ -11,8 +11,8 @@ OmniWaveletModels.exogenousInputs = List(24,16,41)
 val numVars = OmniWaveletModels.exogenousInputs.length + 1
 DstMOGPExperiment.gridSize = 2
 DstMOGPExperiment.gridStep = 0.2
-OmniWaveletModels.globalOpt = "GS"
-DstMOGPExperiment.maxIt = 20
+OmniWaveletModels.globalOpt = "CSA"
+DstMOGPExperiment.maxIt = 5
 
 val num_features = if(OmniWaveletModels.deltaT.isEmpty) {
   (1 to numVars).map(_ => math.pow(2.0, OmniWaveletModels.orderFeat)).sum.toInt
@@ -23,7 +23,6 @@ val num_features = if(OmniWaveletModels.deltaT.isEmpty) {
 //Create a Vector Field of the appropriate dimension so that
 //we can create stationary kernels
 implicit val ev = VectorField(num_features)
-
 
 val linearK = new PolynomialKernel(1, 0.0)
 val cauKernel = new CauchyKernel(6.2)
@@ -67,5 +66,6 @@ val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
-
-DstMOGPExperiment(2,2,true)(kernel, noise)
+DstMOGPExperiment.stormAverages = true
+val resGP = DstMOGPExperiment(2,2,true)(kernel, noise)
+val resPer = DstPersistenceMOExperiment(2)
