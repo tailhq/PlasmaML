@@ -7,7 +7,7 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := "0.1.0",
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.4-beta.38",
+  dynaMLVersion := "v1.4-beta.39",
   libraryDependencies in ThisBuild ++= Seq(
     "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
@@ -55,4 +55,15 @@ lazy val vanAllen =
           """import com.quantifind.charts.Highcharts._;"""+
           """import org.jsoup._;"""+
           """import breeze.linalg.{DenseMatrix, DenseVector}"""
+    ).dependsOn(core)
+
+lazy val streamer =
+  (project in file("streamer")).settings(commonSettings: _*)
+    .settings(
+      initialCommands in console :=
+        """import io.github.mandar2812.PlasmaML.streamer._;"""+
+        """import io.github.mandar2812.dynaml.kernels._;"""+
+          """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
+          """import com.quantifind.charts.Highcharts._;"""+
+          """import breeze.linalg.DenseVector"""
     ).dependsOn(core)

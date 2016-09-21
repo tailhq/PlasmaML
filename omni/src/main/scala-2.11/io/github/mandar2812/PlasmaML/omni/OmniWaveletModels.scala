@@ -639,6 +639,8 @@ object DstPersistenceMOExperiment {
 
   val logger = Logger.getLogger(this.getClass)
 
+  var stormAverages: Boolean = false
+
   def apply(orderT: Int) = {
     OmniWaveletModels.orderTarget = orderT
 

@@ -62,10 +62,10 @@ val coRegDiracMatrix = new CoRegDiracKernel
 val coRegTMatrix = new CoRegTStudentKernel(1.75)
 
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
-  (linearK :* mixedEffects) + (fbmK :* mixedEffects2) + (tKernel :* graphK)
+  (linearK :* mixedEffects) + (tKernel :* graphK)
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
-DstMOGPExperiment.stormAverages = true
+DstMOGPExperiment.stormAverages = false
 val resGP = DstMOGPExperiment(2,2,true)(kernel, noise)
 val resPer = DstPersistenceMOExperiment(2)
