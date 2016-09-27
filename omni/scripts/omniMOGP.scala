@@ -5,6 +5,7 @@ import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
 import spire.algebra.Field
 import io.github.mandar2812.dynaml.analysis.VectorField
+import io.github.mandar2812.dynaml.evaluation.{RegressionMetrics, BinaryClassificationMetrics}
 
 //First define the experiment parameters
 OmniWaveletModels.exogenousInputs = List(24,16,41)
@@ -12,7 +13,7 @@ val numVars = OmniWaveletModels.exogenousInputs.length + 1
 DstMOGPExperiment.gridSize = 2
 DstMOGPExperiment.gridStep = 0.2
 OmniWaveletModels.globalOpt = "CSA"
-DstMOGPExperiment.maxIt = 5
+DstMOGPExperiment.maxIt = 3
 
 val num_features = if(OmniWaveletModels.deltaT.isEmpty) {
   (1 to numVars).map(_ => math.pow(2.0, OmniWaveletModels.orderFeat)).sum.toInt
@@ -67,5 +68,12 @@ val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
 DstMOGPExperiment.stormAverages = false
+
 val resGP = DstMOGPExperiment(2,2,true)(kernel, noise)
+
+DstMOGPExperiment.onsetClassificationScores = true
+OmniWaveletModels.threshold = -70.0
+
+val resGPOnset = DstMOGPExperiment(2,2,true)(kernel, noise)
+
 val resPer = DstPersistenceMOExperiment(2)

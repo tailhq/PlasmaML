@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
+import spire.algebra.Field
 import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.numerics.log
 import io.github.mandar2812.PlasmaML.cdf.{CDFUtils, EpochFormatter}
@@ -19,13 +20,16 @@ import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.Statistics
 import org.apache.spark.rdd.RDD
 import com.quantifind.charts.Highcharts._
+import io.github.mandar2812.dynaml.analysis.VectorField
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
-
+import spire.implicits._
 import scala.util.Random
 
 
-class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5) extends SVMKernel[DenseMatrix[Double]]
+class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5)(
+  implicit ev: Field[DenseVector[Double]], ev1: Field[Double])
+  extends SVMKernel[DenseMatrix[Double]]
   with LocalSVMKernel[DenseVector[Double]] {
 
   val waveletK = new WaveletKernel((x: Double) => math.cos(1.75*x)*math.exp(-1*x*x/2.0))(th)
@@ -242,8 +246,7 @@ object CRRESTest {
     }) >
     DataPipe((seq: Stream[Stream[(DenseVector[Double], Double)]]) => seq.reduce((x,y) => x ++ y))
 
-  def apply(kernel: LocalScalarKernel[DenseVector[Double]] =
-            new RBFKernel(2.0),
+  def apply(kernel: LocalScalarKernel[DenseVector[Double]],
             noiseKernel: LocalScalarKernel[DenseVector[Double]] =
             new DiracKernel(2.0),
             num_train: Int = 500, num_test: Int = 1000,
@@ -505,6 +508,12 @@ object CRRESExp {
 
 object CRRESpsdModels {
 
+
+  val columnNumbers = List(12,3,4,6,8,5)
+
+
+  implicit val ev = VectorField(columnNumbers.length - 1)
+
   def apply(kernel: LocalScalarKernel[DenseVector[Double]] =
             new RBFKernel(2.0),
             noiseKernel: LocalScalarKernel[DenseVector[Double]] =
@@ -516,7 +525,7 @@ object CRRESpsdModels {
     val fileProcess = fileToStream >
       dropHead >
       extractTrainingFeatures(
-        List(12,3,4,6,8,5),
+        columnNumbers,
         Map(
           12 -> "", 3 -> "",
           4 -> "", 5 -> "",

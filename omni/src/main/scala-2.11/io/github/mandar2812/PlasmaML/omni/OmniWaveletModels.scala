@@ -1,8 +1,9 @@
 package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.DenseVector
+import breeze.stats.distributions.Gaussian
 import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.evaluation.{MultiRegressionMetrics, RegressionMetrics}
+import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, MultiRegressionMetrics, RegressionMetrics}
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
@@ -122,6 +123,8 @@ object OmniWaveletModels {
   var useWaveletBasis: Boolean = true
 
   var deltaT: List[Int] = List()
+
+  var threshold = -70.0
 
   def train(kernel: LocalScalarKernel[(DenseVector[Double], Int)],
             noise: LocalScalarKernel[(DenseVector[Double], Int)],
@@ -281,6 +284,103 @@ object OmniWaveletModels {
 
     flow("data/omni2_"+testStartDate.getYear+".csv")
   }
+
+  def testOnset(model: MOGPRegressionModel[DenseVector[Double]], sc: (GaussianScaler, GaussianScaler)) = {
+
+    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
+
+    val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+
+    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+      if (useWaveletBasis)
+        (DenseVector(featAndTarg._1
+          .toArray
+          .grouped(pF)
+          .map(l => hFeat(DenseVector(l)).toArray)
+          .reduceLeft((a,b) => a ++ b)),
+          featAndTarg._2)
+      else
+        featAndTarg
+    )
+
+    val (testStartDate, testEndDate) =
+      (formatter.parseDateTime(testStart).minusHours(pF),
+        formatter.parseDateTime(testEnd).plusHours(pT))
+
+    val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
+
+    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+      couple._1 >= tStampStart && couple._1 <= tStampEnd)
+
+    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+      couple._1 >= tStampStart && couple._1 <= tStampEnd)
+
+    val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
+      extractTimeSeries((year,day,hour) => {
+        val dt = dayofYearformat.parseDateTime(
+          year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
+        dt.getMillis/1000.0 }) >
+        filterData >
+        deltaOperationMult(arxOrders.head, pT)
+    } else {
+      extractTimeSeriesVec((year,day,hour) => {
+        val dt = dayofYearformat.parseDateTime(
+          year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
+        dt.getMillis/1000.0 }) >
+        filterDataARX >
+        deltaOperationARXMult(arxOrders, pT)
+    }
+
+    val postProcessPipe =
+      DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+        model.test(nTestDat)
+          .map(t => (t._1, (t._3, t._2, t._4)))
+          .groupBy(_._1._2).toSeq
+          .sortBy(_._1)
+          .map(res => {
+            logger.info("Collating results for Hour t + " + res._1)
+            val targetIndex = res._1
+            val scAndLabel = res._2.map(pattern => {
+              val unprocessed_features = pattern._1._1
+
+              val dst_t = if(useWaveletBasis) {
+                val features_processed = (sc._1.i > hFeat.i)(unprocessed_features(0 until pF))
+                features_processed(0)
+              } else {
+                val features_processed = sc._1.i(unprocessed_features)
+                features_processed(0)
+              }
+
+              val (resMean, resSigma) = (sc._2.mean(targetIndex), sc._2.sigma(targetIndex))
+
+              val (predictedMean, actualval, sigma) =
+                (resSigma*pattern._2._1 + resMean,
+                  resSigma*pattern._2._2 + resMean,
+                  resSigma*(pattern._2._1 - pattern._2._3))
+
+              val label = if((actualval - dst_t) <= threshold) 1.0 else 0.0
+
+              val normalDist = Gaussian(predictedMean - dst_t, sigma)
+              (normalDist.cdf(threshold), label)
+
+            })
+            new BinaryClassificationMetrics(scAndLabel.toList, scAndLabel.length, true)
+          })
+      })
+
+
+
+    val flow = preProcess >
+      prepareFeaturesAndOutputs >
+      haarWaveletPipe >
+      DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
+      postProcessPipe
+
+    flow("data/omni2_"+testStartDate.getYear+".csv")
+  }
+
+
 
   def train(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
@@ -741,6 +841,7 @@ object DstMOGPExperiment {
   var logScale = false
   var maxIt = 40
   var stormAverages: Boolean = false
+  var onsetClassificationScores: Boolean = false
 
   def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true)(
     kernel: CompositeCovariance[(DenseVector[Double], Int)],
@@ -759,8 +860,6 @@ object DstMOGPExperiment {
 
     model.persist()
 
-    //val (model, scaler) = OmniWaveletModels.train(learningRate, reg, momentum, it, 1.0)
-
     val processResults = if(!stormAverages) {
       DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>
         metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2)))
@@ -770,32 +869,67 @@ object DstMOGPExperiment {
         metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 + pair._2)))
     }
 
-    val stormsPipe =
-      fileToStream >
-        replaceWhiteSpaces >
-        //DataPipe((st: Stream[String]) => st.take(43)) >
-        StreamDataPipe((stormEventData: String) => {
-          val stormMetaFields = stormEventData.split(',')
+    val processResultsOnsetClassification =
+      DataPipe((metrics: Stream[Iterable[BinaryClassificationMetrics]]) => {
+        metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2))
+      })
 
-          val eventId = stormMetaFields(0)
-          val startDate = stormMetaFields(1)
-          val startHour = stormMetaFields(2).take(2)
+    val stormsPipe = onsetClassificationScores match {
+      case false =>
+        fileToStream >
+          replaceWhiteSpaces >
+          //DataPipe((st: Stream[String]) => st.take(43)) >
+          StreamDataPipe((stormEventData: String) => {
+            val stormMetaFields = stormEventData.split(',')
 
-          val endDate = stormMetaFields(3)
-          val endHour = stormMetaFields(4).take(2)
+            val eventId = stormMetaFields(0)
+            val startDate = stormMetaFields(1)
+            val startHour = stormMetaFields(2).take(2)
 
-          //val minDst = stormMetaFields(5).toDouble
+            val endDate = stormMetaFields(3)
+            val endHour = stormMetaFields(4).take(2)
 
-          //val stormCategory = stormMetaFields(6)
+            //val minDst = stormMetaFields(5).toDouble
 
-          OmniWaveletModels.testStart = startDate+"/"+startHour
-          OmniWaveletModels.testEnd = endDate+"/"+endHour
+            //val stormCategory = stormMetaFields(6)
 
-          logger.info("Testing on Storm: "+OmniWaveletModels.testStart+" to "+OmniWaveletModels.testEnd)
+            OmniWaveletModels.testStart = startDate+"/"+startHour
+            OmniWaveletModels.testEnd = endDate+"/"+endHour
 
-          OmniWaveletModels.test(model, scaler)
-        }) >
-        processResults
+            logger.info("Testing on Storm: "+OmniWaveletModels.testStart+" to "+OmniWaveletModels.testEnd)
+
+            OmniWaveletModels.test(model, scaler)
+          }) >
+          processResults
+
+      case true =>
+        fileToStream >
+          replaceWhiteSpaces >
+          //DataPipe((st: Stream[String]) => st.take(43)) >
+          StreamDataPipe((stormEventData: String) => {
+            val stormMetaFields = stormEventData.split(',')
+
+            val eventId = stormMetaFields(0)
+            val startDate = stormMetaFields(1)
+            val startHour = stormMetaFields(2).take(2)
+
+            val endDate = stormMetaFields(3)
+            val endHour = stormMetaFields(4).take(2)
+
+            //val minDst = stormMetaFields(5).toDouble
+
+            //val stormCategory = stormMetaFields(6)
+
+            OmniWaveletModels.testStart = startDate+"/"+startHour
+            OmniWaveletModels.testEnd = endDate+"/"+endHour
+
+            logger.info("Testing on Storm: "+OmniWaveletModels.testStart+" to "+OmniWaveletModels.testEnd)
+
+            OmniWaveletModels.testOnset(model, scaler)
+          }) >
+          processResultsOnsetClassification
+    }
+
 
     stormsPipe("data/geomagnetic_storms.csv")
 

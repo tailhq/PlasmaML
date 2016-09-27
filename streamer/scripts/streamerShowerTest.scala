@@ -10,18 +10,23 @@ implicit val ev = VectorField(num_features)
 
 val stK = new TStudentKernel(2.2)
 val sqExpK = new SEKernel(1.5, 0.7)
+val mlpKernel = new MLPKernel(2.5, 4.0)
+
 sqExpK.blocked_hyper_parameters = List("amplitude")
 val linearK = new PolynomialKernel(1, 0.0)
 linearK.blocked_hyper_parameters = linearK.hyper_parameters
 
-val cauK = new CauchyKernel(2.4)
+val perKernel = new PeriodicKernel(4.5, 2.5)
+
+val cauK = new CauchyKernel(2.1)
+cauK.blocked_hyper_parameters = cauK.hyper_parameters
 
 val n = new DiracKernel(0.1)
 n.blocked_hyper_parameters = n.hyper_parameters
 
 StreamerShowerEmulator.globalOpt = "GS"
-StreamerShowerEmulator.trainingSize = 3000
-val resStreamerGP = StreamerShowerEmulator(cauK + linearK + sqExpK, n, 2, 0.2, false, 15)
+StreamerShowerEmulator.trainingSize = 1000
+val resStreamerGP = StreamerShowerEmulator(linearK + mlpKernel + cauK, n, 2, 0.2, false, 15)
 
 resStreamerGP.print
 
@@ -29,7 +34,7 @@ resStreamerGP.print
 val sqExpK = new SEKernel(1.5, 0.7)
 sqExpK.blocked_hyper_parameters = List("amplitude")
 
-val resStreamerSTP = StreamerShowerEmulator(linearK + sqExpK, n, 10.0, 2, 0.2, false, 15)
+val resStreamerSTP = StreamerShowerEmulator(sqExpK + mlpKernel, n, 10.0, 2, 0.2, false, 15)
 
 resStreamerSTP.print
 
