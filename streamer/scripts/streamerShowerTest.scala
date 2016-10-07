@@ -24,9 +24,10 @@ cauK.blocked_hyper_parameters = cauK.hyper_parameters
 val n = new DiracKernel(0.1)
 n.blocked_hyper_parameters = n.hyper_parameters
 
-StreamerShowerEmulator.globalOpt = "GS"
+StreamerShowerEmulator.globalOpt = "CSA"
+
 StreamerShowerEmulator.trainingSize = 1000
-val resStreamerGP = StreamerShowerEmulator(linearK + mlpKernel + cauK, n, 2, 0.2, false, 15)
+val resStreamerGP = StreamerShowerEmulator(linearK + mlpKernel + cauK, n, 2, 0.2, false, 25)
 
 resStreamerGP.print
 

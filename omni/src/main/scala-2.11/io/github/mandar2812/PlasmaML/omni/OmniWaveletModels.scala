@@ -339,13 +339,15 @@ object OmniWaveletModels {
           .groupBy(_._1._2).toSeq
           .sortBy(_._1)
           .map(res => {
-            logger.info("Collating results for Hour t + " + res._1)
+            logger.info("Collating results for Hour t + " + (res._1+1))
             val targetIndex = res._1
             val scAndLabel = res._2.map(pattern => {
               val unprocessed_features = pattern._1._1
 
               val dst_t = if(useWaveletBasis) {
-                val features_processed = (sc._1.i > hFeat.i)(unprocessed_features(0 until pF))
+                val trancatedSc = GaussianScaler(sc._1.mean(0 until pF), sc._1.sigma(0 until pF))
+
+                val features_processed = (trancatedSc.i > hFeat.i)(unprocessed_features(0 until pF))
                 features_processed(0)
               } else {
                 val features_processed = sc._1.i(unprocessed_features)
