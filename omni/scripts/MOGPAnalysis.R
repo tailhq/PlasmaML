@@ -1,0 +1,42 @@
+library(plyr)
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
+library(latex2exp)
+
+# Compare Brier score of naive models vs GP-ARX
+
+setwd("data/")
+
+df <- read.csv("brier_scores.csv", 
+               header = FALSE, 
+               stringsAsFactors = FALSE, 
+               colClasses = rep("numeric", 2), 
+               col.names = c("prob","brier"))
+
+
+palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
+lines1 <- c("solid", "solid", "dotdash", "dotdash")
+
+ggplot(df, aes(x=prob,y=brier)) +
+  geom_path(size=1.25) + geom_hline(aes(yintercept=0.076, linetype = "dotdash"), show.legend = TRUE) +
+  theme_gray(base_size = 22) + 
+  scale_colour_manual(values=palette1) + 
+  scale_linetype_manual(values = lines1, guide=FALSE) +
+  xlab("Probability of Storm Jump") + ylab("Brier Score")
+
+
+arx_errorbars_pred <- read.csv("mogp_preds_errorbars3.csv", 
+                               header = FALSE, 
+                               col.names = c("Dst", "predicted", "lower", "upper"))
+arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
+
+meltedPred <- melt(arx_errorbars_pred, id="time")
+
+ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
+  geom_line(size=1.35) +
+  theme_gray(base_size = 22) + 
+  scale_colour_manual(values=palette1) + 
+  scale_linetype_manual(values = lines1, guide=FALSE) +
+  xlab("Time (hours)") + ylab("Dst (nT)")
+

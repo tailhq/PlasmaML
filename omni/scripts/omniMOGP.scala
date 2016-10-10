@@ -1,18 +1,19 @@
 import breeze.linalg.DenseMatrix
 import io.github.mandar2812.PlasmaML.omni
 import io.github.mandar2812.PlasmaML.omni.{DstMOGPExperiment, OmniWaveletModels}
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
 import spire.algebra.Field
 import io.github.mandar2812.dynaml.analysis.VectorField
-import io.github.mandar2812.dynaml.evaluation.{RegressionMetrics, BinaryClassificationMetrics}
+import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, RegressionMetrics}
 
 //First define the experiment parameters
 OmniWaveletModels.exogenousInputs = List(24,16,41)
 val numVars = OmniWaveletModels.exogenousInputs.length + 1
 DstMOGPExperiment.gridSize = 2
-DstMOGPExperiment.gridStep = 0.2
-OmniWaveletModels.globalOpt = "GS"
+DstMOGPExperiment.gridStep = 0.4
+OmniWaveletModels.globalOpt = "CSA"
 DstMOGPExperiment.maxIt = 10
 
 val num_features = if(OmniWaveletModels.deltaT.isEmpty) {
@@ -28,8 +29,8 @@ implicit val ev = VectorField(num_features)
 val linearK = new PolynomialKernel(1, 0.0)
 val cauKernel = new CauchyKernel(6.2)
 val rBFKernel = new SEKernel(1.5, 1.5)
-val tKernel = new TStudentKernel(0.1341331567117945)
-tKernel.blocked_hyper_parameters = tKernel.hyper_parameters
+val tKernel = new TStudentKernel(1.0)
+//tKernel.blocked_hyper_parameters = tKernel.hyper_parameters
 val fbmK = new FBMKernel(1.0)
 val mlpKernel = new MLPKernel(20.0, 5.0)
 
@@ -51,7 +52,7 @@ coRegCauchyMatrix.blocked_hyper_parameters = coRegCauchyMatrix.hyper_parameters
 val coRegLaplaceMatrix = new CoRegLaplaceKernel(10.0)
 
 val coRegRBFMatrix = new CoRegRBFKernel(1.7404134335638997)
-coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
+//coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
 
 //Create an adjacency matrix
 val adjacencyMatrix = DenseMatrix.tabulate[Double](4,4){(i,j) => coRegCauchyMatrix.evaluate(i,j)}
@@ -106,7 +107,11 @@ val (model, scaler) = OmniWaveletModels.train(
   DstMOGPExperiment.gridStep, useLogSc = false,
   DstMOGPExperiment.maxIt)
 
-OmniWaveletModels.testStart = "2004/11/09/11"
-OmniWaveletModels.testEnd = "2004/11/11/09"
+model.persist()
 
-val met = OmniWaveletModels.test(model, scaler)
+OmniWaveletModels.testStart = "2003/11/20/00"
+OmniWaveletModels.testEnd = "2003/11/22/00"
+
+val met = OmniWaveletModels.generatePredictions(model, scaler, 3).map(c => c._1.toString+","+c._2.toString+","+c._3.toString+","+c._4.toString)
+
+DynaMLPipe.streamToFile("data/mogp_preds_errorbars.csv")(met)

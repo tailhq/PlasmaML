@@ -382,6 +382,75 @@ object OmniWaveletModels {
     flow("data/omni2_"+testStartDate.getYear+".csv")
   }
 
+  def generatePredictions(model: MOGPRegressionModel[DenseVector[Double]],
+                          sc: (GaussianScaler, GaussianScaler),
+                          predictionIndex: Int = 3) = {
+
+    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
+
+    val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+
+    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+      if (useWaveletBasis)
+        (DenseVector(featAndTarg._1
+          .toArray
+          .grouped(pF)
+          .map(l => hFeat(DenseVector(l)).toArray)
+          .reduceLeft((a,b) => a ++ b)),
+          featAndTarg._2)
+      else
+        featAndTarg
+    )
+
+    val (testStartDate, testEndDate) =
+      (formatter.parseDateTime(testStart).minusHours(pF),
+        formatter.parseDateTime(testEnd).plusHours(pT))
+
+    val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
+
+    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+      couple._1 >= tStampStart && couple._1 <= tStampEnd)
+
+    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+      couple._1 >= tStampStart && couple._1 <= tStampEnd)
+
+    val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
+      extractTimeSeries((year,day,hour) => {
+        val dt = dayofYearformat.parseDateTime(
+          year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
+        dt.getMillis/1000.0 }) >
+        filterData >
+        deltaOperationMult(arxOrders.head, pT)
+    } else {
+      extractTimeSeriesVec((year,day,hour) => {
+        val dt = dayofYearformat.parseDateTime(
+          year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
+        dt.getMillis/1000.0 }) >
+        filterDataARX >
+        deltaOperationARXMult(arxOrders, pT)
+    }
+
+    val flow = preProcess >
+      prepareFeaturesAndOutputs >
+      haarWaveletPipe >
+      DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
+      StreamDataPipe((nTestDat: (DenseVector[Double], DenseVector[Double])) => {
+        //Generate Predictions for each point
+        val preds = model.test(Stream(nTestDat))
+
+        preds.filter(_._1._2 == predictionIndex).map(c => (c._2, c._3, c._4, c._5)).head
+      }) >
+      StreamDataPipe((d: (Double, Double, Double, Double)) => {
+        val (scMean, scSigma) = (sc._2.mean(predictionIndex), sc._2.sigma(predictionIndex))
+
+        (d._1*scSigma + scMean, d._2*scSigma + scMean, d._3*scSigma + scMean, d._4*scSigma + scMean)
+      })
+
+    flow("data/omni2_"+testStartDate.getYear+".csv")
+  }
+
+
 
 
   def train(alpha: Double = 0.01, reg: Double = 0.001,
