@@ -40,3 +40,16 @@ ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
   scale_linetype_manual(values = lines1, guide=FALSE) +
   xlab("Time (hours)") + ylab("Dst (nT)")
 
+arx_onset_pred <- read.csv("mogp_onset_predictions1.csv", 
+                               header = FALSE, 
+                               col.names = c("p", "storm"))
+arx_onset_pred$time <- 1:nrow(arx_onset_pred)
+
+meltedPred1 <- melt(arx_onset_pred, id="time")
+
+ggplot(meltedPred1, aes(x=time,y=value, colour=variable, linetype=variable)) +
+  geom_line(size=1.35) +
+  theme_gray(base_size = 22) + 
+  scale_colour_manual(values=palette1) + 
+  scale_linetype_manual(values = lines1, guide=FALSE) +
+  xlab("Time (hours)") + ylab("P(Dst(t+4) - Dst(t) < -70 nT)")

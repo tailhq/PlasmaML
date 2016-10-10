@@ -16,6 +16,10 @@ DstMOGPExperiment.gridStep = 0.4
 OmniWaveletModels.globalOpt = "CSA"
 DstMOGPExperiment.maxIt = 10
 
+
+OmniWaveletModels.orderFeat = 2
+OmniWaveletModels.orderTarget = 2
+
 val num_features = if(OmniWaveletModels.deltaT.isEmpty) {
   (1 to numVars).map(_ => math.pow(2.0, OmniWaveletModels.orderFeat)).sum.toInt
 } else {
@@ -65,7 +69,7 @@ val coRegDiracMatrix = new CoRegDiracKernel
 val coRegTMatrix = new CoRegTStudentKernel(1.75)
 
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
-  (linearK :* mixedEffects) + (tKernel :* coRegRBFMatrix)
+  (linearK :* mixedEffects) + (tKernel :* coRegRBFMatrix) + (mlpKernel :* mixedEffects2)
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
@@ -101,6 +105,16 @@ resGP.foreach(_.print)
 
 val resPer = DstPersistenceMOExperiment(2)
 
+
+val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
+  (linearK :* mixedEffects) + (tKernel :* graphK) + (mlpKernel :* coRegCauchyMatrix)
+
+val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
+
+
+OmniWaveletModels.globalOpt = "GS"
+DstMOGPExperiment.gridSize = 1
+DstMOGPExperiment.gridStep = 0.0
 //Predictions for an example storm
 val (model, scaler) = OmniWaveletModels.train(
   kernel, noise, DstMOGPExperiment.gridSize,
@@ -109,9 +123,16 @@ val (model, scaler) = OmniWaveletModels.train(
 
 model.persist()
 
-OmniWaveletModels.testStart = "2003/11/20/00"
-OmniWaveletModels.testEnd = "2003/11/22/00"
+OmniWaveletModels.testStart = "2004/07/26/22"
+OmniWaveletModels.testEnd = "2004/07/30/05"
 
-val met = OmniWaveletModels.generatePredictions(model, scaler, 3).map(c => c._1.toString+","+c._2.toString+","+c._3.toString+","+c._4.toString)
+(0 to 3).foreach(i => {
+  val met = OmniWaveletModels.generatePredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString+","+c._3.toString+","+c._4.toString)
 
-DynaMLPipe.streamToFile("data/mogp_preds_errorbars.csv")(met)
+  val onsetScores = OmniWaveletModels.generateOnsetPredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString)
+
+  DynaMLPipe.streamToFile("data/mogp_preds_errorbars"+i+".csv")(met)
+
+  DynaMLPipe.streamToFile("data/mogp_onset_predictions"+i+".csv")(onsetScores.toStream)
+
+})
