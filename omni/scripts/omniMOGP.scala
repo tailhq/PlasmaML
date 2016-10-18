@@ -12,12 +12,12 @@ import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, Regr
 OmniWaveletModels.exogenousInputs = List(24,25,26,16)
 val numVars = OmniWaveletModels.exogenousInputs.length + 1
 DstMOGPExperiment.gridSize = 2
-DstMOGPExperiment.gridStep = 0.4
+DstMOGPExperiment.gridStep = 0.2
 OmniWaveletModels.globalOpt = "CSA"
 DstMOGPExperiment.maxIt = 10
 
 
-OmniWaveletModels.orderFeat = 5
+OmniWaveletModels.orderFeat = 3
 OmniWaveletModels.orderTarget = 2
 
 val num_features = if(OmniWaveletModels.deltaT.isEmpty) {
@@ -98,7 +98,7 @@ val exPred = resGPOnset.last.scores_and_labels
 
 //Calculate Regression scores on the 63 storms data set
 DstMOGPExperiment.onsetClassificationScores = false
-val resGP = DstMOGPExperiment(2,2,true)(kernel, noise).map(_.asInstanceOf[RegressionMetrics])
+val resGP = DstMOGPExperiment(4,2,true)(kernel, noise).map(_.asInstanceOf[RegressionMetrics])
 
 resGP.foreach(_.print)
 
@@ -108,18 +108,19 @@ val resPer = DstPersistenceMOExperiment(2)
 
 //Generating sample predictions and error bars for the halloween storm
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
-  /*(linearK :* mixedEffects) + */(tKernel :* coRegRBFMatrix) + (mlpKernel :* coRegCauchyMatrix)
+  (linearK :* mixedEffects) + (tKernel :* coRegRBFMatrix) + (mlpKernel :* coRegCauchyMatrix)
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
 
 OmniWaveletModels.globalOpt = "GS"
-DstMOGPExperiment.gridSize = 1
-DstMOGPExperiment.gridStep = 0.0
+DstMOGPExperiment.gridSize = 2
+DstMOGPExperiment.gridStep = 0.2
 OmniWaveletModels.orderFeat = 5
 OmniWaveletModels.orderTarget = 2
 //Predictions for an example storm
-val (model, scaler) = OmniWaveletModels.train(
+OmniWaveletModels.numStorms = 12
+val (model, scaler) = OmniWaveletModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
   DstMOGPExperiment.maxIt)
