@@ -170,7 +170,7 @@ object OmniWaveletModels {
               endDate+"/"+endHour)
           }) >
           DataPipe((s: Stream[(String, String)]) =>
-            s.takeRight(n) ++ Stream(("2014/11/15/00", "2014/11/17/00"))) >
+            s.takeRight(n) ++ Stream(("2014/11/15/00", "2014/12/03/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
