@@ -170,7 +170,7 @@ object OmniWaveletModels {
               endDate+"/"+endHour)
           }) >
           DataPipe((s: Stream[(String, String)]) =>
-            s.takeRight(n) ++ Stream(("2014/11/15/00", "2014/12/03/00"))) >
+            s.takeRight(n) ++ Stream(("2014/11/15/00", "2014/11/25/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
@@ -664,11 +664,11 @@ object OmniWaveletModels {
       prepareFeaturesAndOutputs >
       haarWaveletPipe >
       DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
-      StreamDataPipe((nTestDat: (DenseVector[Double], DenseVector[Double])) => {
+      DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
         //Generate Predictions for each point
-        val preds = model.test(Stream(nTestDat))
+        val preds = model.test(nTestDat)
 
-        preds.filter(_._1._2 == predictionIndex).map(c => (c._2, c._3, c._4, c._5)).head
+        preds.filter(_._1._2 == predictionIndex).map(c => (c._2, c._3, c._4, c._5)).toStream//.head
       }) >
       StreamDataPipe((d: (Double, Double, Double, Double)) => {
         val (scMean, scSigma) = (sc._2.mean(predictionIndex), sc._2.sigma(predictionIndex))
@@ -1156,7 +1156,7 @@ object DstMOGPExperiment {
     OmniWaveletModels.orderFeat = orderF
     OmniWaveletModels.orderTarget = orderT
 
-    val (model, scaler) = OmniWaveletModels.train(kernel, noise, gridSize, gridStep, useLogSc = logScale, maxIt)
+    val (model, scaler) = OmniWaveletModels.trainStorms(kernel, noise, gridSize, gridStep, useLogSc = logScale, maxIt)
 
     model.persist()
 

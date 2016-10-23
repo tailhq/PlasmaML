@@ -9,7 +9,7 @@ import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, RegressionMetrics}
 
 //First define the experiment parameters
-OmniWaveletModels.exogenousInputs = List(24,25,26,16)
+OmniWaveletModels.exogenousInputs = List(24,16)
 val numVars = OmniWaveletModels.exogenousInputs.length + 1
 DstMOGPExperiment.gridSize = 2
 DstMOGPExperiment.gridStep = 0.2
@@ -116,10 +116,10 @@ val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatr
 OmniWaveletModels.globalOpt = "GS"
 DstMOGPExperiment.gridSize = 2
 DstMOGPExperiment.gridStep = 0.2
-OmniWaveletModels.orderFeat = 5
+OmniWaveletModels.orderFeat = 2
 OmniWaveletModels.orderTarget = 2
 //Predictions for an example storm
-OmniWaveletModels.numStorms = 12
+OmniWaveletModels.numStorms = 5
 val (model, scaler) = OmniWaveletModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
