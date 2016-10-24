@@ -26,7 +26,8 @@ n.blocked_hyper_parameters = n.hyper_parameters
 
 StreamerShowerEmulator.globalOpt = "CSA"
 
-StreamerShowerEmulator.trainingSize = 1000
+StreamerShowerEmulator.trainingSize = 5000
+StreamerShowerEmulator.testSize = 2000
 val resStreamerGP = StreamerShowerEmulator(linearK + mlpKernel + cauK, n, 2, 0.2, false, 25)
 
 resStreamerGP.print

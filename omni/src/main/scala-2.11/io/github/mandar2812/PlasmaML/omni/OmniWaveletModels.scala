@@ -149,8 +149,6 @@ object OmniWaveletModels {
         featAndTarg
     )
 
-
-
     val prepareTrainingData = DataPipe((n: Int) => {
 
       val stormsPipe =
@@ -170,7 +168,9 @@ object OmniWaveletModels {
               endDate+"/"+endHour)
           }) >
           DataPipe((s: Stream[(String, String)]) =>
-            s.takeRight(n) ++ Stream(("2014/11/15/00", "2014/11/25/00"))) >
+            s.takeRight(n) ++
+              Stream(("2015/03/17/00", "2015/03/18/23")) ++
+              Stream(("2008/01/02/00", "2008/02/02/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
