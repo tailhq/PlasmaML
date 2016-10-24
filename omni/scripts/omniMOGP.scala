@@ -98,7 +98,7 @@ val exPred = resGPOnset.last.scores_and_labels
 
 //Calculate Regression scores on the 63 storms data set
 DstMOGPExperiment.onsetClassificationScores = false
-val resGP = DstMOGPExperiment(4,2,true)(kernel, noise).map(_.asInstanceOf[RegressionMetrics])
+val resGP = DstMOGPExperiment(3,2,true)(kernel, noise).map(_.asInstanceOf[RegressionMetrics])
 
 resGP.foreach(_.print)
 
@@ -119,7 +119,7 @@ DstMOGPExperiment.gridStep = 0.2
 OmniWaveletModels.orderFeat = 2
 OmniWaveletModels.orderTarget = 2
 //Predictions for an example storm
-OmniWaveletModels.numStorms = 5
+OmniWaveletModels.numStorms = 12
 val (model, scaler) = OmniWaveletModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
