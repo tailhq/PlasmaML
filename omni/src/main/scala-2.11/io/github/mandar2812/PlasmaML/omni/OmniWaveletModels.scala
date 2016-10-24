@@ -128,6 +128,8 @@ object OmniWaveletModels {
 
   var numStorms = 12
 
+  val numStormsStart = 10
+
   def trainStorms(kernel: LocalScalarKernel[(DenseVector[Double], Int)],
                   noise: LocalScalarKernel[(DenseVector[Double], Int)],
                   grid: Int, step: Double, useLogSc: Boolean, maxIt:Int) = {
@@ -168,8 +170,9 @@ object OmniWaveletModels {
               endDate+"/"+endHour)
           }) >
           DataPipe((s: Stream[(String, String)]) =>
-            s.takeRight(n) ++
+            s.take(numStormsStart) ++ s.takeRight(n) ++
               Stream(("2015/03/17/00", "2015/03/18/23")) ++
+              Stream(("2015/06/22/08", "2015/06/23/20")) ++
               Stream(("2008/01/02/00", "2008/02/02/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set

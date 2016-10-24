@@ -14,7 +14,7 @@ val numVars = OmniWaveletModels.exogenousInputs.length + 1
 OmniWaveletModels.globalOpt = "GS"
 DstMOGPExperiment.gridSize = 2
 DstMOGPExperiment.gridStep = 0.2
-OmniWaveletModels.orderFeat = 4
+OmniWaveletModels.orderFeat = 3
 OmniWaveletModels.orderTarget = 2
 //Predictions for an example storm
 OmniWaveletModels.numStorms = 12
@@ -68,7 +68,7 @@ val coRegDiracMatrix = new CoRegDiracKernel
 val coRegTMatrix = new CoRegTStudentKernel(1.75)
 
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
-  (linearK :* mixedEffects) + (tKernel :* coRegRBFMatrix) + (mlpKernel :* coRegCauchyMatrix)
+  (linearK :* mixedEffects) + (tKernel :* coRegRBFMatrix) + (mlpKernel :* coRegLaplaceMatrix)
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
@@ -76,6 +76,14 @@ val (model, scaler) = OmniWaveletModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
   DstMOGPExperiment.maxIt)
+
+
+//Calculate Regression scores on the 63 storms data set
+DstMOGPExperiment.onsetClassificationScores = false
+val resGP = DstMOGPExperiment.test(model, scaler).map(_.asInstanceOf[RegressionMetrics])
+
+resGP.foreach(_.print)
+
 
 
 DstMOGPExperiment.onsetClassificationScores = true
@@ -101,11 +109,6 @@ val exPred = resGPOnset.last.scores_and_labels
 
 })
 
-//Calculate Regression scores on the 63 storms data set
-DstMOGPExperiment.onsetClassificationScores = false
-val resGP = DstMOGPExperiment(model, scaler).map(_.asInstanceOf[RegressionMetrics])
-
-resGP.foreach(_.print)
 
 //Calculate regression scores of the persistence model
 val resPer = DstPersistenceMOExperiment(2)
