@@ -126,7 +126,7 @@ object OmniWaveletModels {
 
   var threshold = -70.0
 
-  var numStorms = 20
+  var numStorms = 12
 
   def trainStorms(kernel: LocalScalarKernel[(DenseVector[Double], Int)],
                   noise: LocalScalarKernel[(DenseVector[Double], Int)],
@@ -1143,22 +1143,24 @@ object DstMOGPExperiment {
   var stormAverages: Boolean = false
   var onsetClassificationScores: Boolean = false
 
-  def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true)(
+  def train(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true)(
     kernel: CompositeCovariance[(DenseVector[Double], Int)],
-    noise: CompositeCovariance[(DenseVector[Double], Int)]) = {
+    noise: CompositeCovariance[(DenseVector[Double], Int)]):
+  (MOGPRegressionModel[DenseVector[Double]],(GaussianScaler, GaussianScaler)) = {
 
-    OmniWaveletModels.orderFeat = orderF
-    OmniWaveletModels.orderTarget = orderT
-    OmniWaveletModels.useWaveletBasis = useWavelets
+      OmniWaveletModels.orderFeat = orderF
+      OmniWaveletModels.orderTarget = orderT
+      OmniWaveletModels.useWaveletBasis = useWavelets
 
 
 
-    OmniWaveletModels.orderFeat = orderF
-    OmniWaveletModels.orderTarget = orderT
+      OmniWaveletModels.orderFeat = orderF
+      OmniWaveletModels.orderTarget = orderT
 
-    val (model, scaler) = OmniWaveletModels.trainStorms(kernel, noise, gridSize, gridStep, useLogSc = logScale, maxIt)
+      OmniWaveletModels.trainStorms(kernel, noise, gridSize, gridStep, useLogSc = logScale, maxIt)
+  }
 
-    model.persist()
+  def test(model: MOGPRegressionModel[DenseVector[Double]], scaler: (GaussianScaler, GaussianScaler)) = {
 
     val processResults = if(!stormAverages) {
       DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>

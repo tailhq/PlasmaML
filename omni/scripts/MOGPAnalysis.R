@@ -26,7 +26,7 @@ ggplot(df, aes(x=prob,y=brier)) +
   xlab("Probability of Storm Jump") + ylab("Brier Score")
 
 
-arx_errorbars_pred <- read.csv("mogp_preds_errorbars1.csv", 
+arx_errorbars_pred <- read.csv("mogp_preds_errorbars0.csv", 
                                header = FALSE, 
                                col.names = c("Dst", "predicted", "lower", "upper"))
 arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
