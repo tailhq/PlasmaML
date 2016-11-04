@@ -4,19 +4,18 @@ library(gridExtra)
 library(reshape2)
 library(latex2exp)
 
-# Compare Brier score of naive models vs GP-ARX
-
+palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
+lines1 <- c("solid", "solid", "dotdash", "dotdash")
 setwd("Development/PlasmaML/data/")
 
+
+# Compare Brier score of naive models vs GP-ARX
 df <- read.csv("brier_scores.csv", 
                header = FALSE, 
                stringsAsFactors = FALSE, 
                colClasses = rep("numeric", 2), 
                col.names = c("prob","brier"))
 
-
-palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
-lines1 <- c("solid", "solid", "dotdash", "dotdash")
 
 ggplot(df, aes(x=prob,y=brier)) +
   geom_path(size=1.25) + geom_hline(aes(yintercept=0.076, linetype = "dotdash"), show.legend = TRUE) +

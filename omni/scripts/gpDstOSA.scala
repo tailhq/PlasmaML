@@ -12,7 +12,7 @@ import io.github.mandar2812.dynaml.pipes.DynaMLPipe
 
 val (trainingStart, trainingEnd) = ("2008/01/01/00", "2008/01/11/10")
 
-val (validationStart, validationEnd) = ("2014/11/15/00", "2014/12/01/23")
+val (validationStart, validationEnd) = ("2011/08/05/15", "2011/08/06/22")
 
 //Generate hourly predictions for all storms in Ji et al 2012
 DstARExperiment(trainingStart, trainingEnd,
@@ -89,4 +89,35 @@ DstARExperiment(trainingStart, trainingEnd,
   List(6), Map("globalOpt"->"GS","grid"->"2", "step"->"0.2",
     "fileID"->"Exp_Set3_","validationStart" -> validationStart, "validationEnd" -> validationEnd,
     "action" -> "test", "logScale" -> "true", "block" -> "degree,offset"))
+
+val orders = for(i <- 7 to 9; j <- 6 to 8) yield (i,j)
+
+
+orders.foreach({
+  case (yOrder, xOrder) =>
+    val fileID = "Nov_4_2016_"+yOrder.toString()+"_"+xOrder.toString()+"_"
+    DstARXExperiment(trainingStart, trainingEnd,
+      new PolynomialKernel(1, 0.0), new DiracKernel(1.55),
+      List(yOrder,xOrder,xOrder,xOrder), column = 40, ex = List(16,24),
+      Map("globalOpt"->"GS","grid"->"2", "step"->"0.2", "fileID"-> fileID,
+        "Use VBz" -> "true", "validationStart" -> validationStart, "block" -> "degree,offset",
+        "validationEnd" -> validationEnd, "action" -> "test",
+        "logScale" -> "false"))
+
+})
+
+
+val orders = for(i <- 2 to 7; j <- 1 to 6) yield (i,j)
+orders.foreach({
+  case (yOrder, xOrder) =>
+    val fileID = "Nov_4_2016_alt_"+yOrder.toString()+"_"+xOrder.toString()+"_"
+    DstARXExperiment.alternate_experiment(trainingStart, trainingEnd,
+      new PolynomialKernel(1, 0.0), new DiracKernel(1.55),
+      List(yOrder,xOrder,xOrder,xOrder), column = 40, ex = List(16,24),
+      Map("globalOpt"->"GS","grid"->"2", "step"->"0.2", "fileID"-> fileID,
+        "Use VBz" -> "true", "validationStart" -> validationStart, "block" -> "degree,offset",
+        "validationEnd" -> validationEnd, "action" -> "test",
+        "logScale" -> "false"))
+
+})
 

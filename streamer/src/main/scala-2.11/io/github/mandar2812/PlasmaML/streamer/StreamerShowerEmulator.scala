@@ -101,7 +101,6 @@ object StreamerShowerEmulator {
         val startConf = kernel.effective_state ++ noise.effective_state
 
         val (tunedGP, _) = gs.optimize(startConf)
-        tunedGP.persist()
 
         val predictions = tunedGP.test(dataAndScales._2.map(p => (p._1, p._2(0))))
           .map(p => (DenseVector(p._3), DenseVector(p._2))).toStream
@@ -150,7 +149,6 @@ object StreamerShowerEmulator {
         val startConf = kernel.effective_state ++ noise.effective_state ++ Map("degrees_of_freedom" -> mu)
 
         val (tunedGP, _) = gs.optimize(startConf)
-        tunedGP.persist()
 
         val predictions = tunedGP.test(dataAndScales._2.map(p => (p._1, p._2(0))))
           .map(p => (DenseVector(p._3), DenseVector(p._2))).toStream

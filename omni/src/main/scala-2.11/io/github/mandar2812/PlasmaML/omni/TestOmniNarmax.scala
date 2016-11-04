@@ -8,7 +8,7 @@
 
 package io.github.mandar2812.PlasmaML.omni
 
-import java.io.File
+import java.io.{BufferedWriter, File, FileWriter}
 import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, GregorianCalendar}
 
@@ -17,18 +17,187 @@ import com.github.tototoshi.csv.CSVWriter
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
-import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
+import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import org.apache.log4j.Logger
+import org.joda.time.DateTimeZone
+import org.joda.time.format.DateTimeFormat
+
+object Narmax extends DataPipe[DenseVector[Double], Double] {
+  val narmax_params = DenseVector(
+    0.8335, -3.083e-4, -6.608e-7, 0.13112,
+    -2.1584e-10, 2.8405e-5, 1.5255e-10,
+    7.3573e-5, 0.73433, 1.545e-4)
+
+  override def run(data: DenseVector[Double]): Double = narmax_params dot data
+}
 
 /**
   * Created by mandar on 8/4/16.
   */
 object TestOmniNarmax {
+
+  val logger = Logger.getLogger(this.getClass)
+
+  def apply(start: Int, end: Int) = {
+
+    var (dst_t_1, dst_t_2): (Double, Double) = (Double.NaN, Double.NaN)
+
+    var (couplingFunc_t_1, couplingFunc_t_2, couplingFunc_t_3) = (Double.NaN, Double.NaN, Double.NaN)
+
+    val processOmni = fileToStream >
+      replaceWhiteSpaces >
+      extractTrainingFeatures(
+        List(0, 1, 2, 40, 24, 15, 16, 28),
+        Map(
+          16 -> "999.9", 16 -> "999.9",
+          21 -> "999.9", 24 -> "9999.",
+          23 -> "999.9", 40 -> "99999",
+          22 -> "9999999.", 25 -> "999.9",
+          28 -> "99.99", 27 -> "9.999", 39 -> "999",
+          45 -> "99999.99", 46 -> "99999.99",
+          47 -> "99999.99")) >
+      removeMissingLines >
+      extractTimeSeriesVec((year,day,hour) => (day * 24) + hour) >
+      StreamDataPipe((couple: (Double, DenseVector[Double])) => {
+        val features = couple._2
+        //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
+        val Bt = math.sqrt(math.pow(features(2), 2) + math.pow(features(3), 2))
+        val sin_theta6 = math.pow(features(2)/Bt,6)
+        val p = features(4)
+        val v = features(1)
+        val couplingFunc = math.sqrt(p)*math.pow(v, 4/3.0)*Bt*sin_theta6
+        val Dst = features(0)
+        (couple._1, DenseVector(Dst, couplingFunc))
+      })
+
+
+    for(year <- start to end) {
+      logger.info("Generating Narmax predictions for "+year)
+      val omniFile = "data/omni2_"+year+".csv"
+      val dataStream = processOmni(omniFile)
+
+      val lines = dataStream.map((couple: (Double, DenseVector[Double])) => {
+
+        val finalFeatures = DenseVector(dst_t_1, couplingFunc_t_1, couplingFunc_t_1*dst_t_1,
+          dst_t_2, math.pow(couplingFunc_t_2, 2.0),
+          couplingFunc_t_3, math.pow(couplingFunc_t_1, 2.0),
+          couplingFunc_t_2, 1.0, math.pow(dst_t_1, 2.0))
+
+        val predicted = Narmax(finalFeatures)
+
+        //update values
+        dst_t_2 = dst_t_1
+
+        if(dst_t_1.isNaN || predicted.isNaN) {
+          dst_t_1 = couple._2(0)
+        } else if (!predicted.isNaN) {
+          dst_t_1 = predicted
+        }
+
+        couplingFunc_t_3 = couplingFunc_t_2
+        couplingFunc_t_2 = couplingFunc_t_1
+        couplingFunc_t_1 = couple._2(1)
+
+        couple._1.toString+","+couple._2(0).toString+","+predicted.toString
+      })
+
+      /*val pipe = processOmni  >
+        StreamDataPipe((couple: (Double, DenseVector[Double])) => {
+
+          val finalFeatures = DenseVector(dst_t_1, couplingFunc_t_1, couplingFunc_t_1*dst_t_1,
+            dst_t_2, math.pow(couplingFunc_t_2, 2.0),
+            couplingFunc_t_3, math.pow(couplingFunc_t_1, 2.0),
+            couplingFunc_t_2, 1.0, math.pow(dst_t_1, 2.0))
+
+          val predicted = Narmax(finalFeatures)
+
+          //update values
+          dst_t_2 = dst_t_1
+          dst_t_1 = if(dst_t_1.isNaN) couple._2(0) else predicted
+          couplingFunc_t_3 = couplingFunc_t_2
+          couplingFunc_t_2 = couplingFunc_t_1
+          couplingFunc_t_1 = couple._2(1)
+
+          couple._1.toString+","+couple._2(0).toString+","+predicted.toString
+        }) >
+        streamToFile("data/NM_"+year+"_Res.csv")*/
+
+      streamToFile("data/NM_"+year+"_Res.csv")(lines)
+    }
+  }
+
+  def NMVariantExp = {
+
+    DateTimeZone.setDefault(DateTimeZone.UTC)
+    val format = DateTimeFormat.forPattern("yyyy/M/d")
+
+    val writer =
+      CSVWriter.open(
+        new File("data/Omni_NM_Variant_StormsRes.csv"),
+        append = true)
+
+    val stormsPipe =
+      fileToStream >
+        replaceWhiteSpaces >
+        StreamDataPipe((stormEventData: String) => {
+          val stormMetaFields = stormEventData.split(',')
+
+          val eventId = stormMetaFields(0)
+          val startDate = stormMetaFields(1)
+          val sJDate = format.parseDateTime(startDate)
+
+          val startDay = sJDate.getDayOfYear
+          val startHour = stormMetaFields(2).take(2)
+          val startStamp = 24*startDay + startHour.toInt
+
+          val endDate = stormMetaFields(3)
+          val eJDate = format.parseDateTime(endDate)
+
+          val endDay = eJDate.getDayOfYear
+          val endHour = stormMetaFields(4).take(2)
+          val endStamp = 24*endDay + endHour.toInt
+
+
+          val minDst = stormMetaFields(5).toDouble
+
+          val stormCategory = stormMetaFields(6)
+
+          val year = startDate.split("/").head
+
+          val NMFilePipe = fileToStream >
+            StreamDataPipe((s: String) => s.split(",").map(_.toDouble)) >
+            StreamDataPipe((line: Array[Double]) => line.head >= startStamp && line.head <= endStamp) >
+            StreamDataPipe((line: Array[Double]) => (line.last, line(1))) >
+            DataPipe((s: Stream[(Double, Double)]) => {
+              val met = new RegressionMetrics(s.toList, s.length)
+
+              val minPredDst = s.map(_._1).min
+              val tp = s.map(_._1).indexOf(minPredDst)
+
+              val minAct = s.map(_._2).min
+              val ta = s.map(_._2).indexOf(minAct)
+              /*"eventID","stormCat","order", "modelSize",
+                "rmse", "corr", "deltaDstMin", "DstMin","deltaT"*/
+
+              Seq(
+                eventId, stormCategory, 1.0,
+                0.0, met.rmse, met.corr,
+                minPredDst - minDst,
+                minDst, ta-tp
+              )
+            })
+
+          writer.writeRow(NMFilePipe("data/NM_"+year+"_Res.csv"))
+        })
+
+    stormsPipe("data/geomagnetic_storms.csv")
+    writer.close()
+  }
+
   def apply(start: String = "2006/12/28/00",
             end: String = "2006/12/29/23",
             action: String = "test"): Seq[Seq[Double]] = {
-
-    val logger = Logger.getLogger(this.getClass)
 
     val names = Map(
       24 -> "Solar Wind Speed",
@@ -58,24 +227,27 @@ object TestOmniNarmax {
     val hourEnd = greg.get(Calendar.HOUR_OF_DAY)
     val stampEnd = (dayEnd * 24) + hourEnd
 
-    val narmax_params = DenseVector(0.8335, -3.083e-4, -6.608e-7, 0.13112,
+    val narmax_params = DenseVector(
+      0.8335, -3.083e-4, -6.608e-7, 0.13112,
       -2.1584e-10, 2.8405e-5, 1.5255e-10,
       7.3573e-5, 0.73433, 1.545e-4)
 
 
-    val preProcessPipe = DynaMLPipe.fileToStream >
-      DynaMLPipe.replaceWhiteSpaces > DynaMLPipe.extractTrainingFeatures(
-      List(0, 1, 2, 40, 24, 15, 16, 28),
-      Map(
-        16 -> "999.9", 16 -> "999.9",
-        21 -> "999.9", 24 -> "9999.",
-        23 -> "999.9", 40 -> "99999",
-        22 -> "9999999.", 25 -> "999.9",
-        28 -> "99.99", 27 -> "9.999", 39 -> "999",
-        45 -> "99999.99", 46 -> "99999.99",
-        47 -> "99999.99")) >
-      DynaMLPipe.removeMissingLines >
-      DynaMLPipe.extractTimeSeriesVec((year,day,hour) => (day * 24) + hour) >
+    val preProcessPipe =
+      fileToStream >
+      replaceWhiteSpaces >
+      extractTrainingFeatures(
+        List(0, 1, 2, 40, 24, 15, 16, 28),
+        Map(
+          16 -> "999.9", 16 -> "999.9",
+          21 -> "999.9", 24 -> "9999.",
+          23 -> "999.9", 40 -> "99999",
+          22 -> "9999999.", 25 -> "999.9",
+          28 -> "99.99", 27 -> "9.999", 39 -> "999",
+          45 -> "99999.99", 46 -> "99999.99",
+          47 -> "99999.99")) >
+      removeMissingLines >
+      extractTimeSeriesVec((year,day,hour) => (day * 24) + hour) >
       StreamDataPipe((couple: (Double, DenseVector[Double])) => {
         val features = couple._2
         //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
@@ -88,7 +260,7 @@ object TestOmniNarmax {
         (couple._1, DenseVector(Dst, couplingFunc))
       }) > StreamDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= stampStart && couple._1 <= stampEnd) >
-      DynaMLPipe.deltaOperationARX(List(2, 3)) >
+      deltaOperationARX(List(2, 3)) >
       StreamDataPipe((couple: (DenseVector[Double], Double)) => {
         val vec = couple._1
         val Dst_t_1 = vec(0)
@@ -104,7 +276,7 @@ object TestOmniNarmax {
           couplingFunc_t_2, 1.0, math.pow(Dst_t_1, 2.0))
 
 
-        (narmax_params dot finalFeatures, couple._2)
+        (Narmax(finalFeatures), couple._2)
       }) > DataPipe((scoresAndLabels: Stream[(Double, Double)]) => {
 
         val metrics = new RegressionMetrics(scoresAndLabels.toList,
@@ -227,8 +399,8 @@ object TestOmniTL {
     // Create two pipes pipeTL and pipeDst
 
 
-    val pipeDst = DynaMLPipe.fileToStream >
-      DynaMLPipe.replaceWhiteSpaces > DynaMLPipe.extractTrainingFeatures(
+    val pipeDst = fileToStream >
+      replaceWhiteSpaces > extractTrainingFeatures(
       List(0, 1, 2, 40),
       Map(
         16 -> "999.9", 16 -> "999.9",
@@ -238,8 +410,8 @@ object TestOmniTL {
         28 -> "99.99", 27 -> "9.999", 39 -> "999",
         45 -> "99999.99", 46 -> "99999.99",
         47 -> "99999.99")) >
-      DynaMLPipe.removeMissingLines >
-      DynaMLPipe.extractTimeSeries((year,day,hour) => (day * 24) + hour) >
+      removeMissingLines >
+      extractTimeSeries((year,day,hour) => (day * 24) + hour) >
       StreamDataPipe((couple: (Double, Double)) =>
       couple._1 >= stampStart && couple._1 <= stampEnd) >
       StreamDataPipe((couple: (Double, Double)) => {
@@ -247,9 +419,9 @@ object TestOmniTL {
       })
 
 
-    val preprocessTLFile = DynaMLPipe.fileToStream >
-      DynaMLPipe.dropHead >
-      DynaMLPipe.replaceWhiteSpaces >
+    val preprocessTLFile = fileToStream >
+      dropHead >
+      replaceWhiteSpaces >
       StreamDataPipe((line: String) => {
         //Split line using comma
         val spl = line.split(",")
@@ -341,8 +513,8 @@ object TestOmniTL {
   def prepareTLFiles() = {
 
     val stormsPipe =
-      DynaMLPipe.fileToStream >
-        DynaMLPipe.replaceWhiteSpaces >
+      fileToStream >
+        replaceWhiteSpaces >
         StreamDataPipe((stormEventData: String) => {
           val stormMetaFields = stormEventData.split(',')
 
@@ -409,8 +581,8 @@ object DstNMTLExperiment {
         append = true)
 
     val stormsPipe =
-      DynaMLPipe.fileToStream >
-        DynaMLPipe.replaceWhiteSpaces >
+      fileToStream >
+        replaceWhiteSpaces >
         StreamDataPipe((stormEventData: String) => {
           val stormMetaFields = stormEventData.split(',')
 

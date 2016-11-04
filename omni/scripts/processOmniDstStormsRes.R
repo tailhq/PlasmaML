@@ -4,8 +4,9 @@ library(ggplot2)
 library(gridExtra)
 library(reshape2)
 library(latex2exp)
+library(directlabels)
 
-setwd("data")
+setwd("../PlasmaML/data")
 
 dfPredNAR <- read.csv("PredOmniARStormsRes.csv", 
                       header = FALSE, col.names = c("Dst", "NAR"))
@@ -172,11 +173,20 @@ dfNM <- read.csv("OmniNMStormsRes.csv",
                                 "rmse", "corr", "deltaDstMin", "DstMin",
                                 "deltaT"), na.strings = c("NaN"))
 
+dfNM_v <- read.csv("Omni_NM_Variant_StormsRes.csv", 
+                 header = FALSE, stringsAsFactors = TRUE, 
+                 col.names = c("eventID","stormCat","order", "modelSize",
+                               "rmse", "corr", "deltaDstMin", "DstMin",
+                               "deltaT"), na.strings = c("NaN"))
+
+
 dfTL <- read.csv("OmniTLStormsRes.csv", 
                  header = FALSE, stringsAsFactors = TRUE, 
                  col.names = c("eventID","stormCat","order", "modelSize",
                                "rmse", "corr", "deltaDstMin", "DstMin",
                                "deltaT"))
+
+dfNM_v$model <- rep("NM Variant", nrow(dfNM_v))
 
 dfNM$model <- rep("NM(CWI)", nrow(dfNM))
 
@@ -191,7 +201,7 @@ df$model <- rep("GP-ARX1", nrow(df))
 dfVBz$model <-rep("GP-ARX", nrow(dfVBz))
 
 
-bindDF <- rbind(df, df2, dfPer, dfVBz, dfNM, dfTL)
+bindDF <- rbind(df, df2, dfPer, dfVBz, dfNM, dfTL, dfNM_v)
 
 
 meltedDF <- melt(bindDF[bindDF$order == 6 | bindDF$model != "GP-AR1",],
@@ -213,10 +223,12 @@ dfother <- read.csv("resultsModels.csv",
 
 finalDF <- rbind(dfother, 
                  meansGlobal[!(meansGlobalAbs$variable %in% c("deltaT", "deltaDstMin")) & 
-                                        meansGlobal$model %in% c("TL(CWI)","NM(CWI)","GP-AR", "Persist(1)",
+                                        meansGlobal$model %in% c("TL(CWI)","NM(CWI)","NM Variant",
+                                                                 "GP-AR", "Persist(1)",
                                                                  "GP-ARX", "GP-ARX1"),], 
                  meansGlobalAbs[meansGlobalAbs$variable %in% c("deltaT", "deltaDstMin") & 
-                                  meansGlobalAbs$model %in% c("TL(CWI)","NM(CWI)","GP-AR", "Persist(1)",
+                                  meansGlobalAbs$model %in% c("TL(CWI)","NM(CWI)","NM Variant",
+                                                              "GP-AR", "Persist(1)",
                                                               "GP-ARX", "GP-ARX1"),])
 
 finalDF$colorVal <- with(finalDF, ifelse(!(model %in% c("Persist(1)", "GP-AR", "GP-ARX")), 0, 
@@ -234,7 +246,9 @@ colourPalette <- c("0" = "grey38", "1" = "steelblue3",
                    "2" = "firebrick2", "3" = "firebrick3")
 
 barplrmse2 <- ggplot(finalDF[finalDF$variable == "rmse" & 
-                               !(finalDF$model %in% c("GP-ARX1", "GP-AR", "GP-ARX")),], 
+                               !(finalDF$model %in% c("GP-ARX1", "GP-AR", 
+                                                      "GP-ARX", "NM(CWI)", 
+                                                      "TL(CWI)")),], 
                      aes(x = reorder(model, desc(meanValue)), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 1)), size = 7, nudge_y = 1.25) + 
@@ -262,13 +276,13 @@ barplcc1 <- ggplot(dfother[dfother$variable == "corr",],
 
 
 barplcc2 <- ggplot(finalDF[finalDF$variable == "corr" & 
-                               !(finalDF$model %in% c("GP-ARX1", "GP-AR", "GP-ARX")),], 
+                               !(finalDF$model %in% c("GP-ARX1", "GP-AR", "GP-ARX", "NM(CWI)", "TL(CWI)")),], 
                      aes(x = reorder(model, meanValue), y=meanValue, fill=factor(colorVal))) + 
   geom_bar(stat="identity", position="dodge") + 
   geom_text(aes(label = round(meanValue, digits = 2)), size = 7, nudge_y = 1.25) + 
   scale_fill_manual(values = colourPalette, guide=FALSE) +
   theme_gray(base_size = 20) + 
-  xlab("Model") + ylab("Mean RMSE")
+  xlab("Model") + ylab("Mean Corr Coefficient")
 
 
 barplcc3 <- ggplot(finalDF[finalDF$variable == "corr" & !(finalDF$model %in% c("GP-ARX1", "TL(CWI)", "NM(CWI)")),], 
@@ -320,7 +334,6 @@ deltaDstPlot <- ggplot(dfVBz, aes(x=DstMin, y=deltaDstMin/DstMin)) +
   labs(x = TeX('$min(D_{st})$'), 
        y=TeX('$\\frac{\\Delta D_{st}}{min(D_{st})}$'), color="Storm Category")
 
-library(directlabels)
 lDF <- read.csv("OmniARXLandscapeRes.csv", col.names=c("rmse", "degree", "b", "sigma"))
 contDF <- lDF[lDF$b <= 0.1, c("rmse", "b", "sigma")]
 

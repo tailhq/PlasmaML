@@ -5,7 +5,6 @@ import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
 import spire.algebra.Field
-import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, RegressionMetrics}
 
 //First define the experiment parameters
@@ -14,7 +13,7 @@ val numVars = OmniWaveletModels.exogenousInputs.length + 1
 OmniWaveletModels.globalOpt = "GS"
 DstMOGPExperiment.gridSize = 2
 DstMOGPExperiment.gridStep = 0.2
-OmniWaveletModels.orderFeat = 3
+OmniWaveletModels.orderFeat = 4
 OmniWaveletModels.orderTarget = 2
 //Predictions for an example storm
 OmniWaveletModels.numStorms = 12
@@ -34,11 +33,6 @@ linearK.blocked_hyper_parameters = linearK.hyper_parameters
 //Create a Vector Field of the appropriate dimension so that
 //we can create stationary kernels
 implicit val ev = VectorField(num_features)
-
-val tKernel = new TStudentKernel(0.5+1.0/num_features)
-//tKernel.blocked_hyper_parameters = tKernel.hyper_parameters
-val mlpKernel = new MLPKernel(20.0/num_features.toDouble, 1.382083995440671)
-
 
 val d = new DiracKernel(0.037)
 d.blocked_hyper_parameters = d.hyper_parameters
@@ -66,15 +60,21 @@ coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
 val coRegDiracMatrix = new CoRegDiracKernel
 
 val coRegTMatrix = new CoRegTStudentKernel(1.75)
+val tKernel = new TStudentKernel(0.5+1.0/num_features)
+//tKernel.blocked_hyper_parameters = tKernel.hyper_parameters
+val mlpKernel = new MLPKernel(20.0/num_features.toDouble, 1.382083995440671)
+
+
 
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
-  (linearK :* mixedEffects) + (tKernel :* coRegRBFMatrix) + (mlpKernel :* coRegLaplaceMatrix)
+  (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegCauchyMatrix) + (mlpKernel :* coRegLaplaceMatrix)
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
+OmniWaveletModels.useWaveletBasis = true
 val (model, scaler) = OmniWaveletModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
-  DstMOGPExperiment.gridStep, useLogSc = true,
+  DstMOGPExperiment.gridStep, useLogSc = false,
   DstMOGPExperiment.maxIt)
 
 
