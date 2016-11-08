@@ -36,10 +36,17 @@ df4 <- read.csv("Nov_4_2016_alt_3_1_OmniARXStormsRes.csv",
                               "rmse", "corr", "deltaDstMin", "DstMin",
                               "deltaT"))
 
+df5 <- read.csv("Nov_4_2016_alt_2_1_OmniARXStormsRes.csv", 
+                header = FALSE, stringsAsFactors = TRUE, 
+                col.names = c("eventID","stormCat","order", "modelSize",
+                              "rmse", "corr", "deltaDstMin", "DstMin",
+                              "deltaT"))
 
 dfFinal <- rbind(df, df1, df2, df3, df4)
 
-qplot(data = dfFinal, x = factor(order), y = corr,
+qplot(data = dfFinal, x = factor(order), y = rmse,
       geom = "boxplot", 
-      xlab = "Model Order", ylab = "Model Corr Coefficient") + 
-  theme_gray(base_size = 14)
+      xlab = "Model Order", ylab = "Model RMSE") + 
+  theme_gray(base_size = 22)
+
+ggsave(filename = "Model_RMSE_validationStorms.png", scale = 2.0)
