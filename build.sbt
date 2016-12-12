@@ -7,7 +7,7 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := "0.1.0",
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "master-SNAPSHOT",
+  dynaMLVersion := "v1.4.1-beta.5",
   libraryDependencies in ThisBuild ++= Seq(
     "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
@@ -20,7 +20,10 @@ lazy val commonSettings = Seq(
 
 resolvers in ThisBuild ++= Seq(
   "jitpack" at "https://jitpack.io",
-  "jzy3d-releases" at "http://maven.jzy3d.org/releases"
+  "jzy3d-releases" at "http://maven.jzy3d.org/releases",
+  "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
+  "BeDataDriven" at "https://nexus.bedatadriven.com/content/groups/public",
+  Resolver.sonatypeRepo("public")
 )
 
 lazy val root = (project in file(".")).settings(commonSettings: _*)

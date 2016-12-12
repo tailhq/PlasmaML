@@ -567,39 +567,36 @@ object OmniWaveletModels {
         model.test(nTestDat)
           .filter(_._1._2 == predictionIndex)
           .map(t => (t._1, (t._3, t._2, t._4)))
-          .groupBy(_._1._2).toSeq
-          .sortBy(_._1)
           .map(res => {
-            logger.info("Collating results for Hour t + " + (res._1+1))
-            val targetIndex = res._1
-            val scAndLabel = res._2.map(pattern => {
-              val unprocessed_features = pattern._1._1
+            logger.info("Collating results for Hour t + " + (predictionIndex+1))
+            val targetIndex = predictionIndex
+            val pattern = res
 
-              val dst_t = if(useWaveletBasis) {
-                val trancatedSc = GaussianScaler(sc._1.mean(0 until pF), sc._1.sigma(0 until pF))
+            val unprocessed_features = pattern._1._1
 
-                val features_processed = (trancatedSc.i > hFeat.i)(unprocessed_features(0 until pF))
-                features_processed(0)
-              } else {
-                val features_processed = sc._1.i(unprocessed_features)
-                features_processed(0)
-              }
+            val dst_t = if(useWaveletBasis) {
+              val trancatedSc = GaussianScaler(sc._1.mean(0 until pF), sc._1.sigma(0 until pF))
 
-              val (resMean, resSigma) = (sc._2.mean(targetIndex), sc._2.sigma(targetIndex))
+              val features_processed = (trancatedSc.i > hFeat.i)(unprocessed_features(0 until pF))
+              features_processed(0)
+            } else {
+              val features_processed = sc._1.i(unprocessed_features)
+              features_processed(0)
+            }
 
-              val (predictedMean, actualval, sigma) =
-                (resSigma*pattern._2._1 + resMean,
-                  resSigma*pattern._2._2 + resMean,
-                  resSigma*(pattern._2._1 - pattern._2._3))
+            val (resMean, resSigma) = (sc._2.mean(targetIndex), sc._2.sigma(targetIndex))
 
-              val label = if((actualval - dst_t) <= threshold) 1.0 else 0.0
+            val (predictedMean, actualval, sigma) =
+              (resSigma*pattern._2._1 + resMean,
+                resSigma*pattern._2._2 + resMean,
+                resSigma*(pattern._2._1 - pattern._2._3))
 
-              val normalDist = Gaussian(predictedMean - dst_t, sigma)
-              (normalDist.cdf(threshold), label)
+            val label = if((actualval - dst_t) <= threshold) 1.0 else 0.0
 
-            })
-            scAndLabel
-          }).head
+            val normalDist = Gaussian(predictedMean - dst_t, sigma)
+            (normalDist.cdf(threshold), label)
+
+          })
       })
 
 
