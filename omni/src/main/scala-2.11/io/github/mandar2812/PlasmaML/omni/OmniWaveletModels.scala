@@ -87,7 +87,7 @@ object OmniWaveletModels {
 
   val deltaOperationMult = (deltaT: Int, deltaTargets: Int) =>
     DataPipe((lines: Stream[(Double, Double)]) =>
-      lines.toList.sliding(deltaT+deltaTargets+1).map((history) => {
+      lines.toList.sliding(deltaT+deltaTargets).map((history) => {
         val features = DenseVector(history.take(deltaT).map(_._2).toArray)
         val outputs = DenseVector(history.takeRight(deltaTargets).map(_._2).toArray)
         (features, outputs)
@@ -95,7 +95,7 @@ object OmniWaveletModels {
 
   val deltaOperationARXMult = (deltaT: List[Int], deltaTargets: Int) =>
     DataPipe((lines: Stream[(Double, DenseVector[Double])]) =>
-      lines.toList.sliding(deltaT.max+deltaTargets+1).map((history) => {
+      lines.toList.sliding(deltaT.max+deltaTargets).map((history) => {
 
         val hist = history.take(deltaT.max).map(_._2)
         val histOut = history.takeRight(deltaTargets).map(_._2)
@@ -517,10 +517,12 @@ object OmniWaveletModels {
                                sc: (GaussianScaler, GaussianScaler),
                                predictionIndex: Int = 3) = {
 
-    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val (pF, pT) = (math.pow(2, orderFeat).toInt, math.pow(2, orderTarget).toInt)
     val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
 
-    val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+    val (hFeat, invHFeat) = (haarWaveletFilter(orderFeat), invHaarWaveletFilter(orderFeat))
+
+
 
     val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
       if (useWaveletBasis)
@@ -530,6 +532,17 @@ object OmniWaveletModels {
           .map(l => hFeat(DenseVector(l)).toArray)
           .reduceLeft((a,b) => a ++ b)),
           featAndTarg._2)
+      else
+        featAndTarg
+    )
+
+    val invHaarWaveletPipe = DataPipe((featAndTarg: DenseVector[Double]) =>
+      if (useWaveletBasis)
+        DenseVector(featAndTarg
+          .toArray
+          .grouped(pF)
+          .map(l => invHFeat(DenseVector(l)).toArray)
+          .reduceLeft((a,b) => a ++ b))
       else
         featAndTarg
     )
@@ -568,29 +581,30 @@ object OmniWaveletModels {
           .filter(_._1._2 == predictionIndex)
           .map(t => (t._1, (t._3, t._2, t._4)))
           .map(res => {
-            logger.info("Collating results for Hour t + " + (predictionIndex+1))
-            val targetIndex = predictionIndex
             val pattern = res
 
-            val unprocessed_features = pattern._1._1
-
             val dst_t = if(useWaveletBasis) {
-              val trancatedSc = GaussianScaler(sc._1.mean(0 until pF), sc._1.sigma(0 until pF))
-
-              val features_processed = (trancatedSc.i > hFeat.i)(unprocessed_features(0 until pF))
-              features_processed(0)
+              val features_processed = (sc._1.i > invHaarWaveletPipe)(pattern._1._1)
+              println("Features: "+features_processed)
+              features_processed(pF-1)
             } else {
-              val features_processed = sc._1.i(unprocessed_features)
-              features_processed(0)
+              val features_processed = sc._1.i(pattern._1._1)
+              println("Features: "+features_processed)
+              features_processed(pF-1)
             }
 
-            val (resMean, resSigma) = (sc._2.mean(targetIndex), sc._2.sigma(targetIndex))
+            val (resMean, resSigma) = (sc._2.mean(predictionIndex), sc._2.sigma(predictionIndex))
 
             val (predictedMean, actualval, sigma) =
               (resSigma*pattern._2._1 + resMean,
                 resSigma*pattern._2._2 + resMean,
-                resSigma*(pattern._2._1 - pattern._2._3))
+                resSigma*(pattern._2._1 - pattern._2._3)/model._errorSigma.toDouble)
 
+            print("\n")
+            println("Actual value Dst(t+"+(predictionIndex+1)+"): "+actualval)
+            print("\n")
+            println("Features Dst(t): "+dst_t)
+            print("\n")
             val label = if((actualval - dst_t) <= threshold) 1.0 else 0.0
 
             val normalDist = Gaussian(predictedMean - dst_t, sigma)
@@ -600,7 +614,7 @@ object OmniWaveletModels {
       })
 
 
-
+    logger.info("Collating results for Hour t + " + (predictionIndex+1))
     val flow = preProcess >
       prepareFeaturesAndOutputs >
       haarWaveletPipe >

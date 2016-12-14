@@ -11,7 +11,7 @@ import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, Regr
 OmniWaveletModels.exogenousInputs = List(24,16)
 val numVars = OmniWaveletModels.exogenousInputs.length + 1
 OmniWaveletModels.globalOpt = "GS"
-DstMOGPExperiment.gridSize = 2
+DstMOGPExperiment.gridSize = 3
 DstMOGPExperiment.gridStep = 0.2
 OmniWaveletModels.orderFeat = 4
 OmniWaveletModels.orderTarget = 2
@@ -46,7 +46,8 @@ mixedEffects2.blocked_hyper_parameters = mixedEffects2.hyper_parameters
 val coRegCauchyMatrix = new CoRegCauchyKernel(10.0)
 coRegCauchyMatrix.blocked_hyper_parameters = coRegCauchyMatrix.hyper_parameters
 
-val coRegLaplaceMatrix = new CoRegLaplaceKernel(10.0)
+val coRegLaplaceMatrix = new CoRegLaplaceKernel(9.8)
+coRegLaplaceMatrix.blocked_hyper_parameters = coRegLaplaceMatrix.hyper_parameters
 
 val coRegRBFMatrix = new CoRegRBFKernel(30.33509292873575)
 coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
@@ -59,23 +60,39 @@ coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
 
 val coRegDiracMatrix = new CoRegDiracKernel
 
-val coRegTMatrix = new CoRegTStudentKernel(1.75)
-val tKernel = new TStudentKernel(0.5+1.0/num_features)
-//tKernel.blocked_hyper_parameters = tKernel.hyper_parameters
-val mlpKernel = new MLPKernel(20.0/num_features.toDouble, 1.382083995440671)
-
+val coRegTMatrix = new CoRegTStudentKernel(10.0)
+coRegTMatrix.blocked_hyper_parameters = coRegTMatrix.hyper_parameters
+val tKernel = new TStudentKernel(0.120833/*0.5+1.0/num_features*/)
+tKernel.blocked_hyper_parameters = tKernel.hyper_parameters
+val mlpKernel = new MLPKernel(1.1315546704041666, 0.22867151503917768/*20.0/num_features.toDouble, 1.382083995440671*/)
+mlpKernel.blocked_hyper_parameters = mlpKernel.hyper_parameters
 
 
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
-  (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegCauchyMatrix) + (mlpKernel :* coRegLaplaceMatrix)
+  (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegTMatrix) + (mlpKernel :* coRegLaplaceMatrix)
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
 
 OmniWaveletModels.useWaveletBasis = true
 val (model, scaler) = OmniWaveletModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
-  DstMOGPExperiment.gridStep, useLogSc = false,
+  DstMOGPExperiment.gridStep, useLogSc = true,
   DstMOGPExperiment.maxIt)
+
+
+OmniWaveletModels.testStart = "2003/11/20/00"
+OmniWaveletModels.testEnd = "2003/11/22/00"
+
+(0 to 3).foreach(i => {
+  val met = OmniWaveletModels.generatePredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString+","+c._3.toString+","+c._4.toString)
+
+  val onsetScores = OmniWaveletModels.generateOnsetPredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString)
+
+  DynaMLPipe.streamToFile("data/mogp_preds_errorbars"+i+".csv")(met)
+
+  DynaMLPipe.streamToFile("data/mogp_onset_predictions"+i+".csv")(onsetScores.toStream)
+
+})
 
 
 //Calculate Regression scores on the 63 storms data set
@@ -113,16 +130,3 @@ val exPred = resGPOnset.last.scores_and_labels
 //Calculate regression scores of the persistence model
 val resPer = DstPersistenceMOExperiment(2)
 
-OmniWaveletModels.testStart = "2003/11/20/00"
-OmniWaveletModels.testEnd = "2003/11/22/00"
-
-(0 to 3).foreach(i => {
-  val met = OmniWaveletModels.generatePredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString+","+c._3.toString+","+c._4.toString)
-
-  val onsetScores = OmniWaveletModels.generateOnsetPredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString)
-
-  DynaMLPipe.streamToFile("data/mogp_preds_errorbars"+i+".csv")(met)
-
-  DynaMLPipe.streamToFile("data/mogp_onset_predictions"+i+".csv")(onsetScores.toStream)
-
-})
