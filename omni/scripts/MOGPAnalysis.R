@@ -39,7 +39,7 @@ ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
   scale_linetype_manual(values = lines1, guide=FALSE) +
   xlab("Time (hours)") + ylab("Dst (nT)")
 
-arx_onset_pred <- read.csv("mogp_onset_predictions0.csv", 
+arx_onset_pred <- read.csv("mogp_onset_predictions3.csv", 
                                header = FALSE, 
                                col.names = c("p", "storm"))
 arx_onset_pred$time <- 1:nrow(arx_onset_pred)

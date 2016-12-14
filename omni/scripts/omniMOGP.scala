@@ -13,7 +13,7 @@ val numVars = OmniWaveletModels.exogenousInputs.length + 1
 OmniWaveletModels.globalOpt = "GS"
 DstMOGPExperiment.gridSize = 3
 DstMOGPExperiment.gridStep = 0.2
-OmniWaveletModels.orderFeat = 4
+OmniWaveletModels.orderFeat = 2
 OmniWaveletModels.orderTarget = 2
 //Predictions for an example storm
 OmniWaveletModels.numStorms = 12
@@ -49,7 +49,7 @@ coRegCauchyMatrix.blocked_hyper_parameters = coRegCauchyMatrix.hyper_parameters
 val coRegLaplaceMatrix = new CoRegLaplaceKernel(9.8)
 coRegLaplaceMatrix.blocked_hyper_parameters = coRegLaplaceMatrix.hyper_parameters
 
-val coRegRBFMatrix = new CoRegRBFKernel(30.33509292873575)
+val coRegRBFMatrix = new CoRegRBFKernel(30.135093)
 coRegRBFMatrix.blocked_hyper_parameters = coRegRBFMatrix.hyper_parameters
 
 //Create an adjacency matrix
@@ -71,12 +71,12 @@ mlpKernel.blocked_hyper_parameters = mlpKernel.hyper_parameters
 val kernel: CompositeCovariance[(DenseVector[Double], Int)] =
   (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegTMatrix) + (mlpKernel :* coRegLaplaceMatrix)
 
-val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegDiracMatrix
+val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegRBFMatrix
 
 OmniWaveletModels.useWaveletBasis = true
 val (model, scaler) = OmniWaveletModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
-  DstMOGPExperiment.gridStep, useLogSc = true,
+  DstMOGPExperiment.gridStep, useLogSc = false,
   DstMOGPExperiment.maxIt)
 
 
@@ -120,12 +120,13 @@ resGPOnset.map(_.scores_and_labels).map(sc => sc.map(c => math.pow(c._1 - c._2, 
 
 val exPred = resGPOnset.last.scores_and_labels
 
-(1 to 100).map(i => {
+val brier = (1 to 100).map(i => {
   val prob = i.toDouble/100.0
   (prob, exPred.map(c => (prob, c._2)).map(c => math.pow(c._1 - c._2, 2.0)).sum/exPred.length)
 
 })
 
+DynaMLPipe.streamToFile("data/brier_scores.csv")(brier.map(c => c._1.toString+","+c._2.toString).toStream)
 
 //Calculate regression scores of the persistence model
 val resPer = DstPersistenceMOExperiment(2)

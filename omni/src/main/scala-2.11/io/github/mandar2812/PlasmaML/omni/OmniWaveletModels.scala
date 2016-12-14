@@ -479,10 +479,10 @@ object OmniWaveletModels {
                 val trancatedSc = GaussianScaler(sc._1.mean(0 until pF), sc._1.sigma(0 until pF))
 
                 val features_processed = (trancatedSc.i > hFeat.i)(unprocessed_features(0 until pF))
-                features_processed(0)
+                features_processed(pF-1)
               } else {
                 val features_processed = sc._1.i(unprocessed_features)
-                features_processed(0)
+                features_processed(pF-1)
               }
 
               val (resMean, resSigma) = (sc._2.mean(targetIndex), sc._2.sigma(targetIndex))
