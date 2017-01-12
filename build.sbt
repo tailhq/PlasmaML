@@ -7,9 +7,10 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := "0.1.0",
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.4.1-beta.5",
+  dynaMLVersion := "v1.4.1-beta.9",
   libraryDependencies in ThisBuild ++= Seq(
-    "com.github.mandar2812" % "DynaML" % dynaMLVersion.value,
+    "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
+    "com.github.mandar2812.DynaML" % "dynaml_2.11" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
     "joda-time" % "joda-time" % "2.9.3",
     "org.json4s" % "json4s-native_2.11" % "3.3.0",
@@ -33,17 +34,20 @@ lazy val root = (project in file(".")).settings(commonSettings: _*)
 lazy val core = (project in file("core")).settings(
   initialCommands in console :=
     """import io.github.mandar2812.PlasmaML._;"""+
-    """import io.github.mandar2812.PlasmaML.cdf.CDFUtils""")
+    """import io.github.mandar2812.PlasmaML.cdf.CDFUtils""",
+  scalacOptions ++= Seq("-optimise", "-Yclosure-elim", "-Yinline"))
 
 lazy val omni =
   (project in file("omni")).settings(commonSettings: _*)
     .settings(
       initialCommands in console :=
         """import io.github.mandar2812.PlasmaML.omni._;"""+
+          """import scalaxy.streams.optimize;"""+
           """import io.github.mandar2812.dynaml.kernels._;"""+
           """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
           """import com.quantifind.charts.Highcharts._;"""+
-          """import breeze.linalg.DenseVector"""
+          """import breeze.linalg.DenseVector;""" +
+          """io.github.mandar2812.dynaml.DynaML.main(Array())"""
     ).dependsOn(core)
 
 lazy val vanAllen =
@@ -57,7 +61,8 @@ lazy val vanAllen =
           """import io.github.mandar2812.dynaml.pipes._;"""+
           """import com.quantifind.charts.Highcharts._;"""+
           """import org.jsoup._;"""+
-          """import breeze.linalg.{DenseMatrix, DenseVector}"""
+          """import breeze.linalg.{DenseMatrix, DenseVector};""" +
+          """io.github.mandar2812.dynaml.DynaML.main(Array())"""
     ).dependsOn(core)
 
 lazy val streamer =
@@ -68,5 +73,6 @@ lazy val streamer =
         """import io.github.mandar2812.dynaml.kernels._;"""+
           """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
           """import com.quantifind.charts.Highcharts._;"""+
-          """import breeze.linalg.DenseVector"""
+          """import breeze.linalg.DenseVector;""" +
+          """io.github.mandar2812.dynaml.DynaML.main(Array())"""
     ).dependsOn(core)

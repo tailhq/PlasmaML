@@ -101,13 +101,14 @@ val kernel = new DecomposableCovariance(
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegCauchyMatrix
 
 OmniMultiOutputModels.useWaveletBasis = true
-val (model, scaler) = OmniMultiOutputModels.trainStorms(
-  (linearK :* coRegLaplaceMatrix) + (new RBFKernel(num_features.toDouble) :* coRegTMatrix), noise, DstMOGPExperiment.gridSize,
+
+val (stp_model, stp_scaler) = OmniMultiOutputModels.trainSTPStorms(
+  linearK :* coRegLaplaceMatrix, noise, 5.5, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
   DstMOGPExperiment.maxIt)
 
 
-val storm0 = ("2000/04/06/08", "2000/04/08/09")
+/*val storm0 = ("2000/04/06/08", "2000/04/08/09")
 val storm1 = ("2001/03/30/04", "2001/04/01/21")
 val storm2 = ("2001/04/11/08", "2001/04/13/07")
 val halloween2003Storm = ("2003/11/20/00", "2003/11/22/00")
@@ -117,30 +118,32 @@ val storms = Seq(storm0, storm1, storm2, halloween2003Storm, storm2004)
 
 storms.foreach(s => {
   println("\nGenerating plots for storm: "+s._1+" to "+s._2)
-  OmniMultiOutputModels.testStart = s._1
-  OmniMultiOutputModels.testEnd = s._2
+  OmniWaveletModels.testStart = s._1
+  OmniWaveletModels.testEnd = s._2
 
   (0 to 3).foreach(i => {
-    val met = OmniMultiOutputModels.generatePredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString+","+c._3.toString+","+c._4.toString)
+    val met = OmniWaveletModels.generatePredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString+","+c._3.toString+","+c._4.toString)
 
-    val onsetScores = OmniMultiOutputModels.generateOnsetPredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString)
+    val onsetScores = OmniWaveletModels.generateOnsetPredictions(model, scaler, i).map(c => c._1.toString+","+c._2.toString)
 
-    DynaMLPipe.streamToFile("data/mogp_preds_"+OmniMultiOutputModels.testStart.split("/").take(3).mkString("_")+"-"+i+".csv")(met)
+    DynaMLPipe.streamToFile("data/mogp_preds_"+OmniWaveletModels.testStart.split("/").take(3).mkString("_")+"-"+i+".csv")(met)
 
-    DynaMLPipe.streamToFile("data/mogp_onset_"+OmniMultiOutputModels.testStart.split("/").take(3).mkString("_")+"-"+i+".csv")(onsetScores.toStream)
+    DynaMLPipe.streamToFile("data/mogp_onset_"+OmniWaveletModels.testStart.split("/").take(3).mkString("_")+"-"+i+".csv")(onsetScores.toStream)
 
   })
-})
+})*/
 
 //Calculate Regression scores on the 63 storms data set
 DstMOGPExperiment.onsetClassificationScores = false
-val resGP = DstMOGPExperiment.test(model, scaler).map(_.asInstanceOf[RegressionMetrics])
+
+val resSTP = DstMOGPExperiment.testRegression(stp_model, stp_scaler).map(_.asInstanceOf[RegressionMetrics])
 //Print the Regression evaluation results to the console
-resGP.foreach(_.print)
+resSTP.foreach(_.print)
+
 
 //Now calculate brier scores on the 63 storms data
-DstMOGPExperiment.onsetClassificationScores = true
-OmniMultiOutputModels.threshold = -70.0
+/*DstMOGPExperiment.onsetClassificationScores = true
+OmniWaveletModels.threshold = -70.0
 val resGPOnset =
   DstMOGPExperiment.test(model, scaler).map(
     _.asInstanceOf[BinaryClassificationMetrics].scores_and_labels
@@ -162,3 +165,4 @@ DynaMLPipe.streamToFile("data/brier_scores.csv")(brier.map(c => c._1.toString+",
 
 //Calculate regression scores of the persistence model
 val resPer = DstPersistenceMOExperiment(2)
+*/

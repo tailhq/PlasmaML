@@ -5,7 +5,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.GPRegression
-import io.github.mandar2812.dynaml.optimization.{GPMLOptimizer, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{GradBasedGlobalOptimizer, GridSearch}
 import io.github.mandar2812.dynaml.pipes.DataPipe
 
 import scala.util.Random
@@ -65,9 +65,7 @@ object TestGPOmni {
             .setStepSize(step)
             .setLogScale(false)
 
-          case "ML" => new GPMLOptimizer[DenseVector[Double],
-            Seq[(DenseVector[Double], Double)],
-            GPRegression](model)
+          case "ML" => new GradBasedGlobalOptimizer[GPRegression](model)
         }
 
         val startConf = kernel.state ++ noise.state

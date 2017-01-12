@@ -29,7 +29,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.{GPNarXModel, GPRegression}
-import io.github.mandar2812.dynaml.optimization.{GPMLOptimizer, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{GradBasedGlobalOptimizer, GridSearch}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import org.apache.log4j.Logger
 
@@ -261,9 +261,7 @@ object TestOmniARX {
             .setStepSize(step)
             .setLogScale(opt("logScale").toBoolean)
 
-          case "ML" => new GPMLOptimizer[DenseVector[Double],
-            Seq[(DenseVector[Double], Double)],
-            GPRegression](model)
+          case "ML" => new GradBasedGlobalOptimizer[GPRegression](model)
         }
 
         val startConf = kernel.effective_state ++ noise.effective_state

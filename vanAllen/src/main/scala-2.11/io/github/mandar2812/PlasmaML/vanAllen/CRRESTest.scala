@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
-import spire.algebra.Field
+import spire.algebra.{Field, InnerProductSpace}
 import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.numerics.log
 import io.github.mandar2812.PlasmaML.cdf.{CDFUtils, EpochFormatter}
@@ -24,11 +24,12 @@ import io.github.mandar2812.dynaml.analysis.VectorField
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import spire.implicits._
+
 import scala.util.Random
 
 
 class CRRESKernel(th: Double, s: Double, a: Double = 0.5, b: Double = 0.5)(
-  implicit ev: Field[DenseVector[Double]], ev1: Field[Double])
+  implicit ev: Field[DenseVector[Double]] with InnerProductSpace[DenseVector[Double], Double], ev1: Field[Double])
   extends SVMKernel[DenseMatrix[Double]]
   with LocalSVMKernel[DenseVector[Double]] {
 

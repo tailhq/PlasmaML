@@ -5,7 +5,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.GPTimeSeries
-import io.github.mandar2812.dynaml.optimization.{GPMLOptimizer, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{GradBasedGlobalOptimizer, GridSearch}
 import io.github.mandar2812.dynaml.pipes.DataPipe
 
 /**
@@ -52,9 +52,7 @@ object TestOmniTS {
             .setStepSize(step)
             .setLogScale(false)
 
-          case "ML" => new GPMLOptimizer[Double,
-            Seq[(Double, Double)],
-            GPTimeSeries](model)
+          case "ML" => new GradBasedGlobalOptimizer[GPTimeSeries](model)
         }
         val (_, conf) = gs.optimize(kernel.state ++ noise.state, opt)
 

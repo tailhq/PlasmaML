@@ -1,21 +1,21 @@
 import breeze.linalg.DenseVector
-import io.github.mandar2812.PlasmaML.omni.{DstMOGPExperiment, OmniWaveletModels}
+import io.github.mandar2812.PlasmaML.omni.{DstMOGPExperiment, OmniMultiOutputModels}
 import io.github.mandar2812.dynaml.kernels._
 
-OmniWaveletModels.useWaveletBasis = false
-OmniWaveletModels(2e-1, 0.0, 0.0, 30, 1.0)
+OmniMultiOutputModels.useWaveletBasis = false
+OmniMultiOutputModels(2e-1, 0.0, 0.0, 30, 1.0)
 
-OmniWaveletModels.useWaveletBasis = true
-OmniWaveletModels(2e-1, 0.0, 0.0, 30, 1.0)
+OmniMultiOutputModels.useWaveletBasis = true
+OmniMultiOutputModels(2e-1, 0.0, 0.0, 30, 1.0)
 
 
 // Increase the number of features to boost 6 hr predictions
-OmniWaveletModels.orderFeat = 3
+OmniMultiOutputModels.orderFeat = 3
 
-OmniWaveletModels(4e-2, 0.01, 0.4, 20, 1.0)
+OmniMultiOutputModels(4e-2, 0.01, 0.4, 20, 1.0)
 
-OmniWaveletModels.useWaveletBasis = false
-OmniWaveletModels(4e-2, 0.0, 0.2, 20, 1.0)
+OmniMultiOutputModels.useWaveletBasis = false
+OmniMultiOutputModels(4e-2, 0.0, 0.2, 20, 1.0)
 
 
 val linearK = new PolynomialKernel(1, 0.0)
@@ -35,9 +35,9 @@ val k1 = new CoRegDiracKernel
 val kernel = (linearK :* k) + (rbfK :* k)
 val noise = d :* n
 
-OmniWaveletModels.orderFeat = 4
-OmniWaveletModels.orderTarget = 2
+OmniMultiOutputModels.orderFeat = 4
+OmniMultiOutputModels.orderTarget = 2
 
-val (model, sc) = OmniWaveletModels.train(kernel, noise, 3, 0.2, false)
+val (model, sc) = OmniMultiOutputModels.train(kernel, noise, 3, 0.2, false)
 
-OmniWaveletModels.test(model, sc)
+OmniMultiOutputModels.test(model, sc)

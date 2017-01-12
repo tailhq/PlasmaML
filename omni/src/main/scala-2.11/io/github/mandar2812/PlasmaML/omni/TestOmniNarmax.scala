@@ -20,8 +20,8 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import org.apache.log4j.Logger
-import org.joda.time.DateTimeZone
-import org.joda.time.format.DateTimeFormat
+import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 object Narmax extends DataPipe[DenseVector[Double], Double] {
   val narmax_params = DenseVector(
@@ -39,38 +39,88 @@ object TestOmniNarmax {
 
   val logger = Logger.getLogger(this.getClass)
 
+  DateTimeZone.setDefault(DateTimeZone.UTC)
+  val formatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/MM/dd/HH")
+  val dayofYearformat = DateTimeFormat.forPattern("yyyy/D/H")
+
+  var (dst_t_1, dst_t_2): (Double, Double) = (Double.NaN, Double.NaN)
+
+  var (couplingFunc_t_1, couplingFunc_t_2, couplingFunc_t_3) = (Double.NaN, Double.NaN, Double.NaN)
+
+  val processOmni = fileToStream >
+    replaceWhiteSpaces >
+    extractTrainingFeatures(
+      List(0, 1, 2, 40, 24, 15, 16, 28),
+      Map(
+        16 -> "999.9", 16 -> "999.9",
+        21 -> "999.9", 24 -> "9999.",
+        23 -> "999.9", 40 -> "99999",
+        22 -> "9999999.", 25 -> "999.9",
+        28 -> "99.99", 27 -> "9.999", 39 -> "999",
+        45 -> "99999.99", 46 -> "99999.99",
+        47 -> "99999.99")) >
+    removeMissingLines >
+    extractTimeSeriesVec((year,day,hour) => {
+      dayofYearformat.parseDateTime(year.toInt.toString+"/"+day.toInt.toString+"/"+hour.toInt.toString).getMillis/1000.0
+    }) >
+    StreamDataPipe((couple: (Double, DenseVector[Double])) => {
+      val features = couple._2
+      //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
+      val Bt = math.sqrt(math.pow(features(2), 2) + math.pow(features(3), 2))
+      val sin_theta6 = math.pow(features(2)/Bt,6)
+      val p = features(4)
+      val v = features(1)
+      val couplingFunc = math.sqrt(p)*math.pow(v, 4/3.0)*Bt*sin_theta6
+      val Dst = features(0)
+      (couple._1, DenseVector(Dst, couplingFunc))
+    })
+
+  def apply(start: String, end: String) = {
+
+    val processDates: DataPipe[(String, String), Stream[(Double, DenseVector[Double])]] =
+    DataPipe((limits: (String, String)) => (
+      formatter.parseDateTime(limits._1).minusHours(4),
+      formatter.parseDateTime(limits._2))) >
+      DataPipe((dates: (DateTime, DateTime)) => "data/omni2_"+dates._1.getYear.toString+".csv") >
+      processOmni
+
+    val (trStampStart, trStampEnd) = (
+      formatter.parseDateTime(start).minusHours(4).getMillis/1000.0,
+      formatter.parseDateTime(end).getMillis/1000.0)
+
+
+    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+      couple._1 >= trStampStart && couple._1 <= trStampEnd)
+
+    val mpoPipe = processDates > filterDataARX > StreamDataPipe((couple: (Double, DenseVector[Double])) => {
+
+      val finalFeatures = DenseVector(dst_t_1, couplingFunc_t_1, couplingFunc_t_1*dst_t_1,
+        dst_t_2, math.pow(couplingFunc_t_2, 2.0),
+        couplingFunc_t_3, math.pow(couplingFunc_t_1, 2.0),
+        couplingFunc_t_2, 1.0, math.pow(dst_t_1, 2.0))
+
+      val predicted = Narmax(finalFeatures)
+
+      //update values
+      dst_t_2 = dst_t_1
+
+      if(dst_t_1.isNaN || predicted.isNaN) {
+        dst_t_1 = couple._2(0)
+      } else if (!predicted.isNaN) {
+        dst_t_1 = predicted
+      }
+
+      couplingFunc_t_3 = couplingFunc_t_2
+      couplingFunc_t_2 = couplingFunc_t_1
+      couplingFunc_t_1 = couple._2(1)
+
+      couple._1.toString+","+couple._2(0).toString+","+predicted.toString
+    }) > streamToFile("data/NM_"+start.replaceAll("/", "_")+"_Res.csv")
+
+    mpoPipe(start, end)
+  }
+
   def apply(start: Int, end: Int) = {
-
-    var (dst_t_1, dst_t_2): (Double, Double) = (Double.NaN, Double.NaN)
-
-    var (couplingFunc_t_1, couplingFunc_t_2, couplingFunc_t_3) = (Double.NaN, Double.NaN, Double.NaN)
-
-    val processOmni = fileToStream >
-      replaceWhiteSpaces >
-      extractTrainingFeatures(
-        List(0, 1, 2, 40, 24, 15, 16, 28),
-        Map(
-          16 -> "999.9", 16 -> "999.9",
-          21 -> "999.9", 24 -> "9999.",
-          23 -> "999.9", 40 -> "99999",
-          22 -> "9999999.", 25 -> "999.9",
-          28 -> "99.99", 27 -> "9.999", 39 -> "999",
-          45 -> "99999.99", 46 -> "99999.99",
-          47 -> "99999.99")) >
-      removeMissingLines >
-      extractTimeSeriesVec((year,day,hour) => (day * 24) + hour) >
-      StreamDataPipe((couple: (Double, DenseVector[Double])) => {
-        val features = couple._2
-        //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
-        val Bt = math.sqrt(math.pow(features(2), 2) + math.pow(features(3), 2))
-        val sin_theta6 = math.pow(features(2)/Bt,6)
-        val p = features(4)
-        val v = features(1)
-        val couplingFunc = math.sqrt(p)*math.pow(v, 4/3.0)*Bt*sin_theta6
-        val Dst = features(0)
-        (couple._1, DenseVector(Dst, couplingFunc))
-      })
-
 
     for(year <- start to end) {
       logger.info("Generating Narmax predictions for "+year)
@@ -226,12 +276,6 @@ object TestOmniNarmax {
     val dayEnd = greg.get(Calendar.DAY_OF_YEAR)
     val hourEnd = greg.get(Calendar.HOUR_OF_DAY)
     val stampEnd = (dayEnd * 24) + hourEnd
-
-    val narmax_params = DenseVector(
-      0.8335, -3.083e-4, -6.608e-7, 0.13112,
-      -2.1584e-10, 2.8405e-5, 1.5255e-10,
-      7.3573e-5, 0.73433, 1.545e-4)
-
 
     val preProcessPipe =
       fileToStream >
