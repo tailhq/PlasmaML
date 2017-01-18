@@ -298,16 +298,6 @@ object TestOmniARX {
 
           metrics.print()
 
-          //Plotting time series prediction comparisons
-          /*line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._2))
-          hold()
-          line((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._1))
-          spline((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._3))
-          hold()
-          spline((1 to scoresAndLabels.length).toList, scoresAndLabels.map(_._4))
-          legend(List(name1, "Predicted "+name1+" (one hour ahead)", "Lower Bar", "Higher Bar"))
-          unhold()*/
-
           val (timeObs, timeModel, peakValuePred, peakValueAct) = names(column) match {
             case "Dst" =>
               (scoresAndLabels.map(_._2).zipWithIndex.min._2,

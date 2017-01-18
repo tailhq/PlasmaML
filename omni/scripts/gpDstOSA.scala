@@ -1,6 +1,6 @@
 import io.github.mandar2812.PlasmaML.omni._
 import io.github.mandar2812.dynaml.kernels.{DiracKernel, PolynomialKernel}
-import io.github.mandar2812.dynaml.pipes.DynaMLPipe
+import io.github.mandar2812.dynaml.DynaMLPipe
 
 /**
   * @author mandar2812
@@ -90,7 +90,7 @@ DstARExperiment(trainingStart, trainingEnd,
     "fileID"->"Exp_Set3_","validationStart" -> validationStart, "validationEnd" -> validationEnd,
     "action" -> "test", "logScale" -> "true", "block" -> "degree,offset"))
 
-val orders = for(i <- 7 to 9; j <- 6 to 8) yield (i,j)
+var orders = for(i <- 7 to 9; j <- 6 to 8) yield (i,j)
 
 
 orders.foreach({
@@ -107,7 +107,7 @@ orders.foreach({
 })
 
 
-val orders = for(i <- 2 to 7; j <- 1 to 6) yield (i,j)
+orders = for(i <- 2 to 7; j <- 1 to 6) yield (i,j)
 orders.foreach({
   case (yOrder, xOrder) =>
     val fileID = "Nov_4_2016_alt_"+yOrder.toString()+"_"+xOrder.toString()+"_"
