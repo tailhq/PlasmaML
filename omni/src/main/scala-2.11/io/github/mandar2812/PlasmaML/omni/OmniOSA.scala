@@ -1,6 +1,8 @@
 package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
+import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+
 import scala.collection.mutable.{MutableList => MList}
 //Import Joda time libraries
 import breeze.linalg.DenseVector
@@ -176,7 +178,9 @@ object OmniOSA {
   //Define a variable which stores the training data sections
   //specified as a list of string tuples defining the
   //start and end of each section.
-  var trainingDataSections: Stream[(String, String)] = Stream(("2008/01/01/00", "2008/01/11/10"))
+  var trainingDataSections: Stream[(String, String)] = Stream(
+    ("2008/01/01/00", "2008/01/11/10"),
+    ("2011/08/05/20", "2011/08/06/22"))
 
   /**
     * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
@@ -198,8 +202,10 @@ object OmniOSA {
     * */
   def prepareData(start: String, end: String):
   DataPipe[Stream[String], Stream[(DenseVector[Double], Double)]] = {
+
+    val hoursOffset = if(exogenousInputs.isEmpty) p_target else math.max(p_target, p_ex.max)
     val (startStamp, endStamp) = (
-      formatter.parseDateTime(start).getMillis/1000.0,
+      formatter.parseDateTime(start).minusHours(hoursOffset).getMillis/1000.0,
       formatter.parseDateTime(end).getMillis/1000.0)
 
     //Return the data pipe which creates a time lagged
@@ -265,9 +271,9 @@ object OmniOSA {
 
   def modelTrain(kernel: LocalScalarKernel[DenseVector[Double]],
                  noise: LocalScalarKernel[DenseVector[Double]]) = DataPipe((dataAndScales: (
-    Stream[(DenseVector[Double], DenseVector[Double])],
+    Stream[(DenseVector[Double], Double)],
       (GaussianScaler, GaussianScaler))) => {
-    val trainingData = dataAndScales._1.map(r => (r._1, r._2(0)))
+    val trainingData = dataAndScales._1
     val model = new GPRegression(kernel, noise, trainingData)
     val modelTuner = globalOpt match {
       case "GS" =>
@@ -284,6 +290,71 @@ object OmniOSA {
     (tunedModel, dataAndScales._2)
   })
 
+  /**
+    * Returns a pipeline which takes a model and the data scaling and
+    * tests it on a list of geomagnetic storms supplied in the parameter
+    *
+    * */
+  def modelTest(testFile: String = stormsFileJi) = {
+
+    DataPipe((modelAndScales: (GPRegression, (GaussianScaler, GaussianScaler))) => {
+      val stormFilePipeline = fileToStream >
+        replaceWhiteSpaces >
+        StreamDataPipe((stormEventData: String) => {
+          val stormMetaFields = stormEventData.split(',')
+
+          val eventId = stormMetaFields(0)
+          val startDate = stormMetaFields(1)
+          val startHour = stormMetaFields(2).take(2)
+
+          val endDate = stormMetaFields(3)
+          val endHour = stormMetaFields(4).take(2)
+
+          val minDst = stormMetaFields(5).toDouble
+
+          val stormCategory = stormMetaFields(6)
+
+          //Create a pipeline to process each storm event
+          //Start with the usual cleaning
+          val stormPipe = processSegment >
+            preNormalisation >
+            StreamDataPipe(modelAndScales._2._1 * modelAndScales._2._2) >
+            postNormalisation >
+            //Send storm data to the model for testing
+            DataPipe((testData: Stream[(DenseVector[Double], Double)]) =>
+              modelAndScales._1
+                .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
+                .toStream
+            ) >
+            //Rescale the predicted and actual targets
+            StreamDataPipe(modelAndScales._2._2.i * modelAndScales._2._2.i) >
+            StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) => (c._1(0), c._2(0))) >
+            //Dump results to a regression metrics object
+            DataPipe((results: Stream[(Double, Double)]) =>
+              new RegressionMetrics(results.toList, results.length)
+                .setName(columnNames(targetColumn)+": OSA")
+            )
+
+          stormPipe((startDate+"/"+startHour, endDate+"/"+endHour))
+        }) >
+        DataPipe((metrics: Stream[RegressionMetrics]) => metrics.reduceLeft((m,n) => m++n))
+
+      stormFilePipeline(dataDir+testFile)
+    })
+  }
+
+
+  /**
+    * The complete data pipeline from raw OMNI data
+    * to standardized attributes and targets.
+    * */
+  def dataPipeline = compileSegments >
+      preNormalisation >
+      gaussianScaling >
+      DataPipe(
+        postNormalisation,
+        identityPipe[(GaussianScaler, GaussianScaler)]
+      )
 
   /**
     * Train a Gaussian Process model on the specified training sections i.e. [[trainingDataSections]]
@@ -295,13 +366,20 @@ object OmniOSA {
     kernel: LocalScalarKernel[DenseVector[Double]],
     noise: LocalScalarKernel[DenseVector[Double]]): (GPRegression, (GaussianScaler, GaussianScaler)) = {
 
-    val pipeline =
-      compileSegments >
-      preNormalisation >
-      gaussianScaling >
-      modelTrain(kernel, noise)
+    val pipeline = dataPipeline > modelTrain(kernel, noise)
 
     pipeline(trainingDataSections)
   }
+
+  def buildAndTestGP(kernel: LocalScalarKernel[DenseVector[Double]],
+                     noise: LocalScalarKernel[DenseVector[Double]],
+                     stormFile: String = stormsFileJi) = {
+
+    val pipeline = dataPipeline > modelTrain(kernel, noise) > modelTest(stormsFileJi)
+
+    pipeline(trainingDataSections)
+
+  }
+
 
 }
