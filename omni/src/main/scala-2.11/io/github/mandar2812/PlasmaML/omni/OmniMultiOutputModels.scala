@@ -20,29 +20,6 @@ import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 import scala.collection.mutable.{MutableList => ML}
 
-class CoRegOMNIKernel extends LocalSVMKernel[Int] {
-  override val hyper_parameters: List[String] = List()
-
-  override def gradient(x: Int, y: Int): Map[String, Double] = Map()
-
-  override def evaluate(x: Int, y: Int): Double = if(x == y) 1.0 else 0.0
-}
-
-class CoRegLaplaceKernel(bandwidth: Double) extends LocalSVMKernel[Int] {
-
-  override val hyper_parameters: List[String] = List("coRegLB")
-
-  state = Map("coRegLB" -> bandwidth)
-
-  override def gradient(x: Int, y: Int): Map[String, Double] =
-    Map("coRegLB" -> 1.0*evaluate(x,y)*math.abs(x-y)/math.pow(state("coRegLB"), 2))
-
-  override def evaluate(x: Int, y: Int): Double = {
-    math.exp(-1.0*math.abs(x-y)/state("coRegLB"))
-  }
-}
-
-
 /**
   * Created by mandar on 16/6/16.
   */
