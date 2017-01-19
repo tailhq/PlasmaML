@@ -2,6 +2,7 @@ package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
 
 import scala.collection.mutable.{MutableList => MList}
 //Import Joda time libraries
@@ -268,6 +269,8 @@ object OmniOSA {
   var gridSize: Int = 3
   var gridStep: Double = 0.2
   var useLogScale: Boolean = false
+  //Iterations only required for ML-II or CSA based global optimization
+  var maxIterations: Int = 20
 
   def modelTrain(kernel: LocalScalarKernel[DenseVector[Double]],
                  noise: LocalScalarKernel[DenseVector[Double]]) = DataPipe((dataAndScales: (
@@ -281,6 +284,15 @@ object OmniOSA {
           .setGridSize(gridSize)
           .setStepSize(gridStep)
           .setLogScale(useLogScale)
+      case "CSA" =>
+        new CoupledSimulatedAnnealing[GPRegression](model)
+          .setGridSize(gridSize)
+          .setStepSize(gridStep)
+          .setLogScale(useLogScale)
+          .setMaxIterations(maxIterations)
+          .setVariant(CoupledSimulatedAnnealing.MwVC)
+      case "ML-II" =>
+        new GradBasedGlobalOptimizer(model).setStepSize(gridStep)
     }
 
     val startConfig = kernel.effective_state ++ noise.effective_state
@@ -295,8 +307,7 @@ object OmniOSA {
     * tests it on a list of geomagnetic storms supplied in the parameter
     *
     * */
-  def modelTest(testFile: String = stormsFileJi) = {
-
+  def modelTest(testFile: String = stormsFileJi) =
     DataPipe((modelAndScales: (GPRegression, (GaussianScaler, GaussianScaler))) => {
       val stormFilePipeline = fileToStream >
         replaceWhiteSpaces >
@@ -341,7 +352,6 @@ object OmniOSA {
 
       stormFilePipeline(dataDir+testFile)
     })
-  }
 
 
   /**
