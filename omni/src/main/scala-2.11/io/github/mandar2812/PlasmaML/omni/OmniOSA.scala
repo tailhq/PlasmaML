@@ -272,6 +272,12 @@ object OmniOSA {
   //Iterations only required for ML-II or CSA based global optimization
   var maxIterations: Int = 20
 
+  /**
+    * A pipeline which takes data and its associated scales
+    * (scales are represented by some subclass of [[io.github.mandar2812.dynaml.pipes.ReversibleScaler]])
+    *
+    *
+    * */
   def modelTrain(kernel: LocalScalarKernel[DenseVector[Double]],
                  noise: LocalScalarKernel[DenseVector[Double]]) = DataPipe((dataAndScales: (
     Stream[(DenseVector[Double], Double)],
