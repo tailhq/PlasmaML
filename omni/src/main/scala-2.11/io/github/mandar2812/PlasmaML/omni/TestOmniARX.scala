@@ -248,9 +248,9 @@ object TestOmniARX {
                 (instance._2 - meanTargets)/stdDevTargets)
             })
 
-          model.validationSet =
-            (processValidation > standardizeValidationInstances) run
-              "data/omni2_"+yearTrain+".csv"
+          model.validationSet_((processValidation > standardizeValidationInstances) run
+            "data/omni2_"+yearTrain+".csv")
+
         }
 
 

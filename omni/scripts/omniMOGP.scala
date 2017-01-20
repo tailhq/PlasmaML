@@ -63,7 +63,7 @@ val quadKernel = new FBMKernel(0.8)//+DstMOGPExperiment.gridStep)
 quadKernel.block_all_hyper_parameters
 
 val d = new DiracKernel(0.037)
-d.blocked_hyper_parameters = d.hyper_parameters
+d.block_all_hyper_parameters
 
 val tKernel = new TStudentKernel(1.0/*0.5+1.0/num_features*/)
 //tKernel.block_all_hyper_parameters
@@ -90,19 +90,19 @@ val dstKernel = new DecomposableCovariance(
 
 //val kernel = dstKernel :* (coRegLaplaceMatrix)
 
-val kernel = new DecomposableCovariance(
+val kerneld = new DecomposableCovariance(
   linearK :* coRegLaplaceMatrix,
   (quadKernel :* coRegTMatrix) + (tKernel :* coRegTMatrix),
   quadKernel :* coRegTMatrix,
   mlpKernel :* coRegCauchyMatrix)
 
-//val kernel = (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegTMatrix) + (mlpKernel :* coRegLaplaceMatrix)
+val kernel = (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegTMatrix) + (mlpKernel :* coRegLaplaceMatrix)
 
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegCauchyMatrix
 
 OmniMultiOutputModels.useWaveletBasis = true
 val (model, scaler) = OmniMultiOutputModels.trainStorms(
-  (linearK :* coRegLaplaceMatrix) + (new RBFKernel(num_features.toDouble) :* coRegTMatrix), noise, DstMOGPExperiment.gridSize,
+  kernel, noise, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
   DstMOGPExperiment.maxIt)
 

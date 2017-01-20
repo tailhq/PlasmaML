@@ -183,6 +183,8 @@ object OmniOSA {
     ("2008/01/01/00", "2008/01/11/10"),
     ("2011/08/05/20", "2011/08/06/22"))
 
+  var validationDataSections: Stream[(String, String)] = Stream.empty[(String, String)]
+
   /**
     * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
     * reads an OMNI file cleans it and extracts the columns specified
@@ -273,40 +275,66 @@ object OmniOSA {
   var maxIterations: Int = 20
 
   /**
+    * Returns a pipeline which returns the prediction of the Persistence model.
+    * E[f(t)] = f(t-1).
+    * */
+  def meanFuncPersistence = DataPipe((features: DenseVector[Double]) => features(p_target-1))
+
+  /**
+    * The complete data pipeline from raw OMNI data
+    * to standardized attributes and targets.
+    * */
+  def dataPipeline = compileSegments >
+    preNormalisation >
+    gaussianScaling >
+    DataPipe(
+      postNormalisation,
+      identityPipe[(GaussianScaler, GaussianScaler)]
+    )
+
+  def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) =
+    compileSegments > preNormalisation > StreamDataPipe(scales._1*scales._2) > postNormalisation
+
+  /**
     * A pipeline which takes data and its associated scales
     * (scales are represented by some subclass of [[io.github.mandar2812.dynaml.pipes.ReversibleScaler]])
     *
     *
     * */
   def modelTrain(kernel: LocalScalarKernel[DenseVector[Double]],
-                 noise: LocalScalarKernel[DenseVector[Double]]) = DataPipe((dataAndScales: (
-    Stream[(DenseVector[Double], Double)],
-      (GaussianScaler, GaussianScaler))) => {
-    val trainingData = dataAndScales._1
-    val model = new GPRegression(kernel, noise, trainingData)
-    val modelTuner = globalOpt match {
-      case "GS" =>
-        new GridSearch[GPRegression](model)
-          .setGridSize(gridSize)
-          .setStepSize(gridStep)
-          .setLogScale(useLogScale)
-      case "CSA" =>
-        new CoupledSimulatedAnnealing[GPRegression](model)
-          .setGridSize(gridSize)
-          .setStepSize(gridStep)
-          .setLogScale(useLogScale)
-          .setMaxIterations(maxIterations)
-          .setVariant(CoupledSimulatedAnnealing.MwVC)
-      case "ML-II" =>
-        new GradBasedGlobalOptimizer(model).setStepSize(gridStep)
-    }
+                 noise: LocalScalarKernel[DenseVector[Double]],
+                 meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0)) =
+    DataPipe((dataAndScales: (Stream[(DenseVector[Double], Double)], (GaussianScaler, GaussianScaler))) => {
+      val trainingData = dataAndScales._1
+      val model = new GPRegression(kernel, noise, trainingData, meanFunc)
 
-    val startConfig = kernel.effective_state ++ noise.effective_state
 
-    val (tunedModel, config) = modelTuner.optimize(startConfig)
 
-    (tunedModel, dataAndScales._2)
-  })
+      model.validationSet_(validationDataPipeline(dataAndScales._2)(validationDataSections))
+
+      val modelTuner = globalOpt match {
+        case "GS" =>
+          new GridSearch[GPRegression](model)
+            .setGridSize(gridSize)
+            .setStepSize(gridStep)
+            .setLogScale(useLogScale)
+        case "CSA" =>
+          new CoupledSimulatedAnnealing[GPRegression](model)
+            .setGridSize(gridSize)
+            .setStepSize(gridStep)
+            .setLogScale(useLogScale)
+            .setMaxIterations(maxIterations)
+            .setVariant(CoupledSimulatedAnnealing.MwVC)
+        case "ML-II" =>
+          new GradBasedGlobalOptimizer(model).setStepSize(gridStep)
+      }
+
+      val startConfig = kernel.effective_state ++ noise.effective_state
+
+      val (tunedModel, config) = modelTuner.optimize(startConfig)
+
+      (tunedModel, dataAndScales._2)
+    })
 
   /**
     * Returns a pipeline which takes a model and the data scaling and
@@ -360,17 +388,6 @@ object OmniOSA {
     })
 
 
-  /**
-    * The complete data pipeline from raw OMNI data
-    * to standardized attributes and targets.
-    * */
-  def dataPipeline = compileSegments >
-      preNormalisation >
-      gaussianScaling >
-      DataPipe(
-        postNormalisation,
-        identityPipe[(GaussianScaler, GaussianScaler)]
-      )
 
   /**
     * Train a Gaussian Process model on the specified training sections i.e. [[trainingDataSections]]
@@ -380,18 +397,21 @@ object OmniOSA {
     * */
   def buildGPOnTrainingSections(
     kernel: LocalScalarKernel[DenseVector[Double]],
-    noise: LocalScalarKernel[DenseVector[Double]]): (GPRegression, (GaussianScaler, GaussianScaler)) = {
+    noise: LocalScalarKernel[DenseVector[Double]],
+    meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0))
+  : (GPRegression, (GaussianScaler, GaussianScaler)) = {
 
-    val pipeline = dataPipeline > modelTrain(kernel, noise)
+    val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
 
     pipeline(trainingDataSections)
   }
 
   def buildAndTestGP(kernel: LocalScalarKernel[DenseVector[Double]],
                      noise: LocalScalarKernel[DenseVector[Double]],
+                     meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0),
                      stormFile: String = stormsFileJi) = {
 
-    val pipeline = dataPipeline > modelTrain(kernel, noise) > modelTest(stormsFileJi)
+    val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc) > modelTest(stormsFileJi)
 
     pipeline(trainingDataSections)
 

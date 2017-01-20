@@ -211,9 +211,9 @@ object TestOmniAR {
             scoresAndLabels.map((couple) => math.abs(couple._1-couple._2)).max
           })*/
 
-          model.validationSet =
-            (processValidation > standardizeValidationInstances) run
-              "data/omni2_"+yearTrain+".csv"
+          model.validationSet_((processValidation > standardizeValidationInstances) run
+            "data/omni2_"+yearTrain+".csv")
+
         }
 
 
@@ -231,8 +231,7 @@ object TestOmniAR {
         if (action != "energyLandscape") {
           val (_, conf) = gs.optimize(startConf, opt)
 
-          model.setState(conf)
-          model.persist()
+          model.persist(conf)
 
           val res = model.test(trainTest._1._2)
 

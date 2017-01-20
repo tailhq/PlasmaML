@@ -17,7 +17,7 @@ import scala.util.Random
   */
 object StreamerShowerEmulator {
 
-  var dataFile: String = "../../Downloads/all_results.txt"
+  var dataFile: String = "data/all_results.txt"
 
   var trainingSize = 1000
   var testSize = 1000
