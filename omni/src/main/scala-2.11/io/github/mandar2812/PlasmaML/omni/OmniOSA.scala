@@ -183,6 +183,7 @@ object OmniOSA {
     ("2008/01/01/00", "2008/01/11/10"),
     ("2011/08/05/20", "2011/08/06/22"))
 
+  //Set the validation data sections to empty
   var validationDataSections: Stream[(String, String)] = Stream.empty[(String, String)]
 
   /**
@@ -292,8 +293,33 @@ object OmniOSA {
       identityPipe[(GaussianScaler, GaussianScaler)]
     )
 
-  def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) =
-    compileSegments > preNormalisation > StreamDataPipe(scales._1*scales._2) > postNormalisation
+  /**
+    * Returns a pipeline which takes as input a file containing a list
+    * of storm events and converts them into a stream of tuples containing
+    * the start and end of each event.
+    *
+    * @param num_storms The number of storms to choose (from the end of the file)
+    *
+    * */
+  def extractValidationSectionsPipe(num_storms: Int = 10) = fileToStream >
+    replaceWhiteSpaces >
+    StreamDataPipe((stormEventData: String) => {
+      val stormMetaFields = stormEventData.split(',')
+      //val eventId = stormMetaFields(0)
+      val startDate = stormMetaFields(1)
+      val startHour = stormMetaFields(2).take(2)
+
+      val endDate = stormMetaFields(3)
+      val endHour = stormMetaFields(4).take(2)
+
+      (startDate+"/"+startHour, endDate+"/"+endHour)
+    }) >
+    DataPipe((s: Stream[(String, String)]) => s.takeRight(num_storms))
+
+  def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments >
+    preNormalisation >
+    StreamDataPipe(scales._1*scales._2) >
+    postNormalisation
 
   /**
     * A pipeline which takes data and its associated scales
