@@ -1,7 +1,9 @@
 package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
+import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+import io.github.mandar2812.dynaml.kernels.CovarianceFunction
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
 
 import scala.collection.mutable.{MutableList => MList}
@@ -63,7 +65,7 @@ object OmniOSA {
     25 -> "999.9", 28 -> "99.99",
     27 -> "9.999", 39 -> "999",
     45 -> "99999.99", 46 -> "99999.99",
-    47 -> "99999.99")
+    47 -> "99999.99", 15 -> "999.9")
 
   /**
     * Contains the name of the quantity stored
@@ -136,7 +138,17 @@ object OmniOSA {
 
   private var p_ex: List[Int] = List.fill[Int](exogenousInputs.length)(1)
 
-  private var modelType: String = "AR"
+  private var modelType: String = "GP-AR"
+
+  def modelType_(m: String) = {
+    if(m == "GP-NARMAX") {
+      exogenousInputs = List(24, 15, 16, 28)
+      targetColumn = 40
+      p_target = 2
+      p_ex = List(3)
+    }
+    modelType = m
+  }
 
   /**
     * Returns the model auto-regressive order with respect
@@ -170,7 +182,7 @@ object OmniOSA {
     //Done with sanity checks now for assignments
     exogenousInputs = cols
     p_ex = orders
-    modelType = if(cols.isEmpty) "AR" else "ARX"
+    modelType = if(cols.isEmpty) "GP-AR" else "GP-ARX"
   }
 
 
@@ -180,8 +192,12 @@ object OmniOSA {
   //specified as a list of string tuples defining the
   //start and end of each section.
   var trainingDataSections: Stream[(String, String)] = Stream(
-    ("2008/01/01/00", "2008/01/11/10"),
+    ("2010/01/01/00", "2010/01/8/23"),
     ("2011/08/05/20", "2011/08/06/22"))
+
+  /*Stream(
+    ("2008/01/01/00", "2008/01/11/10"),
+    ("2011/08/05/20", "2011/08/06/22"))*/
 
   //Set the validation data sections to empty
   var validationDataSections: Stream[(String, String)] = Stream.empty[(String, String)]
@@ -198,6 +214,17 @@ object OmniOSA {
       columnFillValues) >
     removeMissingLines
 
+  val extractNarmaxFeatures = StreamDataPipe((couple: (Double, DenseVector[Double])) => {
+    val features = couple._2
+    //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
+    val Bt = math.sqrt(math.pow(features(2), 2) + math.pow(features(3), 2))
+    val sin_theta6 = math.pow(features(2)/Bt,6)
+    val p = features(4)
+    val v = features(1)
+    val couplingFunc = math.sqrt(p)*math.pow(v, 4/3.0)*Bt*sin_theta6
+    val Dst = features(0)
+    (couple._1, DenseVector(Dst, couplingFunc))
+  })
 
   /**
     * Returns a data pipeline which takes a stream of the data
@@ -218,7 +245,16 @@ object OmniOSA {
     //i.e. start and end
 
     modelType match {
-      case "AR" =>
+      case "GP-NARMAX" =>
+        extractTimeSeriesVec((year,day,hour) => {
+          dayofYearformatter.parseDateTime(
+            year.toInt.toString + "/" + day.toInt.toString +
+              "/" + hour.toInt.toString).getMillis/1000.0 }) >
+          StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+            couple._1 >= startStamp && couple._1 <= endStamp) >
+          extractNarmaxFeatures >
+          deltaOperationARX(List(p_target)++p_ex)
+      case "GP-AR" =>
         extractTimeSeries((year,day,hour) => {
           dayofYearformatter.parseDateTime(
             year.toInt.toString + "/" + day.toInt.toString +
@@ -281,13 +317,30 @@ object OmniOSA {
     * */
   def meanFuncPersistence = DataPipe((features: DenseVector[Double]) => features(p_target-1))
 
+  val meanFuncNarmax = DataPipe((vec: DenseVector[Double]) => {
+    val Dst_t_1 = vec(0)
+    val Dst_t_2 = vec(1)
+
+    val couplingFunc_t_1 = vec(2)
+    val couplingFunc_t_2 = vec(3)
+    val couplingFunc_t_3 = vec(4)
+
+    val finalFeatures = DenseVector(Dst_t_1, couplingFunc_t_1, couplingFunc_t_1*Dst_t_1,
+      Dst_t_2, math.pow(couplingFunc_t_2, 2.0),
+      couplingFunc_t_3, math.pow(couplingFunc_t_1, 2.0),
+      couplingFunc_t_2, 1.0, math.pow(Dst_t_1, 2.0))
+
+
+    Narmax(finalFeatures)
+  })
+
   /**
     * The complete data pipeline from raw OMNI data
     * to standardized attributes and targets.
     * */
   def dataPipeline = compileSegments >
     preNormalisation >
-    gaussianScaling >
+    calculateGaussianScales(false) >
     DataPipe(
       postNormalisation,
       identityPipe[(GaussianScaler, GaussianScaler)]
@@ -316,10 +369,10 @@ object OmniOSA {
     }) >
     DataPipe((s: Stream[(String, String)]) => s.takeRight(num_storms))
 
-  def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments >
+  def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments /*>
     preNormalisation >
     StreamDataPipe(scales._1*scales._2) >
-    postNormalisation
+    postNormalisation*/
 
   /**
     * A pipeline which takes data and its associated scales
@@ -329,12 +382,22 @@ object OmniOSA {
     * */
   def modelTrain(kernel: LocalScalarKernel[DenseVector[Double]],
                  noise: LocalScalarKernel[DenseVector[Double]],
-                 meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0)) =
+                 meanFunc: DataPipe[DenseVector[Double], Double] = null) =
     DataPipe((dataAndScales: (Stream[(DenseVector[Double], Double)], (GaussianScaler, GaussianScaler))) => {
       val trainingData = dataAndScales._1
-      val model = new GPRegression(kernel, noise, trainingData, meanFunc)
+      implicit val ev = VectorField(dataAndScales._1.head._1.length)
 
 
+      val kSc = CovarianceFunction(dataAndScales._2._1)
+      val targetSampleVariance = math.pow(dataAndScales._2._2(0).sigma, 2.0)
+
+      val meanF =
+        if (meanFunc == null) DataPipe((_:DenseVector[Double]) => dataAndScales._2._2(0).mean)
+        else meanFunc
+
+      val model = new GPRegression(
+        (kSc>kernel)*targetSampleVariance, (kSc>noise)*targetSampleVariance,
+        trainingData, meanF)
 
       model.validationSet_(validationDataPipeline(dataAndScales._2)(validationDataSections))
 
@@ -357,7 +420,12 @@ object OmniOSA {
 
       val startConfig = kernel.effective_state ++ noise.effective_state
 
-      val (tunedModel, config) = modelTuner.optimize(startConfig)
+      val (tunedModel, config) = modelTuner.optimize(
+        startConfig,
+        Map(
+          "tolerance" -> "0.0001",
+          "step" -> gridStep.toString,
+          "maxIterations" -> maxIterations.toString))
 
       (tunedModel, dataAndScales._2)
     })
@@ -387,10 +455,10 @@ object OmniOSA {
 
           //Create a pipeline to process each storm event
           //Start with the usual cleaning
-          val stormPipe = processSegment >
-            preNormalisation >
-            StreamDataPipe(modelAndScales._2._1 * modelAndScales._2._2) >
-            postNormalisation >
+          val stormPipe = processSegment /*>
+            //preNormalisation >
+            //StreamDataPipe(modelAndScales._2._1 * modelAndScales._2._2) >
+            //postNormalisation >
             //Send storm data to the model for testing
             DataPipe((testData: Stream[(DenseVector[Double], Double)]) =>
               modelAndScales._1
@@ -398,17 +466,30 @@ object OmniOSA {
                 .toStream
             ) >
             //Rescale the predicted and actual targets
-            StreamDataPipe(modelAndScales._2._2.i * modelAndScales._2._2.i) >
+            //StreamDataPipe(modelAndScales._2._2.i * modelAndScales._2._2.i) >
             StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) => (c._1(0), c._2(0))) >
             //Dump results to a regression metrics object
             DataPipe((results: Stream[(Double, Double)]) =>
               new RegressionMetrics(results.toList, results.length)
                 .setName(columnNames(targetColumn)+": OSA")
-            )
+            )*/
 
           stormPipe((startDate+"/"+startHour, endDate+"/"+endHour))
         }) >
-        DataPipe((metrics: Stream[RegressionMetrics]) => metrics.reduceLeft((m,n) => m++n))
+        DataPipe((segments: Stream[Stream[(DenseVector[Double], Double)]]) => {
+          segments.foldLeft(Stream.empty[(DenseVector[Double], Double)])((segA, segB) => segA ++ segB)
+        }) >
+        DataPipe((testData: Stream[(DenseVector[Double], Double)]) =>
+          modelAndScales._1
+            .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
+            .toStream
+        ) >
+        StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) => (c._1(0), c._2(0))) >
+        DataPipe((results: Stream[(Double, Double)]) =>
+          new RegressionMetrics(results.toList, results.length)
+            .setName(columnNames(targetColumn)+": OSA")
+        )
+        //DataPipe((metrics: Stream[RegressionMetrics]) => metrics.reduceLeft((m,n) => m++n))
 
       stormFilePipeline(dataDir+testFile)
     })
