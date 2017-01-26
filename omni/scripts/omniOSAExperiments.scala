@@ -17,12 +17,17 @@ val mlpKernel = new MLPKernel(0.909, 0.909)
 //mlpKernel.block_all_hyper_parameters
 
 val whiteNoiseKernel = new DiracKernel(0.5)
+//whiteNoiseKernel.block_all_hyper_parameters
 
 OmniOSA.gridSize = 2
+OmniOSA.gridStep = 0.00001
+OmniOSA.globalOpt = "ML-II"
+OmniOSA.maxIterations = 15
+
 //Set model validation data set ranges
-//OmniOSA.validationDataSections ++= Stream(
-//  ("2013/03/17/07", "2013/03/18/10"),
-//  ("2011/10/24/20", "2011/10/25/14"))
+/*OmniOSA.validationDataSections ++= Stream(
+  ("2013/03/17/07", "2013/03/18/10"),
+  ("2011/10/24/20", "2011/10/25/14"))*/
 
 OmniOSA.clearExogenousVars()
 //Get test results for Linear GP-AR model
@@ -70,7 +75,6 @@ OmniOSA.modelType_("GP-NARMAX")
 
 
 //OmniOSA.buildGPOnTrainingSections(new RBFKernel(10.0), whiteNoiseKernel, OmniOSA.meanFuncNarmax)
-OmniOSA.globalOpt = "CSA"
 val resPolyNM = OmniOSA.buildAndTestGP(
   new RBFKernel(1.4),
   new DiracKernel(0.5) + new LaplacianKernel(1.0),
