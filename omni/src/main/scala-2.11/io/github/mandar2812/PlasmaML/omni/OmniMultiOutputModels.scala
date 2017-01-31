@@ -1253,7 +1253,7 @@ object DstPersistenceMOExperiment {
           OmniMultiOutputModels.test()
         }) >
         DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
-          metrics.reduce((m,n) => m++n))
+          metrics.reduce((m,n) => m++n).setName("Persistence Dst; OSA"))
 
     stormsPipe("data/geomagnetic_storms.csv")
 

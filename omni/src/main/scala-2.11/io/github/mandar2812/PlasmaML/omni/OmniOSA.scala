@@ -156,6 +156,8 @@ object OmniOSA {
     * */
   def modelOrders = (p_target, p_ex)
 
+  def input_dimensions = OmniOSA.modelOrders._1+OmniOSA.modelOrders._2.sum
+
   /**
     * Set the target variable and the model order
     * with respect to it.
@@ -318,12 +320,12 @@ object OmniOSA {
   def meanFuncPersistence = DataPipe((features: DenseVector[Double]) => features(p_target-1))
 
   val meanFuncNarmax = DataPipe((vec: DenseVector[Double]) => {
-    val Dst_t_1 = vec(0)
-    val Dst_t_2 = vec(1)
+    val Dst_t_1 = vec(1)
+    val Dst_t_2 = vec(0)
 
-    val couplingFunc_t_1 = vec(2)
+    val couplingFunc_t_1 = vec(4)
     val couplingFunc_t_2 = vec(3)
-    val couplingFunc_t_3 = vec(4)
+    val couplingFunc_t_3 = vec(2)
 
     val finalFeatures = DenseVector(Dst_t_1, couplingFunc_t_1, couplingFunc_t_1*Dst_t_1,
       Dst_t_2, math.pow(couplingFunc_t_2, 2.0),
@@ -437,7 +439,8 @@ object OmniOSA {
     * */
   def modelTest(testFile: String = stormsFileJi) =
     DataPipe((modelAndScales: (GPRegression, (GaussianScaler, GaussianScaler))) => {
-      val stormFilePipeline = fileToStream >
+      val stormFilePipeline =
+        fileToStream >
         replaceWhiteSpaces >
         StreamDataPipe((stormEventData: String) => {
           val stormMetaFields = stormEventData.split(',')
@@ -487,7 +490,7 @@ object OmniOSA {
         StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) => (c._1(0), c._2(0))) >
         DataPipe((results: Stream[(Double, Double)]) =>
           new RegressionMetrics(results.toList, results.length)
-            .setName(columnNames(targetColumn)+": OSA")
+            .setName(modelType+" "+columnNames(targetColumn)+"; OSA")
         )
         //DataPipe((metrics: Stream[RegressionMetrics]) => metrics.reduceLeft((m,n) => m++n))
 

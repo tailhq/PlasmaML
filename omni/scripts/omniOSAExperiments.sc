@@ -1,4 +1,5 @@
 //DynaML imports
+import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
 //Import Omni programs
@@ -7,22 +8,23 @@ import io.github.mandar2812.PlasmaML.omni._
 val polynomialKernel = new PolynomialKernel(1, 0.5)
 polynomialKernel.block("degree")
 
-implicit val ev = VectorField(OmniOSA.modelOrders._1+OmniOSA.modelOrders._2.sum)
+implicit val ev = VectorField(OmniOSA.input_dimensions)
 
-val tKernel = new TStudentKernel(1.0)
+val tKernel = new TStudentKernel(0.01)
+tKernel.block_all_hyper_parameters
 
 val rbfKernel = new RBFKernel(1.7)
 
-val mlpKernel = new MLPKernel(0.909, 0.909)
+val mlpKernel = new MLPKernel(0.5, 0.5)
 //mlpKernel.block_all_hyper_parameters
 
-val whiteNoiseKernel = new DiracKernel(0.5)
-//whiteNoiseKernel.block_all_hyper_parameters
+val whiteNoiseKernel = new DiracKernel(1.0)
+whiteNoiseKernel.block_all_hyper_parameters
 
 OmniOSA.gridSize = 2
-OmniOSA.gridStep = 0.00001
-OmniOSA.globalOpt = "ML-II"
-OmniOSA.maxIterations = 15
+OmniOSA.gridStep = 0.02
+OmniOSA.globalOpt = "GS"
+OmniOSA.maxIterations = 500
 
 //Set model validation data set ranges
 /*OmniOSA.validationDataSections ++= Stream(
@@ -43,12 +45,12 @@ OmniOSA.setExogenousVars(List(24, 16), List(2,2))
 //OmniOSA.globalOpt = "ML-II"
 
 //Reset kernel and noise to initial states
-tKernel.setHyperParameters(Map("d" -> 1.0))
+//tKernel.setHyperParameters(Map("d" -> 1.0))
 polynomialKernel.setoffset(0.75)
-whiteNoiseKernel.setNoiseLevel(0.5)
+whiteNoiseKernel.setNoiseLevel(1.5)
 mlpKernel.setw(0.709)
 mlpKernel.setoffset(0.709)
-tKernel.setHyperParameters(Map("d" -> 0.75))
+//tKernel.setHyperParameters(Map("d" -> 0.75))
 OmniOSA.gridSize = 2
 //Get test results for a GP-ARX model
 //with a mean function given by the persistence
@@ -66,19 +68,17 @@ val resPer = DstPersistenceMOExperiment(0)
 
 //Print the results out on the console
 
-tKernel.setHyperParameters(Map("d" -> 1.0))
+//tKernel.setHyperParameters(Map("d" -> 0.75))
 mlpKernel.setw(0.909)
 mlpKernel.setoffset(0.909)
-whiteNoiseKernel.setNoiseLevel(1.0)
+//whiteNoiseKernel.setNoiseLevel(2.0)
 
 OmniOSA.modelType_("GP-NARMAX")
 
-
-//OmniOSA.buildGPOnTrainingSections(new RBFKernel(10.0), whiteNoiseKernel, OmniOSA.meanFuncNarmax)
 val resPolyNM = OmniOSA.buildAndTestGP(
-  new RBFKernel(1.4),
-  new DiracKernel(0.5) + new LaplacianKernel(1.0),
-  OmniOSA.meanFuncNarmax)
+  tKernel+mlpKernel+rbfKernel,
+  whiteNoiseKernel,
+  OmniOSA.meanFuncPersistence)
 resPolyNM.print
 
 resPer.print()
