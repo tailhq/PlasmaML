@@ -22,7 +22,7 @@ val whiteNoiseKernel = new DiracKernel(1.0)
 whiteNoiseKernel.block_all_hyper_parameters
 
 OmniOSA.gridSize = 2
-OmniOSA.gridStep = 0.02
+OmniOSA.gridStep = 0.2
 OmniOSA.globalOpt = "GS"
 OmniOSA.maxIterations = 500
 
@@ -72,6 +72,8 @@ val resPer = DstPersistenceMOExperiment(0)
 mlpKernel.setw(0.909)
 mlpKernel.setoffset(0.909)
 //whiteNoiseKernel.setNoiseLevel(2.0)
+OmniOSA.gridSize = 3
+OmniOSA.globalOpt = "ML-II"
 
 OmniOSA.modelType_("GP-NARMAX")
 
@@ -84,3 +86,5 @@ resPolyNM.print
 resPer.print()
 resPolyAR.print()
 resPolyARX.print()
+
+OmniOSA.clearExogenousVars()
