@@ -101,6 +101,7 @@ val kernel = (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegTMatrix) + (mlpK
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegCauchyMatrix
 
 OmniMultiOutputModels.useWaveletBasis = true
+OmniMultiOutputModels.globalOpt = "ML-II"
 val (model, scaler) = OmniMultiOutputModels.trainStorms(
   kernel, noise, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
