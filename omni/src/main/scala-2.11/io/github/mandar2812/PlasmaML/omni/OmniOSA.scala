@@ -171,10 +171,10 @@ object OmniOSA {
   /**
     * Set the exogenous variables as well as their auto-regressive orders.
     * */
-  def setExogenousVars(cols: List[Int], orders: List[Int]): Unit = {
-    require(
+  def setExogenousVars(cols: List[Int], orders: List[Int], changeModelType: Boolean = true): Unit = {
+    /*require(
       cols.length == orders.length,
-      "Number of exogenous variables must be equal to number of elements in 'orders' list")
+      "Number of exogenous variables must be equal to number of elements in 'orders' list")*/
     require(
       cols.forall(c => c >= 0 && c < 55),
       "All elements of 'cols' list must contain column indices "+
@@ -184,7 +184,8 @@ object OmniOSA {
     //Done with sanity checks now for assignments
     exogenousInputs = cols
     p_ex = orders
-    modelType = if(cols.isEmpty) "GP-AR" else "GP-ARX"
+    if(changeModelType)
+      modelType = if(cols.isEmpty) "GP-AR" else "GP-ARX"
   }
 
 
@@ -220,7 +221,7 @@ object OmniOSA {
     val features = couple._2
     //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
     val Bt = math.sqrt(math.pow(features(2), 2) + math.pow(features(3), 2))
-    val sin_theta6 = math.pow(features(2)/Bt,6)
+    val sin_theta6 = math.pow(features(2)/Bt, 6)
     val p = features(4)
     val v = features(1)
     val couplingFunc = math.sqrt(p)*math.pow(v, 4/3.0)*Bt*sin_theta6
