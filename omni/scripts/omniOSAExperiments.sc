@@ -14,7 +14,7 @@ tKernel.block_all_hyper_parameters
 
 val rbfKernel = new RBFKernel(1.7)
 
-val mlpKernel = new MLPKernel(1.0, 1.0)
+val mlpKernel = new MLPKernel(80.0, 20.0)
 
 val whiteNoiseKernel = new DiracKernel(0.2)
 whiteNoiseKernel.block_all_hyper_parameters
@@ -40,8 +40,9 @@ OmniOSA.clearExogenousVars()
 OmniOSA.setTarget(40, 6)
 OmniOSA.setExogenousVars(List(24, 16), List(2,2))
 //Reset kernel and noise to initial states
-mlpKernel.setw(1.0)
-mlpKernel.setoffset(1.0)
+mlpKernel.setw(80.0)
+mlpKernel.setoffset(20.0)
+rbfKernel.setbandwidth(1.7)
 OmniOSA.gridSize = 2
 //Get test results for a GP-ARX model
 //with a mean function given by the persistence
@@ -57,8 +58,9 @@ val resPer = DstPersistenceMOExperiment(0)
 
 OmniOSA.clearExogenousVars()
 
-mlpKernel.setw(1.0)
-mlpKernel.setoffset(1.0)
+mlpKernel.setw(80.0)
+mlpKernel.setoffset(20.0)
+rbfKernel.setbandwidth(1.7)
 OmniOSA.gridSize = 3
 OmniOSA.globalOpt = "ML-II"
 OmniOSA.modelType_("GP-NARMAX")
@@ -77,3 +79,24 @@ resPolyARX.print()
 resPolyNM.print()
 
 OmniOSA.clearExogenousVars()
+
+mlpKernel.setw(10.0)
+mlpKernel.setoffset(10.0)
+OmniOSA.modelType_("GP-AR")
+
+OmniOSA.experiment(
+  tKernel+mlpKernel,
+  whiteNoiseKernel,
+  OmniOSA.meanFuncPersistence,
+  6 to 10)
+
+
+mlpKernel.setw(10.0)
+mlpKernel.setoffset(10.0)
+OmniOSA.modelType_("GP-ARX")
+
+OmniOSA.experiment(
+  tKernel+mlpKernel,
+  whiteNoiseKernel,
+  OmniOSA.meanFuncPersistence,
+  6 to 10)

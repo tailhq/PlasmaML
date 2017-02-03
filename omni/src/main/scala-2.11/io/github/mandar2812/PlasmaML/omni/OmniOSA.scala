@@ -1,18 +1,20 @@
 package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
+import com.github.tototoshi.csv.CSVWriter
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels.CovarianceFunction
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
-
+import io.github.mandar2812.dynaml.pipes.{BifurcationPipe, StreamFlatMapPipe}
+//scala mutable collections api
 import scala.collection.mutable.{MutableList => MList}
 //Import Joda time libraries
 import breeze.linalg.DenseVector
 import org.apache.log4j.Logger
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
-//Import relevant compenents from DynaML
+//Import relevant components from DynaML
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.optimization.GridSearch
@@ -52,6 +54,8 @@ object OmniOSA {
   val stormsFileJi = "geomagnetic_storms.csv"
   //List of geomagnetic storms from 1995-2014
   val stormsFile2 = "geomagnetic_storms2.csv"
+  //List of storms not contained in Ji et.al but contained in stormsFile2
+  val stormsFile3 = "geomagnetic_storms3.csv"
 
   /**
     * Stores the missing value strings for
@@ -192,7 +196,7 @@ object OmniOSA {
   def clearExogenousVars() = setExogenousVars(List(), List())
 
   //Define a variable which stores the training data sections
-  //specified as a list of string tuples defining the
+  //specified as a list of string 2-tuple defining the
   //start and end of each section.
   var trainingDataSections: Stream[(String, String)] = Stream(
     ("2010/01/01/00", "2010/01/8/23"),
@@ -402,7 +406,7 @@ object OmniOSA {
         (kSc>kernel)*targetSampleVariance, (kSc>noise)*targetSampleVariance,
         trainingData, meanF)
 
-      model.validationSet_(validationDataPipeline(dataAndScales._2)(validationDataSections))
+      //model.validationSet_(validationDataPipeline(dataAndScales._2)(validationDataSections))
 
       val modelTuner = globalOpt match {
         case "GS" =>
@@ -423,13 +427,14 @@ object OmniOSA {
 
       val startConfig = kernel.effective_state ++ noise.effective_state
 
-      val (tunedModel, _) = modelTuner.optimize(
+      val (tunedModel, c) = modelTuner.optimize(
         startConfig,
         Map(
           "tolerance" -> "0.0001",
           "step" -> gridStep.toString,
           "maxIterations" -> maxIterations.toString))
 
+      tunedModel.setState(c)
       (tunedModel, dataAndScales._2)
     })
 
@@ -443,10 +448,7 @@ object OmniOSA {
       val stormFilePipeline =
         fileToStream >
         replaceWhiteSpaces >
-        StreamDataPipe(getStormTimeRanges > processTimeSegment) >
-        DataPipe((segments: Stream[Stream[(DenseVector[Double], Double)]]) => {
-          segments.foldLeft(Stream.empty[(DenseVector[Double], Double)])((segA, segB) => segA ++ segB)
-        }) >
+        StreamFlatMapPipe(getStormTimeRanges > processTimeSegment) >
         DataPipe((testData: Stream[(DenseVector[Double], Double)]) =>
           modelAndScales._1
             .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
@@ -490,4 +492,90 @@ object OmniOSA {
     pipeline(trainingDataSections)
 
   }
+
+
+  /**
+    * Carry out large scale model comparison experiment.
+    * */
+  def experiment(kernel: LocalScalarKernel[DenseVector[Double]],
+                 noise: LocalScalarKernel[DenseVector[Double]],
+                 meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0),
+                 orders: Range = 1 to 10,
+                 modelSelectionStorms: String = stormsFile3,
+                 testStorms: String = stormsFileJi,
+                 resultsFile: String = "OmniOSARes.csv") = {
+
+    noise.block_all_hyper_parameters
+    val originalState = kernel.state ++ noise.state
+
+    val file = new java.io.File(dataDir+resultsFile)
+    val fileOpened: Boolean = !file.exists() || file.length() == 0
+
+
+
+    val writer = CSVWriter.open(new java.io.File(dataDir+resultsFile), append = true)
+    //For each model order and model type train the model, calculate scores on validation and test sets.
+
+    val columnNames = Seq("model", "order") ++
+      (1 to 2).map(i => "order_ex_"+i) ++
+      Seq("data") ++ originalState.keys.toSeq ++
+      Seq("mae", "rmse", "cc", "rsq")
+
+    val zeros = List.fill[Int](2)(0)
+
+    //If the file has already been written to then write the header row.
+    if (fileOpened)
+      writer.writeRow(columnNames)
+
+    val pex = if(modelType == "GP-AR") zeros else p_ex
+
+    orders.foreach(ord => {
+      //Reset the kernel
+      setTarget(40, ord)
+      if(modelType == "GP-ARX") {
+        setExogenousVars(List(24, 16), List(ord, ord))
+      }
+
+      kernel.setHyperParameters(originalState)
+      //Train the model
+      val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
+
+      try {
+        val (model, scalers) = pipeline(trainingDataSections)
+
+
+        val scoresPipe = BifurcationPipe(
+          modelTest(modelSelectionStorms),
+          modelTest(testStorms))
+
+        val (validationPerformance, testPerformance) = scoresPipe((model, scalers))
+
+        val lineCommonData = Seq(modelType, ord) ++ pex
+
+        val selectedState = originalState.keys.map(k => model._current_state(k))
+
+        //Obtain metrics for model
+        val (valP, tP) = (
+          Seq(
+            validationPerformance.mae, validationPerformance.rmse,
+            validationPerformance.corr, validationPerformance.Rsq),
+          Seq(
+            testPerformance.mae, testPerformance.rmse,
+            testPerformance.corr, testPerformance.Rsq))
+
+        //Write results to file
+        writer.writeAll(Seq(
+          lineCommonData ++ Seq("validation") ++ selectedState ++ valP,
+          lineCommonData ++ Seq("test") ++ selectedState ++ tP
+        ))
+      } catch {
+        case e: Exception =>
+          logger.info(e.toString)
+
+      }
+    })
+
+    writer.close()
+  }
+
 }

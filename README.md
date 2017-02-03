@@ -1,6 +1,6 @@
 # PlasmaML
 
-[![Build Status](https://travis-ci.org/mandar2812/PlasmaML.svg?branch=master)](https://travis-ci.org/mandar2812/PlasmaML)
+[![Build Status](https://travis-ci.org/transcendent-ai-labs/PlasmaML.svg?branch=master)](https://travis-ci.org/transcendent-ai-labs/PlasmaML)
 
 Machine Learning tools for Space Weather and Plasma Physics
 ---------------------------
