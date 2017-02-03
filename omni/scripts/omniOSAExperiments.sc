@@ -24,11 +24,6 @@ OmniOSA.gridStep = 0.2
 OmniOSA.globalOpt = "ML-II"
 OmniOSA.maxIterations = 250
 
-//Set model validation data set ranges
-/*OmniOSA.validationDataSections ++= Stream(
-  ("2013/03/17/07", "2013/03/18/10"),
-  ("2011/10/24/20", "2011/10/25/14"))*/
-
 OmniOSA.clearExogenousVars()
 //Get test results for Linear GP-AR model
 //with a mean function given by the persistence

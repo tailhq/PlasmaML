@@ -152,7 +152,7 @@ object OmniMultiOutputModels {
             s.take(numStormsStart) ++ s.takeRight(n) ++
               Stream(("2015/03/17/00", "2015/03/18/23")) ++
               Stream(("2015/06/22/08", "2015/06/23/20")) ++
-              Stream(("2008/01/02/00", "2008/02/02/00"))) >
+              Stream(("2008/01/02/00", "2008/01/05/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 

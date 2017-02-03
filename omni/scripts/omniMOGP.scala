@@ -22,11 +22,11 @@ OmniMultiOutputModels.exogenousInputs = List(24,16)
 val numVars = OmniMultiOutputModels.exogenousInputs.length + 1
 OmniMultiOutputModels.globalOpt = "GS"
 DstMOGPExperiment.gridSize = 3
-DstMOGPExperiment.gridStep = 0.22
+DstMOGPExperiment.gridStep = 0.3
 OmniMultiOutputModels.orderFeat = 2
 OmniMultiOutputModels.orderTarget = 2
 //Predictions for an example storm
-OmniMultiOutputModels.numStorms = 12
+OmniMultiOutputModels.numStorms = 3
 //Calculate the number of features
 //from the provided lengths of each
 //input like Dst, V, Bz, ... etc
@@ -65,11 +65,11 @@ quadKernel.block_all_hyper_parameters
 val d = new DiracKernel(0.037)
 d.block_all_hyper_parameters
 
-val tKernel = new TStudentKernel(1.0/*0.5+1.0/num_features*/)
-//tKernel.block_all_hyper_parameters
+val tKernel = new TStudentKernel(0.8/*0.5+1.0/num_features*/)
+tKernel.block_all_hyper_parameters
 
-val mlpKernel = new MLPKernel(0.909, 0.909)
-mlpKernel.block_all_hyper_parameters
+val mlpKernel = new MLPKernel(80.0, 24.0)
+//mlpKernel.block_all_hyper_parameters
 
 val coRegCauchyMatrix = new CoRegCauchyKernel(10.0)
 coRegCauchyMatrix.block_all_hyper_parameters
@@ -103,7 +103,7 @@ val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegCauchyMat
 OmniMultiOutputModels.useWaveletBasis = true
 OmniMultiOutputModels.globalOpt = "ML-II"
 val (model, scaler) = OmniMultiOutputModels.trainStorms(
-  kernel, noise, DstMOGPExperiment.gridSize,
+  (tKernel + mlpKernel):*coRegTMatrix, noise, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
   DstMOGPExperiment.maxIt)
 

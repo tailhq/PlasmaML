@@ -136,7 +136,7 @@ object OmniOSA {
   //of the models for targets and exogenous inputs.
   private var p_target: Int = 6
 
-  private var p_ex: List[Int] = List.fill[Int](exogenousInputs.length)(1)
+  private var p_ex: List[Int] = List()
 
   private var modelType: String = "GP-AR"
 
@@ -261,7 +261,8 @@ object OmniOSA {
         extractTimeSeries((year,day,hour) => {
           dayofYearformatter.parseDateTime(
             year.toInt.toString + "/" + day.toInt.toString +
-              "/" + hour.toInt.toString).getMillis/1000.0 }) >
+              "/" + hour.toInt.toString)
+            .getMillis/1000.0 }) >
           StreamDataPipe((couple: (Double, Double)) =>
             couple._1 >= startStamp && couple._1 <= endStamp) >
           deltaOperation(p_target, 0)
@@ -276,7 +277,7 @@ object OmniOSA {
     }
   }
 
-  def processSegment = DataPipe((dateLimits: (String, String)) => {
+  def processTimeSegment = DataPipe((dateLimits: (String, String)) => {
     //For the given date limits generate the relevant data
     //The file name to read from
     val fileName = dataDir+"omni2_"+dateLimits._1.split("/").head+".csv"
@@ -293,7 +294,7 @@ object OmniOSA {
     * processes each segment then collates them.
     * */
   def compileSegments =
-    StreamDataPipe(processSegment) >
+    StreamDataPipe(processTimeSegment) >
     DataPipe((segments: Stream[Stream[(DenseVector[Double], Double)]]) => {
       segments.foldLeft(Stream.empty[(DenseVector[Double], Double)])((segA, segB) => segA ++ segB)
     })
@@ -349,6 +350,17 @@ object OmniOSA {
       identityPipe[(GaussianScaler, GaussianScaler)]
     )
 
+  val getStormTimeRanges = DataPipe((stormEventData: String) => {
+    val stormMetaFields = stormEventData.split(',')
+    val startDate = stormMetaFields(1)
+    val startHour = stormMetaFields(2).take(2)
+
+    val endDate = stormMetaFields(3)
+    val endHour = stormMetaFields(4).take(2)
+
+    (startDate+"/"+startHour, endDate+"/"+endHour)
+  })
+
   /**
     * Returns a pipeline which takes as input a file containing a list
     * of storm events and converts them into a stream of tuples containing
@@ -359,23 +371,10 @@ object OmniOSA {
     * */
   def extractValidationSectionsPipe(num_storms: Int = 10) = fileToStream >
     replaceWhiteSpaces >
-    StreamDataPipe((stormEventData: String) => {
-      val stormMetaFields = stormEventData.split(',')
-      //val eventId = stormMetaFields(0)
-      val startDate = stormMetaFields(1)
-      val startHour = stormMetaFields(2).take(2)
-
-      val endDate = stormMetaFields(3)
-      val endHour = stormMetaFields(4).take(2)
-
-      (startDate+"/"+startHour, endDate+"/"+endHour)
-    }) >
+    StreamDataPipe(getStormTimeRanges) >
     DataPipe((s: Stream[(String, String)]) => s.takeRight(num_storms))
 
-  def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments /*>
-    preNormalisation >
-    StreamDataPipe(scales._1*scales._2) >
-    postNormalisation*/
+  def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments
 
   /**
     * A pipeline which takes data and its associated scales
@@ -383,10 +382,11 @@ object OmniOSA {
     *
     *
     * */
-  def modelTrain(kernel: LocalScalarKernel[DenseVector[Double]],
-                 noise: LocalScalarKernel[DenseVector[Double]],
-                 meanFunc: DataPipe[DenseVector[Double], Double] = null) =
-    DataPipe((dataAndScales: (Stream[(DenseVector[Double], Double)], (GaussianScaler, GaussianScaler))) => {
+  def modelTrain(
+    kernel: LocalScalarKernel[DenseVector[Double]],
+    noise: LocalScalarKernel[DenseVector[Double]],
+    meanFunc: DataPipe[DenseVector[Double], Double] = null) = DataPipe(
+    (dataAndScales: (Stream[(DenseVector[Double], Double)], (GaussianScaler, GaussianScaler))) => {
       val trainingData = dataAndScales._1
       implicit val ev = VectorField(dataAndScales._1.head._1.length)
 
@@ -423,7 +423,7 @@ object OmniOSA {
 
       val startConfig = kernel.effective_state ++ noise.effective_state
 
-      val (tunedModel, config) = modelTuner.optimize(
+      val (tunedModel, _) = modelTuner.optimize(
         startConfig,
         Map(
           "tolerance" -> "0.0001",
@@ -443,43 +443,7 @@ object OmniOSA {
       val stormFilePipeline =
         fileToStream >
         replaceWhiteSpaces >
-        StreamDataPipe((stormEventData: String) => {
-          val stormMetaFields = stormEventData.split(',')
-
-          val eventId = stormMetaFields(0)
-          val startDate = stormMetaFields(1)
-          val startHour = stormMetaFields(2).take(2)
-
-          val endDate = stormMetaFields(3)
-          val endHour = stormMetaFields(4).take(2)
-
-          val minDst = stormMetaFields(5).toDouble
-
-          val stormCategory = stormMetaFields(6)
-
-          //Create a pipeline to process each storm event
-          //Start with the usual cleaning
-          val stormPipe = processSegment /*>
-            //preNormalisation >
-            //StreamDataPipe(modelAndScales._2._1 * modelAndScales._2._2) >
-            //postNormalisation >
-            //Send storm data to the model for testing
-            DataPipe((testData: Stream[(DenseVector[Double], Double)]) =>
-              modelAndScales._1
-                .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
-                .toStream
-            ) >
-            //Rescale the predicted and actual targets
-            //StreamDataPipe(modelAndScales._2._2.i * modelAndScales._2._2.i) >
-            StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) => (c._1(0), c._2(0))) >
-            //Dump results to a regression metrics object
-            DataPipe((results: Stream[(Double, Double)]) =>
-              new RegressionMetrics(results.toList, results.length)
-                .setName(columnNames(targetColumn)+": OSA")
-            )*/
-
-          stormPipe((startDate+"/"+startHour, endDate+"/"+endHour))
-        }) >
+        StreamDataPipe(getStormTimeRanges > processTimeSegment) >
         DataPipe((segments: Stream[Stream[(DenseVector[Double], Double)]]) => {
           segments.foldLeft(Stream.empty[(DenseVector[Double], Double)])((segA, segB) => segA ++ segB)
         }) >
@@ -493,7 +457,6 @@ object OmniOSA {
           new RegressionMetrics(results.toList, results.length)
             .setName(modelType+" "+columnNames(targetColumn)+"; OSA")
         )
-        //DataPipe((metrics: Stream[RegressionMetrics]) => metrics.reduceLeft((m,n) => m++n))
 
       stormFilePipeline(dataDir+testFile)
     })
@@ -527,6 +490,4 @@ object OmniOSA {
     pipeline(trainingDataSections)
 
   }
-
-
 }
