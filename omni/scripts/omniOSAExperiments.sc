@@ -21,7 +21,7 @@ whiteNoiseKernel.block_all_hyper_parameters
 
 OmniOSA.gridSize = 2
 OmniOSA.gridStep = 0.2
-OmniOSA.globalOpt = "ML-II"
+OmniOSA.globalOpt = "ML"
 OmniOSA.maxIterations = 250
 
 OmniOSA.clearExogenousVars()
@@ -62,7 +62,7 @@ mlpKernel.setw(80.0)
 mlpKernel.setoffset(20.0)
 rbfKernel.setbandwidth(1.7)
 OmniOSA.gridSize = 3
-OmniOSA.globalOpt = "ML-II"
+OmniOSA.globalOpt = "ML"
 OmniOSA.modelType_("GP-NARMAX")
 OmniOSA.setTarget(40, 6)
 OmniOSA.setExogenousVars(List(24, 15, 16, 28), List(4), changeModelType = false)
@@ -80,6 +80,11 @@ resPolyNM.print()
 
 OmniOSA.clearExogenousVars()
 
+OmniOSA.globalOpt = "CSA"
+OmniOSA.gridSize = 4
+OmniOSA.maxIterations = 30
+OmniOSA.useLogScale = true
+
 mlpKernel.setw(10.0)
 mlpKernel.setoffset(10.0)
 OmniOSA.modelType_("GP-AR")
@@ -88,7 +93,7 @@ OmniOSA.experiment(
   tKernel+mlpKernel,
   whiteNoiseKernel,
   OmniOSA.meanFuncPersistence,
-  6 to 10)
+  4 to 12)
 
 
 mlpKernel.setw(10.0)
@@ -99,4 +104,4 @@ OmniOSA.experiment(
   tKernel+mlpKernel,
   whiteNoiseKernel,
   OmniOSA.meanFuncPersistence,
-  6 to 10)
+  2 to 12)

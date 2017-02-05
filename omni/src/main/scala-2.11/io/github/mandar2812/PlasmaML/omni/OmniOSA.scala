@@ -1,10 +1,13 @@
 package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
+import breeze.linalg.{DenseMatrix, DenseVector}
 import com.github.tototoshi.csv.CSVWriter
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels.CovarianceFunction
+import io.github.mandar2812.dynaml.models.GLMPipe
+import io.github.mandar2812.dynaml.models.lm.{GeneralizedLinearModel, RegularizedGLM}
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
 import io.github.mandar2812.dynaml.pipes.{BifurcationPipe, StreamFlatMapPipe}
 //scala mutable collections api
@@ -90,6 +93,8 @@ object OmniOSA {
     * features.
     * */
   private var useVBz: Boolean = false
+
+  var standardise: Boolean = false
 
   /**
     * Get the value of the V*Bz flag.
@@ -316,7 +321,7 @@ object OmniOSA {
   var gridSize: Int = 3
   var gridStep: Double = 0.2
   var useLogScale: Boolean = false
-  //Iterations only required for ML-II or CSA based global optimization
+  //Iterations only required for ML or CSA based global optimization
   var maxIterations: Int = 20
 
   /**
@@ -348,7 +353,7 @@ object OmniOSA {
     * */
   def dataPipeline = compileSegments >
     preNormalisation >
-    calculateGaussianScales(false) >
+    calculateGaussianScales(standardise) >
     DataPipe(
       postNormalisation,
       identityPipe[(GaussianScaler, GaussianScaler)]
@@ -406,8 +411,6 @@ object OmniOSA {
         (kSc>kernel)*targetSampleVariance, (kSc>noise)*targetSampleVariance,
         trainingData, meanF)
 
-      //model.validationSet_(validationDataPipeline(dataAndScales._2)(validationDataSections))
-
       val modelTuner = globalOpt match {
         case "GS" =>
           new GridSearch[GPRegression](model)
@@ -421,7 +424,7 @@ object OmniOSA {
             .setLogScale(useLogScale)
             .setMaxIterations(maxIterations)
             .setVariant(CoupledSimulatedAnnealing.MwVC)
-        case "ML-II" =>
+        case "ML" =>
           new GradBasedGlobalOptimizer(model).setStepSize(gridStep)
       }
 
@@ -430,6 +433,7 @@ object OmniOSA {
       val (tunedModel, c) = modelTuner.optimize(
         startConfig,
         Map(
+          "persist" -> "true",
           "tolerance" -> "0.0001",
           "step" -> gridStep.toString,
           "maxIterations" -> maxIterations.toString))
@@ -493,17 +497,43 @@ object OmniOSA {
 
   }
 
+  /**
+    * Train a parametric model which
+    * can be used as a mean function for
+    * GP/STP models
+    * */
+  def trainMeanFunc(reg: Double = 0.1) = {
+
+    type Features = DenseVector[Double]
+    type Output = Double
+    type Data = Stream[(Features, Output)]
+    type OptData = (DenseMatrix[Double], Features)
+    type DataAndScales = (Data, (GaussianScaler, GaussianScaler))
+    type DateSection = (String, String)
+    
+    val flowpre = dataPipeline > DataPipe((data: DataAndScales) => data._1)
+    val pipe =
+      new GLMPipe[Data, Stream[DateSection]](flowpre.run) >
+      trainParametricModel[
+        Data, Features, Features, Output, OptData,
+        GeneralizedLinearModel[Data]](reg)
+
+    pipe(trainingDataSections)
+  }
 
   /**
     * Carry out large scale model comparison experiment.
+    * on GP-AR or GP-ARX models.
     * */
-  def experiment(kernel: LocalScalarKernel[DenseVector[Double]],
-                 noise: LocalScalarKernel[DenseVector[Double]],
-                 meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0),
-                 orders: Range = 1 to 10,
-                 modelSelectionStorms: String = stormsFile3,
-                 testStorms: String = stormsFileJi,
-                 resultsFile: String = "OmniOSARes.csv") = {
+  def experiment(
+    kernel: LocalScalarKernel[DenseVector[Double]],
+    noise: LocalScalarKernel[DenseVector[Double]],
+    meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0),
+    orders: Range = 1 to 10,
+    modelSelectionStorms: String = stormsFile3,
+    testStorms: String = stormsFileJi,
+    resultsFile: String = "OmniOSARes.csv",
+    zeros: List[Int] = List.fill[Int](2)(0)) = {
 
     noise.block_all_hyper_parameters
     val originalState = kernel.state ++ noise.state
@@ -511,68 +541,105 @@ object OmniOSA {
     val file = new java.io.File(dataDir+resultsFile)
     val fileOpened: Boolean = !file.exists() || file.length() == 0
 
-
-
     val writer = CSVWriter.open(new java.io.File(dataDir+resultsFile), append = true)
-    //For each model order and model type train the model, calculate scores on validation and test sets.
 
     val columnNames = Seq("model", "order") ++
       (1 to 2).map(i => "order_ex_"+i) ++
-      Seq("data") ++ originalState.keys.toSeq ++
+      Seq("data") ++ originalState.keys.toSeq ++ 
+      Seq("globalOpt", "gridSize", "step", "maxIt") ++
       Seq("mae", "rmse", "cc", "rsq")
 
-    val zeros = List.fill[Int](2)(0)
-
+    val globalOptConfig =
+      globalOpt match {
+        case "GS" =>
+          Seq(globalOpt, gridSize, gridStep, 0)
+        case "CSA" =>
+          Seq(globalOpt, gridSize, gridStep, maxIterations)
+        case "ML" =>
+          Seq("ML", 0, gridStep, maxIterations)
+      }
+      
+    
     //If the file has already been written to then write the header row.
     if (fileOpened)
       writer.writeRow(columnNames)
 
-    val pex = if(modelType == "GP-AR") zeros else p_ex
-
     orders.foreach(ord => {
-      //Reset the kernel
-      setTarget(40, ord)
-      if(modelType == "GP-ARX") {
-        setExogenousVars(List(24, 16), List(ord, ord))
-      }
 
-      kernel.setHyperParameters(originalState)
-      //Train the model
-      val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
+      //Create a list of model orders which sum to ord
+      //For a GP-AR model it is ord, 0, 0
+      //for a GP-ARX model it is ord1, ord2, ord3; st ord1+ord2+ord3 = ord
+      val listOfModelOrders: List[(Int, List[Int])] =
+        if(modelType != "GP-AR") {
+          for(order_dst <- 1 to ord;
+              order_v <- 1 to ord;
+              order_b <- 1 to ord)
+            yield (order_dst, List(order_v, order_b))
+        }.filter(o => o._1+o._2.sum == ord).toList
+      else List((ord, List(0, 0)))
 
-      try {
-        val (model, scalers) = pipeline(trainingDataSections)
+      logger.info("_______________________________")
+      logger.info("Running experiment for model order: "+ord)
+      logger.info("Possible model orders: \n"+listOfModelOrders+"\n")
+      logger.info("_______________________________")
+
+      //Loop over the list of possible model orders
+      listOfModelOrders.foreach(modelOrders => {
+        val (orderTarget, order_ex) = modelOrders
+
+        //Set the target variable to Dst and set
+        //its autoregressive order to ordTarget
+        setTarget(40, orderTarget)
 
 
-        val scoresPipe = BifurcationPipe(
-          modelTest(modelSelectionStorms),
-          modelTest(testStorms))
+        if(modelType == "GP-ARX") {
+          setExogenousVars(List(24, 16), order_ex)
+        } else if(modelType == "GP-AR") {
+          clearExogenousVars()
+        }
 
-        val (validationPerformance, testPerformance) = scoresPipe((model, scalers))
+        //Reset the kernel
+        kernel.setHyperParameters(originalState)
+        //Create a model train/tune pipeline
+        val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
 
-        val lineCommonData = Seq(modelType, ord) ++ pex
+        try {
 
-        val selectedState = originalState.keys.map(k => model._current_state(k))
+          //Apply the pipeline on the training data sections
+          val (model, scalers) = pipeline(trainingDataSections)
 
-        //Obtain metrics for model
-        val (valP, tP) = (
-          Seq(
-            validationPerformance.mae, validationPerformance.rmse,
-            validationPerformance.corr, validationPerformance.Rsq),
-          Seq(
-            testPerformance.mae, testPerformance.rmse,
-            testPerformance.corr, testPerformance.Rsq))
+          //Create a pipeline to test the model on
+          //two different sets of storms
+          val scoresPipe = BifurcationPipe(
+            modelTest(modelSelectionStorms),
+            modelTest(testStorms))
 
-        //Write results to file
-        writer.writeAll(Seq(
-          lineCommonData ++ Seq("validation") ++ selectedState ++ valP,
-          lineCommonData ++ Seq("test") ++ selectedState ++ tP
-        ))
-      } catch {
-        case e: Exception =>
-          logger.info(e.toString)
+          //Calculate scores on validation and test sets.
+          val (validationPerformance, testPerformance) = scoresPipe((model, scalers))
 
-      }
+          //Obtain metrics for model
+          val (valP, tP) = (
+            Seq(
+              validationPerformance.mae, validationPerformance.rmse,
+              validationPerformance.corr, validationPerformance.Rsq),
+            Seq(
+              testPerformance.mae, testPerformance.rmse,
+              testPerformance.corr, testPerformance.Rsq))
+
+          //Initialize some of the data to be dumped into the result csv
+          val lineCommonData = Seq(modelType, orderTarget) ++ order_ex
+          val selectedState = originalState.keys.map(k => model._current_state(k))
+
+          //Write results to file
+          writer.writeAll(Seq(
+            lineCommonData ++ Seq("validation") ++ selectedState ++ globalOptConfig ++ valP,
+            lineCommonData ++ Seq("test") ++ selectedState ++ globalOptConfig ++ tP
+          ))
+        } catch {
+          case e: Exception =>
+            logger.info(e.toString)
+        }
+      })
     })
 
     writer.close()
