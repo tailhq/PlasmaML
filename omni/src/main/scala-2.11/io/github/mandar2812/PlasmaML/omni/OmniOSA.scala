@@ -513,12 +513,14 @@ object OmniOSA {
     
     val flowpre = dataPipeline > DataPipe((data: DataAndScales) => data._1)
     val pipe =
-      new GLMPipe[Data, Stream[DateSection]](flowpre.run) >
+      new GLMPipe[
+        OptData,
+        Stream[DateSection]](flowpre.run) >
       trainParametricModel[
         Data, Features, Features, Output, OptData,
-        GeneralizedLinearModel[Data]](reg)
+        GeneralizedLinearModel[OptData]](reg)
 
-    pipe(trainingDataSections)
+    pipe(Stream(("2008/01/01/00", "2008/12/31/23")))
   }
 
   /**
