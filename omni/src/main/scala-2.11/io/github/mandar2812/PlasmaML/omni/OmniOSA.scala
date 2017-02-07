@@ -1,22 +1,20 @@
 package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
-import breeze.linalg.{DenseMatrix, DenseVector}
-import com.github.tototoshi.csv.CSVWriter
-import io.github.mandar2812.dynaml.analysis.VectorField
-import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
-import io.github.mandar2812.dynaml.kernels.CovarianceFunction
-import io.github.mandar2812.dynaml.models.GLMPipe
-import io.github.mandar2812.dynaml.models.lm.{GeneralizedLinearModel, RegularizedGLM}
-import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
-import io.github.mandar2812.dynaml.pipes.{BifurcationPipe, StreamFlatMapPipe}
 //scala mutable collections api
 import scala.collection.mutable.{MutableList => MList}
-//Import Joda time libraries
-import breeze.linalg.DenseVector
+
+//Logging system
 import org.apache.log4j.Logger
+
+//Linear algebra and csv utilities
+import breeze.linalg.{DenseMatrix, DenseVector}
+import com.github.tototoshi.csv.CSVWriter
+
+//Import Joda time libraries
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+
 //Import relevant components from DynaML
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
@@ -24,6 +22,13 @@ import io.github.mandar2812.dynaml.optimization.GridSearch
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.models.gp.GPRegression
+import io.github.mandar2812.dynaml.analysis.VectorField
+import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+import io.github.mandar2812.dynaml.kernels.CovarianceFunction
+import io.github.mandar2812.dynaml.models.GLMPipe
+import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
+import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
+import io.github.mandar2812.dynaml.pipes.{BifurcationPipe, StreamFlatMapPipe}
 
 /**
   * @author mandar2812 date: 18/01/2017.
@@ -32,6 +37,17 @@ import io.github.mandar2812.dynaml.models.gp.GPRegression
   * and reproducible research on the hourly resolution OMNI data.
   */
 object OmniOSA {
+
+  //Define some types to make code more readable
+  type Features = DenseVector[Double]
+  type Output = Double
+  type Data = Stream[(Features, Output)]
+  type KernelOnVectors = LocalScalarKernel[Features]
+  type DataAndScales = (Data, (GaussianScaler, GaussianScaler))
+  type DateSection = (String, String)
+
+  type TimeStamp = Double
+
 
   //Set time zone to UTC.
   DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -180,10 +196,15 @@ object OmniOSA {
   /**
     * Set the exogenous variables as well as their auto-regressive orders.
     * */
-  def setExogenousVars(cols: List[Int], orders: List[Int], changeModelType: Boolean = true): Unit = {
+  def setExogenousVars(
+    cols: List[Int],
+    orders: List[Int],
+    changeModelType: Boolean = true): Unit = {
+
     /*require(
       cols.length == orders.length,
       "Number of exogenous variables must be equal to number of elements in 'orders' list")*/
+
     require(
       cols.forall(c => c >= 0 && c < 55),
       "All elements of 'cols' list must contain column indices "+
@@ -203,16 +224,12 @@ object OmniOSA {
   //Define a variable which stores the training data sections
   //specified as a list of string 2-tuple defining the
   //start and end of each section.
-  var trainingDataSections: Stream[(String, String)] = Stream(
-    ("2010/01/01/00", "2010/01/8/23"),
+  var trainingDataSections: Stream[DateSection] = Stream(
+    ("2010/01/03/00", "2010/01/11/23"),
     ("2011/08/05/20", "2011/08/06/22"))
 
-  /*Stream(
-    ("2008/01/01/00", "2008/01/11/10"),
-    ("2011/08/05/20", "2011/08/06/22"))*/
-
   //Set the validation data sections to empty
-  var validationDataSections: Stream[(String, String)] = Stream.empty[(String, String)]
+  var validationDataSections: Stream[DateSection] = Stream.empty[DateSection]
 
   /**
     * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
@@ -226,7 +243,7 @@ object OmniOSA {
       columnFillValues) >
     removeMissingLines
 
-  val extractNarmaxFeatures = StreamDataPipe((couple: (Double, DenseVector[Double])) => {
+  val extractNarmaxFeatures = StreamDataPipe((couple: (TimeStamp, Features)) => {
     val features = couple._2
     //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
     val Bt = math.sqrt(math.pow(features(2), 2) + math.pow(features(3), 2))
@@ -243,10 +260,10 @@ object OmniOSA {
     * in its string form and converts it to a usable time lagged
     * data set for training an AR model.
     * */
-  def prepareData(start: String, end: String):
-  DataPipe[Stream[String], Stream[(DenseVector[Double], Double)]] = {
+  def prepareData(start: String, end: String): DataPipe[Stream[String], Data] = {
 
     val hoursOffset = if(exogenousInputs.isEmpty) p_target else math.max(p_target, p_ex.max)
+
     val (startStamp, endStamp) = (
       formatter.parseDateTime(start).minusHours(hoursOffset).getMillis/1000.0,
       formatter.parseDateTime(end).getMillis/1000.0)
@@ -257,15 +274,19 @@ object OmniOSA {
     //i.e. start and end
 
     modelType match {
+
+      //If we are training NARMAX inspired GP model
       case "GP-NARMAX" =>
         extractTimeSeriesVec((year,day,hour) => {
           dayofYearformatter.parseDateTime(
             year.toInt.toString + "/" + day.toInt.toString +
               "/" + hour.toInt.toString).getMillis/1000.0 }) >
-          StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+          StreamDataPipe((couple: (Double, Features)) =>
             couple._1 >= startStamp && couple._1 <= endStamp) >
           extractNarmaxFeatures >
           deltaOperationARX(List(p_target)++p_ex)
+
+      //If we are training a AR model
       case "GP-AR" =>
         extractTimeSeries((year,day,hour) => {
           dayofYearformatter.parseDateTime(
@@ -275,18 +296,20 @@ object OmniOSA {
           StreamDataPipe((couple: (Double, Double)) =>
             couple._1 >= startStamp && couple._1 <= endStamp) >
           deltaOperation(p_target, 0)
+
+      //Else assume we are training an ARX model
       case _ =>
         extractTimeSeriesVec((year,day,hour) => {
           dayofYearformatter.parseDateTime(
             year.toInt.toString + "/" + day.toInt.toString +
               "/" + hour.toInt.toString).getMillis/1000.0 }) >
-          StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+          StreamDataPipe((couple: (Double, Features)) =>
             couple._1 >= startStamp && couple._1 <= endStamp) >
           deltaOperationARX(List(p_target)++p_ex)
     }
   }
 
-  def processTimeSegment = DataPipe((dateLimits: (String, String)) => {
+  def processTimeSegment = DataPipe((dateLimits: DateSection) => {
     //For the given date limits generate the relevant data
     //The file name to read from
     val fileName = dataDir+"omni2_"+dateLimits._1.split("/").head+".csv"
@@ -304,16 +327,16 @@ object OmniOSA {
     * */
   def compileSegments =
     StreamDataPipe(processTimeSegment) >
-    DataPipe((segments: Stream[Stream[(DenseVector[Double], Double)]]) => {
-      segments.foldLeft(Stream.empty[(DenseVector[Double], Double)])((segA, segB) => segA ++ segB)
+    DataPipe((segments: Stream[Data]) => {
+      segments.foldLeft(Stream.empty[(Features, Output)])((segA, segB) => segA ++ segB)
     })
 
   //Pipelines for conversion of targets to and fro vector to double
   val preNormalisation =
-    StreamDataPipe((record: (DenseVector[Double], Double)) => (record._1, DenseVector(record._2)))
+    StreamDataPipe((record: (Features, Output)) => (record._1, DenseVector(record._2)))
 
   val postNormalisation =
-    StreamDataPipe((record: (DenseVector[Double], DenseVector[Double])) => (record._1, record._2(0)))
+    StreamDataPipe((record: (Features, Features)) => (record._1, record._2(0)))
 
 
   //Define the global optimization parameters
@@ -328,9 +351,9 @@ object OmniOSA {
     * Returns a pipeline which returns the prediction of the Persistence model.
     * E[f(t)] = f(t-1).
     * */
-  def meanFuncPersistence = DataPipe((features: DenseVector[Double]) => features(p_target-1))
+  def meanFuncPersistence = DataPipe((features: Features) => features(p_target-1))
 
-  val meanFuncNarmax = DataPipe((vec: DenseVector[Double]) => {
+  val meanFuncNarmax = DataPipe((vec: Features) => {
     val Dst_t_1 = vec(1)
     val Dst_t_2 = vec(0)
 
@@ -381,21 +404,41 @@ object OmniOSA {
   def extractValidationSectionsPipe(num_storms: Int = 10) = fileToStream >
     replaceWhiteSpaces >
     StreamDataPipe(getStormTimeRanges) >
-    DataPipe((s: Stream[(String, String)]) => s.takeRight(num_storms))
+    DataPipe((s: Stream[DateSection]) => s.takeRight(num_storms))
 
   def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments
+
+  /**
+    * Train a parametric model which
+    * can be used as a mean function for
+    * GP/STP models
+    * */
+  def trainMeanFunc(reg: Double = 0.1) = {
+
+    type OptData = (DenseMatrix[Double], Features)
+
+    val flowpre = dataPipeline > DataPipe((data: DataAndScales) => data._1)
+    val pipe =
+      new GLMPipe[
+        OptData,
+        Stream[DateSection]](flowpre.run) >
+        trainParametricModel[
+          Data, Features, Features, Output, OptData,
+          GeneralizedLinearModel[OptData]](reg)
+
+    pipe(Stream(("2008/01/01/00", "2008/12/31/23")))
+  }
 
   /**
     * A pipeline which takes data and its associated scales
     * (scales are represented by some subclass of [[io.github.mandar2812.dynaml.pipes.ReversibleScaler]])
     *
-    *
     * */
   def modelTrain(
-    kernel: LocalScalarKernel[DenseVector[Double]],
-    noise: LocalScalarKernel[DenseVector[Double]],
-    meanFunc: DataPipe[DenseVector[Double], Double] = null) = DataPipe(
-    (dataAndScales: (Stream[(DenseVector[Double], Double)], (GaussianScaler, GaussianScaler))) => {
+    kernel: KernelOnVectors,
+    noise: KernelOnVectors,
+    meanFunc: DataPipe[Features, Output] = null) = DataPipe(
+    (dataAndScales: DataAndScales) => {
       val trainingData = dataAndScales._1
       implicit val ev = VectorField(dataAndScales._1.head._1.length)
 
@@ -404,7 +447,7 @@ object OmniOSA {
       val targetSampleVariance = math.pow(dataAndScales._2._2(0).sigma, 2.0)
 
       val meanF =
-        if (meanFunc == null) DataPipe((_:DenseVector[Double]) => dataAndScales._2._2(0).mean)
+        if (meanFunc == null) DataPipe((_:Features) => dataAndScales._2._2(0).mean)
         else meanFunc
 
       val model = new GPRegression(
@@ -453,12 +496,12 @@ object OmniOSA {
         fileToStream >
         replaceWhiteSpaces >
         StreamFlatMapPipe(getStormTimeRanges > processTimeSegment) >
-        DataPipe((testData: Stream[(DenseVector[Double], Double)]) =>
+        DataPipe((testData: Data) =>
           modelAndScales._1
             .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
             .toStream
         ) >
-        StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) => (c._1(0), c._2(0))) >
+        StreamDataPipe((c: (Features, Features)) => (c._1(0), c._2(0))) >
         DataPipe((results: Stream[(Double, Double)]) =>
           new RegressionMetrics(results.toList, results.length)
             .setName(modelType+" "+columnNames(targetColumn)+"; OSA")
@@ -467,8 +510,6 @@ object OmniOSA {
       stormFilePipeline(dataDir+testFile)
     })
 
-
-
   /**
     * Train a Gaussian Process model on the specified training sections i.e. [[trainingDataSections]]
     *
@@ -476,9 +517,9 @@ object OmniOSA {
     * @param noise The noise as a [[LocalScalarKernel]] instance
     * */
   def buildGPOnTrainingSections(
-    kernel: LocalScalarKernel[DenseVector[Double]],
-    noise: LocalScalarKernel[DenseVector[Double]],
-    meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0))
+    kernel: KernelOnVectors,
+    noise: KernelOnVectors,
+    meanFunc: DataPipe[Features, Double] = DataPipe((_:Features) => 0.0))
   : (GPRegression, (GaussianScaler, GaussianScaler)) = {
 
     val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
@@ -486,41 +527,19 @@ object OmniOSA {
     pipeline(trainingDataSections)
   }
 
-  def buildAndTestGP(kernel: LocalScalarKernel[DenseVector[Double]],
-                     noise: LocalScalarKernel[DenseVector[Double]],
-                     meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0),
-                     stormFile: String = stormsFileJi) = {
+  def buildAndTestGP(
+    kernel: KernelOnVectors,
+    noise: KernelOnVectors,
+    meanFunc: DataPipe[Features, Double] = DataPipe((_:Features) => 0.0),
+    stormFile: String = stormsFileJi) = {
 
-    val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc) > modelTest(stormsFileJi)
+    val pipeline =
+      dataPipeline >
+      modelTrain(kernel, noise, meanFunc) >
+      modelTest(stormsFileJi)
 
     pipeline(trainingDataSections)
 
-  }
-
-  /**
-    * Train a parametric model which
-    * can be used as a mean function for
-    * GP/STP models
-    * */
-  def trainMeanFunc(reg: Double = 0.1) = {
-
-    type Features = DenseVector[Double]
-    type Output = Double
-    type Data = Stream[(Features, Output)]
-    type OptData = (DenseMatrix[Double], Features)
-    type DataAndScales = (Data, (GaussianScaler, GaussianScaler))
-    type DateSection = (String, String)
-    
-    val flowpre = dataPipeline > DataPipe((data: DataAndScales) => data._1)
-    val pipe =
-      new GLMPipe[
-        OptData,
-        Stream[DateSection]](flowpre.run) >
-      trainParametricModel[
-        Data, Features, Features, Output, OptData,
-        GeneralizedLinearModel[OptData]](reg)
-
-    pipe(Stream(("2008/01/01/00", "2008/12/31/23")))
   }
 
   /**
@@ -528,9 +547,9 @@ object OmniOSA {
     * on GP-AR or GP-ARX models.
     * */
   def experiment(
-    kernel: LocalScalarKernel[DenseVector[Double]],
-    noise: LocalScalarKernel[DenseVector[Double]],
-    meanFunc: DataPipe[DenseVector[Double], Double] = DataPipe((_:DenseVector[Double]) => 0.0),
+    kernel: KernelOnVectors,
+    noise: KernelOnVectors,
+    meanFunc: DataPipe[Features, Double] = DataPipe((_:Features) => 0.0),
     orders: Range = 1 to 10,
     modelSelectionStorms: String = stormsFile3,
     testStorms: String = stormsFileJi,
@@ -545,7 +564,7 @@ object OmniOSA {
 
     val writer = CSVWriter.open(new java.io.File(dataDir+resultsFile), append = true)
 
-    val columnNames = Seq("model", "order") ++
+    val columnNames = Seq("model", "modelSize","order") ++
       (1 to 2).map(i => "order_ex_"+i) ++
       Seq("data") ++ originalState.keys.toSeq ++ 
       Seq("globalOpt", "gridSize", "step", "maxIt") ++
@@ -629,7 +648,7 @@ object OmniOSA {
               testPerformance.corr, testPerformance.Rsq))
 
           //Initialize some of the data to be dumped into the result csv
-          val lineCommonData = Seq(modelType, orderTarget) ++ order_ex
+          val lineCommonData = Seq(modelType, model.npoints, orderTarget) ++ order_ex
           val selectedState = originalState.keys.map(k => model._current_state(k))
 
           //Write results to file

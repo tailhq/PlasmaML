@@ -93,7 +93,7 @@ OmniOSA.experiment(
   tKernel+mlpKernel,
   whiteNoiseKernel,
   OmniOSA.meanFuncPersistence,
-  4 to 12)
+  3 to 12)
 
 
 mlpKernel.setw(10.0)
@@ -104,4 +104,4 @@ OmniOSA.experiment(
   tKernel+mlpKernel,
   whiteNoiseKernel,
   OmniOSA.meanFuncPersistence,
-  2 to 12)
+  3 to 12)
