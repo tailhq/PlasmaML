@@ -37,5 +37,8 @@ tmp
 dist
 data/mogp_*.csv
 data/*storm*.csv
+!data/geomagnetic_storms.csv
+!data/geomagnetic_storms2.csv
+!data/geomagnetic_storms3.csv
 data/osa_training.csv
 data/osa_validation.csv
