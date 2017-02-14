@@ -36,6 +36,6 @@ target
 tmp
 dist
 data/mogp_*.csv
-data/storm*.csv
+data/*storm*.csv
 data/osa_training.csv
 data/osa_validation.csv

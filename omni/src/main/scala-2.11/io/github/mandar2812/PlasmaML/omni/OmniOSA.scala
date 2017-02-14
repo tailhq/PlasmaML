@@ -2,6 +2,9 @@ package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
 //scala mutable collections api
+import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
+import io.github.mandar2812.dynaml.optimization.ProbGPCommMachine
+
 import scala.collection.mutable.{MutableList => MList}
 
 //Logging system
@@ -41,13 +44,17 @@ object OmniOSA {
   //Define some types to make code more readable
   type Features = DenseVector[Double]
   type Output = Double
-  type Data = Stream[(Features, Output)]
-  type KernelOnVectors = LocalScalarKernel[Features]
-  type DataAndScales = (Data, (GaussianScaler, GaussianScaler))
-  type DateSection = (String, String)
 
+  type Data = Stream[(Features, Output)]
+  type Scales = (GaussianScaler, GaussianScaler)
+  type DataAndScales = (Data, Scales)
+
+  type VectorKernel = LocalScalarKernel[Features]
+
+  type DateSection = (String, String)
   type TimeStamp = Double
 
+  type GP = AbstractGPRegressionModel[Seq[(Features, Output)], Features]
 
   //Set time zone to UTC.
   DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -435,10 +442,10 @@ object OmniOSA {
     *
     * */
   def modelTrain(
-    kernel: KernelOnVectors,
-    noise: KernelOnVectors,
-    meanFunc: DataPipe[Features, Output] = null) = DataPipe(
-    (dataAndScales: DataAndScales) => {
+    kernel: VectorKernel,
+    noise: VectorKernel,
+    meanFunc: DataPipe[Features, Output] = null) =
+    DataPipe((dataAndScales: DataAndScales) => {
       val trainingData = dataAndScales._1
       implicit val ev = VectorField(dataAndScales._1.head._1.length)
 
@@ -460,6 +467,7 @@ object OmniOSA {
             .setGridSize(gridSize)
             .setStepSize(gridStep)
             .setLogScale(useLogScale)
+
         case "CSA" =>
           new CoupledSimulatedAnnealing[GPRegression](model)
             .setGridSize(gridSize)
@@ -467,8 +475,16 @@ object OmniOSA {
             .setLogScale(useLogScale)
             .setMaxIterations(maxIterations)
             .setVariant(CoupledSimulatedAnnealing.MwVC)
+
         case "ML" =>
           new GradBasedGlobalOptimizer(model).setStepSize(gridStep)
+
+        case "GPC" =>
+          new ProbGPCommMachine(model)
+            .setGridSize(gridSize)
+            .setStepSize(gridStep)
+            .setLogScale(useLogScale)
+            .setMaxIterations(maxIterations)
       }
 
       val startConfig = kernel.effective_state ++ noise.effective_state
@@ -481,7 +497,7 @@ object OmniOSA {
           "step" -> gridStep.toString,
           "maxIterations" -> maxIterations.toString))
 
-      tunedModel.setState(c)
+      //tunedModel.setState(c)
       (tunedModel, dataAndScales._2)
     })
 
@@ -491,23 +507,71 @@ object OmniOSA {
     *
     * */
   def modelTest(testFile: String = stormsFileJi) =
-    DataPipe((modelAndScales: (GPRegression, (GaussianScaler, GaussianScaler))) => {
-      val stormFilePipeline =
+    DataPipe((modelAndScales: (GP, Scales)) => {
+      //Break task into two pipelines
+
+      //pipeline1 is the usual transformations for
+      //reading the data from the correct time ranges
+      //and extracting features and targets from them
+      val pipeline1 =
         fileToStream >
         replaceWhiteSpaces >
-        StreamFlatMapPipe(getStormTimeRanges > processTimeSegment) >
+        StreamFlatMapPipe(getStormTimeRanges > processTimeSegment)
+
+      //Pipeline2 takes the storm time data and performs predictions
+      //and generates a RegressionMetrics object
+      val pipeline2 =
         DataPipe((testData: Data) =>
           modelAndScales._1
             .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
-            .toStream
-        ) >
+            .toStream) >
         StreamDataPipe((c: (Features, Features)) => (c._1(0), c._2(0))) >
         DataPipe((results: Stream[(Double, Double)]) =>
           new RegressionMetrics(results.toList, results.length)
             .setName(modelType+" "+columnNames(targetColumn)+"; OSA")
         )
 
+      val stormFilePipeline = pipeline1 > pipeline2
       stormFilePipeline(dataDir+testFile)
+    })
+
+  def generatePredictions(testFile: String = stormsFileJi) =
+    DataPipe((modelAndScales: (GP, Scales)) => {
+
+      val fileNamePrefix = testFile.split(".csv").head
+
+      val (model, scales) = modelAndScales
+
+      val pipeline1 =
+        fileToStream >
+          replaceWhiteSpaces >
+          StreamDataPipe(getStormTimeRanges > processTimeSegment)
+
+      val pipeline2 =
+        DataPipe((storms: Stream[Data]) => {
+          //For each storm generate predictions
+          //and output them in the appropriate file
+
+          storms.zipWithIndex.foreach(stormCouple => {
+            val stormName = "storm"+(stormCouple._2+1).toString
+            logger.info("Generating Predictions for Storm: "+(stormCouple._2+1))
+            val stormData = stormCouple._1
+            //Generate Predictions
+            val stormPredictions =
+              model.test(stormData)
+                .map(preds => Seq(preds._2, preds._3, preds._4, preds._5))
+                .toStream
+            //Write values to a file dump
+            logger.info("Dumping predictions to csv: "+(stormCouple._2+1))
+            valuesToFile(
+              dataDir+"/"+fileNamePrefix+"_"+stormName+".csv")(
+              stormPredictions)
+          })
+        })
+
+      val predictionsPipeline = pipeline1 > pipeline2
+
+      predictionsPipeline(dataDir+testFile)
     })
 
   /**
@@ -517,10 +581,8 @@ object OmniOSA {
     * @param noise The noise as a [[LocalScalarKernel]] instance
     * */
   def buildGPOnTrainingSections(
-    kernel: KernelOnVectors,
-    noise: KernelOnVectors,
-    meanFunc: DataPipe[Features, Double] = DataPipe((_:Features) => 0.0))
-  : (GPRegression, (GaussianScaler, GaussianScaler)) = {
+    kernel: VectorKernel, noise: VectorKernel,
+    meanFunc: DataPipe[Features, Output] = DataPipe((_:Features) => 0.0)): (GP, Scales) = {
 
     val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
 
@@ -528,8 +590,8 @@ object OmniOSA {
   }
 
   def buildAndTestGP(
-    kernel: KernelOnVectors,
-    noise: KernelOnVectors,
+    kernel: VectorKernel,
+    noise: VectorKernel,
     meanFunc: DataPipe[Features, Double] = DataPipe((_:Features) => 0.0),
     stormFile: String = stormsFileJi) = {
 
@@ -547,8 +609,8 @@ object OmniOSA {
     * on GP-AR or GP-ARX models.
     * */
   def experiment(
-    kernel: KernelOnVectors,
-    noise: KernelOnVectors,
+    kernel: VectorKernel,
+    noise: VectorKernel,
     meanFunc: DataPipe[Features, Double] = DataPipe((_:Features) => 0.0),
     orders: Range = 1 to 10,
     modelSelectionStorms: String = stormsFile3,

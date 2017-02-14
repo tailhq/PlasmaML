@@ -48,7 +48,7 @@ OmniOSA.gridSize = 2
 //with a mean function given by the persistence
 //model
 val resPolyARX = OmniOSA.buildAndTestGP(
-  tKernel+mlpKernel,
+  mlpKernel,
   whiteNoiseKernel,
   OmniOSA.meanFuncPersistence)
 
@@ -104,4 +104,21 @@ OmniOSA.experiment(
   tKernel+mlpKernel,
   whiteNoiseKernel,
   OmniOSA.meanFuncPersistence,
-  3 to 12)
+  8 to 12)
+
+//Use best performing model for generating predictions
+OmniOSA.gridSize = 1
+OmniOSA.gridStep = 0.0
+OmniOSA.globalOpt = "GS"
+OmniOSA.setTarget(40, 7)
+OmniOSA.setExogenousVars(List(24, 16), List(1,3))
+mlpKernel.setw(3.560349737811843)
+mlpKernel.setoffset(102.71615211905888)
+
+val predictPipeline =
+  OmniOSA.dataPipeline > OmniOSA.modelTrain(
+      tKernel+mlpKernel,
+      whiteNoiseKernel,
+      OmniOSA.meanFuncPersistence) > OmniOSA.generatePredictions()
+
+predictPipeline(OmniOSA.trainingDataSections)
