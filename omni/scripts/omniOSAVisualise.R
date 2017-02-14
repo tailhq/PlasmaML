@@ -18,14 +18,14 @@ resultsARX <- df[df$model=="GP-ARX",]
 
 #first for maximum likelihood
 scatterDFML <- df[df$modelOrder <= 12 & 
-                    df$data == "test" & 
+                    df$data == "validation" & 
                     df$modelOrder > 2 &
                     df$globalOpt == "ML",]
 
 #then for grid search and coupled simulated annealing
 scatterDF <- df[
   df$modelOrder <= 12 & 
-    df$data == "test" & 
+    df$data == "validation" & 
     df$modelOrder > 2 & 
     df$globalOpt != "ML",]
 
@@ -49,41 +49,53 @@ ggplot(resultsAR) +
   ylab("Mean Absolute Error")
 
 #plot mae vs model order for both models, all optimization routines
-ggplot(df[df$modelOrder < 36,]) + 
+ggplot(df[df$modelOrder < 36 & df$data == "validation",]) + 
   geom_boxplot(aes(as.factor(modelOrder), mae)) + 
-  facet_grid(data~model) +
+  facet_grid(.~model) +
   theme_gray(base_size = 14) + 
   xlab("Model Order") + 
   ylab("Mean Absolute Error")
 
-#plot mae vs model order for GP-ARX for data vs optimization routine
-ggplot(resultsARX) + 
-  geom_boxplot(aes(as.factor(modelOrder), mae)) + 
-  facet_grid(data~globalOpt) +
-  theme_gray(base_size = 14) + 
-  xlab("Model Order") + 
-  ylab("Mean Absolute Error")
-
+ggsave(
+  filename = "Compare-mae.png", 
+  scale = 1.0)
 
 #plot cc vs model order for both models, all optimization routines
-ggplot(df[df$modelOrder < 36,]) + 
+ggplot(df[df$modelOrder < 36 & df$data == "validation",]) + 
   geom_boxplot(aes(as.factor(modelOrder), cc)) + 
-  facet_grid(data~model) +
+  facet_grid(.~model) +
   theme_gray(base_size = 14) + 
   xlab("Model Order") + 
   ylab("Coefficient of Correlation")
+
+ggsave(
+  filename = "Compare-corr.png", 
+  scale = 1.0)
+
+
+#plot mae vs model order for GP-ARX for data vs optimization routine
+ggplot(resultsARX[resultsARX$data == "validation",]) + 
+  geom_boxplot(aes(as.factor(modelOrder), mae)) + 
+  facet_grid(.~globalOpt) +
+  theme_gray(base_size = 14) + 
+  xlab("Model Order") + 
+  ylab("Mean Absolute Error")
+ggsave(
+  filename = "Compare-mae-arx.png", 
+  scale = 1.0)
 
 #plot cc vs model order for GP-ARX for data vs optimization routine
-ggplot(resultsARX) + 
+ggplot(resultsARX[resultsARX$data == "validation",]) + 
   geom_boxplot(aes(as.factor(modelOrder), cc)) + 
-  facet_grid(data~globalOpt) +
+  facet_grid(.~globalOpt) +
   theme_gray(base_size = 14) + 
   xlab("Model Order") + 
   ylab("Coefficient of Correlation")
+ggsave(
+  filename = "Compare-cc-arx.png", 
+  scale = 1.0)
 
 #scatter plot of kernel configurations selected
-
-
 ggplot(scatterDFML) + 
   geom_point(aes(
     MLPKernel.550b6925.w, 
@@ -134,23 +146,34 @@ ggplot(bestresML) +
 
 #Visualise some storm predictions
 
-arx_errorbars_pred <- read.csv("geomagnetic_storms_storm4.csv", 
-                               header = FALSE, 
-                               col.names = c("Dst", "predicted", "lower", "upper"))
-arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
 
 palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
 lines1 <- c("solid", "solid", "dotdash", "dotdash")
 
-meltedPred <- melt(arx_errorbars_pred, id="time")
 
-ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
-  geom_line(size=1.35) +
-  theme_gray(base_size = 22) + 
-  scale_colour_manual(values=palette1) + 
-  scale_linetype_manual(values = lines1, guide=FALSE) +
-  xlab("Time (hours)") + ylab("Dst (nT)")
 
+for(i in 1:63) {
+  stormName = paste("geomagnetic_storms_storm",i,".csv", sep="")
+  arx_errorbars_pred <- read.csv(stormName, 
+                                 header = FALSE, 
+                                 col.names = c("Dst", "predicted", "lower", "upper"))
+  arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
+
+  meltedPred <- melt(arx_errorbars_pred, id="time")
+  
+  ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
+    geom_line(size=1.35) +
+    theme_gray(base_size = 22) + 
+    scale_colour_manual(values=palette1) + 
+    scale_linetype_manual(values = lines1, guide=FALSE) +
+    xlab("Time (hours)") + ylab("Dst (nT)")
+  
+  ggsave(
+    filename = paste("PredErrBars_Storm",i,".png", sep = ""), 
+    scale = 2.0)
+    
+  
+}
 
 
 
