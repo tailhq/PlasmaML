@@ -35,6 +35,7 @@ project/target
 target
 tmp
 dist
+data/*.png
 data/mogp_*.csv
 data/*storm*.csv
 !data/geomagnetic_storms.csv

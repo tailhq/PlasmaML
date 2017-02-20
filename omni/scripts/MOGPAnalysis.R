@@ -6,7 +6,7 @@ library(latex2exp)
 
 palette1 <- c("#000000", "firebrick3", "forestgreen", "steelblue2")
 lines1 <- c("solid", "solid", "dotdash", "dotdash")
-setwd("Development/PlasmaML/data/")
+setwd("~/Development/PlasmaML/data/")
 
 
 # Compare Brier score of naive models vs GP-ARX
@@ -37,7 +37,7 @@ ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
   theme_gray(base_size = 22) + 
   scale_colour_manual(values=palette1) + 
   scale_linetype_manual(values = lines1, guide=FALSE) +
-  xlab("Time (hours)") + ylab("Dst (nT)")
+  xlab("Time (hours)") + ylab("Dst(t+4)")
 
 arx_onset_pred <- read.csv("mogp_onset_2004_11_07-3.csv", 
                            header = FALSE, 

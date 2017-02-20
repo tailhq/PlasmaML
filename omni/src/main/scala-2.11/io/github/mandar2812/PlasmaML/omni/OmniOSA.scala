@@ -2,6 +2,7 @@ package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
 //scala mutable collections api
+import io.github.mandar2812.dynaml.modelpipe.GLMPipe
 import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
 import io.github.mandar2812.dynaml.optimization.ProbGPCommMachine
 
@@ -28,7 +29,6 @@ import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels.CovarianceFunction
-import io.github.mandar2812.dynaml.models.GLMPipe
 import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
 import io.github.mandar2812.dynaml.pipes.{BifurcationPipe, StreamFlatMapPipe}

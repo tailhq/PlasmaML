@@ -6,11 +6,11 @@ import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, MultiRegressionMetrics, RegressionMetrics}
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.kernels._
-import io.github.mandar2812.dynaml.models.ContinuousProcess
-import io.github.mandar2812.dynaml.models.gp.MOGPRegressionModel
+import io.github.mandar2812.dynaml.models.ContinuousProcessModel
+import io.github.mandar2812.dynaml.models.gp.{AbstractGPRegressionModel, MOGPRegressionModel}
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.models.stp.MOStudentTRegression
-import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer, GridSearch, ProbGPCommMachine}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.wavelets.{GroupedHaarWaveletFilter, HaarWaveletFilter}
@@ -106,9 +106,9 @@ object OmniMultiOutputModels {
 
   var threshold = -70.0
 
-  var numStorms = 12
+  var numStorms = 6
 
-  val numStormsStart = 10
+  val numStormsStart = 4
 
   def gHFeat = GroupedHaarWaveletFilter(Array.fill(exogenousInputs.length+1)(orderFeat))
   def gHTarg = HaarWaveletFilter(orderTarget)
@@ -150,9 +150,9 @@ object OmniMultiOutputModels {
           }) >
           DataPipe((s: Stream[(String, String)]) =>
             s.take(numStormsStart) ++ s.takeRight(n) ++
-              Stream(("2015/03/17/00", "2015/03/18/23")) ++
+              /*Stream(("2015/03/17/00", "2015/03/18/23")) ++*/
               Stream(("2015/06/22/08", "2015/06/23/20")) ++
-              Stream(("2008/01/02/00", "2008/01/05/00"))) >
+              Stream(("2008/01/02/00", "2008/01/03/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
@@ -210,19 +210,37 @@ object OmniMultiOutputModels {
 
       val gs = globalOpt match {
         case "CSA" =>
-          new CoupledSimulatedAnnealing[model.type](model)
+          new CoupledSimulatedAnnealing[AbstractGPRegressionModel[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)
+            ]](model)
             .setGridSize(grid)
             .setStepSize(step)
             .setLogScale(useLogSc)
             .setMaxIterations(maxIt)
             .setVariant(CoupledSimulatedAnnealing.MwVC)
         case "GS" =>
-          new GridSearch[model.type](model)
+          new GridSearch[AbstractGPRegressionModel[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)
+            ]](model)
             .setGridSize(grid)
             .setStepSize(step)
             .setLogScale(useLogSc)
+
+        case "GPC" =>
+          new ProbGPCommMachine[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)](model)
+            .setGridSize(grid)
+            .setStepSize(step)
+            .setLogScale(useLogSc)
+            .setMaxIterations(maxIt)
+
         case "ML-II" =>
-          new GradBasedGlobalOptimizer[model.type](model)
+          new GradBasedGlobalOptimizer[AbstractGPRegressionModel[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)]](model)
       }
 
       val startConf = kernel.effective_state ++ noise.effective_state
@@ -548,7 +566,7 @@ object OmniMultiOutputModels {
 
   }
 
-  def test[M <: ContinuousProcess[
+  def test[M <: ContinuousProcessModel[
     Stream[(DenseVector[Double], DenseVector[Double])],
     (DenseVector[Double], Int), Double, _]](model: M, sc: (GaussianScaler, GaussianScaler)) = {
 
@@ -619,7 +637,9 @@ object OmniMultiOutputModels {
     flow("data/omni2_"+testStartDate.getYear+".csv")
   }
 
-  def testOnset(model: MOGPRegressionModel[DenseVector[Double]], sc: (GaussianScaler, GaussianScaler)) = {
+  def testOnset(
+    model: AbstractGPRegressionModel[Stream[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
+    sc: (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
     val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
@@ -716,9 +736,10 @@ object OmniMultiOutputModels {
     flow("data/omni2_"+testStartDate.getYear+".csv")
   }
 
-  def generateOnsetPredictions(model: MOGPRegressionModel[DenseVector[Double]],
-                               sc: (GaussianScaler, GaussianScaler),
-                               predictionIndex: Int = 3) = {
+  def generateOnsetPredictions(
+    model: AbstractGPRegressionModel[Stream[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
+    sc: (GaussianScaler, GaussianScaler),
+    predictionIndex: Int = 3) = {
 
     val (pF, pT) = (math.pow(2, orderFeat).toInt, math.pow(2, orderTarget).toInt)
     val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
@@ -768,7 +789,7 @@ object OmniMultiOutputModels {
             } else {
               val features_processed = sc._1.i(pattern._1._1)
               //println("Features: "+features_processed)
-              features_processed(pF-1)
+              features_processed(arxOrders.head - 1)
             }
 
             val (resMean, resSigma) = (sc._2.mean(predictionIndex), sc._2.sigma(predictionIndex))
@@ -798,9 +819,10 @@ object OmniMultiOutputModels {
   }
 
 
-  def generatePredictions(model: MOGPRegressionModel[DenseVector[Double]],
-                          sc: (GaussianScaler, GaussianScaler),
-                          predictionIndex: Int = 3) = {
+  def generatePredictions(
+    model: AbstractGPRegressionModel[Stream[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
+    sc: (GaussianScaler, GaussianScaler),
+    predictionIndex: Int = 3) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
     val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
@@ -1322,14 +1344,15 @@ object DstMOGPExperiment {
   var gridSize = 3
   var gridStep = 0.2
   var logScale = false
-  var maxIt = 40
+  var maxIt = 10
   var stormAverages: Boolean = false
   var onsetClassificationScores: Boolean = false
 
   def train(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true)(
     kernel: CompositeCovariance[(DenseVector[Double], Int)],
     noise: CompositeCovariance[(DenseVector[Double], Int)]):
-  (MOGPRegressionModel[DenseVector[Double]],(GaussianScaler, GaussianScaler)) = {
+  (AbstractGPRegressionModel[Stream[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
+    (GaussianScaler, GaussianScaler)) = {
 
       OmniMultiOutputModels.orderFeat = orderF
       OmniMultiOutputModels.orderTarget = orderT
@@ -1343,7 +1366,11 @@ object DstMOGPExperiment {
       OmniMultiOutputModels.trainStorms(kernel, noise, gridSize, gridStep, useLogSc = logScale, maxIt)
   }
 
-  def test(model: MOGPRegressionModel[DenseVector[Double]], scaler: (GaussianScaler, GaussianScaler)) = {
+  def test(
+    model: AbstractGPRegressionModel[
+    Stream[(DenseVector[Double], DenseVector[Double])],
+    (DenseVector[Double], Int)],
+    scaler: (GaussianScaler, GaussianScaler)) = {
 
     val processResults = if(!stormAverages) {
       DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>
@@ -1420,7 +1447,7 @@ object DstMOGPExperiment {
 
   }
 
-  def testRegression[M <: ContinuousProcess[
+  def testRegression[M <: ContinuousProcessModel[
     Stream[(DenseVector[Double], DenseVector[Double])],
     (DenseVector[Double], Int), Double, _]](model: M, scaler: (GaussianScaler, GaussianScaler)) = {
 
