@@ -4,6 +4,7 @@ package io.github.mandar2812.PlasmaML.omni
 //scala mutable collections api
 import io.github.mandar2812.dynaml.modelpipe.GLMPipe
 import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
+import io.github.mandar2812.dynaml.models.sgp.AbstractSkewGPModel
 import io.github.mandar2812.dynaml.optimization.ProbGPCommMachine
 
 import scala.collection.mutable.{MutableList => MList}
@@ -55,6 +56,8 @@ object OmniOSA {
   type TimeStamp = Double
 
   type GP = AbstractGPRegressionModel[Seq[(Features, Output)], Features]
+
+  type SGP = AbstractSkewGPModel[Data, Features]
 
   //Set time zone to UTC.
   DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -441,7 +444,7 @@ object OmniOSA {
     * (scales are represented by some subclass of [[io.github.mandar2812.dynaml.pipes.ReversibleScaler]])
     *
     * */
-  def modelTrain(
+  def gpTrain(
     kernel: VectorKernel,
     noise: VectorKernel,
     meanFunc: DataPipe[Features, Output] = null) =
@@ -501,12 +504,93 @@ object OmniOSA {
       (tunedModel, dataAndScales._2)
     })
 
+  def sgpTrain(
+    kernel: VectorKernel,
+    noise: VectorKernel,
+    lambda: Double, tau: Double,
+    meanFunc: DataPipe[Features, Output] = null) =
+    DataPipe((dataAndScales: DataAndScales) => {
+      val trainingData = dataAndScales._1
+      implicit val ev = VectorField(dataAndScales._1.head._1.length)
+      implicit val transform = DataPipe((data: Data) => data.toSeq)
+
+      val kSc = CovarianceFunction(dataAndScales._2._1)
+      val targetSampleVariance = math.pow(dataAndScales._2._2(0).sigma, 2.0)
+
+      val meanF =
+        if (meanFunc == null) DataPipe((_:Features) => dataAndScales._2._2(0).mean)
+        else meanFunc
+
+      val model: SGP = AbstractSkewGPModel(
+        (kSc> kernel)*targetSampleVariance, (kSc>noise)*targetSampleVariance,
+        meanF, lambda, tau)(trainingData)
+
+      val modelTuner = globalOpt match {
+        case "GS" =>
+          new GridSearch[model.type](model)
+            .setGridSize(gridSize)
+            .setStepSize(gridStep)
+            .setLogScale(useLogScale)
+
+        case "CSA" =>
+          new CoupledSimulatedAnnealing[model.type](model)
+            .setGridSize(gridSize)
+            .setStepSize(gridStep)
+            .setLogScale(useLogScale)
+            .setMaxIterations(maxIterations)
+            .setVariant(CoupledSimulatedAnnealing.MwVC)
+
+      }
+
+      val startConfig = kernel.effective_state ++ noise.effective_state ++ Map("skewness" -> lambda, "cutoff" -> tau)
+
+      val (tunedModel, c) = modelTuner.optimize(
+        startConfig,
+        Map(
+          "persist" -> "true",
+          "tolerance" -> "0.0001",
+          "step" -> gridStep.toString,
+          "maxIterations" -> maxIterations.toString))
+
+      (tunedModel, dataAndScales._2)
+    })
+
+  def sgpTest(testFile: String = stormsFileJi) =
+    DataPipe((modelAndScales: (SGP, Scales)) => {
+      //Break task into two pipelines
+
+      //pipeline1 is the usual transformations for
+      //reading the data from the correct time ranges
+      //and extracting features and targets from them
+      val pipeline1 =
+      fileToStream >
+        replaceWhiteSpaces >
+        StreamFlatMapPipe(getStormTimeRanges > processTimeSegment)
+
+      //Pipeline2 takes the storm time data and performs predictions
+      //and generates a RegressionMetrics object
+      val pipeline2 =
+      DataPipe((testData: Data) =>
+        modelAndScales._1
+          .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
+          .toStream) >
+        StreamDataPipe((c: (Features, Features)) => (c._1(0), c._2(0))) >
+        DataPipe((results: Stream[(Double, Double)]) =>
+          new RegressionMetrics(results.toList, results.length)
+            .setName(modelType+" "+columnNames(targetColumn)+"; OSA")
+        )
+
+      val stormFilePipeline = pipeline1 > pipeline2
+      stormFilePipeline(dataDir+testFile)
+    })
+
+
   /**
     * Returns a pipeline which takes a model and the data scaling and
     * tests it on a list of geomagnetic storms supplied in the parameter
     *
     * */
-  def modelTest(testFile: String = stormsFileJi) =
+  def gpTest(testFile: String = stormsFileJi) =
     DataPipe((modelAndScales: (GP, Scales)) => {
       //Break task into two pipelines
 
@@ -535,7 +619,7 @@ object OmniOSA {
       stormFilePipeline(dataDir+testFile)
     })
 
-  def generatePredictions(testFile: String = stormsFileJi) =
+  def generateGPPredictions(testFile: String = stormsFileJi) =
     DataPipe((modelAndScales: (GP, Scales)) => {
 
       val fileNamePrefix = testFile.split(".csv").head
@@ -574,6 +658,46 @@ object OmniOSA {
       predictionsPipeline(dataDir+testFile)
     })
 
+  def generateSGPPredictions(testFile: String = stormsFileJi) =
+    DataPipe((modelAndScales: (SGP, Scales)) => {
+
+      val fileNamePrefix = testFile.split(".csv").head
+
+      val (model, scales) = modelAndScales
+
+      val pipeline1 =
+        fileToStream >
+          replaceWhiteSpaces >
+          StreamDataPipe(getStormTimeRanges > processTimeSegment)
+
+      val pipeline2 =
+        DataPipe((storms: Stream[Data]) => {
+          //For each storm generate predictions
+          //and output them in the appropriate file
+
+          storms.zipWithIndex.foreach(stormCouple => {
+            val stormName = "storm"+(stormCouple._2+1).toString
+            logger.info("Generating Predictions for Storm: "+(stormCouple._2+1))
+            val stormData = stormCouple._1
+            //Generate Predictions
+            val stormPredictions =
+              model.test(stormData)
+                .map(preds => Seq(preds._2, preds._3, preds._4, preds._5))
+                .toStream
+            //Write values to a file dump
+            logger.info("Dumping predictions to csv: "+(stormCouple._2+1))
+            valuesToFile(
+              dataDir+"/"+fileNamePrefix+"_sgp"+"_"+stormName+".csv")(
+              stormPredictions)
+          })
+        })
+
+      val predictionsPipeline = pipeline1 > pipeline2
+
+      predictionsPipeline(dataDir+testFile)
+    })
+
+
   /**
     * Train a Gaussian Process model on the specified training sections i.e. [[trainingDataSections]]
     *
@@ -584,7 +708,7 @@ object OmniOSA {
     kernel: VectorKernel, noise: VectorKernel,
     meanFunc: DataPipe[Features, Output] = DataPipe((_:Features) => 0.0)): (GP, Scales) = {
 
-    val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
+    val pipeline = dataPipeline > gpTrain(kernel, noise, meanFunc)
 
     pipeline(trainingDataSections)
   }
@@ -597,8 +721,24 @@ object OmniOSA {
 
     val pipeline =
       dataPipeline >
-      modelTrain(kernel, noise, meanFunc) >
-      modelTest(stormsFileJi)
+      gpTrain(kernel, noise, meanFunc) >
+      gpTest(stormsFileJi)
+
+    pipeline(trainingDataSections)
+
+  }
+
+  def buildAndTestSGP(
+    kernel: VectorKernel,
+    noise: VectorKernel,
+    lambda: Double, tau: Double,
+    meanFunc: DataPipe[Features, Double] = DataPipe((_:Features) => 0.0),
+    stormFile: String = stormsFileJi) = {
+
+    val pipeline =
+      dataPipeline >
+        sgpTrain(kernel, noise, lambda, tau, meanFunc) >
+        sgpTest(stormsFileJi)
 
     pipeline(trainingDataSections)
 
@@ -628,7 +768,7 @@ object OmniOSA {
 
     val columnNames = Seq("model", "modelSize","order") ++
       (1 to 2).map(i => "order_ex_"+i) ++
-      Seq("data") ++ originalState.keys.toSeq ++ 
+      Seq("data") ++ originalState.keys.toSeq ++
       Seq("globalOpt", "gridSize", "step", "maxIt") ++
       Seq("mae", "rmse", "cc", "rsq")
 
@@ -641,8 +781,8 @@ object OmniOSA {
         case "ML" =>
           Seq("ML", 0, gridStep, maxIterations)
       }
-      
-    
+
+
     //If the file has already been written to then write the header row.
     if (fileOpened)
       writer.writeRow(columnNames)
@@ -684,7 +824,7 @@ object OmniOSA {
         //Reset the kernel
         kernel.setHyperParameters(originalState)
         //Create a model train/tune pipeline
-        val pipeline = dataPipeline > modelTrain(kernel, noise, meanFunc)
+        val pipeline = dataPipeline > gpTrain(kernel, noise, meanFunc)
 
         try {
 
@@ -694,8 +834,8 @@ object OmniOSA {
           //Create a pipeline to test the model on
           //two different sets of storms
           val scoresPipe = BifurcationPipe(
-            modelTest(modelSelectionStorms),
-            modelTest(testStorms))
+            gpTest(modelSelectionStorms),
+            gpTest(testStorms))
 
           //Calculate scores on validation and test sets.
           val (validationPerformance, testPerformance) = scoresPipe((model, scalers))

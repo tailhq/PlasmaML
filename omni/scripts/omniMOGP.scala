@@ -20,7 +20,7 @@ import io.github.mandar2812.PlasmaML.omni.{DstMOGPExperiment, OmniMultiOutputMod
 //First define the experiment parameters
 OmniMultiOutputModels.exogenousInputs = List(24,16)
 val numVars = OmniMultiOutputModels.exogenousInputs.length + 1
-OmniMultiOutputModels.globalOpt = "CSA"
+OmniMultiOutputModels.globalOpt = "GPC"
 DstMOGPExperiment.gridSize = 2
 DstMOGPExperiment.gridStep = 0.3
 DstMOGPExperiment.logScale = true

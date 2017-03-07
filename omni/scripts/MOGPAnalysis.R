@@ -25,7 +25,7 @@ ggplot(df, aes(x=prob,y=brier)) +
   xlab("Probability of Storm Jump") + ylab("Brier Score")
 
 
-arx_errorbars_pred <- read.csv("mogp_preds_2004_11_07-3.csv", 
+arx_errorbars_pred <- read.csv("mogp_preds_2004_11_07-2.csv", 
                                header = FALSE, 
                                col.names = c("Dst", "predicted", "lower", "upper"))
 arx_errorbars_pred$time <- 1:nrow(arx_errorbars_pred)
@@ -37,9 +37,9 @@ ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
   theme_gray(base_size = 22) + 
   scale_colour_manual(values=palette1) + 
   scale_linetype_manual(values = lines1, guide=FALSE) +
-  xlab("Time (hours)") + ylab("Dst(t+4)")
+  xlab("Time (hours)") + ylab("Dst(t+3)")
 
-arx_onset_pred <- read.csv("mogp_onset_2004_11_07-3.csv", 
+arx_onset_pred <- read.csv("mogp_onset_2004_11_07-2.csv", 
                            header = FALSE, 
                            col.names = c("p", "storm"))
 arx_onset_pred$time <- 1:nrow(arx_onset_pred)
@@ -51,4 +51,4 @@ ggplot(meltedPred1, aes(x=time,y=value, colour=variable, linetype=variable)) +
   theme_gray(base_size = 22) + 
   scale_colour_manual(values=palette1) + 
   scale_linetype_manual(values = lines1, guide=FALSE) +
-  xlab("Time (hours)") + ylab("P(Dst(t+4) - Dst(t) < -70 nT)")
+  xlab("Time (hours)") + ylab("P(Dst(t+3) - Dst(t) < -70 nT)")

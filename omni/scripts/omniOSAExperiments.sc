@@ -14,9 +14,9 @@ tKernel.block_all_hyper_parameters
 
 val rbfKernel = new RBFKernel(1.7)
 
-val mlpKernel = new MLPKernel(80.0, 20.0)
+val mlpKernel = new MLPKernel(2.5, 0.9)
 
-val whiteNoiseKernel = new DiracKernel(0.2)
+val whiteNoiseKernel = new DiracKernel(0.5)
 whiteNoiseKernel.block_all_hyper_parameters
 
 OmniOSA.gridSize = 2
@@ -116,9 +116,30 @@ mlpKernel.setw(3.560349737811843)
 mlpKernel.setoffset(102.71615211905888)
 
 val predictPipeline =
-  OmniOSA.dataPipeline > OmniOSA.modelTrain(
+  OmniOSA.dataPipeline > OmniOSA.gpTrain(
       tKernel+mlpKernel,
       whiteNoiseKernel,
-      OmniOSA.meanFuncPersistence) > OmniOSA.generatePredictions()
+      OmniOSA.meanFuncPersistence) > OmniOSA.generateGPPredictions()
 
 predictPipeline(OmniOSA.trainingDataSections)
+
+
+OmniOSA.globalOpt = "CSA"
+OmniOSA.setTarget(40, 7)
+OmniOSA.setExogenousVars(List(24, 16), List(1,3))
+
+val resSGPARX = OmniOSA.buildAndTestSGP(
+  mlpKernel + tKernel, whiteNoiseKernel, -4.4, -0.01,
+  OmniOSA.meanFuncPersistence)
+
+//val mlpKernel = new MLPKernel(2.5, 0.9)
+
+//val whiteNoiseKernel = new DiracKernel(0.5)
+
+val sgpPipeline =
+  OmniOSA.dataPipeline > OmniOSA.sgpTrain(
+    mlpKernel + tKernel,
+    whiteNoiseKernel, -4.4, -0.01,
+    OmniOSA.meanFuncPersistence) > OmniOSA.generateSGPPredictions()
+
+sgpPipeline(OmniOSA.trainingDataSections)
