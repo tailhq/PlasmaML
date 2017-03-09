@@ -14,13 +14,13 @@ tKernel.block_all_hyper_parameters
 
 val rbfKernel = new RBFKernel(1.7)
 
-val mlpKernel = new MLPKernel(2.5, 0.9)
+val mlpKernel = new MLPKernel(80.0, 20.0)
 
-val whiteNoiseKernel = new DiracKernel(0.5)
+val whiteNoiseKernel = new DiracKernel(1.5)
 whiteNoiseKernel.block_all_hyper_parameters
 
-OmniOSA.gridSize = 2
-OmniOSA.gridStep = 0.2
+OmniOSA.gridSize = 4
+OmniOSA.gridStep = 0.15
 OmniOSA.globalOpt = "ML"
 OmniOSA.maxIterations = 250
 
