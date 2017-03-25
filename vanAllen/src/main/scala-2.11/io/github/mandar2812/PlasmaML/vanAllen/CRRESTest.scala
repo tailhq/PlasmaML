@@ -319,50 +319,6 @@ object CRRESTest {
     workflow(fileIds ++ testFileIds)
   }
 
-  /*def apply(hidden: Int, acts: List[String], nCounts: List[Int],
-            num_train: Int, num_test: Int) = {
-
-    val trainTest = collateData >
-      StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
-      StreamDataPipe(
-        (couple: (DenseVector[Double], Double)) =>
-          (couple._1, DenseVector(couple._2))) >
-      DataPipe((data: Stream[(DenseVector[Double], DenseVector[Double])]) => {
-        (data.take(num_train), data.takeRight(num_test))
-      }) >
-      crresScale >
-      DataPipe((datSc: (Stream[(DenseVector[Double], DenseVector[Double])],
-        Stream[(DenseVector[Double], DenseVector[Double])],
-        (ReversibleScaler[DenseVector[Double]], ReversibleScaler[DenseVector[Double]]))) => {
-
-        val gr = FFNeuralGraph(
-          datSc._1.head._1.length, 1,
-          hidden, acts, nCounts)
-
-        val model = new FeedForwardNetwork(
-          datSc._1, gr,
-          StreamDataPipe(identity[(DenseVector[Double], DenseVector[Double])] _))
-
-        model.setLearningRate(OptConfig.stepSize)
-          .setMaxIterations(OptConfig.maxIt)
-          .setBatchFraction(OptConfig.mini)
-          .setMomentum(OptConfig.momentum)
-          .setRegParam(OptConfig.reg)
-          .learn()
-
-        val reverseScale = datSc._3._2.i * datSc._3._2.i
-        val res = reverseScale(model.test(datSc._2)).map(c => (c._1(0), c._2(0))).toList
-
-
-        val results = new RegressionMetrics(res, res.length)
-        //results.generateFitPlot()
-        results.print()
-      })
-
-    trainTest(Stream("19910112"))
-
-  }*/
-  
   //Test AutoEncoder Idea
   def apply(numExtractedFeatures: Int,
             num_train: Int,
@@ -452,14 +408,6 @@ object CRRESTest {
 
     val mapF = (rec: (DenseVector[Double], Double)) => if(logFlag) math.log(rec._2) else rec._2
 
-    /*val pipe = processCRRESCDF >
-      StreamDataPipe(mapF) >
-      DataPipe((s: Stream[Double]) => {
-        histogram(s.toList)
-      })
-
-    pipe(traintestFile)*/
-
     val cumulativeDist = (s: Stream[Double]) => (x: Double) => {
       s.count(_ <= x).toDouble/s.length.toDouble
     }
@@ -486,31 +434,6 @@ object CRRESTest {
     yAxis("log(-log(1-F(n_average)))")
 
   }
-
-  /*def apply(committeeSize: Int, fraction: Double) = {
-    // From the original RDD construct pipes for subsampling
-    // and give them as inputs to a LSSVM Committee
-    val rddPipe = preProcessRDD() >
-      DataPipe((data: RDD[(DenseVector[Double], Double)]) => {
-        val colStats = Statistics.colStats(data.map(pattern =>
-          Vectors.dense(pattern._1.toArray ++ Array(pattern._2))))
-
-        val pre = (d: RDD[(DenseVector[Double], Double)]) =>
-          d.sample(fraction = fraction, withReplacement = true).collect().toStream
-
-        val pipes = (1 to committeeSize).map(i => {
-          val kernel = new RBFKernel(1.0)
-          new DLSSVMPipe[RDD[(DenseVector[Double], Double)]](pre, kernel)
-        })
-
-      })
-  }*/
-
-}
-
-object CRRESExp {
-
-  //def apply
 }
 
 object CRRESpsdModels {
