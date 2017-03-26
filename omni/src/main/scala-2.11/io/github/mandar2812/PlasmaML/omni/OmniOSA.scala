@@ -4,7 +4,7 @@ package io.github.mandar2812.PlasmaML.omni
 //scala mutable collections api
 import io.github.mandar2812.dynaml.modelpipe.GLMPipe
 import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
-import io.github.mandar2812.dynaml.models.sgp.AbstractSkewGPModel
+import io.github.mandar2812.dynaml.models.sgp.ESGPModel
 import io.github.mandar2812.dynaml.optimization.ProbGPCommMachine
 
 import scala.collection.mutable.{MutableList => MList}
@@ -57,7 +57,7 @@ object OmniOSA {
 
   type GP = AbstractGPRegressionModel[Seq[(Features, Output)], Features]
 
-  type SGP = AbstractSkewGPModel[Data, Features]
+  type SGP = ESGPModel[Data, Features]
 
   //Set time zone to UTC.
   DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -521,7 +521,7 @@ object OmniOSA {
         if (meanFunc == null) DataPipe((_:Features) => dataAndScales._2._2(0).mean)
         else meanFunc
 
-      val model: SGP = AbstractSkewGPModel(
+      val model: SGP = ESGPModel(
         (kSc> kernel)*targetSampleVariance, (kSc>noise)*targetSampleVariance,
         meanF, lambda, tau)(trainingData)
 

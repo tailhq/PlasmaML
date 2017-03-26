@@ -14,7 +14,7 @@ tKernel.block_all_hyper_parameters
 
 val rbfKernel = new RBFKernel(1.7)
 
-val mlpKernel = new MLPKernel(80.0, 20.0)
+val mlpKernel = new MLPKernel(1.5, 0.75)
 
 val whiteNoiseKernel = new DiracKernel(1.5)
 whiteNoiseKernel.block_all_hyper_parameters
