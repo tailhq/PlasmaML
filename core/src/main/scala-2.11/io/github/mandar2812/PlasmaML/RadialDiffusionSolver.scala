@@ -7,7 +7,7 @@ abstract class RadialDiffusionSolver(
   lShellLimits: (Double, Double), timeLimits: (Double, Double),
   nL: Int, nT: Int) {
 
-  val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/deltaL, (timeLimits._2 - timeLimits._1)/deltaT)
+  val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
 
 
