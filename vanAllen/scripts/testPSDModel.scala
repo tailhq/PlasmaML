@@ -5,7 +5,7 @@ import io.github.mandar2812.dynaml.analysis.{DifferentiableMap, PartitionedVecto
 import io.github.mandar2812.dynaml.dataformat.MAT
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.{GPRegression, WarpedGPModel}
-import io.github.mandar2812.dynaml.models.sgp.AbstractSkewGPModel
+import io.github.mandar2812.dynaml.models.sgp.ESGPModel
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder}
 
@@ -59,7 +59,7 @@ val enc = Encoder[Map[String, Double], (DenseVector[Double], DenseVector[Double]
 )
 
 
-val gaussianSMKernel = GaussianSMKernel(DenseVector(2.5, 2.5), DenseVector(0.5, 10.0), enc)
+val gaussianSMKernel = GaussianSpectralKernel(DenseVector(2.5, 2.5), DenseVector(0.5, 10.0), enc)
 
 
 val kernel = mlpKernel + tKernel
@@ -68,7 +68,7 @@ val noise = new DiracKernel(1.0)
 
 val gpModel = new GPRegression(gaussianSMKernel, noise, training)
 
-val sgpModel = AbstractSkewGPModel(kernel, noise, DataPipe((x: DenseVector[Double]) => 0.0), 1.5, 0.5)(training)
+val sgpModel = ESGPModel(kernel, noise, DataPipe((x: DenseVector[Double]) => 0.0), 1.5, 0.5)(training)
 
 implicit val detImpl = identityPipe[Double]
 

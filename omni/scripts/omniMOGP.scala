@@ -21,14 +21,14 @@ import io.github.mandar2812.PlasmaML.omni.{DstMOGPExperiment, OmniMultiOutputMod
 OmniMultiOutputModels.exogenousInputs = List(24,16)
 val numVars = OmniMultiOutputModels.exogenousInputs.length + 1
 OmniMultiOutputModels.globalOpt = "GPC"
-DstMOGPExperiment.gridSize = 2
-DstMOGPExperiment.gridStep = 0.3
+DstMOGPExperiment.gridSize = 3
+DstMOGPExperiment.gridStep = 0.15
 DstMOGPExperiment.logScale = true
 //OmniMultiOutputModels.orderFeat = 2
 OmniMultiOutputModels.deltaT = List(7,1,3)
 OmniMultiOutputModels.orderTarget = 2
 //Predictions for an example storm
-OmniMultiOutputModels.numStorms = 1
+OmniMultiOutputModels.numStorms = 4
 //Calculate the number of features
 //from the provided lengths of each
 //input like Dst, V, Bz, ... etc
@@ -100,11 +100,13 @@ val kerneld = new DecomposableCovariance(
 
 val kernel = (linearK :* coRegLaplaceMatrix) + (tKernel :* coRegTMatrix) + (mlpKernel :* coRegLaplaceMatrix)
 
+val kernel1 = linearK + tKernel + mlpKernel
+
 val noise: CompositeCovariance[(DenseVector[Double], Int)] = d :* coRegCauchyMatrix
 
 OmniMultiOutputModels.useWaveletBasis = false
-val (model, scaler) = OmniMultiOutputModels.trainStorms(
-  kernel, noise, DstMOGPExperiment.gridSize,
+val (model, scaler) = OmniMultiOutputModels.trainStormsKron(
+  kernel1, d, coRegTMatrix, DstMOGPExperiment.gridSize,
   DstMOGPExperiment.gridStep, useLogSc = true,
   DstMOGPExperiment.maxIt)
 

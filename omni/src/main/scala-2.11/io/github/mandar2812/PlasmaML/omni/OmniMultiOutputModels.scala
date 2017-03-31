@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.evaluation.{BinaryClassificationMetrics, Mult
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.ContinuousProcessModel
-import io.github.mandar2812.dynaml.models.gp.{AbstractGPRegressionModel, MOGPRegressionModel}
+import io.github.mandar2812.dynaml.models.gp.{AbstractGPRegressionModel, KroneckerMOGPModel, MOGPRegressionModel}
 import io.github.mandar2812.dynaml.models.neuralnets.FeedForwardNetwork
 import io.github.mandar2812.dynaml.models.stp.MOStudentTRegression
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer, GridSearch, ProbGPCommMachine}
@@ -255,6 +255,146 @@ object OmniMultiOutputModels {
       DataPipe(modelTuning))(numStorms)
 
   }
+
+
+  def trainStormsKron(
+    kernel: LocalScalarKernel[DenseVector[Double]],
+    noise: LocalScalarKernel[DenseVector[Double]],
+    coRegK: LocalScalarKernel[Int],
+    grid: Int, step: Double, useLogSc: Boolean, maxIt:Int) = {
+
+    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val arxOrders = if(deltaT.isEmpty) List.fill[Int](exogenousInputs.length+1)(pF) else deltaT
+
+    val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+
+
+    val prepareTrainingData = (n: Int) => {
+
+      val stormsPipe =
+        fileToStream >
+          replaceWhiteSpaces >
+          StreamDataPipe((stormEventData: String) => {
+            val stormMetaFields = stormEventData.split(',')
+
+            val eventId = stormMetaFields(0)
+            val startDate = stormMetaFields(1)
+            val startHour = stormMetaFields(2).take(2)
+
+            val endDate = stormMetaFields(3)
+            val endHour = stormMetaFields(4).take(2)
+
+            (startDate+"/"+startHour,
+              endDate+"/"+endHour)
+          }) >
+          DataPipe((s: Stream[(String, String)]) =>
+            s.take(numStormsStart) ++ s.takeRight(n) ++
+              /*Stream(("2015/03/17/00", "2015/03/18/23")) ++*/
+              Stream(("2015/06/22/08", "2015/06/23/20")) ++
+              Stream(("2008/01/02/00", "2008/01/03/00"))) >
+          StreamDataPipe((storm: (String, String)) => {
+            // for each storm construct a data set
+
+            val (trainingStartDate, trainingEndDate) =
+              (formatter.parseDateTime(storm._1).minusHours(pF),
+                formatter.parseDateTime(storm._2).plusHours(pT))
+
+            val (trStampStart, trStampEnd) =
+              (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
+
+            val filterData = StreamDataPipe((couple: (Double, Double)) =>
+              couple._1 >= trStampStart && couple._1 <= trStampEnd)
+
+            val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+              couple._1 >= trStampStart && couple._1 <= trStampEnd)
+
+            val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
+              extractTimeSeries((year,day,hour) => {
+                val dt = dayofYearformat.parseDateTime(
+                  year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
+                dt.getMillis/1000.0 }) >
+                filterData >
+                deltaOperationMult(arxOrders.head, pT)
+            } else {
+              extractTimeSeriesVec((year,day,hour) => {
+                val dt = dayofYearformat.parseDateTime(
+                  year.toInt.toString + "/" + day.toInt.toString + "/" + hour.toInt.toString)
+                dt.getMillis/1000.0 }) >
+                filterDataARX >
+                deltaOperationARXMult(arxOrders, pT)
+            }
+
+
+            val getTraining = preProcess >
+              prepareFeaturesAndOutputs >
+              haarWaveletPipe
+
+            getTraining("data/omni2_"+trainingStartDate.getYear+".csv")
+
+          }) >
+          DataPipe((s: Stream[Stream[(DenseVector[Double], DenseVector[Double])]]) => {
+            s.reduce((p,q) => p ++ q)
+          })
+
+      stormsPipe("data/geomagnetic_storms2.csv")
+    }
+
+    val modelTuning = (dataAndScales: (
+      Stream[(DenseVector[Double], DenseVector[Double])],
+        (GaussianScaler, GaussianScaler))) => {
+
+      val model = new KroneckerMOGPModel[DenseVector[Double]](
+        kernel, noise, coRegK, dataAndScales._1,
+        dataAndScales._1.length, pT)
+
+      val gs = globalOpt match {
+        case "CSA" =>
+          new CoupledSimulatedAnnealing[AbstractGPRegressionModel[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)
+            ]](model)
+            .setGridSize(grid)
+            .setStepSize(step)
+            .setLogScale(useLogSc)
+            .setMaxIterations(maxIt)
+            .setVariant(CoupledSimulatedAnnealing.MwVC)
+        case "GS" =>
+          new GridSearch[AbstractGPRegressionModel[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)
+            ]](model)
+            .setGridSize(grid)
+            .setStepSize(step)
+            .setLogScale(useLogSc)
+
+        case "GPC" =>
+          new ProbGPCommMachine[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)](model)
+            .setGridSize(grid)
+            .setStepSize(step)
+            .setLogScale(useLogSc)
+            .setMaxIterations(maxIt)
+
+        case "ML-II" =>
+          new GradBasedGlobalOptimizer[AbstractGPRegressionModel[
+            Stream[(DenseVector[Double], DenseVector[Double])],
+            (DenseVector[Double], Int)]](model)
+      }
+
+      val startConf = model.covariance.effective_state ++ model.noiseModel.effective_state
+
+      val (tunedGP, _) = gs.optimize(startConf)
+
+      (tunedGP, dataAndScales._2)
+    }
+
+    (DataPipe(prepareTrainingData) >
+      gaussianScaling >
+      DataPipe(modelTuning))(numStorms)
+
+  }
+
 
   def trainSTPStorms(kernel: LocalScalarKernel[(DenseVector[Double], Int)],
                      noise: LocalScalarKernel[(DenseVector[Double], Int)],
