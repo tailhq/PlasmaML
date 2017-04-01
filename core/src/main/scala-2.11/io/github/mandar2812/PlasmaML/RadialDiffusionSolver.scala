@@ -31,3 +31,21 @@ class RadialDiffusionSolver(
     getComputationStack(lossProfile, diffusionProfile, boundaryFlux).forwardPropagate(f0)
 
 }
+
+object RadialDiffusionSolver {
+
+
+  def getForwardModelParameters(
+    lShellLimits: (Double, Double),
+    timeLimits: (Double, Double),
+    nL: Int, nT: Int)(
+    lossProfile: DenseMatrix[Double],
+    diffusionProfile: DenseMatrix[Double],
+    boundaryFlux: DenseMatrix[Double]) = {
+
+    val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
+
+
+
+  }
+}
