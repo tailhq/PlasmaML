@@ -88,17 +88,23 @@ object RadialDiffusionSolver {
       else lShellLimits._2).map(v => 0.5*v*v/deltaL
     )
 
+    /*
+    * Forward Operator alpha(n)
+    * */
     val alpha: (Int) => DenseMatrix[Double] = (n) => {
 
       DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
-        if (math.abs(j-k) > 1) {
+        if (math.abs(j-k) > 1 || (j == 0 && k != j) || (j == nL && k != j)) {
           0.0
         } else if(j == k) {
-          if(j == 0 || j == nL + 1) {
+          if(j == 0 || j == nL) {
             1.0
           } else {
-            1/deltaT - 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) -
-              lVec(j)*(conv(forwardDiffConv(j, n))(diffusionProfile) + conv(backwardDiffConv(j, n))(diffusionProfile))
+            1/deltaT -
+              0.5*conv(forwardConvLossProfile(j, n))(lossProfile) -
+              lVec(j)*(
+                conv(forwardDiffConv(j, n))(diffusionProfile) +
+                conv(backwardDiffConv(j, n))(diffusionProfile))
           }
         } else if(j > k) {
           lVec(j)*conv(backwardDiffConv(j, n))(diffusionProfile)
@@ -109,12 +115,15 @@ object RadialDiffusionSolver {
       })
     }
 
+    /*
+    * Backward Operator beta(n)
+    * */
     val beta: (Int) => DenseMatrix[Double] = (n) => {
       DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
-        if (math.abs(j-k) > 1) {
+        if (math.abs(j-k) > 1 || (j == 0 && k != j) || (j == nL && k != j)) {
           0.0
         } else if(j == k) {
-          if(j == 0 || j == nL + 1) {
+          if(j == 0 || j == nL) {
             1.0
           } else {
             1/deltaT + 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
@@ -129,12 +138,18 @@ object RadialDiffusionSolver {
       })
     }
 
+    /*
+    * Boundary term gamma(n)
+    * */
     val gamma: (Int) => DenseVector[Double] = (n) => {
       DenseVector.tabulate[Double](nL + 1)(l =>
         if( l == 0 || l == nL) conv(forwardConvBoundaryFlux(l,n))(boundaryFlux) else 0.0
       )
     }
 
+    /*
+    * Instantiate layer transformations
+    * */
     (0 until nT).map(n => {
       (beta(n)\alpha(n), beta(n)\gamma(n))
     })
