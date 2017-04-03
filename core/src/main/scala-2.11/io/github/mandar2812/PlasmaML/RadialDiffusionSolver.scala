@@ -31,7 +31,7 @@ class RadialDiffusionSolver(
     diffusionProfile: DenseMatrix[Double],
     boundaryFlux: DenseMatrix[Double])(
     f0: DenseVector[Double]): Seq[DenseVector[Double]] =
-    getComputationStack(lossProfile, diffusionProfile, boundaryFlux).forwardPropagate(f0)
+    getComputationStack(lossProfile, diffusionProfile, boundaryFlux) forwardPropagate f0
 
 }
 

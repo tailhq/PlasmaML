@@ -34,7 +34,13 @@ lazy val root = (project in file(".")).settings(commonSettings: _*)
 lazy val core = (project in file("core")).settings(
   initialCommands in console :=
     """import io.github.mandar2812.PlasmaML._;"""+
-    """import io.github.mandar2812.PlasmaML.cdf.CDFUtils""",
+      """import io.github.mandar2812.PlasmaML.cdf.CDFUtils;"""+
+      """import scalaxy.streams.optimize;"""+
+      """import io.github.mandar2812.dynaml.kernels._;"""+
+      """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
+      """import com.quantifind.charts.Highcharts._;"""+
+      """import breeze.linalg.DenseVector;""" +
+      """io.github.mandar2812.dynaml.DynaML.main(Array())""",
   scalacOptions ++= Seq("-optimise", "-Yclosure-elim", "-Yinline"))
 
 lazy val omni =
