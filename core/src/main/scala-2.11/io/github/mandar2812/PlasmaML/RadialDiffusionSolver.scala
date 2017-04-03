@@ -37,22 +37,42 @@ class RadialDiffusionSolver(
 
 object RadialDiffusionSolver {
 
-
-  def forwardConvDiff(i: Int, j: Int)(n: Int, m: Int): Double =
+  /**
+    * The forward difference convolution filter
+    * */
+  def forwardDiffConv(i: Int, j: Int)(n: Int, m: Int): Double =
     if(n - i >= 0 && n - i <= 1 && m - j >= 0 && m - j <= 1) 0.25 else 0.0
 
-  def backwardConvDiff(i: Int, j: Int)(n: Int, m: Int): Double =
+  /**
+    * The backward difference convolution filter
+    * */
+  def backwardDiffConv(i: Int, j: Int)(n: Int, m: Int): Double =
     if(i - n >= 0 && i - n <= 1 && m - j >= 0 && m - j <= 1) 0.25 else 0.0
 
+  /**
+    * Forward difference convolution filter for boundary flux
+    * */
   def forwardConvBoundaryFlux(j:Int, i: Int)(n: Int, m: Int): Double =
     if(m == i && n == j) -1.0 else if(m == i+1 && n == j) 1.0 else 0.0
 
+  /**
+    * Forward difference convolution filter for loss profiles/scales
+    * */
   def forwardConvLossProfile(i: Int, j: Int)(n: Int, m: Int): Double =
     if(n == i && m - j >= 0 && m - j <= 1) 0.5 else 0.0
 
   def conv(filter: (Int, Int) => Double)(data: DenseMatrix[Double]) =
     sum(data.mapPairs((coords, value) => value * filter(coords._1, coords._2)))
 
+  /**
+    *
+    * @param lShellLimits The lower and upper limits of L-Shell
+    * @param timeLimits The lower and upper limits of time.
+    * @param nL The number of partitions to create in the L-Shell domain.
+    * @param nT The number of partitions to create in the time domain.
+    * @return A sequence of parameters which specify the [[NeuralStack]]
+    *         used to compute the radial diffusion solution.
+    * */
   def getForwardModelParameters(
     lShellLimits: (Double, Double),
     timeLimits: (Double, Double),
@@ -64,8 +84,9 @@ object RadialDiffusionSolver {
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
     val lVec = DenseVector.tabulate[Double](nL + 1)(i =>
-      if(i < nL) lShellLimits._1+(deltaL*i) else lShellLimits._2)
-      .map(v => 0.5*v*v/deltaL)
+      if(i < nL) lShellLimits._1+(deltaL*i)
+      else lShellLimits._2).map(v => 0.5*v*v/deltaL
+    )
 
     val alpha: (Int) => DenseMatrix[Double] = (n) => {
 
@@ -77,12 +98,12 @@ object RadialDiffusionSolver {
             1.0
           } else {
             1/deltaT - 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) -
-              lVec(j)*(conv(forwardConvDiff(j, n))(diffusionProfile) + conv(backwardConvDiff(j, n))(diffusionProfile))
+              lVec(j)*(conv(forwardDiffConv(j, n))(diffusionProfile) + conv(backwardDiffConv(j, n))(diffusionProfile))
           }
         } else if(j > k) {
-          lVec(j)*conv(backwardConvDiff(j, n))(diffusionProfile)
+          lVec(j)*conv(backwardDiffConv(j, n))(diffusionProfile)
         } else {
-          lVec(j)*conv(forwardConvDiff(j, n))(diffusionProfile)
+          lVec(j)*conv(forwardDiffConv(j, n))(diffusionProfile)
         }
 
       })
@@ -97,12 +118,12 @@ object RadialDiffusionSolver {
             1.0
           } else {
             1/deltaT + 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
-              lVec(j)*(conv(forwardConvDiff(j, n))(diffusionProfile) + conv(backwardConvDiff(j, n))(diffusionProfile))
+              lVec(j)*(conv(forwardDiffConv(j, n))(diffusionProfile) + conv(backwardDiffConv(j, n))(diffusionProfile))
           }
         } else if(j > k) {
-          -lVec(j)*conv(backwardConvDiff(j, n))(diffusionProfile)
+          -lVec(j)*conv(backwardDiffConv(j, n))(diffusionProfile)
         } else {
-          -lVec(j)*conv(forwardConvDiff(j, n))(diffusionProfile)
+          -lVec(j)*conv(forwardDiffConv(j, n))(diffusionProfile)
         }
 
       })
