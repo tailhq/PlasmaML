@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.DenseVector
+import breeze.linalg.{DenseMatrix, DenseVector}
 import io.github.mandar2812.dynaml.models.neuralnets.{FeedForwardNetwork, GenericFFNeuralNet, NeuralStackFactory}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
@@ -9,16 +9,21 @@ import io.github.mandar2812.PlasmaML.omni.OmniMultiOutputModels._
 import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
 import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.optimization.FFBackProp
+import org.apache.log4j.Logger
 
 /**
   * Created by mandar on 05/04/2017.
   */
 object OmniMSANN {
 
+  type Features = DenseVector[Double]
+  type Data = Stream[(Features, Features)]
+  type LayerParams = (DenseMatrix[Double], DenseVector[Double])
+
   def train(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
             mini: Double = 1.0, useWaveletBasis: Boolean = true)
-  : (FeedForwardNetwork[Stream[(DenseVector[Double], DenseVector[Double])]],
+  : (GenericFFNeuralNet[Data, LayerParams, Features],
     (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
@@ -84,24 +89,28 @@ object OmniMSANN {
     val modelTrain = (trainTest: (Stream[(DenseVector[Double], DenseVector[Double])],
       (GaussianScaler, GaussianScaler))) => {
 
-      val gr = FFNeuralGraph(
-        trainTest._1.head._1.length,
-        trainTest._1.head._2.length,
-        hidden_layers, neuronActivations,
-        neuronCounts)
 
-      implicit val transform = DataPipe(identity[Stream[(DenseVector[Double], DenseVector[Double])]] _)
+      val layerCounts = List(trainTest._1.head._1.length) ++ neuronCounts ++ List(trainTest._1.head._2.length)
 
-      val model = new FeedForwardNetwork[
-        Stream[(DenseVector[Double], DenseVector[Double])]
-        ](trainTest._1, gr)
+      val stackFactory = NeuralStackFactory(layerCounts)(activations)
 
-      model.setLearningRate(alpha)
-        .setMaxIterations(maxIt)
-        .setRegParam(reg)
-        .setMomentum(momentum)
-        .setBatchFraction(mini)
-        .learn()
+      val weightsInitializer = GenericFFNeuralNet.getWeightInitializer(layerCounts)
+
+      val backPropOptimizer =
+        new FFBackProp(stackFactory)
+          .setNumIterations(maxIt)
+          .setRegParam(reg)
+          .setStepSize(alpha)
+          .setMiniBatchFraction(mini)
+          .momentum_(momentum)
+
+      val model = GenericFFNeuralNet(
+        backPropOptimizer,
+        trainTest._1, identityPipe[Stream[(DenseVector[Double], DenseVector[Double])]],
+        weightsInitializer)
+
+
+      model.learn()
 
       (model, trainTest._2)
     }
@@ -112,7 +121,7 @@ object OmniMSANN {
 
   }
 
-  def test(model: FeedForwardNetwork[Stream[(DenseVector[Double], DenseVector[Double])]],
+  def test(model: GenericFFNeuralNet[Data, LayerParams, Features],
            scaler: (GaussianScaler, GaussianScaler)): MultiRegressionMetrics = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
@@ -136,7 +145,7 @@ object OmniMSANN {
 
     val modelTest = DataPipe((testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => {
       val testSetToResult = DataPipe(
-        (testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => model.test(testSet)) >
+        (testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => testSet.map(c => (model.predict(c._1), c._2))) >
         StreamDataPipe(
           (tuple: (DenseVector[Double], DenseVector[Double])) => reverseTargetsScaler(tuple)) >
         StreamDataPipe(
@@ -368,4 +377,59 @@ object OmniMSANN {
 
   }
 
+}
+
+
+object DstMSANNExperiment {
+
+  val logger = Logger.getLogger(this.getClass)
+
+  var learningRate: Double = 1.0
+
+  var reg: Double = 0.0005
+
+  var momentum: Double = 0.6
+
+  var it:Int = 150
+
+  def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true) = {
+
+    OmniMultiOutputModels.orderFeat = orderF
+    OmniMultiOutputModels.orderTarget = orderT
+    OmniMultiOutputModels.useWaveletBasis = useWavelets
+
+    val (model, scaler) = OmniMSANN.train(learningRate, reg, momentum, it, 1.0)
+
+    val stormsPipe =
+      fileToStream >
+        replaceWhiteSpaces >
+        DataPipe((st: Stream[String]) => st.take(43)) >
+        StreamDataPipe((stormEventData: String) => {
+          val stormMetaFields = stormEventData.split(',')
+
+          val eventId = stormMetaFields(0)
+          val startDate = stormMetaFields(1)
+          val startHour = stormMetaFields(2).take(2)
+
+          val endDate = stormMetaFields(3)
+          val endHour = stormMetaFields(4).take(2)
+
+          //val minDst = stormMetaFields(5).toDouble
+
+          //val stormCategory = stormMetaFields(6)
+
+
+          OmniMultiOutputModels.testStart = startDate+"/"+startHour
+          OmniMultiOutputModels.testEnd = endDate+"/"+endHour
+
+          logger.info("Testing on Storm: "+OmniMultiOutputModels.testStart+" to "+OmniMultiOutputModels.testEnd)
+
+          OmniMSANN.test(model, scaler)
+        }) >
+        DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
+          metrics.reduce((m,n) => m++n))
+
+    stormsPipe("data/geomagnetic_storms.csv")
+
+  }
 }

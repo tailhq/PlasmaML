@@ -1110,61 +1110,6 @@ object DstPersistenceMOExperiment {
   }
 }
 
-
-object DstWaveletExperiment {
-
-  val logger = Logger.getLogger(this.getClass)
-
-  var learningRate: Double = 1.0
-
-  var reg: Double = 0.0005
-
-  var momentum: Double = 0.6
-
-  var it:Int = 150
-
-  def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true) = {
-
-    OmniMultiOutputModels.orderFeat = orderF
-    OmniMultiOutputModels.orderTarget = orderT
-    OmniMultiOutputModels.useWaveletBasis = useWavelets
-
-    val (model, scaler) = OmniMSANN.train(learningRate, reg, momentum, it, 1.0)
-
-    val stormsPipe =
-      fileToStream >
-        replaceWhiteSpaces >
-        DataPipe((st: Stream[String]) => st.take(43)) >
-        StreamDataPipe((stormEventData: String) => {
-          val stormMetaFields = stormEventData.split(',')
-
-          val eventId = stormMetaFields(0)
-          val startDate = stormMetaFields(1)
-          val startHour = stormMetaFields(2).take(2)
-
-          val endDate = stormMetaFields(3)
-          val endHour = stormMetaFields(4).take(2)
-
-          //val minDst = stormMetaFields(5).toDouble
-
-          //val stormCategory = stormMetaFields(6)
-
-
-          OmniMultiOutputModels.testStart = startDate+"/"+startHour
-          OmniMultiOutputModels.testEnd = endDate+"/"+endHour
-
-          logger.info("Testing on Storm: "+OmniMultiOutputModels.testStart+" to "+OmniMultiOutputModels.testEnd)
-
-          OmniMSANN.test(model, scaler)
-        }) >
-        DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
-          metrics.reduce((m,n) => m++n))
-
-    stormsPipe("data/geomagnetic_storms.csv")
-
-  }
-}
-
 object DstMOGPExperiment {
 
   val logger = Logger.getLogger(this.getClass)
