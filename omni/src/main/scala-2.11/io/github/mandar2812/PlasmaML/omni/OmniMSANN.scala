@@ -27,11 +27,6 @@ object OmniMSANN {
     (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
-    val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
-
-    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-      if (useWaveletBasis) (hFeat*hTarg)(featAndTarg) else featAndTarg)
-
 
     val prepareTrainingData = DataPipe((n: Int) => {
 
@@ -52,7 +47,7 @@ object OmniMSANN {
               endDate+"/"+endHour)
           }) >
           DataPipe((s: Stream[(String, String)]) =>
-            s.takeRight(n) ++ Stream(("2014/11/15/00", "2014/12/15/00"))) >
+            s.takeRight(n) ++ Stream(("2014/01/10/00", "2014/12/30/00"))) >
           StreamDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
@@ -66,14 +61,17 @@ object OmniMSANN {
             val filterTrainingData = StreamDataPipe((couple: (Double, Double)) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
+            val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+              couple._1 >= trStampStart && couple._1 <= trStampEnd)
+
             val getTraining = preProcess >
-              extractTimeSeries((year,day,hour) => {
+              extractTimeSeriesVec((year,day,hour) => {
                 val dt = dayofYearformat.parseDateTime(
                   year.toInt.toString + "/" + day.toInt.toString + "/"+hour.toInt.toString)
                 dt.getMillis/1000.0
               }) >
-              filterTrainingData >
-              deltaOperationMult(pF,pT) >
+              filterDataARX >
+              OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT) >
               haarWaveletPipe
 
             getTraining("data/omni2_"+trainingStartDate.getYear+".csv")
@@ -83,7 +81,7 @@ object OmniMSANN {
             s.reduce((p,q) => p ++ q)
           })
 
-      stormsPipe("data/geomagnetic_storms.csv")
+      stormsPipe(OmniOSA.dataDir+OmniOSA.stormsFile2)
     })
 
     val modelTrain = (trainTest: (Stream[(DenseVector[Double], DenseVector[Double])],
@@ -125,7 +123,7 @@ object OmniMSANN {
            scaler: (GaussianScaler, GaussianScaler)): MultiRegressionMetrics = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
-    val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
+    //val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
     val (testStartDate, testEndDate) =
       (formatter.parseDateTime(testStart).minusHours(pF),
@@ -138,9 +136,6 @@ object OmniMSANN {
 
     val postPipe = deltaOperationMult(pF,pT)
 
-    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
-      if (useWaveletBasis) (hFeat*hTarg)(featAndTarg) else featAndTarg)
-
     val reverseTargetsScaler = scaler._2.i * scaler._2.i
 
     val modelTest = DataPipe((testSet: Stream[(DenseVector[Double], DenseVector[Double])]) => {
@@ -150,7 +145,7 @@ object OmniMSANN {
           (tuple: (DenseVector[Double], DenseVector[Double])) => reverseTargetsScaler(tuple)) >
         StreamDataPipe(
           (tuple: (DenseVector[Double], DenseVector[Double])) =>
-            if (useWaveletBasis) (hTarg.i*hTarg.i)(tuple) else tuple) >
+            if (useWaveletBasis) (gHFeat.i*gHTarg.i)(tuple) else tuple) >
         DataPipe((scoresAndLabels: Stream[(DenseVector[Double], DenseVector[Double])]) => {
           val metrics = new MultiRegressionMetrics(
             scoresAndLabels.toList,
