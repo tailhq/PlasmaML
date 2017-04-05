@@ -1,25 +1,44 @@
 package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.{DenseMatrix, DenseVector}
-import io.github.mandar2812.dynaml.models.neuralnets.{FeedForwardNetwork, GenericFFNeuralNet, NeuralStackFactory}
+import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.PlasmaML.omni.OmniMultiOutputModels._
 import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
-import io.github.mandar2812.dynaml.graph.FFNeuralGraph
 import io.github.mandar2812.dynaml.optimization.FFBackProp
 import org.apache.log4j.Logger
 
 /**
-  * Created by mandar on 05/04/2017.
-  */
+  * @author mandar2812 date 05/04/2017.
+  *
+  * Contains helper methods to train Neural Nets
+  * for MSA prediction of OMNI Dst time series.
+  * */
 object OmniMSANN {
 
+  /*
+  * Instantiating some types to make code more
+  * readable later on.
+  * */
   type Features = DenseVector[Double]
   type Data = Stream[(Features, Features)]
   type LayerParams = (DenseMatrix[Double], DenseVector[Double])
 
+
+  /**
+    * Trains a [[GenericFFNeuralNet]] on a subset of storms
+    * contained in [[OmniOSA.stormsFile2]].
+    *
+    * @param alpha The learning rate for [[FFBackProp]]
+    * @param reg The regularisation parameter
+    * @param momentum Momentum parameter
+    * @param maxIt Maximum number of iterations to run for [[FFBackProp]]
+    * @param useWaveletBasis Set to true if discrete wavelet transform is
+    *                        to be used for pre-processing data.
+    *
+    * */
   def train(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
             mini: Double = 1.0, useWaveletBasis: Boolean = true)
@@ -119,11 +138,18 @@ object OmniMSANN {
 
   }
 
+  /**
+    * Test a trained [[GenericFFNeuralNet]] on the time period
+    * specified by the variable [[OmniMultiOutputModels.testStart]] and
+    * [[OmniMultiOutputModels.testEnd]]
+    *
+    * @param model The model to be tested
+    * @param scaler The [[GaussianScaler]] objects returned by [[train()]].
+    * */
   def test(model: GenericFFNeuralNet[Data, LayerParams, Features],
            scaler: (GaussianScaler, GaussianScaler)): MultiRegressionMetrics = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
-    //val (hFeat, hTarg) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
     val (testStartDate, testEndDate) =
       (formatter.parseDateTime(testStart).minusHours(pF),
