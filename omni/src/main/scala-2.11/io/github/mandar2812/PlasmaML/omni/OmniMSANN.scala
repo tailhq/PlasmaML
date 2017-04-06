@@ -77,9 +77,6 @@ object OmniMSANN {
             val (trStampStart, trStampEnd) =
               (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-            val filterTrainingData = StreamDataPipe((couple: (Double, Double)) =>
-              couple._1 >= trStampStart && couple._1 <= trStampEnd)
-
             val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
@@ -132,9 +129,12 @@ object OmniMSANN {
       (model, trainTest._2)
     }
 
-    (prepareTrainingData >
+    val netWorkFlow =
+      prepareTrainingData >
       gaussianScaling >
-      DataPipe(modelTrain)) run 20
+      DataPipe(modelTrain)
+
+    netWorkFlow run 20
 
   }
 
@@ -157,10 +157,10 @@ object OmniMSANN {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val testPipe = StreamDataPipe((couple: (Double, Double)) =>
+    val testPipe = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
-    val postPipe = deltaOperationMult(pF,pT)
+    val postPipe = OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT)
 
     val reverseTargetsScaler = scaler._2.i * scaler._2.i
 
@@ -171,7 +171,7 @@ object OmniMSANN {
           (tuple: (DenseVector[Double], DenseVector[Double])) => reverseTargetsScaler(tuple)) >
         StreamDataPipe(
           (tuple: (DenseVector[Double], DenseVector[Double])) =>
-            if (useWaveletBasis) (gHFeat.i*gHTarg.i)(tuple) else tuple) >
+            if (useWaveletBasis) (gHTarg.i*gHTarg.i)(tuple) else tuple) >
         DataPipe((scoresAndLabels: Stream[(DenseVector[Double], DenseVector[Double])]) => {
           val metrics = new MultiRegressionMetrics(
             scoresAndLabels.toList,
@@ -184,7 +184,7 @@ object OmniMSANN {
     })
 
     val finalPipe = preProcess >
-      extractTimeSeries((year,day,hour) => {
+      extractTimeSeriesVec((year,day,hour) => {
         val dt = dayofYearformat.parseDateTime(
           year.toInt.toString + "/" + day.toInt.toString + "/"+hour.toInt.toString)
         dt.getMillis/1000.0
@@ -234,6 +234,22 @@ object OmniMSANN {
 
   }
 
+  /**
+    * Train and test a [[GenericFFNeuralNet]] model on the OMNI data.
+    * Training set is the period between
+    * [[OmniMultiOutputModels.trainingStart]] to [[OmniMultiOutputModels.trainingEnd]]
+    *
+    * Test set is the time interval between
+    * [[OmniMultiOutputModels.testStart]] to [[OmniMultiOutputModels.testEnd]]
+    *
+    * @param alpha Learning rate
+    * @param reg Regularization parameter
+    * @param momentum Momentum parameter
+    * @param maxIt The maximum iterations of [[FFBackProp]] to run
+    * @param mini Mini batch fraction to be used in each epoch of [[FFBackProp]]
+    *
+    * @return An instance of [[MultiRegressionMetrics]] containing the test results.
+    * */
   def apply(alpha: Double = 0.01, reg: Double = 0.001,
             momentum: Double = 0.02, maxIt: Int = 20,
             mini: Double = 1.0): MultiRegressionMetrics = {
@@ -413,6 +429,20 @@ object DstMSANNExperiment {
 
   var it:Int = 150
 
+  /**
+    * Train and test a [[GenericFFNeuralNet]] model on the OMNI data.
+    * Training set is combination of 20 storms from [[OmniOSA.stormsFile2]]
+    * and one year period of quite time.
+    *
+    * Test set is the storm events in [[OmniOSA.stormsFileJi]]
+    *
+    * @param orderF The base 2 logarithm of the auto-regressive order for each input
+    * @param orderT The base 2 logarithm of the auto-regressive order for the outputs
+    * @param useWavelets Set to true if you want to use discrete wavelet transform to
+    *                    pre-process input and output features before training.
+    *
+    * @return An instance of [[MultiRegressionMetrics]] containing the test results.
+    * */
   def apply(orderF: Int = 4, orderT: Int = 3, useWavelets: Boolean = true) = {
 
     OmniMultiOutputModels.orderFeat = orderF

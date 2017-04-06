@@ -8,7 +8,7 @@ OmniMultiOutputModels.activations = List(VectorTansig, VectorTansig, VectorLinea
 
 DstMSANNExperiment.learningRate = 0.02
 DstMSANNExperiment.momentum = 0.5
-DstMSANNExperiment.it = 1000
+DstMSANNExperiment.it = 2000
 DstMSANNExperiment.reg = 0.0001
 
-DstMSANNExperiment(2, 3, true)
+DstMSANNExperiment(2, 2, true)
