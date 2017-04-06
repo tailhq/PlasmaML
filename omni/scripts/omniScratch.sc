@@ -18,7 +18,13 @@ val trainAutoEnc = DataPipe(
   val activations = (1 until layerSizes.length).map(_ => VectorTansig).toList
   val autoenc = GenericAutoEncoder(layerSizes, List(VectorTansig, VectorSigmoid, VectorSigmoid, VectorTansig))
 
-  autoenc.optimizer.setNumIterations(1000).setStepSize(0.05).momentum_(0.9).setRegParam(0.0)
+  autoenc
+    .optimizer
+    .setNumIterations(5000)
+    .setStepSize(0.02)
+    .momentum_(0.75)
+    .setRegParam(0.0001)
+    .setMiniBatchFraction(1.0)
 
   autoenc.learn(d)
   autoenc
@@ -26,4 +32,10 @@ val trainAutoEnc = DataPipe(
 
 val pipe = OmniOSA.dataPipeline > DataPipe(trainAutoEnc, identityPipe[(GaussianScaler, GaussianScaler)])
 
-val (autoenc, scalers) = pipe.run(OmniOSA.trainingDataSections ++ Stream(("2012/01/10/00", "2015/12/28/23")))
+val (autoenc, scalers) =
+  pipe.run(
+    OmniOSA.trainingDataSections ++
+      Stream(
+        ("2012/01/10/00", "2012/12/28/23"),
+        ("2013/01/10/00", "2012/12/28/23"),
+        ("2014/01/10/00", "2014/12/28/23")))

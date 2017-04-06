@@ -3,7 +3,7 @@ import io.github.mandar2812.dynaml.models.neuralnets._
 
 OmniMultiOutputModels.exogenousInputs = List(24, 16)
 
-OmniMultiOutputModels.neuronCounts = List(12, 6)
+OmniMultiOutputModels.neuronCounts = List(6, 3)
 OmniMultiOutputModels.activations = List(VectorTansig, VectorSigmoid, VectorLinear)
 
 DstMSANNExperiment.learningRate = 0.075
