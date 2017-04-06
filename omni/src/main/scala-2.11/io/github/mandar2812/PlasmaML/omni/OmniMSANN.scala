@@ -15,7 +15,8 @@ import org.apache.log4j.Logger
   * @author mandar2812 date 05/04/2017.
   *
   * Contains helper methods to train Neural Nets
-  * for MSA prediction of OMNI Dst time series.
+  * for Multiple Step Ahead (multiple hour ahead)
+  * prediction of OMNI time series.
   * */
 object OmniMSANN {
 
