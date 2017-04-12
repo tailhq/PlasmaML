@@ -88,45 +88,23 @@ object RadialDiffusionSolver {
       else lShellLimits._2).map(v => 0.5*v*v/deltaL
     )
 
-    /*
-    * Forward Operator alpha(n)
-    * */
-    val alpha: (Int) => DenseMatrix[Double] = (n) => {
+    val deltaTMat = DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
+      if(j == k) {
+        if(j == 0 || j == nL) 1.0 else 1/deltaT
+      } else {
+        0.0
+      }
+    })
 
+    val paramsMat: (Int) => DenseMatrix[Double] = (n) => {
       DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
         if (math.abs(j-k) > 1 || (j == 0 && k != j) || (j == nL && k != j)) {
           0.0
         } else if(j == k) {
           if(j == 0 || j == nL) {
-            1.0
+            0.0
           } else {
-            1/deltaT -
-              0.5*conv(forwardConvLossProfile(j, n))(lossProfile) -
-              lVec(j)*(
-                conv(forwardDiffConv(j, n))(diffusionProfile) +
-                conv(backwardDiffConv(j, n))(diffusionProfile))
-          }
-        } else if(j > k) {
-          lVec(j)*conv(backwardDiffConv(j, n))(diffusionProfile)
-        } else {
-          lVec(j)*conv(forwardDiffConv(j, n))(diffusionProfile)
-        }
-
-      })
-    }
-
-    /*
-    * Backward Operator beta(n)
-    * */
-    val beta: (Int) => DenseMatrix[Double] = (n) => {
-      DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
-        if (math.abs(j-k) > 1 || (j == 0 && k != j) || (j == nL && k != j)) {
-          0.0
-        } else if(j == k) {
-          if(j == 0 || j == nL) {
-            1.0
-          } else {
-            1/deltaT + 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
+            0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
               lVec(j)*(conv(forwardDiffConv(j, n))(diffusionProfile) + conv(backwardDiffConv(j, n))(diffusionProfile))
           }
         } else if(j > k) {
@@ -151,7 +129,11 @@ object RadialDiffusionSolver {
     * Instantiate layer transformations
     * */
     (0 until nT).map(n => {
-      (beta(n)\alpha(n), beta(n)\gamma(n))
+      val pM = paramsMat(n)
+      val a = deltaTMat - pM
+      val b = deltaTMat + pM
+
+      (b\a, b\gamma(n))
     })
   }
 }

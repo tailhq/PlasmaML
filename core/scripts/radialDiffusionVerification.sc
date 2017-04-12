@@ -6,7 +6,7 @@ import com.quantifind.charts.Highcharts._
 import com.quantifind.charts.highcharts.AxisType
 
 
-val (nL,nT) = (10, 50)
+val (nL,nT) = (10, 500)
 
 
 val bins = List(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
