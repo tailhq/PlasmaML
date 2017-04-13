@@ -45,16 +45,19 @@ val lossesTime = bins.map(bT => {
   val diffProVec = lShellVec.map(l => theta*l*l)
   val lossProVec = lShellVec.map(l => alpha - math.pow(l*omega, 2.0)*theta)
 
+  println("\tInitialising diffusion profiles and boundary fluxes ...")
   val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,bT)((i,_) => diffProVec(i))
   val lossProfileGT = DenseMatrix.tabulate[Double](nL+1,bT)((i,_) => lossProVec(i))
   val boundFluxGT = DenseMatrix.tabulate[Double](nL+1,bT)((i,j) => if(i == nL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT) else 0.0)
 
+  println("\tGenerating neural computation stack")
   val radialDiffusionStack = rds.getComputationStack(diffProfileGT, lossProfileGT, boundFluxGT)
 
   val solution = radialDiffusionStack forwardPropagate initialPSDGT
 
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
+  println("\tCalculating RMSE with respect to reference solution")
   val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/(bT+1.0))
 
   (rds.deltaT, error)
@@ -62,7 +65,7 @@ val lossesTime = bins.map(bT => {
 })
 
 spline(lossesTime)
-title("Variation of discretisation Errors")
+title("Forward Solver Error")
 xAxisType(AxisType.logarithmic)
 xAxis("delta T")
 yAxis("RMSE")
@@ -87,16 +90,19 @@ val lossesSpace = bins.map(bL => {
   val diffProVec = lShellVec.map(l => theta*l*l)
   val lossProVec = lShellVec.map(l => alpha - math.pow(l*omega, 2.0)*theta)
 
+  println("\tInitialising diffusion profiles and boundary fluxes ...")
   val diffProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,_) => diffProVec(i))
   val lossProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,_) => lossProVec(i))
   val boundFluxGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => if(i == nL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT) else 0.0)
 
+  println("\tGenerating neural computation stack")
   val radialDiffusionStack = rds.getComputationStack(diffProfileGT, lossProfileGT, boundFluxGT)
 
   val solution = radialDiffusionStack forwardPropagate initialPSDGT
 
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
+  println("\tCalculating RMSE with respect to reference solution")
   val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/(nT+1.0))
 
   (rds.deltaL, error)
@@ -105,7 +111,7 @@ val lossesSpace = bins.map(bL => {
 
 
 spline(lossesSpace)
-title("Variation of discretisation Errors")
+title("Forward Solver Error")
 xAxisType(AxisType.logarithmic)
 xAxis("delta L")
 yAxis("RMSE")
