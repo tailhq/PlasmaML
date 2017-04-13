@@ -1,4 +1,4 @@
-package io.github.mandar2812.PlasmaML
+package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector, sum}
 import io.github.mandar2812.dynaml.models.neuralnets._
@@ -18,7 +18,7 @@ class RadialDiffusionSolver(
   val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
   val stackFactory = NeuralStackFactory(
-    (1 to nT).map(_ => new Vec2VecLayerFactory(VectorLinear)(nL+1, nL+1)):_*
+    (1 to nT).map(_ => new NeuralLayerFactory(RadialDiffusionLayer.metaCompute, VectorLinear)):_*
   )
 
   val computeStackParameters =
@@ -40,13 +40,13 @@ object RadialDiffusionSolver {
   /**
     * The forward difference convolution filter
     * */
-  def forwardDiffConv(i: Int, j: Int)(n: Int, m: Int): Double =
+  def forwardConvDiff(i: Int, j: Int)(n: Int, m: Int): Double =
     if(n - i >= 0 && n - i <= 1 && m - j >= 0 && m - j <= 1) 0.25 else 0.0
 
   /**
     * The backward difference convolution filter
     * */
-  def backwardDiffConv(i: Int, j: Int)(n: Int, m: Int): Double =
+  def backwardConvDiff(i: Int, j: Int)(n: Int, m: Int): Double =
     if(i - n >= 0 && i - n <= 1 && m - j >= 0 && m - j <= 1) 0.25 else 0.0
 
   /**
@@ -79,15 +79,17 @@ object RadialDiffusionSolver {
     nL: Int, nT: Int)(
     lossProfile: DenseMatrix[Double],
     diffusionProfile: DenseMatrix[Double],
-    boundaryFlux: DenseMatrix[Double]): Seq[(DenseMatrix[Double], DenseVector[Double])] = {
+    boundaryFlux: DenseMatrix[Double]): Seq[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])] = {
 
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
     val lVec = DenseVector.tabulate[Double](nL + 1)(i =>
-      if(i < nL) lShellLimits._1+(deltaL*i)
-      else lShellLimits._2).map(v => 0.5*v*v/deltaL
-    )
+      if(i < nL) lShellLimits._1+(deltaL*i) else lShellLimits._2)
+      .map(v => 0.5*v*v/deltaL)
 
+    val invDeltaT = 1/deltaT
+
+    /*
     val deltaTMat = DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
       if(j == k) {
         if(j == 0 || j == nL) 1.0 else 1/deltaT
@@ -105,15 +107,34 @@ object RadialDiffusionSolver {
             0.0
           } else {
             0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
-              lVec(j)*(conv(forwardDiffConv(j, n))(diffusionProfile) + conv(backwardDiffConv(j, n))(diffusionProfile))
+              lVec(j)*(conv(forwardConvDiff(j, n))(diffusionProfile) + conv(backwardConvDiff(j, n))(diffusionProfile))
           }
         } else if(j > k) {
-          -lVec(j)*conv(backwardDiffConv(j, n))(diffusionProfile)
+          -lVec(j)*conv(backwardConvDiff(j, n))(diffusionProfile)
         } else {
-          -lVec(j)*conv(forwardDiffConv(j, n))(diffusionProfile)
+          -lVec(j)*conv(forwardConvDiff(j, n))(diffusionProfile)
         }
 
       })
+    }
+    */
+
+    val paramsTMat: (Int) => (Seq[Seq[Double]], Seq[Seq[Double]]) = (n) => {
+
+      val (alph, bet) = (1 until nL).map(j => {
+        val b = 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
+          lVec(j)*(conv(forwardConvDiff(j, n))(diffusionProfile) + conv(backwardConvDiff(j, n))(diffusionProfile))
+
+        val a = -lVec(j)*conv(backwardConvDiff(j, n))(diffusionProfile)
+
+        val c = -lVec(j)*conv(forwardConvDiff(j, n))(diffusionProfile)
+
+        (Seq(-a, invDeltaT - b, -c), Seq(a, invDeltaT + b, c))
+      }).unzip
+
+      (
+        Seq(Seq(0.0, 1.0, 0.0)) ++ alph ++ Seq(Seq(0.0, 1.0, 0.0)),
+        Seq(Seq(0.0, 1.0, 0.0)) ++ bet ++ Seq(Seq(0.0, 1.0, 0.0)))
     }
 
     /*
@@ -129,11 +150,14 @@ object RadialDiffusionSolver {
     * Instantiate layer transformations
     * */
     (0 until nT).map(n => {
+
+      /*
       val pM = paramsMat(n)
       val a = deltaTMat - pM
       val b = deltaTMat + pM
-
-      (b\a, b\gamma(n))
+      */
+      val (alpha, beta) = paramsTMat(n)
+      (alpha, beta, gamma(n))
     })
   }
 }

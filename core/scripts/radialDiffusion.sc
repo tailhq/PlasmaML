@@ -1,8 +1,8 @@
 import breeze.stats.distributions._
 import breeze.linalg._
-import io.github.mandar2812.PlasmaML.RadialDiffusionSolver
 import io.github.mandar2812.dynaml.probability._
 import com.quantifind.charts.Highcharts._
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusionSolver
 
 
 val (nL,nT) = (20, 50)
