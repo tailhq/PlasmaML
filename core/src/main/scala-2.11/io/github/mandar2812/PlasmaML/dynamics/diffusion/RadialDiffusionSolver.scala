@@ -1,6 +1,7 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector, sum}
+import io.github.mandar2812.dynaml.algebra.square
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes.DataPipe3
 
@@ -83,9 +84,12 @@ object RadialDiffusionSolver {
 
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
-    val lVec = DenseVector.tabulate[Double](nL + 1)(i =>
-      if(i < nL) lShellLimits._1+(deltaL*i) else lShellLimits._2)
-      .map(v => 0.5*v*v/deltaL)
+    val lSqVec = square(DenseVector.tabulate[Double](nL + 1)(i =>
+      if(i < nL) lShellLimits._1+(deltaL*i) else lShellLimits._2))
+
+    val adjLVec = lSqVec.map(v => 0.5*v/(deltaL*deltaL))
+
+    val adjustedDiffusionProfile = diffusionProfile.mapPairs((coords, value) => value/lSqVec(coords._1))
 
     val invDeltaT = 1/deltaT
 
@@ -107,12 +111,13 @@ object RadialDiffusionSolver {
             0.0
           } else {
             0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
-              lVec(j)*(conv(forwardConvDiff(j, n))(diffusionProfile) + conv(backwardConvDiff(j, n))(diffusionProfile))
+              adjLVec(j)*(conv(forwardConvDiff(j, n))(adjustedDiffusionProfile) +
+                conv(backwardConvDiff(j, n))(adjustedDiffusionProfile))
           }
         } else if(j > k) {
-          -lVec(j)*conv(backwardConvDiff(j, n))(diffusionProfile)
+          -adjLVec(j)*conv(backwardConvDiff(j, n))(adjustedDiffusionProfile)
         } else {
-          -lVec(j)*conv(forwardConvDiff(j, n))(diffusionProfile)
+          -adjLVec(j)*conv(forwardConvDiff(j, n))(adjustedDiffusionProfile)
         }
 
       })
@@ -123,11 +128,12 @@ object RadialDiffusionSolver {
 
       val (alph, bet) = (1 until nL).map(j => {
         val b = 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
-          lVec(j)*(conv(forwardConvDiff(j, n))(diffusionProfile) + conv(backwardConvDiff(j, n))(diffusionProfile))
+          adjLVec(j)*(conv(forwardConvDiff(j, n))(adjustedDiffusionProfile) +
+            conv(backwardConvDiff(j, n))(adjustedDiffusionProfile))
 
-        val a = -lVec(j)*conv(backwardConvDiff(j, n))(diffusionProfile)
+        val a = -adjLVec(j)*conv(backwardConvDiff(j, n))(adjustedDiffusionProfile)
 
-        val c = -lVec(j)*conv(forwardConvDiff(j, n))(diffusionProfile)
+        val c = -adjLVec(j)*conv(forwardConvDiff(j, n))(adjustedDiffusionProfile)
 
         (Seq(-a, invDeltaT - b, -c), Seq(a, invDeltaT + b, c))
       }).unzip
