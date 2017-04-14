@@ -4,7 +4,7 @@ import com.quantifind.charts.highcharts.AxisType
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (10, 10)
+val (nL,nT) = (10, 50)
 
 
 val bins = List(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
@@ -12,13 +12,26 @@ val bins = List(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 
 val lShellLimits = (1.0, 5.0)
 val timeLimits = (0.0, 5.0)
 
-val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
-val theta = 0.06
-val alpha = 0.005 + theta*math.pow(omega*lShellLimits._2, 2.0)
+//Define parameters of reference solution
+val a = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
+val b = math.log(2d)/timeLimits._2
 
-val referenceSolution = (l: Double, t: Double) => math.sin(omega*l)*(math.exp(-alpha*t) + 1.0)
+val referenceSolution = (l: Double, t: Double) => math.sin(a*(l - lShellLimits._1))*(math.exp(b*t) - 1.0)
 
-val radialDiffusionSolver = (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT)
+//Define parameters of radial diffusion system
+val alpha = 1.9E-10
+val beta = 11.7
+
+val dll = (l: Double, _: Double) => alpha*math.pow(l, beta)
+
+val q = (l: Double, t: Double) => {
+  b*math.sin(a*(l - lShellLimits._1))*math.exp(b*t) -
+    a*alpha*(beta-2d)*math.pow(l, beta-1d)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1)) +
+    a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1))
+}
+
+val radialDiffusionSolver =
+  (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT, false)
 
 
 //Perform verification of errors for constant nL
@@ -33,26 +46,26 @@ val lossesTime = bins.map(bT => {
     if(i < nL) lShellLimits._1+(rds.deltaL*i)
     else lShellLimits._2).toArray.toSeq
 
-  val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l - lShellLimits._1, 0.0)).toArray)
+  val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l,0.0)).toArray)
 
   val timeVec = DenseVector.tabulate[Double](bT+1)(i =>
     if(i < bT) timeLimits._1+(rds.deltaT*i)
     else timeLimits._2).toArray.toSeq
 
-
-  val diffProVec = lShellVec.map(l => theta*l*l)
-  val lossProVec = lShellVec.map(l => alpha - math.pow(l*omega, 2.0)*theta)
-
   println("\tInitialising diffusion profiles and boundary fluxes ...")
-  val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,_) => diffProVec(i))
-  val lossProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => lossProVec(i)/(1 + math.exp(alpha*timeVec(j))))
-  val boundFluxGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => if(i == nL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT) else 0.0)
+  val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => dll(lShellVec(i), timeVec(j)))
+  val injectionProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => q(lShellVec(i), timeVec(j)))
+  val boundFluxGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => {
+    if(i == nL || i == 0) referenceSolution(lShellVec(i), timeVec(j))
+    else 0.0
+  })
 
-  println("\tGenerating neural computation stack & computing solution")
+  println("\tGenerating neural computation stack")
+  //val radialDiffusionStack = rds.getComputationStack(injectionProfileGT, diffProfileGT, boundFluxGT)
 
-  val solution = rds.solve(lossProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
+  val solution = rds.solve(injectionProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
 
-  val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS-lShellLimits._1, t)).toArray))
+  val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
   println("\tCalculating RMSE with respect to reference solution\n")
   val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/(bT+1.0))
@@ -83,18 +96,18 @@ val lossesSpace = bins.map(bL => {
     if(i < nT) timeLimits._1+(rds.deltaT*i)
     else timeLimits._2).toArray.toSeq
 
-
-  val diffProVec = lShellVec.map(l => theta*l*l)
-  val lossProVec = lShellVec.map(l => alpha - math.pow(l*omega, 2.0)*theta)
-
   println("\tInitialising diffusion profiles and boundary fluxes ...")
-  val diffProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,_) => diffProVec(i))
-  val lossProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => lossProVec(i)/(1 + math.exp(alpha*timeVec(j))))
-  val boundFluxGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => if(i == nL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT) else 0.0)
+  val diffProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => dll(lShellVec(i), timeVec(j)))
+  val injectionProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => q(lShellVec(i), timeVec(j)))
+  val boundFluxGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => {
+    if(i == bL || i == 0) referenceSolution(lShellVec(i), timeVec(j))
+    else 0.0
+  })
 
-  println("\tGenerating neural computation stack & computing solution")
+  println("\tGenerating neural computation stack")
+  //val radialDiffusionStack = rds.getComputationStack(lossProfileGT, diffProfileGT, boundFluxGT)
 
-  val solution = rds.solve(lossProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
+  val solution = rds.solve(injectionProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
 
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS-lShellLimits._1, t)).toArray))
 
