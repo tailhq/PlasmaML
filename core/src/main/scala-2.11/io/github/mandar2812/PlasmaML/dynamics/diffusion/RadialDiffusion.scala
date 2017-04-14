@@ -241,7 +241,7 @@ object RadialDiffusion {
 
         val c = -adjLVec(j)*conv(forwardConvDiff(j, n))(adjustedDiffusionProfile)
 
-        (Seq(-a, invDeltaT - b, -c), Seq(a, invDeltaT + b, c))
+        (Seq(-a*deltaT, 1d - b*deltaT, -c*deltaT), Seq(a*deltaT, 1d + b*deltaT, c*deltaT))
       }).unzip
 
       (
