@@ -76,7 +76,7 @@ object RadialDiffusionLayer {
     x.toArray
   }
 
-  val metaCompute = MetaPipe(
+  val forwardPropagate = MetaPipe(
     (params: (Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])) => (x: DenseVector[Double]) => {
 
     val (alpha, beta, gamma) = params

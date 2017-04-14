@@ -1,10 +1,10 @@
 import breeze.linalg._
 import com.quantifind.charts.Highcharts._
 import com.quantifind.charts.highcharts.AxisType
-import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusionSolver
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (10, 10)
+val (nL,nT) = (10, 50)
 
 
 val bins = List(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
@@ -16,9 +16,9 @@ val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val theta = 0.06
 val alpha = 0.005 + theta*math.pow(omega*lShellLimits._2, 2.0)
 
-val referenceSolution = (l: Double, t: Double) => math.sin(omega*l)*math.exp(-alpha*t)
+val referenceSolution = (l: Double, t: Double) => math.sin(omega*l)*(math.exp(-alpha*t) + 1.0)
 
-val radialDiffusionSolver = (binsL: Int, binsT: Int) => new RadialDiffusionSolver(lShellLimits, timeLimits, binsL, binsT)
+val radialDiffusionSolver = (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT)
 
 
 //Perform verification of errors for constant nL
@@ -45,7 +45,7 @@ val lossesTime = bins.map(bT => {
 
   println("\tInitialising diffusion profiles and boundary fluxes ...")
   val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,_) => diffProVec(i))
-  val lossProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,_) => lossProVec(i))
+  val lossProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => lossProVec(i)/(1 + math.exp(alpha*timeVec(j))))
   val boundFluxGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => if(i == nL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT) else 0.0)
 
   println("\tGenerating neural computation stack")
@@ -90,7 +90,7 @@ val lossesSpace = bins.map(bL => {
 
   println("\tInitialising diffusion profiles and boundary fluxes ...")
   val diffProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,_) => diffProVec(i))
-  val lossProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,_) => lossProVec(i))
+  val lossProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => lossProVec(i)/(1 + math.exp(alpha*timeVec(j))))
   val boundFluxGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => if(i == nL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT) else 0.0)
 
   println("\tGenerating neural computation stack")
