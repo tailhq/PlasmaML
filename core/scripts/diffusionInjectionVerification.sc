@@ -7,9 +7,9 @@ import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 val (nL,nT) = (10, 50)
 
 
-val bins = List(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
+val bins = List(1, 10, 50, 100, 500, 1000, 5000)
 
-val lShellLimits = (1.0, 5.0)
+val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)
 
 //Define parameters of reference solution
@@ -19,15 +19,15 @@ val b = math.log(2d)/timeLimits._2
 val referenceSolution = (l: Double, t: Double) => math.sin(a*(l - lShellLimits._1))*(math.exp(b*t) - 1.0)
 
 //Define parameters of radial diffusion system
-val alpha = 1.9E-10
-val beta = 11.7
+val alpha = 0.9
+val beta = 2.0
 
 val dll = (l: Double, _: Double) => alpha*math.pow(l, beta)
 
 val q = (l: Double, t: Double) => {
   b*math.sin(a*(l - lShellLimits._1))*math.exp(b*t) -
     a*alpha*(beta-2d)*math.pow(l, beta-1d)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1)) +
-    a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1))
+    a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
 }
 
 val radialDiffusionSolver =

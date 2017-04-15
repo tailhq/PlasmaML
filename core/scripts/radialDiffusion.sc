@@ -15,15 +15,15 @@ val b = math.log(2d)/timeLimits._2
 val referenceSolution = (l: Double, t: Double) => math.sin(a*(l - lShellLimits._1))*(math.exp(b*t) - 1.0)
 
 //Define parameters of radial diffusion system
-val alpha = 1.9E-10
-val beta = 11.7
+val alpha = 0.9
+val beta = 2.0
 
 val dll = (l: Double, _: Double) => alpha*math.pow(l, beta)
 
 val q = (l: Double, t: Double) => {
   b*math.sin(a*(l - lShellLimits._1))*math.exp(b*t) -
     a*alpha*(beta-2d)*math.pow(l, beta-1d)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1)) +
-    a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1))
+    a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
 }
 
 val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT, false)
@@ -40,10 +40,12 @@ val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
 
 val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => dll(lShellVec(i), timeVec(j)))
 val injectionProfileGT = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => q(lShellVec(i), timeVec(j)))
-val boundFluxGT = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => {
+val boundFluxGT = DenseMatrix.zeros[Double](nL+1,nT+1)
+
+/*((i,j) => {
   if(i == nL || i == 0) referenceSolution(lShellVec(i), timeVec(j))
   else 0.0
-})
+})*/
 
 val radialDiffusionStack = rds.getComputationStack(injectionProfileGT, diffProfileGT, boundFluxGT)
 

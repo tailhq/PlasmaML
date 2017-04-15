@@ -232,7 +232,7 @@ object RadialDiffusion {
 
     val paramsTMat: (Int) => (Seq[Seq[Double]], Seq[Seq[Double]]) = (n) => {
 
-      val (alph, bet) = (1 until nL).map(j => {
+      val (alpha_n, beta_n) = (1 until nL).map(j => {
         val b = adjLVec(j)*(
           conv(forwardConvDiff(j, n))(adjustedDiffusionProfile) +
           conv(backwardConvDiff(j, n))(adjustedDiffusionProfile))
@@ -241,12 +241,12 @@ object RadialDiffusion {
 
         val c = -adjLVec(j)*conv(forwardConvDiff(j, n))(adjustedDiffusionProfile)
 
-        (Seq(-a*deltaT, 1d - b*deltaT, -c*deltaT), Seq(a*deltaT, 1d + b*deltaT, c*deltaT))
+        (Seq(-a, invDeltaT - b, -c), Seq(a, invDeltaT + b, c))
       }).unzip
 
       (
-        Seq(Seq(0.0, 1.0, 0.0)) ++ alph ++ Seq(Seq(0.0, 1.0, 0.0)),
-        Seq(Seq(0.0, 1.0, 0.0)) ++ bet ++ Seq(Seq(0.0, 1.0, 0.0)))
+        Seq(Seq(0.0, 1.0, 0.0)) ++ alpha_n ++ Seq(Seq(0.0, 1.0, 0.0)),
+        Seq(Seq(0.0, 1.0, 0.0)) ++ beta_n ++ Seq(Seq(0.0, 1.0, 0.0)))
     }
 
     /*
@@ -259,7 +259,7 @@ object RadialDiffusion {
     }
 
     val delta: (Int) => DenseVector[Double] = (n) => {
-      DenseVector.tabulate[Double](nL + 1)(j => deltaT*conv(forwardConvLossProfile(j,n))(injectionProfile))
+      DenseVector.tabulate[Double](nL + 1)(j => conv(forwardConvLossProfile(j,n))(injectionProfile))
     }
 
     /*
