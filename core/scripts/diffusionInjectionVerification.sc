@@ -4,7 +4,7 @@ import com.quantifind.charts.highcharts.AxisType
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (10, 50)
+val (nL,nT) = (10, 10)
 
 
 val bins = List(1, 10, 50, 100, 500, 1000, 5000)
@@ -87,10 +87,10 @@ val lossesSpace = bins.map(bL => {
 
   println("Solving for delta L = "+rds.deltaL)
   val lShellVec = DenseVector.tabulate[Double](bL+1)(i =>
-    if(i < nL) lShellLimits._1+(rds.deltaL*i)
+    if(i < bL) lShellLimits._1+(rds.deltaL*i)
     else lShellLimits._2).toArray.toSeq
 
-  val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l - lShellLimits._1, 0.0)).toArray)
+  val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l, 0.0)).toArray)
 
   val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
     if(i < nT) timeLimits._1+(rds.deltaT*i)
@@ -109,10 +109,10 @@ val lossesSpace = bins.map(bL => {
 
   val solution = rds.solve(injectionProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
 
-  val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS-lShellLimits._1, t)).toArray))
+  val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
   println("\tCalculating RMSE with respect to reference solution\n")
-  val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/(nT+1.0))
+  val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0)/(bL+1.0), 2.0)).sum/(nT+1d))
 
   (rds.deltaL, error)
 

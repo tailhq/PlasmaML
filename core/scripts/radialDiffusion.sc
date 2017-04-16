@@ -3,7 +3,7 @@ import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (100, 50)
+val (nL,nT) = (500, 50)
 val lMax = 20
 val tMax = 5
 
@@ -84,3 +84,21 @@ legend(DenseVector.tabulate[Double](tMax+1)(i =>
 title("Variation of Phase Space Density f(L,t)")
 xAxis("L")
 yAxis("f(L,t)")
+
+
+
+spline(lShellVec.toArray.map(lShell => (lShell, referenceSolution(lShell, 0.0))).toSeq)
+hold()
+
+(1 to tMax).foreach(l => {
+  spline(lShellVec.toArray.map(lShell => (lShell, referenceSolution(lShell, timeVec(l*10)))).toSeq)
+})
+
+unhold()
+
+legend(DenseVector.tabulate[Double](tMax+1)(i =>
+  if(i < nL) timeLimits._1+(rds.deltaT*i*10)
+  else timeLimits._2).toArray.map(s => "t = "+"%3f".format(s)))
+xAxis("L")
+yAxis("f(L,t)")
+title("Reference Solution")

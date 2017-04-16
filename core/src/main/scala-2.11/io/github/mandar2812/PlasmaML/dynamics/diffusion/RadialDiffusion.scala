@@ -129,37 +129,6 @@ object RadialDiffusion {
 
     val invDeltaT = 1/deltaT
 
-    /*
-    val deltaTMat = DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
-      if(j == k) {
-        if(j == 0 || j == nL) 1.0 else 1/deltaT
-      } else {
-        0.0
-      }
-    })
-
-    val paramsMat: (Int) => DenseMatrix[Double] = (n) => {
-      DenseMatrix.tabulate[Double](nL + 1, nL + 1)((j, k) => {
-        if (math.abs(j-k) > 1 || (j == 0 && k != j) || (j == nL && k != j)) {
-          0.0
-        } else if(j == k) {
-          if(j == 0 || j == nL) {
-            0.0
-          } else {
-            0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
-              adjLVec(j)*(conv(forwardConvDiff(j, n))(adjustedDiffusionProfile) +
-                conv(backwardConvDiff(j, n))(adjustedDiffusionProfile))
-          }
-        } else if(j > k) {
-          -adjLVec(j)*conv(backwardConvDiff(j, n))(adjustedDiffusionProfile)
-        } else {
-          -adjLVec(j)*conv(forwardConvDiff(j, n))(adjustedDiffusionProfile)
-        }
-
-      })
-    }
-    */
-
     val paramsTMat: (Int) => (Seq[Seq[Double]], Seq[Seq[Double]]) = (n) => {
 
       val (alph, bet) = (1 until nL).map(j => {
