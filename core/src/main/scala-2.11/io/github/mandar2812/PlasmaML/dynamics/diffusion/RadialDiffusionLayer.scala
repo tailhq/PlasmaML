@@ -5,7 +5,18 @@ import io.github.mandar2812.dynaml.models.neuralnets.{NeuralLayer, VectorLinear}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, MetaPipe}
 
 /**
-  * Created by mandar on 13/04/2017.
+  *
+  * Represents a Radial Diffusion forward propagation computation.
+  *
+  * f(n+1) = &Beta;(n)<sup>-1</sup>.(&Alpha;(n).f(n) + &gamma;(n))
+  *
+  * @author mandar2812 date 13/04/2017.
+  *
+  *
+  * @param alpha The tri-diagonal portion (non-zero) of &Alpha;
+  * @param beta The tri-diagonal portion (non-zero) of &Beta;
+  * @param gamma The intercept &gamma;
+  *
   * */
 class RadialDiffusionLayer(
   alpha: Seq[Seq[Double]],
@@ -37,6 +48,16 @@ class RadialDiffusionLayer(
 
 object RadialDiffusionLayer {
 
+  /**
+    * Solve a tri-diagonal linear system using
+    * the <a href="https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm">Thomas algorithm</a>.
+    *
+    * &Alpha;.x = b
+    *
+    * @param a The tri-diagonal portion of matrix &Alpha;
+    * @param b Right Hand Side of the linear system.
+    *
+    * */
   def triDiagSolve(a: Seq[Seq[Double]], b: Seq[Double]): Array[Double] = {
 
 
@@ -61,7 +82,9 @@ object RadialDiffusionLayer {
     * Does a reverse pass of the Thomas algorithm in a tail recursive manner
     * expects cpdp to be in reverse order see forwardTRec
     * */
-    def reverseTRec(cpdp: List[(Double, Double)], xP: Double, xAcc: List[Double]): Seq[Double] = cpdp match {
+    def reverseTRec(
+      cpdp: List[(Double, Double)],
+      xP: Double, xAcc: List[Double]): Seq[Double] = cpdp match {
       case Nil => xAcc
       case h::tail =>
         val (c, d) = h
@@ -91,6 +114,18 @@ object RadialDiffusionLayer {
     DenseVector(RadialDiffusionLayer.triDiagSolve(beta, a.toArray))
   })
 
+  /**
+    * Convenience Method.
+    * Create a Radial Diffusion forward propagation layer.
+    *
+    * f(n+1) = &Beta;(n)<sup>-1</sup>.(&Alpha;(n).f(n) + &gamma;(n))
+    * @param alpha The tri-diagonal portion (non-zero) of &Alpha;
+    * @param beta The tri-diagonal portion (non-zero) of &Beta;
+    * @param gamma The intercept &gamma;
+    *
+    * @return A [[RadialDiffusionLayer]] instance representing the
+    *         specified forward propagation computation.
+    * */
   def apply(
     alpha: Seq[Seq[Double]],
     beta: Seq[Seq[Double]],

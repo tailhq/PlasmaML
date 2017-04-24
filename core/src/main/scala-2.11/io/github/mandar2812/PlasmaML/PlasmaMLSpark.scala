@@ -3,8 +3,8 @@ package io.github.mandar2812.PlasmaML
 import org.apache.spark.{SparkConf, SparkContext}
 
 /**
-  * Created by mandar on 14/5/16.
-  */
+  * @author mandar2812 date 14/5/16.
+  * */
 object PlasmaMLSpark {
 
   /**

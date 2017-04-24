@@ -3,8 +3,8 @@ package io.github.mandar2812.PlasmaML.omni
 import org.apache.log4j.Logger
 
 /**
-  * Created by mandar on 12/7/16.
-  */
+  * @author mandar2812 date 12/7/16.
+  * */
 object OMNIData {
 
   val logger = Logger.getLogger(this.getClass)

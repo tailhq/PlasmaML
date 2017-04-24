@@ -12,11 +12,11 @@ import io.github.mandar2812.dynaml.optimization.FFBackProp
 import org.apache.log4j.Logger
 
 /**
-  * @author mandar2812 date 05/04/2017.
-  *
   * Contains helper methods to train Neural Nets
   * for Multiple Step Ahead (multiple hour ahead)
   * prediction of OMNI time series.
+  *
+  * @author mandar2812 date 05/04/2017.
   * */
 object OmniMSANN {
 

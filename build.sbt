@@ -27,24 +27,27 @@ resolvers in ThisBuild ++= Seq(
   Resolver.sonatypeRepo("public")
 )
 
-lazy val root = (project in file(".")).settings(commonSettings: _*)
+lazy val root = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+  .settings(commonSettings: _*)
   .aggregate(core, omni, vanAllen)
   .settings(aggregate in update := false)
+  .settings(aggregate in publishM2 := true)
 
-lazy val core = (project in file("core")).settings(
-  initialCommands in console :=
-    """import io.github.mandar2812.PlasmaML._;"""+
-      """import io.github.mandar2812.PlasmaML.cdf.CDFUtils;"""+
-      """import scalaxy.streams.optimize;"""+
-      """import io.github.mandar2812.dynaml.kernels._;"""+
-      """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
-      """import com.quantifind.charts.Highcharts._;"""+
-      """import breeze.linalg.DenseVector;""" +
-      """io.github.mandar2812.dynaml.DynaML.main(Array())""",
-  scalacOptions ++= Seq("-optimise", "-Yclosure-elim", "-Yinline"))
+lazy val core = (project in file("core")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+  .settings(
+    initialCommands in console :=
+      """import io.github.mandar2812.PlasmaML._;"""+
+        """import io.github.mandar2812.PlasmaML.cdf.CDFUtils;"""+
+        """import scalaxy.streams.optimize;"""+
+        """import io.github.mandar2812.dynaml.kernels._;"""+
+        """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
+        """import com.quantifind.charts.Highcharts._;"""+
+        """import breeze.linalg.DenseVector;""" +
+        """io.github.mandar2812.dynaml.DynaML.main(Array())""",
+    scalacOptions ++= Seq("-optimise", "-Yclosure-elim", "-Yinline"))
 
 lazy val omni =
-  (project in file("omni")).settings(commonSettings: _*)
+  (project in file("omni")).enablePlugins(JavaAppPackaging, BuildInfoPlugin).settings(commonSettings: _*)
     .settings(
       initialCommands in console :=
         """import io.github.mandar2812.PlasmaML.omni._;"""+
@@ -57,7 +60,8 @@ lazy val omni =
     ).dependsOn(core)
 
 lazy val vanAllen =
-  (project in file("vanAllen")).settings(commonSettings: _*)
+  (project in file("vanAllen")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+    .settings(commonSettings: _*)
     .settings(
       initialCommands in console :=
         """import io.github.mandar2812.PlasmaML.vanAllen._;"""+
@@ -72,7 +76,8 @@ lazy val vanAllen =
     ).dependsOn(core)
 
 lazy val streamer =
-  (project in file("streamer")).settings(commonSettings: _*)
+  (project in file("streamer")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+    .settings(commonSettings: _*)
     .settings(
       initialCommands in console :=
         """import io.github.mandar2812.PlasmaML.streamer._;"""+

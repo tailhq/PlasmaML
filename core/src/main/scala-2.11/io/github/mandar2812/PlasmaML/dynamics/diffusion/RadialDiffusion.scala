@@ -6,14 +6,15 @@ import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe3}
 
 /**
-  * @author mandar2812 date 30/03/2017.
   *
   * Implementation of a discrete radial diffusion system.
   *
-  * df/dt = L<sup>2</sup>d/dL[D<sub>LL</sub> &times L<sup>-2</sup> &times;  df/dL] + Q(L,t)
+  * df/dt = L<sup>2</sup>d/dL(D<sub>LL</sub> &times; L<sup>-2</sup> &times;  df/dL) + Q(L,t)
   *
   * This class solves the radial diffusion dynamics by representing the forward model
   * as a feed forward neural network represented by DynaML's [[NeuralStack]].
+  *
+  * @author mandar2812 date 30/03/2017.
   *
   * @param lShellLimits The minimum and maximum value of L* i.e. the drift shell
   * @param timeLimits The minimum and maximum of the time coordinate.

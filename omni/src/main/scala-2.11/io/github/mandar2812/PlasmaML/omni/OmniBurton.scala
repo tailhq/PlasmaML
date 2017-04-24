@@ -5,8 +5,6 @@ import io.github.mandar2812.dynaml.DynaMLPipe.extractTimeSeries
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 
 /**
-  * @author mandar2812 30/03/2017.
-  *
   * Contains work-flows for running experiments
   * on hybrid GP-Burton injection inference and
   * prediction models.
@@ -17,7 +15,9 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
   * d Dst(t)/dt + lambda*Dst(t) = Q(t)
   *
   * Q(t) ~ GP(0, K(t, t'))
-  */
+  *
+  * @author mandar2812 30/03/2017.
+  * */
 object OmniBurton {
 
   /**

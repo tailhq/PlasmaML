@@ -34,7 +34,7 @@ object Narmax extends DataPipe[DenseVector[Double], Double] {
 
 /**
   * Created by mandar on 8/4/16.
-  */
+  * */
 object TestOmniNarmax {
 
   val logger = Logger.getLogger(this.getClass)

@@ -35,11 +35,11 @@ import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, Grad
 import io.github.mandar2812.dynaml.pipes.{BifurcationPipe, StreamFlatMapPipe}
 
 /**
-  * @author mandar2812 date: 18/01/2017.
-  *
-  * A consolidation of models and workflows for OSA prediction
+  * A consolidation of models and work-flows for OSA prediction
   * and reproducible research on the hourly resolution OMNI data.
-  */
+  *
+  * @author mandar2812 date: 18/01/2017.
+  * */
 object OmniOSA {
 
   //Define some types to make code more readable
