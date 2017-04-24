@@ -17,6 +17,11 @@ val a = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val b = math.log(2d)/timeLimits._2
 
 val referenceSolution = (l: Double, t: Double) => math.sin(a*(l - lShellLimits._1))*(math.exp(b*t) - 1.0)
+val boundFlux = (l: Double, t: Double) => {
+  if(l == lShellLimits._1 || l == lShellLimits._2) referenceSolution(l, t) else 0.0
+}
+
+val initialPSD = (l: Double) => referenceSolution(l, 0.0)
 
 //Define parameters of radial diffusion system
 val alpha = 0.9
@@ -46,24 +51,13 @@ val lossesTime = bins.map(bT => {
     if(i < nL) lShellLimits._1+(rds.deltaL*i)
     else lShellLimits._2).toArray.toSeq
 
-  val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l,0.0)).toArray)
-
   val timeVec = DenseVector.tabulate[Double](bT+1)(i =>
     if(i < bT) timeLimits._1+(rds.deltaT*i)
     else timeLimits._2).toArray.toSeq
 
-  println("\tInitialising diffusion profiles and boundary fluxes ...")
-  val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => dll(lShellVec(i), timeVec(j)))
-  val injectionProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => q(lShellVec(i), timeVec(j)))
-  val boundFluxGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => {
-    if(i == nL || i == 0) referenceSolution(lShellVec(i), timeVec(j))
-    else 0.0
-  })
-
   println("\tGenerating neural computation stack")
-  //val radialDiffusionStack = rds.getComputationStack(injectionProfileGT, diffProfileGT, boundFluxGT)
 
-  val solution = rds.solve(injectionProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
+  val solution = rds.solve(q, dll, boundFlux)(initialPSD)
 
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
@@ -90,24 +84,13 @@ val lossesSpace = bins.map(bL => {
     if(i < bL) lShellLimits._1+(rds.deltaL*i)
     else lShellLimits._2).toArray.toSeq
 
-  val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l, 0.0)).toArray)
-
   val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
     if(i < nT) timeLimits._1+(rds.deltaT*i)
     else timeLimits._2).toArray.toSeq
 
-  println("\tInitialising diffusion profiles and boundary fluxes ...")
-  val diffProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => dll(lShellVec(i), timeVec(j)))
-  val injectionProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => q(lShellVec(i), timeVec(j)))
-  val boundFluxGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => {
-    if(i == bL || i == 0) referenceSolution(lShellVec(i), timeVec(j))
-    else 0.0
-  })
-
   println("\tGenerating neural computation stack")
-  //val radialDiffusionStack = rds.getComputationStack(lossProfileGT, diffProfileGT, boundFluxGT)
 
-  val solution = rds.solve(injectionProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
+  val solution = rds.solve(q, dll, boundFlux)(initialPSD)
 
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 

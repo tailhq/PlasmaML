@@ -88,7 +88,12 @@ object RadialDiffusionLayer {
       couple => couple._1.zip(couple._2).map(c => c._1*c._2).sum
     ).toArray) + gamma
 
-    //Return beta\(alpha*x+gamma)
     DenseVector(RadialDiffusionLayer.triDiagSolve(beta, a.toArray))
   })
+
+  def apply(
+    alpha: Seq[Seq[Double]],
+    beta: Seq[Seq[Double]],
+    gamma: DenseVector[Double]): RadialDiffusionLayer =
+    new RadialDiffusionLayer(alpha, beta, gamma)
 }

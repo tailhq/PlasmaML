@@ -42,11 +42,6 @@ val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => dll(lShellV
 val injectionProfileGT = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => q(lShellVec(i), timeVec(j)))
 val boundFluxGT = DenseMatrix.zeros[Double](nL+1,nT+1)
 
-/*((i,j) => {
-  if(i == nL || i == 0) referenceSolution(lShellVec(i), timeVec(j))
-  else 0.0
-})*/
-
 val radialDiffusionStack = rds.getComputationStack(injectionProfileGT, diffProfileGT, boundFluxGT)
 
 val solution = radialDiffusionStack forwardPropagate initialPSDGT

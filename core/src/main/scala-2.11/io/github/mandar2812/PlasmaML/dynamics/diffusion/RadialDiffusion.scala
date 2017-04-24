@@ -32,13 +32,20 @@ class RadialDiffusion(
 
   val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
+
+  val lShellVec = DenseVector.tabulate[Double](nL+1)(i =>
+    if(i < nL) lShellLimits._1+(deltaL*i)
+    else lShellLimits._2)
+
+  val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
+    if(i < nT) timeLimits._1+(deltaT*i)
+    else timeLimits._2)
+
   val stackFactory = DataPipe(
     (params: Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])]) =>
       new LazyNeuralStack[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double]), DenseVector[Double]](
-        params.map((layer) => new RadialDiffusionLayer(layer._1, layer._2, layer._3)))
+        params.map((layer) => RadialDiffusionLayer(layer._1, layer._2, layer._3)))
   )
-    /*NeuralStackFactory(
-      (1 to nT).map(_ => new NeuralLayerFactory(RadialDiffusionLayer.forwardPropagate, VectorLinear)):_*)*/
 
   val computeStackParameters =
     if(linearDecay) DataPipe3(RadialDiffusion.getLinearDecayModelParams(lShellLimits, timeLimits, nL, nT))
@@ -57,7 +64,7 @@ class RadialDiffusion(
     *                     spatial domain (drift shell) for each time epoch
     * @param f0 The initial phase space density profile realised on the spatial grid
     *
-    * @return The phase space density evolution as a [[Seq]] of [[DenseVector]]
+    * @return The phase space density evolution as a [[Stream]] of [[DenseVector]]
     *
     * */
   def solve(
@@ -66,6 +73,39 @@ class RadialDiffusion(
     boundaryFlux: DenseMatrix[Double])(
     f0: DenseVector[Double]): Stream[DenseVector[Double]] =
     getComputationStack(injectionProfile, diffusionProfile, boundaryFlux) forwardPropagate f0
+
+  /**
+    * Solve the radial diffusion dynamics.
+    *
+    * @param injection Depending on value the [[linearDecay]] flag,
+    *                         it is the injection or linear decay field
+    * @param diffusionField The radial diffusion coefficient as a field
+    * @param boundaryFlux The phase space density at the boundaries of the
+    *                     spatial domain (drift shell) as a function of LShell and time.
+    * @param f0 The initial phase space density profile as a function of LShell
+    *
+    * @return The phase space density evolution as a [[Stream]] of [[DenseVector]]
+    *
+    * */
+  def solve(
+    injection: (Double, Double) => Double,
+    diffusionField: (Double, Double) => Double,
+    boundaryFlux: (Double, Double) => Double)(
+    f0: (Double) => Double): Stream[DenseVector[Double]] = {
+
+    val initialPSD: DenseVector[Double] = DenseVector(lShellVec.map(l => f0(l)).toArray)
+
+    val diffProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => diffusionField(lShellVec(i), timeVec(j)))
+
+    val injectionProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => injection(lShellVec(i), timeVec(j)))
+
+    val boundFlux = DenseMatrix.tabulate[Double](nL+1,nT)((i,j) => {
+      if(i == nL || i == 0) boundaryFlux(lShellVec(i), timeVec(j))
+      else 0.0
+    })
+
+    solve(injectionProfile, diffProfile, boundFlux)(initialPSD)
+  }
 
 }
 
