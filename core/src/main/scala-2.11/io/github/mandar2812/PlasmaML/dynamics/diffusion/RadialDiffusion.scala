@@ -3,7 +3,7 @@ package io.github.mandar2812.PlasmaML.dynamics.diffusion
 import breeze.linalg.{DenseMatrix, DenseVector, sum}
 import io.github.mandar2812.dynaml.algebra.square
 import io.github.mandar2812.dynaml.models.neuralnets._
-import io.github.mandar2812.dynaml.pipes.DataPipe3
+import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe3}
 
 /**
   * @author mandar2812 date 30/03/2017.
@@ -32,9 +32,13 @@ class RadialDiffusion(
 
   val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
-  val stackFactory = NeuralStackFactory(
-      (1 to nT).map(_ => new NeuralLayerFactory(RadialDiffusionLayer.forwardPropagate, VectorLinear)):_*
+  val stackFactory = DataPipe(
+    (params: Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])]) =>
+      new LazyNeuralStack[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double]), DenseVector[Double]](
+        params.map((layer) => new RadialDiffusionLayer(layer._1, layer._2, layer._3)))
   )
+    /*NeuralStackFactory(
+      (1 to nT).map(_ => new NeuralLayerFactory(RadialDiffusionLayer.forwardPropagate, VectorLinear)):_*)*/
 
   val computeStackParameters =
     if(linearDecay) DataPipe3(RadialDiffusion.getLinearDecayModelParams(lShellLimits, timeLimits, nL, nT))
@@ -60,7 +64,7 @@ class RadialDiffusion(
     injectionProfile: DenseMatrix[Double],
     diffusionProfile: DenseMatrix[Double],
     boundaryFlux: DenseMatrix[Double])(
-    f0: DenseVector[Double]): Seq[DenseVector[Double]] =
+    f0: DenseVector[Double]): Stream[DenseVector[Double]] =
     getComputationStack(injectionProfile, diffusionProfile, boundaryFlux) forwardPropagate f0
 
 }
@@ -116,7 +120,7 @@ object RadialDiffusion {
     nL: Int, nT: Int)(
     lossProfile: DenseMatrix[Double],
     diffusionProfile: DenseMatrix[Double],
-    boundaryFlux: DenseMatrix[Double]): Seq[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])] = {
+    boundaryFlux: DenseMatrix[Double]): Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])] = {
 
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
@@ -160,7 +164,7 @@ object RadialDiffusion {
     /*
     * Instantiate layer transformations
     * */
-    (0 until nT).map(n => {
+    Stream.tabulate(nT)(n => {
 
       /*
       val pM = paramsMat(n)
@@ -186,7 +190,7 @@ object RadialDiffusion {
   def getInjectionModelParams(
     lShellLimits: (Double, Double), timeLimits: (Double, Double), nL: Int, nT: Int)(
     injectionProfile: DenseMatrix[Double], diffusionProfile: DenseMatrix[Double], boundaryFlux: DenseMatrix[Double])
-  : Seq[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])] = {
+  : Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])] = {
 
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
@@ -234,7 +238,7 @@ object RadialDiffusion {
     /*
     * Instantiate layer transformations
     * */
-    (0 until nT).map(n => {
+    Stream.tabulate(nT)(n => {
       val (alpha, beta) = paramsTMat(n)
       (alpha, beta, gamma(n) + delta(n))
     })

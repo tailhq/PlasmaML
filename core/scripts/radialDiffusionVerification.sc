@@ -110,7 +110,7 @@ val lossesSpace = bins.map(bL => {
 
   println("\tCalculating RMSE with respect to reference solution\n")
   val error = math.sqrt(
-    solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0)/(bL+1.0), 2.0)).sum/(nT+1.0)
+    solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0)/(bL+1.0), 2.0)).sum/(nT+1d)
   )
 
   (rds.deltaL, error)

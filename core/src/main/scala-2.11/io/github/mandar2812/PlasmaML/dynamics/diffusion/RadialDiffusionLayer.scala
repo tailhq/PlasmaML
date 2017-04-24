@@ -6,7 +6,7 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, MetaPipe}
 
 /**
   * Created by mandar on 13/04/2017.
-  */
+  * */
 class RadialDiffusionLayer(
   alpha: Seq[Seq[Double]],
   beta: Seq[Seq[Double]],
