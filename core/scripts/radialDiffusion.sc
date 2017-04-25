@@ -26,6 +26,12 @@ val q = (l: Double, t: Double) => {
     a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
 }
 
+val boundFlux = (l: Double, t: Double) => {
+  if(l == lShellLimits._1 || l == lShellLimits._2) referenceSolution(l, t) else 0.0
+}
+
+val initialPSD = (l: Double) => referenceSolution(l, 0.0)
+
 val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT, false)
 
 val lShellVec = DenseVector.tabulate[Double](nL+1)(i =>
@@ -38,13 +44,7 @@ val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
   if(i < nT) timeLimits._1+(rds.deltaT*i)
   else timeLimits._2).toArray.toSeq
 
-val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => dll(lShellVec(i), timeVec(j)))
-val injectionProfileGT = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => q(lShellVec(i), timeVec(j)))
-val boundFluxGT = DenseMatrix.zeros[Double](nL+1,nT+1)
-
-val radialDiffusionStack = rds.getComputationStack(injectionProfileGT, diffProfileGT, boundFluxGT)
-
-val solution = radialDiffusionStack forwardPropagate initialPSDGT
+val solution = rds.solve(q, dll, boundFlux)(initialPSD)
 
 spline(timeVec.zip(solution.map(_(0))))
 hold()

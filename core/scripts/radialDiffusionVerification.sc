@@ -16,9 +16,18 @@ val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val theta = 0.06
 val alpha = 0.005 + theta*math.pow(omega*lShellLimits._2, 2.0)
 
-val referenceSolution = (l: Double, t: Double) => math.sin(omega*l)*(math.exp(-alpha*t) + 1.0)
+val referenceSolution = (l: Double, t: Double) => math.sin(omega*(l - lShellLimits._1))*(math.exp(-alpha*t) + 1.0)
 
 val radialDiffusionSolver = (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT)
+
+val boundFlux = (l: Double, t: Double) => {
+  if(l == lShellLimits._1 || l == lShellLimits._2) referenceSolution(l, t) else 0.0
+}
+
+val dll = (l: Double, _: Double) => theta*l*l
+val q = (l: Double, _: Double) => alpha - math.pow(l*omega, 2.0)*theta
+
+val initialPSD = (l: Double) => referenceSolution(l, 0.0)
 
 
 //Perform verification of errors for constant nL
@@ -33,34 +42,21 @@ val lossesTime = bins.map(bT => {
     if(i < nL) lShellLimits._1+(rds.deltaL*i)
     else lShellLimits._2).toArray.toSeq
 
-  val initialPSDGT: DenseVector[Double] = DenseVector(
-    lShellVec.map(l => referenceSolution(l - lShellLimits._1, 0.0)).toArray
-  )
-
   val timeVec = DenseVector.tabulate[Double](bT+1)(i =>
     if(i < bT) timeLimits._1+(rds.deltaT*i)
     else timeLimits._2).toArray.toSeq
 
-
-  val diffProVec = lShellVec.map(l => theta*l*l)
-  val lossProVec = lShellVec.map(l => alpha - math.pow(l*omega, 2.0)*theta)
-
-  println("\tInitialising diffusion profiles and boundary fluxes ...")
-  val diffProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,_) => diffProVec(i))
-  val lossProfileGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) => lossProVec(i)/(1 + math.exp(alpha*timeVec(j))))
-  val boundFluxGT = DenseMatrix.tabulate[Double](nL+1,bT+1)((i,j) =>
-    if(i == nL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT)
-    else 0.0)
-
   println("\tGenerating neural computation stack & computing solution")
 
-  val solution = rds.solve(lossProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
+  val solution = rds.solve(q, dll, boundFlux)(initialPSD)
 
   val referenceSol = timeVec.map(t =>
-    DenseVector(lShellVec.map(lS => referenceSolution(lS-lShellLimits._1, t)).toArray))
+    DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
   println("\tCalculating RMSE with respect to reference solution\n")
-  val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/(bT+1.0))
+  val error = math.sqrt(
+    solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/(nL+1.0)*(bT+1.0)
+  )
 
   (rds.deltaT, error)
 
@@ -82,35 +78,20 @@ val lossesSpace = bins.map(bL => {
     if(i < bL) lShellLimits._1+(rds.deltaL*i)
     else lShellLimits._2).toArray.toSeq
 
-  val initialPSDGT: DenseVector[Double] = DenseVector(
-    lShellVec.map(l => referenceSolution(l - lShellLimits._1, 0.0)).toArray
-  )
-
   val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
     if(i < nT) timeLimits._1+(rds.deltaT*i)
     else timeLimits._2).toArray.toSeq
 
-
-  val diffProVec = lShellVec.map(l => theta*l*l)
-  val lossProVec = lShellVec.map(l => alpha - math.pow(l*omega, 2.0)*theta)
-
-  println("\tInitialising diffusion profiles and boundary fluxes ...")
-  val diffProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,_) => diffProVec(i))
-  val lossProfileGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) => lossProVec(i)/(1 + math.exp(alpha*timeVec(j))))
-  val boundFluxGT = DenseMatrix.tabulate[Double](bL+1,nT)((i,j) =>
-    if(i == bL || i == 0) referenceSolution(i * rds.deltaL, j * rds.deltaT)
-    else 0.0)
-
   println("\tGenerating neural computation stack & computing solution")
 
-  val solution = rds.solve(lossProfileGT, diffProfileGT, boundFluxGT)(initialPSDGT)
+  val solution = rds.solve(q, dll, boundFlux)(initialPSD)
 
   val referenceSol = timeVec.map(t =>
-    DenseVector(lShellVec.map(lS => referenceSolution(lS-lShellLimits._1, t)).toArray))
+    DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
   println("\tCalculating RMSE with respect to reference solution\n")
   val error = math.sqrt(
-    solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0)/(bL+1.0), 2.0)).sum/(nT+1d)
+    solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/((bL+1.0)*(nT+1d))
   )
 
   (rds.deltaL, error)

@@ -95,7 +95,7 @@ val lossesSpace = bins.map(bL => {
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
   println("\tCalculating RMSE with respect to reference solution\n")
-  val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0)/(bL+1.0), 2.0)).sum/(nT+1d))
+  val error = math.sqrt(solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)/(bL+1.0)).sum/(nT+1d))
 
   (rds.deltaL, error)
 
