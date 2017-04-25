@@ -12,6 +12,6 @@ DstMSANNExperiment.it = 2000
 DstMSANNExperiment.reg = 0.00001
 
 
-val metrics = DstMSANNExperiment(2, 2, false)
+val metrics = DstMSANNExperiment(2, 2, useWavelets = false)
 
-val metricsW = DstMSANNExperiment(2, 2, true)
+val metricsW = DstMSANNExperiment(2, 2)
