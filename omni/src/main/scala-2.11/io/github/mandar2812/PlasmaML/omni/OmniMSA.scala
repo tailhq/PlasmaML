@@ -1,24 +1,29 @@
 package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.{DenseMatrix, DenseVector}
+import io.github.mandar2812.PlasmaML.omni.OmniMSA.Features
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.PlasmaML.omni.OmniMultiOutputModels._
+import io.github.mandar2812.PlasmaML.omni.OmniOSA.DataAndScales
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
+import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.modelpipe.ModelPredictionPipe
-import io.github.mandar2812.dynaml.optimization.FFBackProp
+import io.github.mandar2812.dynaml.models.stp.MVStudentsTModel
+import io.github.mandar2812.dynaml.optimization.{FFBackProp, GridSearch}
 import org.apache.log4j.Logger
 
 /**
-  * Contains helper methods to train Neural Nets
+  * Contains helper methods to train models
   * for Multiple Step Ahead (multiple hour ahead)
   * prediction of OMNI time series.
   *
   * @author mandar2812 date 05/04/2017.
   * */
-object OmniMSANN {
+object OmniMSA {
 
   /*
   * Instantiating some types to make code more
@@ -32,6 +37,8 @@ object OmniMSANN {
   type LayerParams = (DenseMatrix[Double], DenseVector[Double])
 
 
+  var quietTimeSegment = ("2014/01/10/00", "2014/12/30/00")
+
   def haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
     if (useWaveletBasis)
       (gHFeat(featAndTarg._1), gHTarg(featAndTarg._2))
@@ -39,24 +46,8 @@ object OmniMSANN {
       featAndTarg
   )
 
-  /**
-    * Trains a [[GenericFFNeuralNet]] on the storms
-    * contained in [[OmniOSA.stormsFile3]] plus one year of
-    * OMNI data from the year 2014.
-    *
-    * @param alpha The learning rate for [[FFBackProp]]
-    * @param reg The regularisation parameter
-    * @param momentum Momentum parameter
-    * @param maxIt Maximum number of iterations to run for [[FFBackProp]]
-    * @param useWaveletBasis Set to true if discrete wavelet transform is
-    *                        to be used for pre-processing data.
-    *
-    * */
-  def train(
-    alpha: Double = 0.01, reg: Double = 0.001,
-    momentum: Double = 0.02, maxIt: Int = 20,
-    mini: Double = 1.0, useWaveletBasis: Boolean = true):
-  (GenericFFNeuralNet[Data, LayerParams, Features], DataScales) = {
+
+  def prepareData: DataPipe[String, (Data, DataScales)] = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
 
@@ -74,7 +65,7 @@ object OmniMSANN {
         (startDate+"/"+startHour, endDate+"/"+endHour)
       }) >
       DataPipe((s: Stream[(String, String)]) =>
-        s ++ Stream(("2014/01/10/00", "2014/12/30/00"))) >
+        s ++ Stream(quietTimeSegment)) >
       StreamFlatMapPipe((storm: (String, String)) => {
         // for each storm construct a data set
 
@@ -98,6 +89,31 @@ object OmniMSANN {
 
         generateDataSegment("data/omni2_"+trainingStartDate.getYear+".csv")
       })
+
+    prepareTrainingData >
+      OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT) >
+      haarWaveletPipe >
+      gaussianScaling
+  }
+
+  /**
+    * Trains a [[GenericFFNeuralNet]] on the storms
+    * contained in [[OmniOSA.stormsFile3]] plus one year of
+    * OMNI data from the year 2014.
+    *
+    * @param alpha The learning rate for [[FFBackProp]]
+    * @param reg The regularisation parameter
+    * @param momentum Momentum parameter
+    * @param maxIt Maximum number of iterations to run for [[FFBackProp]]
+    * @param useWaveletBasis Set to true if discrete wavelet transform is
+    *                        to be used for pre-processing data.
+    *
+    * */
+  def train(
+    alpha: Double = 0.01, reg: Double = 0.001,
+    momentum: Double = 0.02, maxIt: Int = 20,
+    mini: Double = 1.0, useWaveletBasis: Boolean = true):
+  (GenericFFNeuralNet[Data, LayerParams, Features], DataScales) = {
 
     val modelTrain = DataPipe((dataAndScales: (Data, DataScales)) => {
 
@@ -127,13 +143,90 @@ object OmniMSANN {
       (model, dataAndScales._2)
     })
 
-    val netWorkFlow = prepareTrainingData >
-      OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT) >
-      haarWaveletPipe >
-      gaussianScaling >
-      modelTrain
+    val netWorkFlow = prepareData > modelTrain
 
     netWorkFlow(OmniOSA.dataDir+OmniOSA.stormsFile3)
+  }
+
+  def train(
+    kernel: LocalScalarKernel[Features], noise: LocalScalarKernel[Features],
+    gridSize: Int, gridStep: Double, logSc: Boolean,
+    phi: DataPipe[Features, DenseVector[Double]]):
+  (MVStudentsTModel[Data, Features] , DataScales) = {
+
+    implicit val transform = DataPipe((d: Data) => d.toSeq)
+
+    val modelTrain = DataPipe((dataAndScales: (Data, DataScales)) => {
+      val multiVariateSTModel = MVStudentsTModel[Data, Features](kernel, noise, phi) _
+
+      val num_outputs = dataAndScales._2._2.mean.length
+      val initial_model = multiVariateSTModel(dataAndScales._1, dataAndScales._1.length, num_outputs)
+
+      val gs = new GridSearch[initial_model.type](initial_model)
+        .setGridSize(gridSize)
+        .setStepSize(gridStep)
+        .setLogScale(logSc)
+
+      val startConf = initial_model.covariance.effective_state ++ initial_model.noiseModel.effective_state
+
+      val (optModel, _) = gs.optimize(startConf, Map("persist" -> "true"))
+
+      (optModel, dataAndScales._2)
+    })
+
+    val netWorkFlow = prepareData > modelTrain
+
+    netWorkFlow(OmniOSA.dataDir+OmniOSA.stormsFile3)
+  }
+
+  def test(model: MVStudentsTModel[Data, Features], scaler: DataScales) = {
+
+    val (pF, pT) = (math.pow(2, orderFeat).toInt,math.pow(2, orderTarget).toInt)
+
+    val (testStartDate, testEndDate) =
+      (formatter.parseDateTime(testStart).minusHours(pF),
+        formatter.parseDateTime(testEnd).plusHours(pT))
+
+    val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
+
+    val testDataFilter = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+      couple._1 >= tStampStart && couple._1 <= tStampEnd)
+
+    val scaleFeatures: DataPipe[Features, Features] =
+      if (useWaveletBasis) gHFeat > scaler._1
+      else scaler._1
+
+    val scaleTarg: DataPipe[Features, Features] =
+      if (useWaveletBasis) gHTarg > scaler._2
+      else scaler._1
+
+    val reverseScale: DataPipe[Features, Features] =
+      if (useWaveletBasis) scaler._2.i > gHTarg.i
+      else scaler._2.i
+
+    val finalPipe = preProcess >
+      extractTimeSeriesVec((year,day,hour) => {
+        val dt = dayofYearformat.parseDateTime(
+          year.toInt.toString + "/" + day.toInt.toString + "/"+hour.toInt.toString)
+        dt.getMillis/1000.0
+      }) >
+      testDataFilter >
+      OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT) >
+      DataPipe((data: Data) => {
+        val forSc = scaleFeatures*scaleTarg
+        val revSc = reverseScale*reverseScale
+        revSc(model.test(forSc(data)).toStream.map(t => (t._3, t._2)))
+      }) >
+      DataPipe((predictions: ScoresAndLabels) => {
+        val metrics = new MultiRegressionMetrics(
+          predictions.toList,
+          predictions.length)
+        metrics.setName(names(column)+" "+pT+" hour forecast")
+      })
+
+    finalPipe("data/omni2_"+testStartDate.getYear+".csv")
+
+
   }
 
   /**
@@ -147,7 +240,7 @@ object OmniMSANN {
     model: GenericFFNeuralNet[Data, LayerParams, Features],
     scaler: DataScales): MultiRegressionMetrics = {
 
-    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val (pF, pT) = (math.pow(2, orderFeat).toInt,math.pow(2, orderTarget).toInt)
 
     val (testStartDate, testEndDate) =
       (formatter.parseDateTime(testStart).minusHours(pF),
@@ -389,7 +482,7 @@ object OmniMSANN {
 }
 
 
-object DstMSANNExperiment {
+object DstMSAExperiment {
 
   val logger = Logger.getLogger(this.getClass)
 
@@ -421,7 +514,7 @@ object DstMSANNExperiment {
     OmniMultiOutputModels.orderTarget = orderT
     OmniMultiOutputModels.useWaveletBasis = useWavelets
 
-    val (model, scaler) = OmniMSANN.train(learningRate, reg, momentum, it, 1.0)
+    val (model, scaler) = OmniMSA.train(learningRate, reg, momentum, it, 1.0)
 
     val stormsPipe =
       fileToStream >
@@ -441,7 +534,49 @@ object DstMSANNExperiment {
 
           logger.info("Testing on Storm: "+OmniMultiOutputModels.testStart+" to "+OmniMultiOutputModels.testEnd)
 
-          OmniMSANN.test(model, scaler)
+          OmniMSA.test(model, scaler)
+        }) >
+        DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
+          metrics.reduce((m,n) => m++n))
+
+    stormsPipe("data/geomagnetic_storms.csv")
+
+  }
+
+  def apply(
+    kernel: LocalScalarKernel[Features],
+    noise: LocalScalarKernel[Features],
+    orderF: Int, orderT: Int,
+    useWavelets: Boolean) = {
+
+
+    OmniMultiOutputModels.orderFeat = orderF
+    OmniMultiOutputModels.orderTarget = orderT
+    OmniMultiOutputModels.useWaveletBasis = useWavelets
+
+    val (model, scaler) = OmniMSA.train(
+      kernel, noise, 4, 0.5, false,
+      DataPipe((x: Features) => DenseVector(x.toArray :+ 1.0)))
+
+    val stormsPipe =
+      fileToStream >
+        replaceWhiteSpaces >
+        DataPipe((st: Stream[String]) => st.take(43)) >
+        StreamDataPipe((stormEventData: String) => {
+          val stormMetaFields = stormEventData.split(',')
+
+          val startDate = stormMetaFields(1)
+          val startHour = stormMetaFields(2).take(2)
+
+          val endDate = stormMetaFields(3)
+          val endHour = stormMetaFields(4).take(2)
+
+          OmniMultiOutputModels.testStart = startDate+"/"+startHour
+          OmniMultiOutputModels.testEnd = endDate+"/"+endHour
+
+          logger.info("Testing on Storm: "+OmniMultiOutputModels.testStart+" to "+OmniMultiOutputModels.testEnd)
+
+          OmniMSA.test(model, scaler)
         }) >
         DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
           metrics.reduce((m,n) => m++n))
