@@ -494,6 +494,10 @@ object DstMSAExperiment {
 
   var it:Int = 150
 
+  var gridSize = 3
+  var gridStep = 0.5
+  var useLogScale = false
+
   /**
     * Train and test a [[GenericFFNeuralNet]] model on the OMNI data.
     * Training set is combination of 20 storms from [[OmniOSA.stormsFile2]]
@@ -555,7 +559,7 @@ object DstMSAExperiment {
     OmniMultiOutputModels.useWaveletBasis = useWavelets
 
     val (model, scaler) = OmniMSA.train(
-      kernel, noise, 4, 0.5, false,
+      kernel, noise, gridSize, gridStep, useLogScale,
       DataPipe((x: Features) => DenseVector(x.toArray :+ 1.0)))
 
     val stormsPipe =
