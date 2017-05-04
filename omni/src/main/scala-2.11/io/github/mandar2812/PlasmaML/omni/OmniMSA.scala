@@ -85,13 +85,13 @@ object OmniMSA {
               year.toInt.toString + "/" + day.toInt.toString + "/"+hour.toInt.toString)
             dt.getMillis/1000.0
           }) >
-          filterData
+          filterData >
+          OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT)
 
         generateDataSegment("data/omni2_"+trainingStartDate.getYear+".csv")
       })
 
     prepareTrainingData >
-      OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT) >
       haarWaveletPipe >
       gaussianScaling
   }
@@ -198,7 +198,7 @@ object OmniMSA {
 
     val scaleTarg: DataPipe[Features, Features] =
       if (useWaveletBasis) gHTarg > scaler._2
-      else scaler._1
+      else scaler._2
 
     val reverseScale: DataPipe[Features, Features] =
       if (useWaveletBasis) scaler._2.i > gHTarg.i
