@@ -7,9 +7,7 @@ import io.github.mandar2812.dynaml.pipes.{Encoder, MetaPipe}
 import io.github.mandar2812.dynaml.probability.{MatrixNormalRV, MeasurableFunction}
 
 
-val (nL,nT) = (700, 200)
-val lMax = 20
-val tMax = 5
+val (nL,nT) = (500, 50)
 
 val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)
@@ -49,7 +47,7 @@ val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
   else timeLimits._2).toArray.toSeq
 
 
-val baseNoiseLevel = 1E-8
+val baseNoiseLevel = 0.001
 
 val encoder = Encoder(
   (conf: Map[String, Double]) => (conf("c"), conf("s")),
@@ -57,17 +55,17 @@ val encoder = Encoder(
 
 
 val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  /*new SECovFunc(1E-6, 0.1) + */new MAKernel(baseNoiseLevel),
-  /*new SECovFunc(1E-6, 0.1) + */new MAKernel(baseNoiseLevel),
+  new SECovFunc(rds.deltaL, 0.001) + new MAKernel(baseNoiseLevel),
+  new SECovFunc(rds.deltaT, 0.001) + new MAKernel(baseNoiseLevel),
   new MAKernel(baseNoiseLevel), new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (x: (Double, Double)) => {
     alphaBeta._1*math.pow(x._1, alphaBeta._2)
   }),
-  (0.5, 1.27))
+  (alpha, beta))
 
 val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  /*new SECovFunc(1E-6, 0.1) + */new MAKernel(baseNoiseLevel),
-  /*new SECovFunc(1E-6, 0.1) + */new MAKernel(baseNoiseLevel),
+  new SECovFunc(rds.deltaL, 0.001) + new MAKernel(baseNoiseLevel),
+  new SECovFunc(rds.deltaT, 0.001) + new MAKernel(baseNoiseLevel),
   new MAKernel(baseNoiseLevel), new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (lt: (Double, Double)) => {
     val (l,t) = lt
@@ -76,11 +74,11 @@ val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
       a*alp*(bet-2d)*math.pow(l, bet-1d)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1)) +
       a*a*alp*math.pow(l, bet)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
   }),
-  (0.5, 1.27))
+  (alpha, beta))
 
 val radialDiffusionProcess = StochasticRadialDiffusion(
-  new SECovFunc(rds.deltaL,rds.deltaL),
-  new SECovFunc(rds.deltaT,rds.deltaT),
+  new SECovFunc(rds.deltaL, rds.deltaL),
+  new SECovFunc(rds.deltaT, rds.deltaT),
   q_prior, dll_prior)
 
 

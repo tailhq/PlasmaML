@@ -4,7 +4,7 @@ import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
 val (nL,nT) = (700, 200)
-val lMax = 20
+val lMax = 10
 val tMax = 5
 
 val lShellLimits = (1.0, 10.0)
