@@ -1,13 +1,9 @@
 import breeze.linalg._
 import com.quantifind.charts.Highcharts._
-import io.github.mandar2812.PlasmaML.dynamics.diffusion.{RadialDiffusion, StochasticRadialDiffusion}
-import io.github.mandar2812.dynaml.kernels._
-import io.github.mandar2812.dynaml.models.bayes.CoRegGPPrior
-import io.github.mandar2812.dynaml.pipes.{Encoder, MetaPipe}
-import io.github.mandar2812.dynaml.analysis.implicits._
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (500, 50)
+val (nL,nT) = (700, 200)
 val lMax = 20
 val tMax = 5
 
@@ -50,6 +46,12 @@ val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
 
 val solution = rds.solve(q, dll, boundFlux)(initialPSD)
 
+/*
+*
+* First set of plots
+*
+* */
+
 spline(timeVec.zip(solution.map(_(0))))
 hold()
 
@@ -67,6 +69,11 @@ xAxis("time")
 yAxis("f(L,t)")
 
 
+/*
+*
+* Second set of plots
+*
+* */
 spline(lShellVec.toArray.toSeq.zip(solution.head.toArray.toSeq))
 hold()
 
@@ -84,8 +91,6 @@ title("Variation of Phase Space Density f(L,t)")
 xAxis("L")
 yAxis("f(L,t)")
 
-
-
 spline(lShellVec.toArray.map(lShell => (lShell, referenceSolution(lShell, 0.0))).toSeq)
 hold()
 
@@ -101,51 +106,3 @@ legend(DenseVector.tabulate[Double](tMax+1)(i =>
 xAxis("L")
 yAxis("f(L,t)")
 title("Reference Solution")
-
-
-
-val encoder = Encoder(
-  (conf: Map[String, Double]) => (conf("c"), conf("s")),
-  (cs: (Double, Double)) => Map("c" -> cs._1, "s" -> cs._2))
-
-
-val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  GaussianSpectralKernel[Double](0.0, 0.2, encoder) + new MAKernel(0.02),
-  GaussianSpectralKernel[Double](0.0, 0.2, encoder) + new MAKernel(0.02),
-  new MAKernel(0.02), new MAKernel(0.02))(
-  MetaPipe((alphaBeta: (Double, Double)) => (x: (Double, Double)) => alphaBeta._1*math.pow(x._1, alphaBeta._2)),
-  (0.5, 1.27))
-
-val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(0.1, 0.1) + new MAKernel(0.02),
-  new SECovFunc(0.1, 0.1) + new MAKernel(0.02),
-  new MAKernel(0.02), new MAKernel(0.02))(
-  MetaPipe((alphaBeta: (Double, Double)) => (x: (Double, Double)) => {
-    alphaBeta._1*math.pow(x._1, alphaBeta._2)
-  }),
-  (0.5, 1.27))
-
-val radialDiffusionProcess = StochasticRadialDiffusion(
-  GaussianSpectralKernel[Double](0.0, 1.0, encoder) + new MAKernel(0.01),
-  new GenericMaternKernel[Double](0.1, 1) + new MAKernel(0.01),
-  q_prior, dll_prior)
-
-
-val result = radialDiffusionProcess.priorDistribution(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
-
-spline(lShellVec.toArray.map(lShell => (lShell, referenceSolution(lShell, timeLimits._2))).toSeq)
-
-hold()
-val samples = (1 to 10).map(_ => {
-  val sample_solution = result.draw
-  val psd_profile_nt = sample_solution(::, nT-1)
-  spline(lShellVec.toArray.toSeq.zip(psd_profile_nt.toArray.toSeq))
-})
-
-spline(lShellVec.toArray.toSeq.zip(result.m(::,nT-1).toArray.toSeq))
-
-unhold()
-legend(Array("Reference Solution")++(1 to 10).map(i => "Sample: "+i)++Array("Mean"))
-xAxis("L")
-yAxis("f(L,t)")
-title("Generated Samples vs Reference Solution")

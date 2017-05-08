@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
-import breeze.linalg.{DenseMatrix, DenseVector, sum}
+import breeze.linalg.{DenseMatrix, DenseVector, sum, trace}
 import io.github.mandar2812.dynaml.algebra.square
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe3}
@@ -288,4 +288,18 @@ object RadialDiffusion {
       (alpha, beta, gamma(n) + delta(n))
     })
   }
+
+  def error(referenceSolution: DenseMatrix[Double])(computedSolution: DenseMatrix[Double]): Double = {
+    val residual = referenceSolution - computedSolution
+    trace(residual.t*residual)/(computedSolution.rows*computedSolution.cols).toDouble
+  }
+
+  def error(referenceSolution: Seq[DenseVector[Double]])(computedSolution: Seq[DenseVector[Double]]): Double = {
+    val y = DenseMatrix.horzcat(referenceSolution.map(_.toDenseMatrix.t):_*)
+
+    val yhat = DenseMatrix.horzcat(computedSolution.map(_.toDenseMatrix.t):_*)
+
+    error(y)(yhat)
+  }
+
 }
