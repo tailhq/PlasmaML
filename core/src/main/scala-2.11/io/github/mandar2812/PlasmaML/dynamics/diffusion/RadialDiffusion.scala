@@ -14,8 +14,6 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe3}
   * This class solves the radial diffusion dynamics by representing the forward model
   * as a feed forward neural network represented by DynaML's [[NeuralStack]].
   *
-  * @author mandar2812 date 30/03/2017.
-  *
   * @param lShellLimits The minimum and maximum value of L* i.e. the drift shell
   * @param timeLimits The minimum and maximum of the time coordinate.
   * @param nL The number of bins to divide spatial domain into.
@@ -23,6 +21,7 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe3}
   * @param linearDecay Set to true if injection term Q(L, t) = - &lambda;(L,t) &times; f(L,t),
   *                    in this case the [[solve()]] method will accept the realisation of &lambda;(L,t)
   *                    instead of Q(L,t).
+  * @author mandar2812 date 30/03/2017.
   *
   * */
 class RadialDiffusion(
@@ -143,6 +142,11 @@ object RadialDiffusion {
     * */
   def conv(filter: (Int, Int) => Double)(data: DenseMatrix[Double]) =
     sum(data.mapPairs((coords, value) => value * filter(coords._1, coords._2)))
+
+  def apply(
+    lShellLimits: (Double, Double), timeLimits: (Double, Double),
+    nL: Int, nT: Int, linearDecay: Boolean = true) =
+    new RadialDiffusion(lShellLimits, timeLimits, nL, nT, linearDecay)
 
   /**
     * Compute [[NeuralStack]] parameters for forward model governed by
