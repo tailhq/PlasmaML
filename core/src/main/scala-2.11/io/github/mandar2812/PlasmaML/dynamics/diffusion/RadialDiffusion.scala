@@ -4,6 +4,7 @@ import breeze.linalg.{DenseMatrix, DenseVector, sum, trace}
 import io.github.mandar2812.dynaml.algebra.square
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe3}
+import org.apache.log4j.Logger
 
 /**
   *
@@ -32,14 +33,9 @@ class RadialDiffusion(
 
   val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
+  private val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
 
-  val lShellVec = DenseVector.tabulate[Double](nL+1)(i =>
-    if(i < nL) lShellLimits._1+(deltaL*i)
-    else lShellLimits._2)
-
-  val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
-    if(i < nT) timeLimits._1+(deltaT*i)
-    else timeLimits._2)
+  def stencil = (lShellVec, timeVec)
 
   val stackFactory = DataPipe(
     (params: Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])]) =>
@@ -110,6 +106,39 @@ class RadialDiffusion(
 }
 
 object RadialDiffusion {
+
+  private val logger = Logger.getLogger(this.getClass)
+
+  /**
+    * Builds the discretized domain in space and time
+    * */
+  def buildStencil(
+    lShellLimits: (Double, Double), nL: Int,
+    timeLimits: (Double, Double), nT: Int): (Seq[Double], Seq[Double]) = {
+
+    logger.info("----------------------------------")
+    logger.info("Domain stencil: \n")
+
+    val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
+    logger.info("Space")
+    logger.info(lShellLimits._1+" =< L =< "+lShellLimits._2)
+    logger.info("ΔL = "+deltaL+"\n")
+
+    logger.info("Time")
+    logger.info(timeLimits._1+" =< t =< "+timeLimits._2)
+    logger.info("Δt = "+deltaT)
+    logger.info("----------------------------------")
+
+    val lShellVec = Seq.tabulate[Double](nL+1)(i =>
+      if(i < nL) lShellLimits._1+(deltaL*i)
+      else lShellLimits._2)
+
+    val timeVec = Seq.tabulate[Double](nT+1)(i =>
+      if(i < nT) timeLimits._1+(deltaT*i)
+      else timeLimits._2)
+
+    (lShellVec, timeVec)
+  }
 
   /**
     * The forward difference convolution filter to
@@ -289,17 +318,21 @@ object RadialDiffusion {
     })
   }
 
+  /**
+    * Compute L<sub>2</sub> norm error for a solution of radial diffusion.
+    * */
   def error(referenceSolution: DenseMatrix[Double])(computedSolution: DenseMatrix[Double]): Double = {
     val residual = referenceSolution - computedSolution
     trace(residual.t*residual)/(computedSolution.rows*computedSolution.cols).toDouble
   }
 
-  def error(referenceSolution: Seq[DenseVector[Double]])(computedSolution: Seq[DenseVector[Double]]): Double = {
-    val y = DenseMatrix.horzcat(referenceSolution.map(_.toDenseMatrix.t):_*)
+  /**
+    * Compute L<sub>2</sub> norm error for a solution of radial diffusion.
+    * */
+  def error(referenceSolution: Seq[DenseVector[Double]])(computedSolution: Seq[DenseVector[Double]]): Double =
+    error(
+      DenseMatrix.horzcat(referenceSolution.map(_.toDenseMatrix.t):_*))(
+      DenseMatrix.horzcat(computedSolution.map(_.toDenseMatrix.t):_*))
 
-    val yhat = DenseMatrix.horzcat(computedSolution.map(_.toDenseMatrix.t):_*)
-
-    error(y)(yhat)
-  }
 
 }

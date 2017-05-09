@@ -36,18 +36,12 @@ val initialPSD = (l: Double) => referenceSolution(l, 0.0)
 
 val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT, false)
 
-val lShellVec = DenseVector.tabulate[Double](nL+1)(i =>
-  if(i < nL) lShellLimits._1+(rds.deltaL*i)
-  else lShellLimits._2).toArray.toSeq
+val (lShellVec, timeVec) = rds.stencil
 
 val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l, 0.0)).toArray)
 
-val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
-  if(i < nT) timeLimits._1+(rds.deltaT*i)
-  else timeLimits._2).toArray.toSeq
 
-
-val baseNoiseLevel = 0.001
+val baseNoiseLevel = 0.01
 
 val encoder = Encoder(
   (conf: Map[String, Double]) => (conf("c"), conf("s")),
@@ -55,8 +49,8 @@ val encoder = Encoder(
 
 
 val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(rds.deltaL, 0.001) + new MAKernel(baseNoiseLevel),
-  new SECovFunc(rds.deltaT, 0.001) + new MAKernel(baseNoiseLevel),
+  new SECovFunc(rds.deltaL, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
+  new SECovFunc(rds.deltaT, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
   new MAKernel(baseNoiseLevel), new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (x: (Double, Double)) => {
     alphaBeta._1*math.pow(x._1, alphaBeta._2)
@@ -64,8 +58,8 @@ val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   (alpha, beta))
 
 val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(rds.deltaL, 0.001) + new MAKernel(baseNoiseLevel),
-  new SECovFunc(rds.deltaT, 0.001) + new MAKernel(baseNoiseLevel),
+  new SECovFunc(rds.deltaL, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
+  new SECovFunc(rds.deltaT, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
   new MAKernel(baseNoiseLevel), new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (lt: (Double, Double)) => {
     val (l,t) = lt
@@ -77,8 +71,8 @@ val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   (alpha, beta))
 
 val radialDiffusionProcess = StochasticRadialDiffusion(
-  new SECovFunc(rds.deltaL, rds.deltaL),
-  new SECovFunc(rds.deltaT, rds.deltaT),
+  new SECovFunc(rds.deltaL, baseNoiseLevel),
+  new SECovFunc(rds.deltaT, baseNoiseLevel),
   q_prior, dll_prior)
 
 

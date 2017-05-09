@@ -47,13 +47,7 @@ val lossesTime = bins.map(bT => {
 
   println("Solving for delta T = "+rds.deltaT)
 
-  val lShellVec = DenseVector.tabulate[Double](nL+1)(i =>
-    if(i < nL) lShellLimits._1+(rds.deltaL*i)
-    else lShellLimits._2).toArray.toSeq
-
-  val timeVec = DenseVector.tabulate[Double](bT+1)(i =>
-    if(i < bT) timeLimits._1+(rds.deltaT*i)
-    else timeLimits._2).toArray.toSeq
+  val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, bT)
 
   println("\tGenerating neural computation stack")
 
@@ -80,13 +74,8 @@ val lossesSpace = bins.map(bL => {
   val rds = radialDiffusionSolver(bL, nT)
 
   println("Solving for delta L = "+rds.deltaL)
-  val lShellVec = DenseVector.tabulate[Double](bL+1)(i =>
-    if(i < bL) lShellLimits._1+(rds.deltaL*i)
-    else lShellLimits._2).toArray.toSeq
 
-  val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
-    if(i < nT) timeLimits._1+(rds.deltaT*i)
-    else timeLimits._2).toArray.toSeq
+  val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, bL, timeLimits, nT)
 
   println("\tGenerating neural computation stack")
 

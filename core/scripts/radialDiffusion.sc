@@ -34,15 +34,11 @@ val initialPSD = (l: Double) => referenceSolution(l, 0.0)
 
 val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT, false)
 
-val lShellVec = DenseVector.tabulate[Double](nL+1)(i =>
-  if(i < nL) lShellLimits._1+(rds.deltaL*i)
-  else lShellLimits._2).toArray.toSeq
+val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
+
 
 val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l, 0.0)).toArray)
 
-val timeVec = DenseVector.tabulate[Double](nT+1)(i =>
-  if(i < nT) timeLimits._1+(rds.deltaT*i)
-  else timeLimits._2).toArray.toSeq
 
 val solution = rds.solve(q, dll, boundFlux)(initialPSD)
 
