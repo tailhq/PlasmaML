@@ -13,8 +13,8 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, MetaPipe}
   * @author mandar2812 date 13/04/2017.
   *
   *
-  * @param alpha The tri-diagonal portion (non-zero) of &Alpha;
-  * @param beta The tri-diagonal portion (non-zero) of &Beta;
+  * @param alpha The tri-diagonal (non-zero) portion of &Alpha;
+  * @param beta The tri-diagonal (non-zero) portion of &Beta;
   * @param gamma The intercept &gamma;
   *
   * */
