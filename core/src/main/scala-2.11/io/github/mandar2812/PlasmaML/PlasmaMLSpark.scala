@@ -16,7 +16,7 @@ object PlasmaMLSpark {
 
   val sc = new SparkContext(
     new SparkConf().setMaster(sparkHost)
-      .setAppName("Van Allen Data Models")
+      .setAppName("PlasmaML on Apache Spark")
       .set("spark.executor.memory", "3g"))
 
 
