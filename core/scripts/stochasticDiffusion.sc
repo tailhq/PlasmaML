@@ -42,6 +42,7 @@ val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => reference
 
 
 val baseNoiseLevel = 0.1
+val mult = 1.0
 
 val encoder = Encoder(
   (conf: Map[String, Double]) => (conf("c"), conf("s")),
@@ -49,7 +50,7 @@ val encoder = Encoder(
 
 
 val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(rds.deltaL*2, baseNoiseLevel),
+  new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new MAKernel(baseNoiseLevel),
   new MAKernel(baseNoiseLevel),
   new MAKernel(baseNoiseLevel))(
@@ -59,8 +60,8 @@ val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   (alpha, beta))
 
 val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(rds.deltaL*2, baseNoiseLevel),
-  new SECovFunc(rds.deltaT*2, baseNoiseLevel),
+  new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
+  new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
   new MAKernel(baseNoiseLevel),
   new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (lt: (Double, Double)) => {
@@ -73,8 +74,8 @@ val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   (alpha, beta))
 
 val radialDiffusionProcess = StochasticRadialDiffusion(
-  new SECovFunc(rds.deltaL*2, baseNoiseLevel),
-  new SECovFunc(rds.deltaT*2, baseNoiseLevel),
+  new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
+  new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
   q_prior, dll_prior)
 
 

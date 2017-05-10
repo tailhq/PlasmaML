@@ -33,14 +33,16 @@ import org.apache.log4j.Logger
 class StochasticRadialDiffusion[ParamsQ, ParamsD](
   psdCovarianceL: StochasticRadialDiffusion.Kernel,
   psdCovarianceT: StochasticRadialDiffusion.Kernel,
-  injectionProcess: StochasticRadialDiffusion.LatentProcess[ParamsQ],
-  diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD],
+  val injectionProcess: StochasticRadialDiffusion.LatentProcess[ParamsQ],
+  val diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD],
   linearDecay: Boolean = false) {
 
   private val logger = Logger.getLogger(this.getClass)
 
   type DomainLimits = (Double, Double)
   type TimeSlice = DenseVector[Double]
+
+  var num_samples: Int = 10000
 
   /**
     * A function which takes as input the domain
@@ -81,16 +83,29 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     logger.info("Constructing prior distributions of injection and diffusion fields on domain stencil")
     val (q_dist, dll_dist) = epistemics(l_values, t_values)
 
-    val dll_profile = dll_dist.draw
-    val q_profile = q_dist.draw
+    logger.info("Generating ensemble of diffusion and injection fields.")
+    val boundF = DenseMatrix.zeros[Double](nL+1, nT+1)
 
-    logger.info("Running radial diffusion system forward model on domain")
-    val solution = radialSolver.solve(q_profile, dll_profile, DenseMatrix.zeros[Double](nL+1, nT+1))(f0)
+    var avg_solution = Stream.fill[DenseVector[Double]](nT)(DenseVector.zeros(nL+1))
 
-    logger.info("Approximate solution obtained, constructing distribution of PSD")
-    val m = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)
+    var l = 1
+    while (l <= num_samples) {
 
-    logger.info("Constructing covariance matrices of PSD")
+      val solution = radialSolver.solve(q_dist.draw, dll_dist.draw, boundF)(f0)
+
+      if(l%500 == 0) {
+        logger.info("\tProgress: "+"%4f".format(l*100d/num_samples)+"%")
+      }
+      val old_avg = avg_solution
+
+      avg_solution = old_avg.zip(solution.tail).map(c => c._1+c._2)
+      l += 1
+    }
+
+    logger.info("Ensemble solution obtained, constructing distribution of the Phase Space Density")
+    val m = DenseMatrix.horzcat(avg_solution.map(_.asDenseMatrix.t):_*)/num_samples.toDouble
+
+    logger.info("Constructing covariance matrices of Phase Space Density")
     val u = psdCovarianceL.buildKernelMatrix(l_values, l_values.length).getKernelMatrix()
     val v = psdCovarianceT.buildKernelMatrix(t_values.tail, t_values.tail.length).getKernelMatrix()
 

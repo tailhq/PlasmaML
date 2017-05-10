@@ -29,7 +29,8 @@ class RadialDiffusion(
   lShellLimits: (Double, Double),
   timeLimits: (Double, Double),
   nL: Int, nT: Int,
-  linearDecay: Boolean = true) {
+  linearDecay: Boolean = true)
+  extends Serializable {
 
   val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
