@@ -7,7 +7,7 @@ import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 val (nL,nT) = (10, 10)
 
 
-val bins = List(1, 10, 50, 100, 500, 1000, 5000)
+val bins = List(1, 10, 50, 100, 500, 1000, 5000, 10000)
 
 val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)

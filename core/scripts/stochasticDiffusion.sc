@@ -41,7 +41,7 @@ val (lShellVec, timeVec) = rds.stencil
 val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l, 0.0)).toArray)
 
 
-val baseNoiseLevel = 0.01
+val baseNoiseLevel = 0.1
 
 val encoder = Encoder(
   (conf: Map[String, Double]) => (conf("c"), conf("s")),
@@ -49,18 +49,20 @@ val encoder = Encoder(
 
 
 val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(rds.deltaL, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
-  new SECovFunc(rds.deltaT, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
-  new MAKernel(baseNoiseLevel), new MAKernel(baseNoiseLevel))(
+  new SECovFunc(rds.deltaL*2, baseNoiseLevel),
+  new MAKernel(baseNoiseLevel),
+  new MAKernel(baseNoiseLevel),
+  new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (x: (Double, Double)) => {
     alphaBeta._1*math.pow(x._1, alphaBeta._2)
   }),
   (alpha, beta))
 
 val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(rds.deltaL, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
-  new SECovFunc(rds.deltaT, baseNoiseLevel) /*+ new MAKernel(baseNoiseLevel)*/,
-  new MAKernel(baseNoiseLevel), new MAKernel(baseNoiseLevel))(
+  new SECovFunc(rds.deltaL*2, baseNoiseLevel),
+  new SECovFunc(rds.deltaT*2, baseNoiseLevel),
+  new MAKernel(baseNoiseLevel),
+  new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (lt: (Double, Double)) => {
     val (l,t) = lt
     val (alp, bet) = alphaBeta
@@ -71,8 +73,8 @@ val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   (alpha, beta))
 
 val radialDiffusionProcess = StochasticRadialDiffusion(
-  new SECovFunc(rds.deltaL, baseNoiseLevel),
-  new SECovFunc(rds.deltaT, baseNoiseLevel),
+  new SECovFunc(rds.deltaL*2, baseNoiseLevel),
+  new SECovFunc(rds.deltaT*2, baseNoiseLevel),
   q_prior, dll_prior)
 
 
@@ -111,7 +113,7 @@ title("Generated Samples vs Reference Solution")
 val dll_dist = dll_prior.priorDistribution(lShellVec, timeVec)
 
 
-val num_samples = 20
+val num_samples = 10
 spline(lShellVec.zip(dll_dist.m(::,nT/2).toArray.toSeq))
 hold()
 (1 to num_samples).map(_ => {
@@ -143,3 +145,6 @@ legend(Array("Mean Q(L, t)")++(1 to num_samples).map(i => "Sample: "+i))
 xAxis("L")
 yAxis("Q(L,t)")
 title("Injection Process Prior")
+
+histogram(error.iid(1000).draw)
+title("Model Errors")

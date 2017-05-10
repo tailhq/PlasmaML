@@ -45,7 +45,7 @@ class RadialDiffusion(
 
   val computeStackParameters =
     if(linearDecay) DataPipe3(RadialDiffusion.getLinearDecayModelParams(lShellLimits, timeLimits, nL, nT))
-    else DataPipe3(RadialDiffusion.getInjectionModelParams(lShellLimits, timeLimits, nL, nT))
+    else DataPipe3(RadialDiffusion.getModelParams(lShellLimits, timeLimits, nL, nT))
 
   def getComputationStack = computeStackParameters > stackFactory
 
@@ -95,7 +95,7 @@ class RadialDiffusion(
 
     val injectionProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => injection(lShellVec(i), timeVec(j)))
 
-    val boundFlux = DenseMatrix.tabulate[Double](nL+1,nT)((i,j) => {
+    val boundFlux = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => {
       if(i == nL || i == 0) boundaryFlux(lShellVec(i), timeVec(j))
       else 0.0
     })
@@ -108,6 +108,8 @@ class RadialDiffusion(
 object RadialDiffusion {
 
   private val logger = Logger.getLogger(this.getClass)
+
+  type StackParameters = Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])]
 
   /**
     * Builds the discretized domain in space and time
@@ -139,6 +141,15 @@ object RadialDiffusion {
 
     (lShellVec, timeVec)
   }
+
+  def filter1d(center_i: Int)(i: Int): Double =
+    if(i - center_i >= 0 && i - center_i <= 1) 0.5 else 0.0
+
+  def backward1dFilter(center_i: Int)(i: Int): Double =
+    if(center_i - i >= 0 && center_i - i <= 1) 0.5 else 0.0
+
+  def haar1dFilter(center: Int)(i: Int): Double =
+    if(i == center) 1.0 else if(i == center + 1) -1.0 else 0.0
 
   /**
     * The forward difference convolution filter to
@@ -194,7 +205,7 @@ object RadialDiffusion {
     nL: Int, nT: Int)(
     lossProfile: DenseMatrix[Double],
     diffusionProfile: DenseMatrix[Double],
-    boundaryFlux: DenseMatrix[Double]): Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])] = {
+    boundaryFlux: DenseMatrix[Double]): StackParameters = {
 
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
@@ -207,16 +218,46 @@ object RadialDiffusion {
 
     val invDeltaT = 1/deltaT
 
+    val (filterMatL, backwardFilterMatL) = (
+      DenseMatrix.tabulate[Double](nL-1, nL+1)((i,j) => filter1d(i+1)(j)),
+      DenseMatrix.tabulate[Double](nL-1, nL+1)((i,j) => filter1d(i)(j))
+    )
+
+    val filterMatT = DenseMatrix.tabulate[Double](nT+1, nT)((i,j) => filter1d(j)(i))
+
+    val diffForward = (filterMatL*adjustedDiffusionProfile*filterMatT).mapPairs((coords, value) => {
+      value*adjLVec(coords._1+1)
+    })
+
+    val diffBackward = (backwardFilterMatL*adjustedDiffusionProfile*filterMatT).mapPairs((coords, value) => {
+      value*adjLVec(coords._1+1)
+    })
+
+    val filterInjectionL = DenseMatrix.tabulate[Double](nL-1, nL+1)((i,j) => if(i == j) 1.0 else 0.0)
+
+    val lossForward = filterInjectionL*lossProfile*filterMatT
+
+    val diffFPlusBack = diffBackward + diffForward + lossForward
+
+    val filterLBFlux = DenseMatrix.tabulate[Double](nL+1, nL+1)((i,j) =>
+      if((i == j && i == 0) || (i == j && i == nL)) -1.0
+      else 0.0)
+
+    val filterTBFlux = DenseMatrix.tabulate[Double](nT+1, nT+1)((i,j) => {
+      haar1dFilter(j)(i)
+    })
+
+    val bFluxForward = filterLBFlux*boundaryFlux*filterTBFlux
+
+
     val paramsTMat: (Int) => (Seq[Seq[Double]], Seq[Seq[Double]]) = (n) => {
 
       val (alph, bet) = (1 until nL).map(j => {
-        val b = 0.5*conv(forwardConvLossProfile(j,n))(lossProfile) +
-          adjLVec(j)*(conv(forwardConvDiff(j, n))(adjustedDiffusionProfile) +
-            conv(backwardConvDiff(j, n))(adjustedDiffusionProfile))
+        val b = diffFPlusBack(j-1,n)
 
-        val a = -adjLVec(j)*conv(backwardConvDiff(j, n))(adjustedDiffusionProfile)
+        val a = -diffBackward(j-1,n)
 
-        val c = -adjLVec(j)*conv(forwardConvDiff(j, n))(adjustedDiffusionProfile)
+        val c = -diffForward(j-1,n)
 
         (Seq(-a, invDeltaT - b, -c), Seq(a, invDeltaT + b, c))
       }).unzip
@@ -229,11 +270,7 @@ object RadialDiffusion {
     /*
     * Boundary term gamma(n)
     * */
-    val gamma: (Int) => DenseVector[Double] = (n) => {
-      DenseVector.tabulate[Double](nL + 1)(l =>
-        if( l == 0 || l == nL) conv(forwardConvBoundaryFlux(l,n))(boundaryFlux) else 0.0
-      )
-    }
+    val gamma: (Int) => DenseVector[Double] = (n) => bFluxForward(::,n)
 
     /*
     * Instantiate layer transformations
@@ -262,9 +299,12 @@ object RadialDiffusion {
     *         used to compute the radial diffusion solution.
     * */
   def getInjectionModelParams(
-    lShellLimits: (Double, Double), timeLimits: (Double, Double), nL: Int, nT: Int)(
-    injectionProfile: DenseMatrix[Double], diffusionProfile: DenseMatrix[Double], boundaryFlux: DenseMatrix[Double])
-  : Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])] = {
+    lShellLimits: (Double, Double),
+    timeLimits: (Double, Double),
+    nL: Int, nT: Int)(
+    injectionProfile: DenseMatrix[Double],
+    diffusionProfile: DenseMatrix[Double],
+    boundaryFlux: DenseMatrix[Double]): StackParameters = {
 
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
@@ -317,6 +357,102 @@ object RadialDiffusion {
       (alpha, beta, gamma(n) + delta(n))
     })
   }
+
+  /**
+    * Compute [[NeuralStack]] parameters for a general injection
+    * diffusion model.
+    *
+    * @param lShellLimits The lower and upper limits of L-Shell
+    * @param timeLimits The lower and upper limits of time.
+    * @param nL The number of partitions to create in the L-Shell domain.
+    * @param nT The number of partitions to create in the time domain.
+    * @return A sequence of parameters which specify the [[NeuralStack]]
+    *         used to compute the radial diffusion solution.
+    * */
+  def getModelParams(
+    lShellLimits: (Double, Double),
+    timeLimits: (Double, Double),
+    nL: Int, nT: Int)(
+    injectionProfile: DenseMatrix[Double],
+    diffusionProfile: DenseMatrix[Double],
+    boundaryFlux: DenseMatrix[Double]): StackParameters = {
+
+    val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
+
+    val lSqVec = square(DenseVector.tabulate[Double](nL + 1)(i =>
+      if(i < nL) lShellLimits._1+(deltaL*i) else lShellLimits._2))
+
+    val adjLVec = lSqVec.map(v => 0.5*v/(deltaL*deltaL))
+
+    val adjustedDiffusionProfile = diffusionProfile.mapPairs((coords, value) => value/lSqVec(coords._1))
+
+    val invDeltaT = 1/deltaT
+
+    val (filterMatL, backwardFilterMatL) = (
+      DenseMatrix.tabulate[Double](nL-1, nL+1)((i,j) => filter1d(i+1)(j)),
+      DenseMatrix.tabulate[Double](nL-1, nL+1)((i,j) => filter1d(i)(j))
+    )
+
+    val filterMatT = DenseMatrix.tabulate[Double](nT+1, nT)((i,j) => filter1d(j)(i))
+
+    val diffForward = (filterMatL*adjustedDiffusionProfile*filterMatT).mapPairs((coords, value) => {
+      value*adjLVec(coords._1+1)
+    })
+
+    val diffBackward = (backwardFilterMatL*adjustedDiffusionProfile*filterMatT).mapPairs((coords, value) => {
+      value*adjLVec(coords._1+1)
+    })
+
+    val diffFPlusBack = diffBackward + diffForward
+
+    val filterInjectionL = DenseMatrix.tabulate[Double](nL-1, nL+1)((i,j) => if(i == j) 1.0 else 0.0)
+
+    val injectionForward = filterInjectionL*injectionProfile*filterMatT
+
+    val filterLBFlux = DenseMatrix.tabulate[Double](nL+1, nL+1)((i,j) =>
+      if((i == j && i == 0) || (i == j && i == nL)) -1.0
+      else 0.0)
+
+    val filterTBFlux = DenseMatrix.tabulate[Double](nT+1, nT+1)((i,j) => {
+      haar1dFilter(j)(i)
+    })
+
+    val bFluxForward = filterLBFlux*boundaryFlux*filterTBFlux
+
+    val paramsTMat: (Int) => (Seq[Seq[Double]], Seq[Seq[Double]]) = (n) => {
+
+      val (alpha_n, beta_n) = (1 until nL).map(j => {
+        val b = diffFPlusBack(j-1,n)
+
+        val a = -diffBackward(j-1,n)
+
+        val c = -diffForward(j-1,n)
+
+        (Seq(-a, invDeltaT - b, -c), Seq(a, invDeltaT + b, c))
+      }).unzip
+
+      (
+        Seq(Seq(0.0, 1.0, 0.0)) ++ alpha_n ++ Seq(Seq(0.0, 1.0, 0.0)),
+        Seq(Seq(0.0, 1.0, 0.0)) ++ beta_n ++ Seq(Seq(0.0, 1.0, 0.0)))
+    }
+
+    /*
+    * Boundary term gamma(n)
+    * */
+    val gamma: (Int) => DenseVector[Double] = (n) => bFluxForward(::,n)
+
+    val delta: (Int) => DenseVector[Double] = (n) =>
+      DenseVector(Array(0.0) ++ injectionForward(::,n).toArray ++ Array(0.0))
+
+    /*
+    * Instantiate layer transformations
+    * */
+    Stream.tabulate(nT)(n => {
+      val (alpha, beta) = paramsTMat(n)
+      (alpha, beta, gamma(n) + delta(n))
+    })
+  }
+
 
   /**
     * Compute L<sub>2</sub> norm error for a solution of radial diffusion.

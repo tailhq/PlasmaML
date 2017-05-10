@@ -85,7 +85,7 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     val q_profile = q_dist.draw
 
     logger.info("Running radial diffusion system forward model on domain")
-    val solution = radialSolver.solve(q_profile, dll_profile, DenseMatrix.zeros[Double](nL+1, nT))(f0)
+    val solution = radialSolver.solve(q_profile, dll_profile, DenseMatrix.zeros[Double](nL+1, nT+1))(f0)
 
     logger.info("Approximate solution obtained, constructing distribution of PSD")
     val m = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)

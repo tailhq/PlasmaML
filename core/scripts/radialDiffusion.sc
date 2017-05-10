@@ -3,7 +3,7 @@ import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (700, 200)
+val (nL,nT) = (200, 200)
 val lMax = 10
 val tMax = 5
 
