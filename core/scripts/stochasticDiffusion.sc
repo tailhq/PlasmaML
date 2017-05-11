@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.pipes.{Encoder, MetaPipe}
 import io.github.mandar2812.dynaml.probability.{MatrixNormalRV, MeasurableFunction}
 
 
-val (nL,nT) = (20, 50)
+val (nL,nT) = (100, 10)
 
 val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)

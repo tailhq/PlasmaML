@@ -4,7 +4,7 @@ import com.quantifind.charts.highcharts.AxisType
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (10, 10)
+val (nL,nT) = (100, 100)
 
 
 val bins = List(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
@@ -16,7 +16,7 @@ val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val theta = 0.06
 val alpha = 0.005 + theta*math.pow(omega*lShellLimits._2, 2.0)
 
-val referenceSolution = (l: Double, t: Double) => math.sin(omega*(l - lShellLimits._1))*(math.exp(-alpha*t) + 1.0)
+val referenceSolution = (l: Double, t: Double) => math.sin(omega*(l - lShellLimits._1))*math.exp(-alpha*t)
 
 val radialDiffusionSolver = (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT)
 
@@ -54,11 +54,8 @@ val lossesTime = bins.map(bT => {
     DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
   println("\tCalculating RMSE with respect to reference solution\n")
-  val error = math.sqrt(
-    solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/(nL+1.0)*(bT+1.0)
-  )
 
-  (rds.deltaT, error)
+  (rds.deltaT, RadialDiffusion.error(referenceSol)(solution))
 
 })
 
@@ -90,11 +87,8 @@ val lossesSpace = bins.map(bL => {
     DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
   println("\tCalculating RMSE with respect to reference solution\n")
-  val error = math.sqrt(
-    solution.zip(referenceSol).map(c => math.pow(norm(c._1 - c._2, 2.0), 2.0)).sum/((bL+1.0)*(nT+1d))
-  )
 
-  (rds.deltaL, error)
+  (rds.deltaL, RadialDiffusion.error(referenceSol)(solution))
 
 })
 

@@ -234,11 +234,7 @@ object RadialDiffusion {
       value*adjLVec(coords._1+1)
     })
 
-    val filterInjectionL = DenseMatrix.tabulate[Double](nL-1, nL+1)((i,j) => if(i == j) 1.0 else 0.0)
-
-    val lossForward = filterInjectionL*lossProfile*filterMatT
-
-    val diffFPlusBack = diffBackward + diffForward + lossForward
+    val diffFPlusBack = diffBackward + diffForward
 
     val filterLBFlux = DenseMatrix.tabulate[Double](nL+1, nL+1)((i,j) =>
       if((i == j && i == 0) || (i == j && i == nL)) -1.0
@@ -260,7 +256,7 @@ object RadialDiffusion {
 
         val c = -diffForward(j-1,n)
 
-        (Seq(-a, invDeltaT - b, -c), Seq(a, invDeltaT + b, c))
+        (Seq(-a, invDeltaT - b - lossProfile(j,n)*0.5, -c), Seq(a, invDeltaT + b + lossProfile(j,n+1)*0.5, c))
       }).unzip
 
       (
@@ -277,12 +273,6 @@ object RadialDiffusion {
     * Instantiate layer transformations
     * */
     Stream.tabulate(nT)(n => {
-
-      /*
-      val pM = paramsMat(n)
-      val a = deltaTMat - pM
-      val b = deltaTMat + pM
-      */
       val (alpha, beta) = paramsTMat(n)
       (alpha, beta, gamma(n))
     })
