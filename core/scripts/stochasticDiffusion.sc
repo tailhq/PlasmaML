@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.pipes.{Encoder, MetaPipe}
 import io.github.mandar2812.dynaml.probability.{MatrixNormalRV, MeasurableFunction}
 
 
-val (nL,nT) = (500, 50)
+val (nL,nT) = (20, 50)
 
 val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)
@@ -79,7 +79,9 @@ val radialDiffusionProcess = StochasticRadialDiffusion(
   q_prior, dll_prior)
 
 
-val result = radialDiffusionProcess.priorDistribution(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
+val result = radialDiffusionProcess.likelihood(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
+
+val result_marg = radialDiffusionProcess.marginalLikelihood(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
 
 val referenceSolutionMatrix = DenseMatrix.tabulate[Double](nL+1, nT)((i,j) => {
   referenceSolution(lShellVec(i), timeVec(j+1))
@@ -89,7 +91,7 @@ val errorFunctional = MeasurableFunction[DenseMatrix[Double], Double, MatrixNorm
   RadialDiffusion.error(referenceSolutionMatrix) _) _
 
 val error = errorFunctional(result)
-
+val error_marg = errorFunctional(result_marg)
 
 
 val thalf = timeVec(nT/2)
