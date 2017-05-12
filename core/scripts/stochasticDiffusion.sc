@@ -28,13 +28,9 @@ val q = (l: Double, t: Double) => {
     a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
 }
 
-val boundFlux = (l: Double, t: Double) => {
-  if(l == lShellLimits._1 || l == lShellLimits._2) referenceSolution(l, t) else 0.0
-}
-
 val initialPSD = (l: Double) => referenceSolution(l, 0.0)
 
-val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT, false)
+val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
 val (lShellVec, timeVec) = rds.stencil
 

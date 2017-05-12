@@ -26,13 +26,15 @@ val q = (l: Double, t: Double) => {
     a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
 }
 
+val loss = (_: Double, _:Double) => 0.0
+
 val boundFlux = (l: Double, t: Double) => {
   if(l == lShellLimits._1 || l == lShellLimits._2) referenceSolution(l, t) else 0.0
 }
 
 val initialPSD = (l: Double) => referenceSolution(l, 0.0)
 
-val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT, false)
+val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
 val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
 
@@ -40,7 +42,7 @@ val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLi
 val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l, 0.0)).toArray)
 
 
-val solution = rds.solve(q, dll, boundFlux)(initialPSD)
+val solution = rds.solve(q, dll, loss)(initialPSD)
 
 /*
 *

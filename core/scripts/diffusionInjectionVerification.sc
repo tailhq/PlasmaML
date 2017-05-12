@@ -17,9 +17,7 @@ val a = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val b = math.log(2d)/timeLimits._2
 
 val referenceSolution = (l: Double, t: Double) => math.sin(a*(l - lShellLimits._1))*(math.exp(b*t) - 1.0)
-val boundFlux = (l: Double, t: Double) => {
-  if(l == lShellLimits._1 || l == lShellLimits._2) referenceSolution(l, t) else 0.0
-}
+val loss = (l: Double, t: Double) => 0.0
 
 val initialPSD = (l: Double) => referenceSolution(l, 0.0)
 
@@ -35,8 +33,7 @@ val q = (l: Double, t: Double) => {
     a*a*alpha*math.pow(l, beta)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
 }
 
-val radialDiffusionSolver =
-  (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT, false)
+val radialDiffusionSolver = (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT)
 
 
 //Perform verification of errors for constant nL
@@ -51,7 +48,7 @@ val lossesTime = bins.map(bT => {
 
   println("\tGenerating neural computation stack")
 
-  val solution = rds.solve(q, dll, boundFlux)(initialPSD)
+  val solution = rds.solve(q, dll, loss)(initialPSD)
 
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
@@ -61,12 +58,6 @@ val lossesTime = bins.map(bT => {
   (rds.deltaT, error)
 
 })
-
-spline(lossesTime)
-title("Forward Solver Error")
-xAxisType(AxisType.logarithmic)
-xAxis("delta T")
-yAxis("RMSE")
 
 
 val lossesSpace = bins.map(bL => {
@@ -79,7 +70,7 @@ val lossesSpace = bins.map(bL => {
 
   println("\tGenerating neural computation stack")
 
-  val solution = rds.solve(q, dll, boundFlux)(initialPSD)
+  val solution = rds.solve(q, dll, loss)(initialPSD)
 
   val referenceSol = timeVec.map(t => DenseVector(lShellVec.map(lS => referenceSolution(lS, t)).toArray))
 
@@ -89,6 +80,13 @@ val lossesSpace = bins.map(bL => {
   (rds.deltaL, error)
 
 })
+
+
+spline(lossesTime)
+title("Forward Solver Error")
+xAxisType(AxisType.logarithmic)
+xAxis("delta T")
+yAxis("RMSE")
 
 
 spline(lossesSpace)

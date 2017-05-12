@@ -27,15 +27,13 @@ import org.apache.log4j.Logger
   * @param psdCovarianceT Covariance of the PSD in the temporal domain.
   * @param injectionProcess A gaussian process prior on the injection function Q(l,t)
   * @param diffusionProcess A gaussian process prior on the diffusion field D(l,t)
-  * @param linearDecay Same function as [[RadialDiffusion.linearDecay]]
   * @author mandar2812 date 04/05/2017.
   * */
 class StochasticRadialDiffusion[ParamsQ, ParamsD](
   psdCovarianceL: StochasticRadialDiffusion.Kernel,
   psdCovarianceT: StochasticRadialDiffusion.Kernel,
   val injectionProcess: StochasticRadialDiffusion.LatentProcess[ParamsQ],
-  val diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD],
-  linearDecay: Boolean = false) {
+  val diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD]) {
 
   private val logger = Logger.getLogger(this.getClass)
 
@@ -50,7 +48,7 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     * */
   protected val forwardSolver: (DomainLimits, Int, DomainLimits, Int) => RadialDiffusion =
     (lDomain: DomainLimits, nL: Int, timeDomain: DomainLimits, nT: Int) =>
-      RadialDiffusion(lDomain, timeDomain, nL, nT, linearDecay)
+      RadialDiffusion(lDomain, timeDomain, nL, nT)
 
   /**
     * Return the finite dimensional prior of the
@@ -87,14 +85,14 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     val (q_dist, dll_dist) = epistemics(l_values, t_values)
 
     logger.info("Generating ensemble of diffusion and injection fields.")
-    val boundF = DenseMatrix.zeros[Double](nL+1, nT+1)
+    val lossProfile = DenseMatrix.zeros[Double](nL+1, nT+1)
 
     val avg_solution = DenseMatrix.zeros[Double](nL+1, nT)
 
     var l = 1
     while (l <= num_samples) {
 
-      val solution = radialSolver.solve(q_dist.draw, dll_dist.draw, boundF)(f0)
+      val solution = radialSolver.solve(q_dist.draw, dll_dist.draw, lossProfile)(f0)
 
       val solutionMat = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)/num_samples.toDouble
 
