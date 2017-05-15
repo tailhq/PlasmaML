@@ -89,7 +89,7 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     val avg_solution = StochasticRadialDiffusion.ensembleAvg(
       q_dist, dll_dist,
       radialSolver,
-      num_samples, nL, nT)(
+      num_samples)(
       f0)
 
     logger.info("Ensemble solution obtained")
@@ -164,11 +164,22 @@ object StochasticRadialDiffusion {
       injectionProcess, diffusionProcess)
 
 
+  /**
+    * Calculate the enxemble averaged radial diffusion solution
+    * on a rectangular domain stencil.
+    *
+    * @param injection_dist The distribution of the injection Q(l,t) realised on the domain stencil
+    * @param diffusion_dist The distribution of the diffusion coefficient D<sup>LL</sup>(l,t) realised on the domain stencil
+    * @param radialSolver An instance of [[RadialDiffusion]]
+    * @param num_samples Size of the ensemble
+    * @param f0 The initial phase space density realized on the domain stencil.
+    *
+    * */
   def ensembleAvg(
     injection_dist: MatrixNormalRV, diffusion_dist: MatrixNormalRV,
-    radialSolver: RadialDiffusion, num_samples: Int, nL: Int, nT: Int)(f0: DenseVector[Double]) = {
+    radialSolver: RadialDiffusion, num_samples: Int)(f0: DenseVector[Double]) = {
 
-    val avg_solution = DenseMatrix.zeros[Double](nL+1, nT)
+    val avg_solution = DenseMatrix.zeros[Double](radialSolver.nL+1, radialSolver.nT)
 
     var l = 1
     while (l <= num_samples) {
@@ -176,7 +187,7 @@ object StochasticRadialDiffusion {
       val solution = radialSolver.solve(
         injection_dist.draw,
         diffusion_dist.draw,
-        DenseMatrix.zeros[Double](nL+1, nT+1))(f0)
+        DenseMatrix.zeros[Double](radialSolver.nL+1, radialSolver.nT+1))(f0)
 
       val solutionMat = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)/num_samples.toDouble
 

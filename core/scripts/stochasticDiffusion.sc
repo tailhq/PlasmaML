@@ -8,7 +8,7 @@ import io.github.mandar2812.dynaml.probability.{MatrixNormalRV, MeasurableFuncti
 import io.github.mandar2812.dynaml.analysis.implicits._
 
 
-val (nL,nT) = (300, 100)
+val (nL,nT) = (200, 50)
 
 val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)
@@ -62,8 +62,8 @@ val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   (alpha, beta))
 
 val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new GenericMaternKernel[Double](rds.deltaL*mult, 1),
-  new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
+  new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
+  new GenericMaternKernel[Double](rds.deltaT*mult, 1),
   new MAKernel(baseNoiseLevel),
   new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (lt: (Double, Double)) => {
