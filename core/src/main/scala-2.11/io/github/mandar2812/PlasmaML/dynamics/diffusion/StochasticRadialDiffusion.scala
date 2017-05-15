@@ -29,11 +29,12 @@ import org.apache.log4j.Logger
   * @param diffusionProcess A gaussian process prior on the diffusion field D(l,t)
   * @author mandar2812 date 04/05/2017.
   * */
-class StochasticRadialDiffusion[ParamsQ, ParamsD](
+class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
   psdCovarianceL: StochasticRadialDiffusion.Kernel,
   psdCovarianceT: StochasticRadialDiffusion.Kernel,
   val injectionProcess: StochasticRadialDiffusion.LatentProcess[ParamsQ],
-  val diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD]) extends Serializable {
+  val diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD],
+  val lossProcess: StochasticRadialDiffusion.LatentProcess[ParamsL]) extends Serializable {
 
   private val logger = Logger.getLogger(this.getClass)
 
@@ -54,10 +55,11 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     * Return the finite dimensional prior of the
     * injection and diffusion field on the domain stencil
     * */
-  def epistemics(l_values: Seq[Double], t_values: Seq[Double]): (MatrixNormalRV, MatrixNormalRV) =
+  def epistemics(l_values: Seq[Double], t_values: Seq[Double]): (MatrixNormalRV, MatrixNormalRV, MatrixNormalRV) =
     (
       injectionProcess.priorDistribution(l_values, t_values),
-      diffusionProcess.priorDistribution(l_values, t_values))
+      diffusionProcess.priorDistribution(l_values, t_values),
+      lossProcess.priorDistribution(l_values, t_values))
 
   /**
     * Return the distribution of f(L,t) on a
@@ -82,15 +84,13 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     val (l_values, t_values) = radialSolver.stencil
 
     logger.info("Constructing prior distributions of injection and diffusion fields on domain stencil")
-    val (q_dist, dll_dist) = epistemics(l_values, t_values)
+    val (q_dist, dll_dist, loss_dist) = epistemics(l_values, t_values)
 
     logger.info("Generating ensemble of diffusion and injection fields.")
 
     val avg_solution = StochasticRadialDiffusion.ensembleAvg(
-      q_dist, dll_dist,
-      radialSolver,
-      num_samples)(
-      f0)
+      q_dist, dll_dist, loss_dist,
+      radialSolver, num_samples)(f0)
 
     logger.info("Ensemble solution obtained")
 
@@ -122,13 +122,14 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     val (l_values, t_values) = radialSolver.stencil
 
     logger.info("Constructing prior distributions of injection and diffusion fields on domain stencil")
-    val (q_dist, dll_dist) = epistemics(l_values, t_values)
+    val (q_dist, dll_dist, loss_dist) = epistemics(l_values, t_values)
 
     val dll_profile = dll_dist.underlyingDist.m
     val q_profile = q_dist.underlyingDist.m
+    val loss_profile = loss_dist.underlyingDist.m
 
     logger.info("Running radial diffusion system forward model on domain")
-    val solution = radialSolver.solve(q_profile, dll_profile, DenseMatrix.zeros[Double](nL+1, nT+1))(f0)
+    val solution = radialSolver.solve(q_profile, dll_profile, loss_profile)(f0)
 
     logger.info("Approximate solution obtained, constructing distribution of PSD")
     val m = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)
@@ -153,15 +154,16 @@ object StochasticRadialDiffusion {
   /**
     * Convenience method
     * */
-  def apply[MPD, MPQ](
+  def apply[MPD, MPQ, MPL](
     psdCovarianceL: Kernel,
     psdCovarianceT: Kernel,
     injectionProcess: LatentProcess[MPQ],
     diffusionProcess: LatentProcess[MPD],
-    linearDecay: Boolean = false) =
+    lossProcess: LatentProcess[MPL]) =
     new StochasticRadialDiffusion(
       psdCovarianceL, psdCovarianceT,
-      injectionProcess, diffusionProcess)
+      injectionProcess, diffusionProcess,
+      lossProcess)
 
 
   /**
@@ -169,14 +171,15 @@ object StochasticRadialDiffusion {
     * on a rectangular domain stencil.
     *
     * @param injection_dist The distribution of the injection Q(l,t) realised on the domain stencil
-    * @param diffusion_dist The distribution of the diffusion coefficient D<sup>LL</sup>(l,t) realised on the domain stencil
+    * @param diffusion_dist The distribution of the diffusion coefficient D<sup>LL</sup>(l,t)
+    *                       realised on the domain stencil
     * @param radialSolver An instance of [[RadialDiffusion]]
     * @param num_samples Size of the ensemble
     * @param f0 The initial phase space density realized on the domain stencil.
     *
     * */
   def ensembleAvg(
-    injection_dist: MatrixNormalRV, diffusion_dist: MatrixNormalRV,
+    injection_dist: MatrixNormalRV, diffusion_dist: MatrixNormalRV, loss_dist: MatrixNormalRV,
     radialSolver: RadialDiffusion, num_samples: Int)(f0: DenseVector[Double]) = {
 
     val avg_solution = DenseMatrix.zeros[Double](radialSolver.nL+1, radialSolver.nT)

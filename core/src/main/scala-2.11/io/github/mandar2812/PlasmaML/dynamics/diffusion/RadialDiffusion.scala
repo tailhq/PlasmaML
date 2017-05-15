@@ -24,10 +24,10 @@ import org.apache.log4j.Logger
   * @author mandar2812 date 30/03/2017.
   *
   * */
-class RadialDiffusion(
+case class RadialDiffusion(
   lShellLimits: (Double, Double),
   timeLimits: (Double, Double),
-  val nL: Int, val nT: Int) extends Serializable {
+  nL: Int, nT: Int) extends Serializable {
 
   val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
@@ -175,11 +175,6 @@ object RadialDiffusion {
     * */
   def conv(filter: (Int, Int) => Double)(data: DenseMatrix[Double]) =
     sum(data.mapPairs((coords, value) => value * filter(coords._1, coords._2)))
-
-  def apply(
-    lShellLimits: (Double, Double),
-    timeLimits: (Double, Double),
-    nL: Int, nT: Int) = new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
   /**
     * Compute [[NeuralStack]] parameters for forward model

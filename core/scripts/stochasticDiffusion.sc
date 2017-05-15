@@ -75,10 +75,21 @@ val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   }),trend_encoder,
   (alpha, beta))
 
+
+val loss_prior = CoRegGPPrior[Double, Double, (Double, Double)](
+  new MAKernel(baseNoiseLevel),
+  new MAKernel(baseNoiseLevel),
+  new MAKernel(baseNoiseLevel),
+  new MAKernel(baseNoiseLevel))(
+  MetaPipe((alphaBeta: (Double, Double)) => (lt: (Double, Double)) => 0.0),
+  trend_encoder,
+  (alpha, beta)
+)
+
 val radialDiffusionProcess = StochasticRadialDiffusion(
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new GenericMaternKernel[Double](rds.deltaT*mult,0),
-  q_prior, dll_prior)
+  q_prior, dll_prior, loss_prior)
 
 
 val result = radialDiffusionProcess.likelihood(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
