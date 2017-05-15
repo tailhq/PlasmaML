@@ -5,9 +5,10 @@ import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.bayes.CoRegGPPrior
 import io.github.mandar2812.dynaml.pipes.{Encoder, MetaPipe}
 import io.github.mandar2812.dynaml.probability.{MatrixNormalRV, MeasurableFunction}
+import io.github.mandar2812.dynaml.analysis.implicits._
 
 
-val (nL,nT) = (100, 10)
+val (nL,nT) = (300, 100)
 
 val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)
@@ -45,6 +46,11 @@ val encoder = Encoder(
   (cs: (Double, Double)) => Map("c" -> cs._1, "s" -> cs._2))
 
 
+val trend_encoder = Encoder(
+  (alphaBeta: (Double, Double)) => Map("alpha"-> alphaBeta._1, "beta"-> alphaBeta._2),
+  (conf: Map[String, Double]) => (conf("alpha"), conf("beta"))
+)
+
 val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new MAKernel(baseNoiseLevel),
@@ -52,11 +58,11 @@ val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   new MAKernel(baseNoiseLevel))(
   MetaPipe((alphaBeta: (Double, Double)) => (x: (Double, Double)) => {
     alphaBeta._1*math.pow(x._1, alphaBeta._2)
-  }),
+  }),trend_encoder,
   (alpha, beta))
 
 val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
-  new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
+  new GenericMaternKernel[Double](rds.deltaL*mult, 1),
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
   new MAKernel(baseNoiseLevel),
   new MAKernel(baseNoiseLevel))(
@@ -66,12 +72,12 @@ val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
     b*math.sin(a*(l - lShellLimits._1))*math.exp(b*t) -
       a*alp*(bet-2d)*math.pow(l, bet-1d)*(math.exp(b*t) - 1.0)*math.cos(a*(l - lShellLimits._1)) +
       a*a*alp*math.pow(l, bet)*(math.exp(b*t) - 1.0)*math.sin(a*(l - lShellLimits._1))
-  }),
+  }),trend_encoder,
   (alpha, beta))
 
 val radialDiffusionProcess = StochasticRadialDiffusion(
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
-  new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
+  new GenericMaternKernel[Double](rds.deltaT*mult,0),
   q_prior, dll_prior)
 
 
@@ -96,7 +102,7 @@ spline(lShellVec.toArray.map(lShell => (lShell, referenceSolution(lShell, thalf)
 
 hold()
 val samples = (1 to 10).map(_ => {
-  val sample_solution = result.draw
+  val sample_solution = result_marg.draw
   val psd_profile_nt = sample_solution(::, nT/2)
   spline(lShellVec.toArray.toSeq.zip(psd_profile_nt.toArray.toSeq))
 })

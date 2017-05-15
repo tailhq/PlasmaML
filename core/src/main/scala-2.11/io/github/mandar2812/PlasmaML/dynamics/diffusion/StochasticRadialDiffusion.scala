@@ -23,7 +23,7 @@ import org.apache.log4j.Logger
   * See [[RadialDiffusion]] for an introduction to the radial diffusion solver.
   *
   * @param psdCovarianceL Covariance of the phase space density (PSD) f(l,t)
-  *                       in the spatial domain, i.e. the third invariant of plastma motion, L-shell.
+  *                       in the spatial domain, i.e. the third invariant of plasma motion, L-shell.
   * @param psdCovarianceT Covariance of the PSD in the temporal domain.
   * @param injectionProcess A gaussian process prior on the injection function Q(l,t)
   * @param diffusionProcess A gaussian process prior on the diffusion field D(l,t)
@@ -33,7 +33,7 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
   psdCovarianceL: StochasticRadialDiffusion.Kernel,
   psdCovarianceT: StochasticRadialDiffusion.Kernel,
   val injectionProcess: StochasticRadialDiffusion.LatentProcess[ParamsQ],
-  val diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD]) {
+  val diffusionProcess: StochasticRadialDiffusion.LatentProcess[ParamsD]) extends Serializable {
 
   private val logger = Logger.getLogger(this.getClass)
 
@@ -85,25 +85,11 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
     val (q_dist, dll_dist) = epistemics(l_values, t_values)
 
     logger.info("Generating ensemble of diffusion and injection fields.")
-    val lossProfile = DenseMatrix.zeros[Double](nL+1, nT+1)
 
-    val avg_solution = DenseMatrix.zeros[Double](nL+1, nT)
-
-    var l = 1
-    while (l <= num_samples) {
-
-      val solution = radialSolver.solve(q_dist.draw, dll_dist.draw, lossProfile)(f0)
-
-      val solutionMat = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)/num_samples.toDouble
-
-      if(l%500 == 0) {
-        logger.info("\tProgress: "+"%4f".format(l*100d/num_samples)+"%")
-      }
-
-      avg_solution :+= solutionMat
-
-      l += 1
-    }
+    val avg_solution = StochasticRadialDiffusion.ensembleAvg(
+      q_dist, dll_dist,
+      radialSolver, num_samples, nL, nT)(
+      f0)
 
     logger.info("Ensemble solution obtained")
 
@@ -158,6 +144,8 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
 
 object StochasticRadialDiffusion {
 
+  private val logger = Logger.getLogger(this.getClass)
+
   type LatentProcess[MP] = CoRegGPPrior[Double, Double, MP]
   type Kernel = LocalScalarKernel[Double]
 
@@ -173,5 +161,35 @@ object StochasticRadialDiffusion {
     new StochasticRadialDiffusion(
       psdCovarianceL, psdCovarianceT,
       injectionProcess, diffusionProcess)
+
+
+  def ensembleAvg(
+    injection_dist: MatrixNormalRV, diffusion_dist: MatrixNormalRV,
+    radialSolver: RadialDiffusion, num_samples: Int, nL: Int, nT: Int)(f0: DenseVector[Double]) = {
+
+    val avg_solution = DenseMatrix.zeros[Double](nL+1, nT)
+
+    var l = 1
+    while (l <= num_samples) {
+
+      val solution = radialSolver.solve(
+        injection_dist.draw,
+        diffusion_dist.draw,
+        DenseMatrix.zeros[Double](nL+1, nT+1))(f0)
+
+      val solutionMat = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)/num_samples.toDouble
+
+      if(l%500 == 0) {
+        logger.info("\tProgress: "+"%4f".format(l*100d/num_samples)+"%")
+      }
+
+      avg_solution :+= solutionMat
+
+      l += 1
+    }
+
+    avg_solution
+  }
+
 
 }

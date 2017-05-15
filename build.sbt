@@ -7,15 +7,14 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := "0.1.0",
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.4.3-beta.1",
+  dynaMLVersion := "v1.4.3-beta.2",
   libraryDependencies in ThisBuild ++= Seq(
     "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
     "com.github.transcendent-ai-labs" % "DynaML" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
     "joda-time" % "joda-time" % "2.9.3",
     "org.json4s" % "json4s-native_2.11" % "3.3.0",
-    "com.typesafe.slick" %% "slick" % "3.1.1",
-    "org.slf4j" % "slf4j-nop" % "1.6.4"
+    "com.typesafe.slick" %% "slick" % "3.1.1"
   )
 )
 

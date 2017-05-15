@@ -27,7 +27,7 @@ import org.apache.log4j.Logger
 class RadialDiffusion(
   lShellLimits: (Double, Double),
   timeLimits: (Double, Double),
-  nL: Int, nT: Int) extends Serializable {
+  val nL: Int, val nT: Int) extends Serializable {
 
   val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
