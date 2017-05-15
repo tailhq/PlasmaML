@@ -88,7 +88,8 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD](
 
     val avg_solution = StochasticRadialDiffusion.ensembleAvg(
       q_dist, dll_dist,
-      radialSolver, num_samples, nL, nT)(
+      radialSolver,
+      num_samples, nL, nT)(
       f0)
 
     logger.info("Ensemble solution obtained")
