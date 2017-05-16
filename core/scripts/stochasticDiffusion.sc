@@ -92,9 +92,11 @@ val radialDiffusionProcess = StochasticRadialDiffusion(
   q_prior, dll_prior, loss_prior)
 
 
-val result = radialDiffusionProcess.likelihood(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
+val result = radialDiffusionProcess.forwardModel(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
 
-val result_marg = radialDiffusionProcess.marginalLikelihood(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
+radialDiffusionProcess.ensembleMode = true
+
+val result_marg = radialDiffusionProcess.forwardModel(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
 
 val referenceSolutionMatrix = DenseMatrix.tabulate[Double](nL+1, nT)((i,j) => {
   referenceSolution(lShellVec(i), timeVec(j+1))

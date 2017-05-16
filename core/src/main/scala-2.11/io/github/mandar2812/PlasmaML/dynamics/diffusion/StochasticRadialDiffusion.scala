@@ -1,9 +1,11 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector}
+import breeze.stats.distributions.ContinuousDistr
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.models.bayes.CoRegGPPrior
-import io.github.mandar2812.dynaml.probability.MatrixNormalRV
+import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder}
+import io.github.mandar2812.dynaml.probability.{ContinuousDistrRV, MatrixNormalRV}
 import org.apache.log4j.Logger
 
 /**
@@ -43,6 +45,8 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
 
   var num_samples: Int = 10000
 
+  var ensembleMode: Boolean = false
+
   /**
     * A function which takes as input the domain
     * stencil and returns a radial diffusion solver.
@@ -62,46 +66,6 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
       lossProcess.priorDistribution(l_values, t_values))
 
   /**
-    * Return the distribution of f(L,t) on a
-    * stencil defined by the method parameters.
-    *
-    * This distribution is the approximate marginalized
-    * version of the distribution returned by [[likelihood()]].
-    *
-    * @param lDomain Lower and upper limits of L-shell.
-    * @param nL Number of equally spaced points in space
-    * @param timeDomain Lower and upper limits of time.
-    * @param nT Number of equally spaced points in time.
-    * */
-  def marginalLikelihood(
-    lDomain: DomainLimits, nL: Int,
-    timeDomain: DomainLimits, nT: Int)(
-    f0: TimeSlice): MatrixNormalRV = {
-
-    logger.info("Initializing radial diffusion forward solver")
-    val radialSolver = forwardSolver(lDomain, nL, timeDomain, nT)
-
-    val (l_values, t_values) = radialSolver.stencil
-
-    logger.info("Constructing prior distributions of injection and diffusion fields on domain stencil")
-    val (q_dist, dll_dist, loss_dist) = epistemics(l_values, t_values)
-
-    logger.info("Generating ensemble of diffusion and injection fields.")
-
-    val avg_solution = StochasticRadialDiffusion.ensembleAvg(
-      q_dist, dll_dist, loss_dist,
-      radialSolver, num_samples)(f0)
-
-    logger.info("Ensemble solution obtained")
-
-    logger.info("Constructing covariance matrices of Phase Space Density")
-    val u = psdCovarianceL.buildKernelMatrix(l_values, l_values.length).getKernelMatrix()
-    val v = psdCovarianceT.buildKernelMatrix(t_values.tail, t_values.tail.length).getKernelMatrix()
-
-    MatrixNormalRV(avg_solution, u, v)
-  }
-
-  /**
     * Return the distribution of f(L,t), conditioned on the most likely
     * values of the injection and diffusion processes, on a
     * stencil defined by the method parameters.
@@ -111,37 +75,18 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
     * @param timeDomain Lower and upper limits of time.
     * @param nT Number of equally spaced points in time.
     * */
-  def likelihood(
+  def forwardModel(
     lDomain: DomainLimits, nL: Int,
     timeDomain: DomainLimits, nT: Int)(
-    f0: TimeSlice): MatrixNormalRV = {
-
-    logger.info("Initializing radial diffusion forward solver")
-    val radialSolver = forwardSolver(lDomain, nL, timeDomain, nT)
-
-    val (l_values, t_values) = radialSolver.stencil
-
-    logger.info("Constructing prior distributions of injection and diffusion fields on domain stencil")
-    val (q_dist, dll_dist, loss_dist) = epistemics(l_values, t_values)
-
-    val dll_profile = dll_dist.underlyingDist.m
-    val q_profile = q_dist.underlyingDist.m
-    val loss_profile = loss_dist.underlyingDist.m
-
-    logger.info("Running radial diffusion system forward model on domain")
-    val solution = radialSolver.solve(q_profile, dll_profile, loss_profile)(f0)
-
-    logger.info("Approximate solution obtained, constructing distribution of PSD")
-    val m = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)
-
-    logger.info("Constructing covariance matrices of PSD")
-    val u = psdCovarianceL.buildKernelMatrix(l_values, l_values.length).getKernelMatrix()
-    val v = psdCovarianceT.buildKernelMatrix(t_values.tail, t_values.tail.length).getKernelMatrix()
-
-    MatrixNormalRV(m, u, v)
-
-  }
-
+    f0: TimeSlice): MatrixNormalRV =
+    if (ensembleMode) StochasticRadialDiffusion.likelihood(
+      psdCovarianceL, psdCovarianceT,
+      injectionProcess, diffusionProcess,
+      lossProcess)(lDomain, nL, timeDomain, nT)(f0)
+    else StochasticRadialDiffusion.marginalLikelihood(
+      psdCovarianceL, psdCovarianceT,
+      injectionProcess, diffusionProcess,
+      lossProcess)(lDomain, nL, timeDomain, nT)(num_samples, f0)
 }
 
 object StochasticRadialDiffusion {
@@ -150,6 +95,10 @@ object StochasticRadialDiffusion {
 
   type LatentProcess[MP] = CoRegGPPrior[Double, Double, MP]
   type Kernel = LocalScalarKernel[Double]
+  type EpistemicUncertainties = (MatrixNormalRV, MatrixNormalRV, MatrixNormalRV)
+  type DomainLimits = (Double, Double)
+  type TimeSlice = DenseVector[Double]
+
 
   /**
     * Convenience method
@@ -167,7 +116,101 @@ object StochasticRadialDiffusion {
 
 
   /**
-    * Calculate the enxemble averaged radial diffusion solution
+    * Return the finite dimensional prior of the
+    * injection and diffusion field on the domain stencil
+    * */
+  def epistemics[MPQ, MPD, MPL](
+    injectionProcess: LatentProcess[MPQ],
+    diffusionProcess: LatentProcess[MPD],
+    lossProcess: LatentProcess[MPL])(
+    l_values: Seq[Double],
+    t_values: Seq[Double]): EpistemicUncertainties =
+    (
+      injectionProcess.priorDistribution(l_values, t_values),
+      diffusionProcess.priorDistribution(l_values, t_values),
+      lossProcess.priorDistribution(l_values, t_values))
+
+
+  def likelihood[MPQ, MPD, MPL](
+    psdCovarianceL: Kernel, psdCovarianceT: Kernel,
+    injectionProcess: LatentProcess[MPQ],
+    diffusionProcess: LatentProcess[MPD],
+    lossProcess: LatentProcess[MPL])(
+    lDomain: DomainLimits, nL: Int,
+    timeDomain: DomainLimits, nT: Int)(
+    f0: TimeSlice) = {
+
+    logger.info("Initializing radial diffusion forward solver")
+
+    val radialSolver = RadialDiffusion(lDomain, timeDomain, nL, nT)
+
+    val (l_values, t_values) = RadialDiffusion.buildStencil(lDomain, nL, timeDomain, nT)
+
+    logger.info("Constructing prior distributions of injection and diffusion fields on domain stencil")
+    val (q_dist, dll_dist, loss_dist) = epistemics(
+      injectionProcess, diffusionProcess, lossProcess)(
+      l_values, t_values)
+
+    val dll_profile = dll_dist.underlyingDist.m
+    val q_profile = q_dist.underlyingDist.m
+    val loss_profile = loss_dist.underlyingDist.m
+
+    logger.info("Running radial diffusion system forward model on domain")
+    val solution = radialSolver.solve(q_profile, dll_profile, loss_profile)(f0)
+
+    logger.info("Approximate solution obtained, constructing distribution of PSD")
+    val m = DenseMatrix.horzcat(solution.tail.map(_.asDenseMatrix.t):_*)
+
+    logger.info("Constructing covariance matrices of PSD")
+    val u = psdCovarianceL.buildKernelMatrix(l_values, l_values.length).getKernelMatrix()
+    val v = psdCovarianceT.buildKernelMatrix(t_values.tail, t_values.tail.length).getKernelMatrix()
+
+    MatrixNormalRV(m, u, v)
+
+
+  }
+
+
+  def marginalLikelihood[MPQ, MPD, MPL](
+    psdCovarianceL: Kernel, psdCovarianceT: Kernel,
+    injectionProcess: LatentProcess[MPQ],
+    diffusionProcess: LatentProcess[MPD],
+    lossProcess: LatentProcess[MPL])(
+    lDomain: DomainLimits, nL: Int,
+    timeDomain: DomainLimits, nT: Int)(
+    num_samples: Int,
+    f0: TimeSlice) = {
+
+    logger.info("Initializing radial diffusion forward solver")
+
+    val radialSolver = RadialDiffusion(lDomain, timeDomain, nL, nT)
+
+    val (l_values, t_values) = RadialDiffusion.buildStencil(lDomain, nL, timeDomain, nT)
+
+    logger.info("Constructing prior distributions of injection and diffusion fields on domain stencil")
+    val (q_dist, dll_dist, loss_dist) =
+      epistemics(
+        injectionProcess, diffusionProcess,
+        lossProcess)(
+        l_values, t_values)
+
+    logger.info("Generating ensemble of diffusion and injection fields.")
+
+    val avg_solution = ensembleAvg(
+      q_dist, dll_dist, loss_dist,
+      radialSolver, num_samples)(f0)
+
+    logger.info("Ensemble solution obtained")
+
+    logger.info("Constructing covariance matrices of PSD")
+    val u = psdCovarianceL.buildKernelMatrix(l_values, l_values.length).getKernelMatrix()
+    val v = psdCovarianceT.buildKernelMatrix(t_values.tail, t_values.tail.length).getKernelMatrix()
+
+    MatrixNormalRV(avg_solution, u, v)
+  }
+
+  /**
+    * Calculate the ensemble averaged radial diffusion solution
     * on a rectangular domain stencil.
     *
     * @param injection_dist The distribution of the injection Q(l,t) realised on the domain stencil
@@ -208,3 +251,8 @@ object StochasticRadialDiffusion {
 
 
 }
+
+
+
+
+
