@@ -6,7 +6,7 @@ import io.github.mandar2812.dynaml.probability.ContinuousDistrRV
 
 /**
   * Created by mandar on 16/05/2017.
-  */
+  * */
 class EncodedContDistrRV[Domain1, Domain2, Distr <: ContinuousDistr[Domain1]](
   base: Distr, encoder: Encoder[Domain1, Domain2])
   extends ContinuousDistrRV[Domain2] {

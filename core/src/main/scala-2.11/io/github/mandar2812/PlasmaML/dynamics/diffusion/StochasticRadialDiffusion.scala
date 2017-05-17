@@ -47,6 +47,59 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
 
   var ensembleMode: Boolean = false
 
+  val (qEnc, dEnc, lEnc) = (
+    injectionProcess.trendParamsEncoder,
+    diffusionProcess.trendParamsEncoder,
+    lossProcess.trendParamsEncoder)
+
+  protected var state: Map[String, Double] =
+    qEnc(injectionProcess._meanFuncParams) ++
+      dEnc(diffusionProcess._meanFuncParams) ++
+      lEnc(lossProcess._meanFuncParams) ++ psdCovarianceL.state ++
+      psdCovarianceT.state ++
+      injectionProcess.covariance.state ++
+      diffusionProcess.covariance.state ++
+      lossProcess.covariance.state
+
+  protected val hyper_parameters: List[String] = state.keys.toList
+
+  protected var blocked_hyper_parameters: List[String] =
+    injectionProcess.covariance.hyper_parameters ++
+      diffusionProcess.covariance.hyper_parameters ++
+      lossProcess.covariance.hyper_parameters ++
+      psdCovarianceL.hyper_parameters ++
+      psdCovarianceT.hyper_parameters
+
+  def block(h: String*) = blocked_hyper_parameters = List(h:_*)
+
+  def block_++(h: String*) = blocked_hyper_parameters ++= List(h:_*)
+
+  def effective_state:Map[String, Double] =
+    state.filterNot(h => blocked_hyper_parameters.contains(h._1))
+
+  def effective_hyper_parameters: List[String] =
+    hyper_parameters.filterNot(h => blocked_hyper_parameters.contains(h))
+
+  def setState(s: Map[String, Double]) = {
+    assert(effective_hyper_parameters.forall(s.contains),
+      "All hyper parameters must be contained in the arguments")
+    effective_hyper_parameters.foreach((key) => {
+      state += (key -> s(key))
+    })
+
+    injectionProcess.meanFuncParams_(qEnc.i(state))
+    injectionProcess.covariance.setHyperParameters(state)
+
+    diffusionProcess.meanFuncParams_(dEnc.i(state))
+    diffusionProcess.covariance.setHyperParameters(s)
+
+    lossProcess.meanFuncParams_(lEnc.i(state))
+    lossProcess.covariance.setHyperParameters(state)
+
+    psdCovarianceL.setHyperParameters(state)
+    psdCovarianceT.setHyperParameters(state)
+  }
+
   /**
     * A function which takes as input the domain
     * stencil and returns a radial diffusion solver.
