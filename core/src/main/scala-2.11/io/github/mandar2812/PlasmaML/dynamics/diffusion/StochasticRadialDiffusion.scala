@@ -55,13 +55,20 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
   protected var state: Map[String, Double] =
     qEnc(injectionProcess._meanFuncParams) ++
       dEnc(diffusionProcess._meanFuncParams) ++
-      lEnc(lossProcess._meanFuncParams) ++ psdCovarianceL.state ++
+      lEnc(lossProcess._meanFuncParams) ++
+      psdCovarianceL.state ++
       psdCovarianceT.state ++
       injectionProcess.covariance.state ++
       diffusionProcess.covariance.state ++
       lossProcess.covariance.state
 
   protected val hyper_parameters: List[String] = state.keys.toList
+
+  injectionProcess.covariance.block_all_hyper_parameters
+  diffusionProcess.covariance.block_all_hyper_parameters
+  lossProcess.covariance.block_all_hyper_parameters
+  psdCovarianceL.block_all_hyper_parameters
+  psdCovarianceT.block_all_hyper_parameters
 
   protected var blocked_hyper_parameters: List[String] =
     injectionProcess.covariance.hyper_parameters ++
@@ -73,6 +80,8 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
   def block(h: String*) = blocked_hyper_parameters = List(h:_*)
 
   def block_++(h: String*) = blocked_hyper_parameters ++= List(h:_*)
+
+  def _state = state
 
   def effective_state:Map[String, Double] =
     state.filterNot(h => blocked_hyper_parameters.contains(h._1))
@@ -88,16 +97,16 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
     })
 
     injectionProcess.meanFuncParams_(qEnc.i(state))
-    injectionProcess.covariance.setHyperParameters(state)
+    injectionProcess.covariance.setHyperParameters(effective_state)
 
     diffusionProcess.meanFuncParams_(dEnc.i(state))
-    diffusionProcess.covariance.setHyperParameters(s)
+    diffusionProcess.covariance.setHyperParameters(effective_state)
 
     lossProcess.meanFuncParams_(lEnc.i(state))
-    lossProcess.covariance.setHyperParameters(state)
+    lossProcess.covariance.setHyperParameters(effective_state)
 
-    psdCovarianceL.setHyperParameters(state)
-    psdCovarianceT.setHyperParameters(state)
+    psdCovarianceL.setHyperParameters(effective_state)
+    psdCovarianceT.setHyperParameters(effective_state)
   }
 
   /**
@@ -132,7 +141,7 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
     lDomain: DomainLimits, nL: Int,
     timeDomain: DomainLimits, nT: Int)(
     f0: TimeSlice): MatrixNormalRV =
-    if (ensembleMode) StochasticRadialDiffusion.likelihood(
+    if (!ensembleMode) StochasticRadialDiffusion.likelihood(
       psdCovarianceL, psdCovarianceT,
       injectionProcess, diffusionProcess,
       lossProcess)(lDomain, nL, timeDomain, nT)(f0)
