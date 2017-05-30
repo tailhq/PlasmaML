@@ -41,8 +41,8 @@ val (lShellVec, timeVec) = rds.stencil
 val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => referenceSolution(l, 0.0)).toArray)
 
 
-val baseNoiseLevel = 0.1
-val mult = 1.0
+val baseNoiseLevel = 1.2
+val mult = 0.8
 
 val encoder = Encoder(
   (conf: Map[String, Double]) => (conf("c"), conf("s")),
@@ -61,7 +61,7 @@ val dll_prior = CoRegGPPrior[Double, Double, (Double, Double)](
     (alphaBeta: (Double, Double)) => Map("d_alpha"-> alphaBeta._1, "d_beta"-> alphaBeta._2),
     (conf: Map[String, Double]) => (conf("d_alpha"), conf("d_beta"))
   ),
-  (2.0, 1.0))
+  (alpha, beta))
 
 val q_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
@@ -95,16 +95,23 @@ val loss_prior = CoRegGPPrior[Double, Double, (Double, Double)](
   (2.0, 1.0)
 )
 
+val covL = new SECovFunc(rds.deltaL*mult, baseNoiseLevel)
+covL.block_all_hyper_parameters
+val covT = new SECovFunc(rds.deltaT*mult, baseNoiseLevel)
+covT.block_all_hyper_parameters
+
 val radialDiffusionProcess = StochasticRadialDiffusion(
-  new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
-  new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
-  q_prior, dll_prior, loss_prior)
+  covL, covT,
+  q_prior, dll_prior,
+  loss_prior)
 
 radialDiffusionProcess.block_++(loss_prior.trendParamsEncoder(loss_prior._meanFuncParams).keys.toSeq:_*)
+radialDiffusionProcess.block_++(dll_prior.trendParamsEncoder(loss_prior._meanFuncParams).keys.toSeq:_*)
+
 
 val hyper_params = radialDiffusionProcess.effective_hyper_parameters
 
-val hyper_prior = getPriorMapDistr(hyper_params.map(h => (h, Gamma(2.0, 1.0))).toMap)
+val hyper_prior = getPriorMapDistr(hyper_params.map(h => (h, Gamma(1.0, 1.0))).toMap)
 val mapEncoding = ConfigEncoding(hyper_params)
 
 val processed_prior: ContinuousDistrRV[DenseVector[Double]] = EncodedContDistrRV(hyper_prior, mapEncoding)
@@ -119,23 +126,34 @@ val likelihood = DataPipe((hyp: DenseVector[Double]) => {
 
 implicit val ev = VectorField(hyper_params.length)
 
+val proposal_distr1 = MultGaussianRV(hyper_params.length)(
+  DenseVector.zeros[Double](hyper_params.length),
+  DenseMatrix.eye[Double](hyper_params.length))
+
+val proposal_distr2 = MultStudentsTRV(hyper_params.length)(
+  3.5, DenseVector.zeros[Double](hyper_params.length),
+  DenseMatrix.eye[Double](hyper_params.length)*0.5)
+
+
 val mcmc_sampler = new ContinuousMCMC[DenseVector[Double], DenseMatrix[Double]](
-  processed_prior, likelihood,
-  MultGaussianRV(hyper_params.length)(
-    DenseVector.zeros[Double](hyper_params.length),
-    DenseMatrix.eye[Double](hyper_params.length)*0.25),
-  2000
+  processed_prior, likelihood, proposal_distr1,
+  burnIn = 0, dropCount = 0
 )
 
+val measurement_noise = GaussianRV(0.0, 0.25)
 
 val referenceSolutionMatrix = DenseMatrix.tabulate[Double](nL+1, nT)((i,j) => {
-  referenceSolution(lShellVec(i), timeVec(j+1))
+  referenceSolution(lShellVec(i), timeVec(j+1)) + measurement_noise.draw
 })
 
-val post = mcmc_sampler.posterior(referenceSolutionMatrix)
+val post = mcmc_sampler.posterior(referenceSolutionMatrix).iid(2000)
 
-val samples = (1 to 200).map(_ => post.draw)
+val processed_samples: Seq[Map[String, Double]] = post.draw.map(mapEncoding.i(_))
 
-val processed_samples: IndexedSeq[Map[String, Double]] = samples.map(mapEncoding.i(_))
+val alphaBeta = processed_samples.map(m => (m("q_alpha"), m("q_beta")))
 
 
+scatter(alphaBeta)
+xAxis("Injection alpha")
+yAxis("Injection beta")
+title("Samples from Posterior P(alpha, beta | PSD data)")
