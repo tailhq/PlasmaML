@@ -162,8 +162,9 @@ for(i in 1:63) {
 
   meltedPred <- melt(arx_errorbars_pred, id="time")
   
-  ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) +
-    geom_line(size=1.35) +
+  ggplot(meltedPred, aes(x=time,y=value, colour=variable, linetype=variable)) + 
+    geom_point() +
+    geom_line() +
     theme_gray(base_size = 22) + 
     scale_colour_manual(values=palette1) + 
     scale_linetype_manual(values = lines1, guide=FALSE) +

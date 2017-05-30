@@ -392,7 +392,7 @@ object OmniOSA {
       identityPipe[(GaussianScaler, GaussianScaler)]
     )
 
-  val getStormTimeRanges = DataPipe((stormEventData: String) => {
+  def getStormTimeRanges(offsetHours: Int = 0) = DataPipe((stormEventData: String) => {
     val stormMetaFields = stormEventData.split(',')
     val startDate = stormMetaFields(1)
     val startHour = stormMetaFields(2).take(2)
@@ -400,7 +400,11 @@ object OmniOSA {
     val endDate = stormMetaFields(3)
     val endHour = stormMetaFields(4).take(2)
 
-    (startDate+"/"+startHour, endDate+"/"+endHour)
+    val start = formatter.parseDateTime(startDate+"/"+startHour).minusHours(offsetHours)
+    val end = formatter.parseDateTime(endDate+"/"+endHour).plusHours(offsetHours)
+
+
+    (formatter.print(start), formatter.print(end))
   })
 
   /**
@@ -413,7 +417,7 @@ object OmniOSA {
     * */
   def extractValidationSectionsPipe(num_storms: Int = 10) = fileToStream >
     replaceWhiteSpaces >
-    StreamDataPipe(getStormTimeRanges) >
+    StreamDataPipe(getStormTimeRanges()) >
     DataPipe((s: Stream[DateSection]) => s.takeRight(num_storms))
 
   def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments
@@ -565,7 +569,7 @@ object OmniOSA {
       val pipeline1 =
       fileToStream >
         replaceWhiteSpaces >
-        StreamFlatMapPipe(getStormTimeRanges > processTimeSegment)
+        StreamFlatMapPipe(getStormTimeRanges() > processTimeSegment)
 
       //Pipeline2 takes the storm time data and performs predictions
       //and generates a RegressionMetrics object
@@ -600,7 +604,7 @@ object OmniOSA {
       val pipeline1 =
         fileToStream >
         replaceWhiteSpaces >
-        StreamFlatMapPipe(getStormTimeRanges > processTimeSegment)
+        StreamFlatMapPipe(getStormTimeRanges() > processTimeSegment)
 
       //Pipeline2 takes the storm time data and performs predictions
       //and generates a RegressionMetrics object
@@ -619,7 +623,7 @@ object OmniOSA {
       stormFilePipeline(dataDir+testFile)
     })
 
-  def generateGPPredictions(testFile: String = stormsFileJi) =
+  def generateGPPredictions(testFile: String = stormsFileJi, hoursOffset: Int = 15) =
     DataPipe((modelAndScales: (GP, Scales)) => {
 
       val fileNamePrefix = testFile.split(".csv").head
@@ -629,7 +633,7 @@ object OmniOSA {
       val pipeline1 =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe(getStormTimeRanges > processTimeSegment)
+          StreamDataPipe(getStormTimeRanges(hoursOffset) > processTimeSegment)
 
       val pipeline2 =
         DataPipe((storms: Stream[Data]) => {
@@ -658,7 +662,7 @@ object OmniOSA {
       predictionsPipeline(dataDir+testFile)
     })
 
-  def generateSGPPredictions(testFile: String = stormsFileJi) =
+  def generateSGPPredictions(testFile: String = stormsFileJi, hoursOffset: Int = 15) =
     DataPipe((modelAndScales: (SGP, Scales)) => {
 
       val fileNamePrefix = testFile.split(".csv").head
@@ -668,7 +672,7 @@ object OmniOSA {
       val pipeline1 =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe(getStormTimeRanges > processTimeSegment)
+          StreamDataPipe(getStormTimeRanges(hoursOffset) > processTimeSegment)
 
       val pipeline2 =
         DataPipe((storms: Stream[Data]) => {

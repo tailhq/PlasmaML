@@ -16,7 +16,7 @@ val rbfKernel = new RBFKernel(1.7)
 
 val mlpKernel = new MLPKernel(1.5, 0.75)
 
-val whiteNoiseKernel = new DiracKernel(1.5)
+val whiteNoiseKernel = new DiracKernel(0.2)
 whiteNoiseKernel.block_all_hyper_parameters
 
 OmniOSA.gridSize = 4
@@ -38,17 +38,17 @@ val resPolyAR = OmniOSA.buildAndTestGP(
 OmniOSA.clearExogenousVars()
 //Set solar wind speed and IMF Bz as exogenous variables
 OmniOSA.setTarget(40, 6)
-OmniOSA.setExogenousVars(List(24, 16), List(2,2))
+OmniOSA.setExogenousVars(List(24, 16), List(1,3))
 //Reset kernel and noise to initial states
-mlpKernel.setw(80.0)
-mlpKernel.setoffset(20.0)
-rbfKernel.setbandwidth(1.7)
-OmniOSA.gridSize = 2
+mlpKernel.setw(1.2901485870065708)
+mlpKernel.setoffset(73.92009461973996)
+OmniOSA.gridSize = 1
+OmniOSA.gridStep = 0.0
 //Get test results for a GP-ARX model
 //with a mean function given by the persistence
 //model
 val resPolyARX = OmniOSA.buildAndTestGP(
-  mlpKernel,
+  mlpKernel + tKernel,
   whiteNoiseKernel,
   OmniOSA.meanFuncPersistence)
 
@@ -110,16 +110,18 @@ OmniOSA.experiment(
 OmniOSA.gridSize = 1
 OmniOSA.gridStep = 0.0
 OmniOSA.globalOpt = "GS"
-OmniOSA.setTarget(40, 7)
+OmniOSA.setTarget(40, 6)
 OmniOSA.setExogenousVars(List(24, 16), List(1,3))
-mlpKernel.setw(3.560349737811843)
-mlpKernel.setoffset(102.71615211905888)
+mlpKernel.setw(1.2901485870065708)
+mlpKernel.setoffset(73.92009461973996)
+OmniOSA.gridSize = 1
+OmniOSA.gridStep = 0.0
 
 val predictPipeline =
   OmniOSA.dataPipeline > OmniOSA.gpTrain(
       tKernel+mlpKernel,
       whiteNoiseKernel,
-      OmniOSA.meanFuncPersistence) > OmniOSA.generateGPPredictions()
+      OmniOSA.meanFuncPersistence) > OmniOSA.generateGPPredictions(hoursOffset = 40)
 
 predictPipeline(OmniOSA.trainingDataSections)
 
