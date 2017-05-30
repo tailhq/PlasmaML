@@ -446,7 +446,8 @@ object OmniOSA {
   /**
     * A pipeline which takes data and its associated scales
     * (scales are represented by some subclass of [[io.github.mandar2812.dynaml.pipes.ReversibleScaler]])
-    *
+    * and returns a [[AbstractGPRegressionModel]] trained using a global optimization
+    * algorithm, as determined by [[globalOpt]].
     * */
   def gpTrain(
     kernel: VectorKernel,
@@ -508,6 +509,12 @@ object OmniOSA {
       (tunedModel, dataAndScales._2)
     })
 
+  /**
+    * A pipeline which takes data and its associated scales
+    * (scales are represented by some subclass of [[io.github.mandar2812.dynaml.pipes.ReversibleScaler]])
+    * and returns a [[ESGPModel]] trained using a global optimization
+    * algorithm, as determined by [[globalOpt]].
+    * */
   def sgpTrain(
     kernel: VectorKernel,
     noise: VectorKernel,
