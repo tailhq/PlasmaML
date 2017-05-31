@@ -7,8 +7,9 @@ import io.github.mandar2812.dynaml.models.bayes.CoRegGPPrior
 import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
 import io.github.mandar2812.dynaml.probability._
 import io.github.mandar2812.dynaml.analysis.implicits._
-import io.github.mandar2812.PlasmaML.utils._
+import io.github.mandar2812.dynaml.utils._
 import io.github.mandar2812.dynaml.analysis.VectorField
+import io.github.mandar2812.dynaml.utils.ConfigEncoding
 
 
 val (nL,nT) = (200, 50)
@@ -135,7 +136,7 @@ val proposal_distr2 = MultStudentsTRV(hyper_params.length)(
   DenseMatrix.eye[Double](hyper_params.length)*0.5)
 
 
-val mcmc_sampler = new ContinuousMCMC[DenseVector[Double], DenseMatrix[Double]](
+val mcmc_sampler = new GenericContinuousMCMC[DenseVector[Double], DenseMatrix[Double]](
   processed_prior, likelihood, proposal_distr1,
   burnIn = 0, dropCount = 0
 )

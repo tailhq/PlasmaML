@@ -1,14 +1,13 @@
 package io.github.mandar2812.PlasmaML.cdf
 
 import java.io.File
-
 import io.github.mandar2812.PlasmaML.PlasmaMLSpark
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import org.apache.spark.rdd.RDD
 
 /**
-  * Created by mandar on 20/5/16.
-  */
+  * @author mandar2812 date 20/5/16.
+  * */
 object CDFUtils {
 
   val dataDir = "data/"
@@ -66,7 +65,6 @@ object CDFUtils {
 
   /**
     * Read a CDF file into an Apache Spark RDD
- *
     * @param columns A list of columns to be selected from the file
     * @param missingValueKey The attribute name in the CDF column metadata
     *                        which holds the missing value string for each
