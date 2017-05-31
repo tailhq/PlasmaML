@@ -11,6 +11,7 @@ import io.github.mandar2812.dynaml.probability.mcmc.HyperParameterMCMC
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 //Import Omni programs
 import io.github.mandar2812.PlasmaML.omni._
+import com.quantifind.charts.Highcharts._
 
 OmniOSA.setTarget(40, 10)
 //OmniOSA.setExogenousVars(List(24, 5), List(24, 5))
@@ -51,7 +52,6 @@ polynomialKernel.block("degree")
 implicit val ev = VectorField(OmniOSA.input_dimensions)
 
 val tKernel = new TStudentKernel(0.01)
-//tKernel.block_all_hyper_parameters
 
 val rbfKernel = new RBFKernel(1.7)
 
@@ -76,14 +76,28 @@ val predictPipeline = OmniOSA.dataPipeline > OmniOSA.gpTrain(
     whiteNoiseKernel,
     OmniOSA.meanFuncPersistence)
 
+val predictPipelineSGP = OmniOSA.dataPipeline > OmniOSA.sgpTrain(
+  tKernel+mlpKernel, whiteNoiseKernel,
+  -4.4, -0.01, OmniOSA.meanFuncPersistence)
+
+
 val (model, scaler) = predictPipeline(OmniOSA.trainingDataSections)
 
+val (sgp_model, scaler_sgp) = predictPipelineSGP(OmniOSA.trainingDataSections)
+
 val num_hyp = model._hyper_parameters.length
+val num_hyp_sgp = sgp_model._hyper_parameters.length
 
 val proposal = MultGaussianRV(
   num_hyp)(
   DenseVector.zeros[Double](num_hyp),
   DenseMatrix.eye[Double](num_hyp)*0.001)
+
+val proposal_sgp = MultGaussianRV(
+  num_hyp_sgp)(
+  DenseVector.zeros[Double](num_hyp_sgp),
+  DenseMatrix.eye[Double](num_hyp_sgp)*0.001)
+
 
 val mcmc = HyperParameterMCMC[model.type, ContinuousDistr[Double]](
   model, model._hyper_parameters.map(h => (h, new Gamma(1.0, 2.0))).toMap,
@@ -92,3 +106,16 @@ val mcmc = HyperParameterMCMC[model.type, ContinuousDistr[Double]](
 mcmc.burnIn = 50
 
 val samples = mcmc.iid(100).draw
+
+val mcmc_sgp = HyperParameterMCMC[sgp_model.type, ContinuousDistr[Double]](
+  sgp_model, sgp_model._hyper_parameters.map(h => (h, new Gamma(1.0, 2.0))).toMap,
+  proposal_sgp)
+
+mcmc_sgp.burnIn = 150
+
+val samples_sgp = mcmc_sgp.iid(200).draw
+
+scatter(samples_sgp.map(c => (c("MLPKernel@231c8794/w"), c("MLPKernel@231c8794/b"))))
+title("Posterior Samples")
+xAxis("MLP Kernel: w")
+yAxis("MLP Kernel: b")
