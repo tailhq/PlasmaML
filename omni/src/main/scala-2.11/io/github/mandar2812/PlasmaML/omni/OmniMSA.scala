@@ -14,7 +14,7 @@ import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.modelpipe.ModelPredictionPipe
 import io.github.mandar2812.dynaml.models.stp.MVStudentsTModel
-import io.github.mandar2812.dynaml.optimization.{FFBackProp, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, FFBackProp, GridSearch}
 import io.github.mandar2812.dynaml.probability.RandomVariable
 import org.apache.log4j.Logger
 
@@ -163,6 +163,7 @@ object OmniMSA {
   def train(
     kernel: LocalScalarKernel[Features], noise: LocalScalarKernel[Features],
     gridSize: Int, gridStep: Double, logSc: Boolean,
+    globalOpt: String, maxIt: Int,
     phi: DataPipe[Features, DenseVector[Double]]):
   (MVStudentsTModel[Data, Features] , DataScales) = {
 
@@ -174,10 +175,21 @@ object OmniMSA {
       val num_outputs = dataAndScales._2._2.mean.length
       val initial_model = multiVariateSTModel(dataAndScales._1, dataAndScales._1.length, num_outputs)
 
-      val gs = new GridSearch[initial_model.type](initial_model)
-        .setGridSize(gridSize)
-        .setStepSize(gridStep)
-        .setLogScale(logSc)
+      val gs = globalOpt match {
+
+        case "CSA" =>
+          new CoupledSimulatedAnnealing[initial_model.type](initial_model)
+            .setGridSize(gridSize)
+            .setStepSize(gridStep)
+            .setLogScale(logSc)
+            .setMaxIterations(maxIt)
+            .setVariant(CoupledSimulatedAnnealing.MwVC)
+        case _ =>
+          new GridSearch[initial_model.type](initial_model)
+            .setGridSize(gridSize)
+            .setStepSize(gridStep)
+            .setLogScale(logSc)
+      }
 
       val startConf = initial_model.covariance.effective_state ++ initial_model.noiseModel.effective_state
 
@@ -510,6 +522,8 @@ object DstMSAExperiment {
   var gridStep = 0.5
   var useLogScale = false
 
+  var globalOpt = "GS"
+
   /**
     * Train and test a [[GenericFFNeuralNet]] model on the OMNI data.
     * Training set is combination of 20 storms from [[OmniOSA.stormsFile2]]
@@ -571,8 +585,11 @@ object DstMSAExperiment {
     OmniMultiOutputModels.useWaveletBasis = useWavelets
 
     val (model, scaler) = OmniMSA.train(
-      kernel, noise, gridSize, gridStep, useLogScale,
-      DataPipe((x: Features) => DenseVector(x.toArray :+ 1.0)))
+      kernel, noise,
+      gridSize, gridStep,
+      useLogScale, globalOpt, it,
+      DataPipe((x: Features) => DenseVector(x.toArray :+ 1.0))
+    )
 
     val stormsPipe =
       fileToStream >
