@@ -42,7 +42,7 @@ object OmniMultiOutputModels {
 
   var neuronActivations: List[String] = List("logsig", "linear")
 
-  var activations = List(VectorSigmoid, VectorTansig, VectorLinear)
+  var activations = List(MagicSELU, MagicSELU, VectorLinear)
 
   var column: Int = 40
 

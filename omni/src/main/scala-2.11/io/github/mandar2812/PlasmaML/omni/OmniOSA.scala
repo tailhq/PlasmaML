@@ -160,6 +160,8 @@ object OmniOSA {
     * */
   private var targetColumn: Int = 40
 
+  def _targetColumn = targetColumn
+
   /**
     * Column indices of the exogenous inputs, if any.
     * Defaults to an empty list which implies AR models
@@ -174,6 +176,8 @@ object OmniOSA {
   private var p_ex: List[Int] = List()
 
   private var modelType: String = "GP-AR"
+
+  def _modelType = modelType
 
   def modelType_(m: String) = {
     if(m == "GP-NARMAX") {

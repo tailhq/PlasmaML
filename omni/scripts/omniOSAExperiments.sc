@@ -1,6 +1,10 @@
+import breeze.linalg._
+import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 //DynaML imports
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
+import io.github.mandar2812.dynaml.pipes._
 //Import Omni programs
 import io.github.mandar2812.PlasmaML.omni._
 
@@ -145,3 +149,63 @@ val sgpPipeline =
     OmniOSA.meanFuncPersistence) > OmniOSA.generateSGPPredictions()
 
 sgpPipeline(OmniOSA.trainingDataSections)
+
+
+
+OmniOSA.gridSize = 1
+OmniOSA.gridStep = 0.0
+OmniOSA.globalOpt = "GS"
+OmniOSA.setTarget(40, 6)
+OmniOSA.setExogenousVars(List(24, 16), List(1,3))
+mlpKernel.setw(1.2901485870065708)
+mlpKernel.setoffset(73.92009461973996)
+OmniOSA.gridSize = 1
+OmniOSA.gridStep = 0.0
+
+
+val modelAndScales = (
+  OmniOSA.dataPipeline >
+    OmniOSA.gpTrain(
+      tKernel+mlpKernel, whiteNoiseKernel,
+      OmniOSA.meanFuncPersistence))(
+  OmniOSA.trainingDataSections)
+
+
+val pipeline_alt = {
+  fileToStream > replaceWhiteSpaces > StreamDataPipe(OmniOSA.getStormTimeRanges() > OmniOSA.processTimeSegment)
+}
+
+val pipeline2 = {
+  DataPipe((testData: OmniOSA.Data) =>
+    modelAndScales._1
+      .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
+      .toStream) >
+    StreamDataPipe((c: (OmniOSA.Features, OmniOSA.Features)) => (c._1(0), c._2(0))) >
+    DataPipe((results: Stream[(Double, Double)]) =>
+      new RegressionMetrics(results.toList, results.length)
+        .setName(OmniOSA._modelType+" "+OmniOSA.columnNames(OmniOSA._targetColumn)+"; OSA")
+    )
+}
+
+val stormAvgPipeline = pipeline_alt > StreamDataPipe(pipeline2)
+
+val mets = stormAvgPipeline.run(OmniOSA.dataDir+OmniOSA.stormsFileJi)
+
+val perfs = mets.map(r => (r.rmse, r.mae, r.corr))
+val rmse = perfs.map(_._1).sum/perfs.length.toDouble
+
+OmniOSA.clearExogenousVars()
+
+OmniOSA.gridSize = 1
+OmniOSA.gridStep = 0.0
+OmniOSA.globalOpt = "GS"
+OmniOSA.setTarget(40, 6)
+
+mlpKernel.setw(1.2901485870065708)
+mlpKernel.setoffset(73.92009461973996)
+OmniOSA.gridSize = 1
+OmniOSA.gridStep = 0.0
+
+
+13.25
+10.71

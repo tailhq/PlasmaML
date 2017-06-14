@@ -96,7 +96,7 @@ val proposal = MultGaussianRV(
 val proposal_sgp = MultGaussianRV(
   num_hyp_sgp)(
   DenseVector.zeros[Double](num_hyp_sgp),
-  DenseMatrix.eye[Double](num_hyp_sgp)*0.001)
+  DenseMatrix.eye[Double](num_hyp_sgp)*0.01)
 
 
 val mcmc = HyperParameterMCMC[model.type, ContinuousDistr[Double]](
@@ -113,9 +113,10 @@ val mcmc_sgp = HyperParameterMCMC[sgp_model.type, ContinuousDistr[Double]](
 
 mcmc_sgp.burnIn = 150
 
-val samples_sgp = mcmc_sgp.iid(200).draw
+val samples_sgp = mcmc_sgp.iid(500).draw
 
-scatter(samples_sgp.map(c => (c("MLPKernel@231c8794/w"), c("MLPKernel@231c8794/b"))))
+scatter(samples_sgp.map(c => (c("MLPKernel@5209a193/w"), c("MLPKernel@5209a193/b"))))
 title("Posterior Samples")
 xAxis("MLP Kernel: w")
 yAxis("MLP Kernel: b")
+

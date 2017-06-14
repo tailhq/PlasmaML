@@ -1,6 +1,7 @@
 package io.github.mandar2812.PlasmaML.omni
 
 import breeze.linalg.{DenseMatrix, DenseVector}
+import breeze.stats.distributions.Gaussian
 import io.github.mandar2812.PlasmaML.omni.OmniMSA.Features
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes._
@@ -14,6 +15,7 @@ import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.modelpipe.ModelPredictionPipe
 import io.github.mandar2812.dynaml.models.stp.MVStudentsTModel
 import io.github.mandar2812.dynaml.optimization.{FFBackProp, GridSearch}
+import io.github.mandar2812.dynaml.probability.RandomVariable
 import org.apache.log4j.Logger
 
 /**
@@ -123,7 +125,17 @@ object OmniMSA {
 
       val stackFactory = NeuralStackFactory(layerCounts)(activations)
 
-      val weightsInitializer = GenericFFNeuralNet.getWeightInitializer(layerCounts)
+      val uni = Gaussian(0.0, 1.0)
+
+      val weightsInitializer = RandomVariable(
+        layerCounts.sliding(2)
+          .toSeq
+          .map(l => (l.head, l.last))
+          .map((c) => RandomVariable(() => (
+            DenseMatrix.tabulate(c._2, c._1)((_, _) => uni.draw()),
+            DenseVector.tabulate(c._2)(_ => uni.draw())))
+          ):_*
+      )
 
       val backPropOptimizer =
         new FFBackProp(stackFactory)
