@@ -14,7 +14,7 @@ import io.github.mandar2812.dynaml.evaluation.MultiRegressionMetrics
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.modelpipe.ModelPredictionPipe
 import io.github.mandar2812.dynaml.models.stp.MVStudentsTModel
-import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, FFBackProp, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{AbstractCSA, CoupledSimulatedAnnealing, FFBackProp, GridSearch}
 import io.github.mandar2812.dynaml.probability.RandomVariable
 import org.apache.log4j.Logger
 
@@ -183,7 +183,7 @@ object OmniMSA {
             .setStepSize(gridStep)
             .setLogScale(logSc)
             .setMaxIterations(maxIt)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
         case _ =>
           new GridSearch[initial_model.type](initial_model)
             .setGridSize(gridSize)

@@ -51,12 +51,12 @@ metricsMT.print
 
 OmniMultiOutputModels.exogenousInputs = List(24, 16)
 
-OmniMultiOutputModels.neuronCounts = List(6, 4)
-OmniMultiOutputModels.activations = List(MagicSELU, MagicSELU, VectorLinear)
+OmniMultiOutputModels.neuronCounts = List(12, 8, 6)
+OmniMultiOutputModels.activations = List(MagicSELU, MagicSELU, MagicSELU, VectorLinear)
 
-DstMSAExperiment.learningRate = 0.075
-DstMSAExperiment.momentum = 0.25
-DstMSAExperiment.it = 10000
-DstMSAExperiment.reg = 0.00001
+DstMSAExperiment.learningRate = 0.001
+DstMSAExperiment.momentum = 0.005
+DstMSAExperiment.it = 7000
+DstMSAExperiment.reg = 0.0000001
 
-val metricsW = DstMSAExperiment(3, 2)
+val metricsW = DstMSAExperiment(4, 2)

@@ -5,7 +5,7 @@ package io.github.mandar2812.PlasmaML.omni
 import io.github.mandar2812.dynaml.modelpipe.GLMPipe
 import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
 import io.github.mandar2812.dynaml.models.sgp.ESGPModel
-import io.github.mandar2812.dynaml.optimization.ProbGPCommMachine
+import io.github.mandar2812.dynaml.optimization.{AbstractCSA, ProbGPCommMachine}
 
 import scala.collection.mutable.{MutableList => MList}
 
@@ -486,7 +486,7 @@ object OmniOSA {
             .setStepSize(gridStep)
             .setLogScale(useLogScale)
             .setMaxIterations(maxIterations)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
 
         case "ML" =>
           new GradBasedGlobalOptimizer(model).setStepSize(gridStep)
@@ -553,7 +553,7 @@ object OmniOSA {
             .setStepSize(gridStep)
             .setLogScale(useLogScale)
             .setMaxIterations(maxIterations)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
 
       }
 
@@ -714,7 +714,9 @@ object OmniOSA {
 
 
   /**
-    * Train a Gaussian Process model on the specified training sections i.e. [[trainingDataSections]]
+    * Train a Gaussian Process model on
+    * the specified training sections
+    * i.e. [[trainingDataSections]]
     *
     * @param kernel The covariance function as a [[LocalScalarKernel]] instance
     * @param noise The noise as a [[LocalScalarKernel]] instance

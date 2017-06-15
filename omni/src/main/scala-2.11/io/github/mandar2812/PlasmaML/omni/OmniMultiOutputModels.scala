@@ -220,7 +220,7 @@ object OmniMultiOutputModels {
             .setStepSize(step)
             .setLogScale(useLogSc)
             .setMaxIterations(maxIt)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
         case "GS" =>
           new GridSearch[AbstractGPRegressionModel[
             Stream[(DenseVector[Double], DenseVector[Double])],
@@ -359,7 +359,7 @@ object OmniMultiOutputModels {
             .setStepSize(step)
             .setLogScale(useLogSc)
             .setMaxIterations(maxIt)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
         case "GS" =>
           new GridSearch[AbstractGPRegressionModel[
             Stream[(DenseVector[Double], DenseVector[Double])],
@@ -491,7 +491,7 @@ object OmniMultiOutputModels {
             .setStepSize(step)
             .setLogScale(useLogSc)
             .setMaxIterations(maxIt)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
         case "GS" =>
           new GridSearch[model.type](model)
             .setGridSize(grid)
@@ -607,7 +607,7 @@ object OmniMultiOutputModels {
             .setStepSize(step)
             .setLogScale(useLogSc)
             .setMaxIterations(maxIt)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
         case "GS" =>
           new GridSearch[model.type](model)
             .setGridSize(grid)
@@ -684,7 +684,7 @@ object OmniMultiOutputModels {
             .setStepSize(step)
             .setLogScale(useLogSc)
             .setMaxIterations(maxIt)
-            .setVariant(CoupledSimulatedAnnealing.MwVC)
+            .setVariant(AbstractCSA.MwVC)
         case "GS" =>
           new GridSearch[model.type](model)
             .setGridSize(grid)
