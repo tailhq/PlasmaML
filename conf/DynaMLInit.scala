@@ -42,6 +42,11 @@ import io.github.mandar2812.dynaml.wavelets._
 import javax.script._
 import org.renjin.script._
 import org.renjin.sexp._
+
+import io.github.mandar2812.PlasmaML.omni._
+import io.github.mandar2812.PlasmaML.vanAllen._
+import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+
 val r_engine_factory = new RenjinScriptEngineFactory()
 implicit val renjin = r_engine_factory.getScriptEngine()
 val r: String => SEXP = (s: String) => renjin.eval(s).asInstanceOf[SEXP]
