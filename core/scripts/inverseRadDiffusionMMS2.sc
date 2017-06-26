@@ -115,7 +115,7 @@ val hyper_params = radialDiffusionProcess.effective_hyper_parameters
 val hyper_prior = getPriorMapDistr(hyper_params.map(h => (h, Gamma(1.0, 1.0))).toMap)
 val mapEncoding = ConfigEncoding(hyper_params)
 
-val processed_prior: ContinuousDistrRV[DenseVector[Double]] = EncodedContDistrRV(hyper_prior, mapEncoding)
+val processed_prior = EncodedContDistrRV(hyper_prior, mapEncoding)
 
 val forward_model = radialDiffusionProcess.forwardModel(lShellLimits, nL, timeLimits, nT) _
 
@@ -136,7 +136,8 @@ val proposal_distr2 = MultStudentsTRV(hyper_params.length)(
   DenseMatrix.eye[Double](hyper_params.length)*0.5)
 
 
-val mcmc_sampler = new GenericContinuousMCMC[DenseVector[Double], DenseMatrix[Double]](
+val mcmc_sampler = new GenericContinuousMCMC[
+  DenseVector[Double], DenseMatrix[Double]](
   processed_prior, likelihood, proposal_distr1,
   burnIn = 0, dropCount = 0
 )

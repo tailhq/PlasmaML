@@ -14,10 +14,10 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := mainVersion,
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.5-beta.1",
+  dynaMLVersion := "v1.5-beta.3",
   libraryDependencies in ThisBuild ++= Seq(
     "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
-    "com.github.transcendent-ai-labs" % "DynaML" % dynaMLVersion.value,
+    "io.github.mandar2812" % "dynaml_2.11" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
     "joda-time" % "joda-time" % "2.9.3",
     "org.json4s" % "json4s-native_2.11" % "3.3.0",
@@ -58,14 +58,7 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
     "-J-Xms64m"
   ),
   dataDirectory := new File("data/"),
-  initialCommands in console := """import io.github.mandar2812.PlasmaML._;"""+
-    """import io.github.mandar2812.PlasmaML.cdf.CDFUtils;"""+
-    """import scalaxy.streams.optimize;"""+
-    """import io.github.mandar2812.dynaml.kernels._;"""+
-    """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
-    """import com.quantifind.charts.Highcharts._;"""+
-    """import breeze.linalg.DenseVector;""" +
-    """io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""")
+  initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""")
   .aggregate(core, omni, vanAllen)
   .settings(aggregate in update := false)
   .settings(aggregate in publishM2 := true)
