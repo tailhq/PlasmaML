@@ -20,6 +20,8 @@ val timeLimits = (0.0, 5.0)
 
 val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
+val (lShellVec, timeVec) = rds.stencil
+
 val Kp = DataPipe((t: Double) =>
   if(t<= 0d) 2.5
   else if(t < 1.5) 2.5 + 4*t
@@ -84,12 +86,18 @@ val q = (l: Double, t: Double) => q_trend(
 )
 
 val lambda = (l: Double, t: Double) => loss_trend(
-  Map("lambda_alpha" -> loss_alpha, "lambda_beta" -> loss_beta, "lambda_a" -> loss_a, "lambda_b" -> loss_b))(
+  Map(
+    "lambda_alpha" -> 1/(0.5*1.2*math.pow(10, 4)),
+    "lambda_beta" -> 1d,
+    "lambda_a" -> 2.5,
+    "lambda_b" -> 0.18))(
   (l, t)
 )
 
 val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val initialPSD = (l: Double) => math.sin(omega*(l - lShellLimits._1))
+
+val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => initialPSD(l)).toArray)
 
 val groundTruth = rds.solve(q, dll, lambda)(initialPSD)
 
@@ -98,3 +106,61 @@ val measurement_noise = GaussianRV(0.0, 0.25)
 
 val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
 val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
+
+val covL = new SECovFunc(rds.deltaL*mult, baseNoiseLevel)
+covL.block_all_hyper_parameters
+val covT = new SECovFunc(rds.deltaT*mult, baseNoiseLevel)
+covT.block_all_hyper_parameters
+
+val radialDiffusionProcess = StochasticRadialDiffusion(
+  covL, covT,
+  q_prior, dll_prior,
+  loss_prior)
+
+radialDiffusionProcess.block_++(dll_prior.trendParamsEncoder(loss_prior._meanFuncParams).keys.toSeq:_*)
+radialDiffusionProcess.block_++(q_prior.trendParamsEncoder(loss_prior._meanFuncParams).keys.toSeq:_*)
+
+
+val hyper_params = radialDiffusionProcess.effective_hyper_parameters
+
+val hyper_prior = getPriorMapDistr(hyper_params.map(h => (h, Gamma(1.0, 1.0))).toMap)
+val mapEncoding = ConfigEncoding(hyper_params)
+
+val processed_prior = EncodedContDistrRV(hyper_prior, mapEncoding)
+
+val forward_model = radialDiffusionProcess.forwardModel(lShellLimits, nL, timeLimits, nT) _
+
+val likelihood = DataPipe((hyp: DenseVector[Double]) => {
+  val config = mapEncoding.i(hyp)
+  radialDiffusionProcess.setState(config)
+  radialDiffusionProcess.forwardModel(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
+})
+
+implicit val ev = VectorField(hyper_params.length)
+
+val proposal_distr1 = MultGaussianRV(hyper_params.length)(
+  DenseVector.zeros[Double](hyper_params.length),
+  DenseMatrix.eye[Double](hyper_params.length))
+
+val proposal_distr2 = MultStudentsTRV(hyper_params.length)(
+  3.5, DenseVector.zeros[Double](hyper_params.length),
+  DenseMatrix.eye[Double](hyper_params.length)*0.5)
+
+
+val mcmc_sampler = new GenericContinuousMCMC[
+  DenseVector[Double], DenseMatrix[Double]](
+  processed_prior, likelihood, proposal_distr1,
+  burnIn = 0, dropCount = 0
+)
+
+val post = mcmc_sampler.posterior(data).iid(2000)
+
+val processed_samples: Seq[Map[String, Double]] = post.draw.map(mapEncoding.i(_))
+
+val alphaBeta = processed_samples.map(m => (m("lambda_alpha"), m("lambda_beta")))
+
+
+scatter(alphaBeta)
+xAxis("Injection alpha")
+yAxis("Injection beta")
+title("Samples from Posterior P(alpha, beta | PSD data)")
