@@ -117,8 +117,8 @@ val radialDiffusionProcess = StochasticRadialDiffusion(
   q_prior, dll_prior,
   loss_prior)
 
-radialDiffusionProcess.block_++(dll_prior.trendParamsEncoder(loss_prior._meanFuncParams).keys.toSeq:_*)
-radialDiffusionProcess.block_++(q_prior.trendParamsEncoder(loss_prior._meanFuncParams).keys.toSeq:_*)
+radialDiffusionProcess.block_++(dll_prior.trendParamsEncoder(dll_prior._meanFuncParams).keys.toSeq:_*)
+radialDiffusionProcess.block_++(q_prior.trendParamsEncoder(q_prior._meanFuncParams).keys.toSeq:_*)
 
 
 val hyper_params = radialDiffusionProcess.effective_hyper_parameters
