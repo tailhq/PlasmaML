@@ -71,3 +71,28 @@ val loss_prior = new DiffusionPrior(
   baseNoiseLevel*mult, (loss_alpha, loss_beta, loss_a, loss_b))
 
 
+//Create ground truth diffusion parameter functions
+
+val dll = (l: Double, t: Double) => dll_trend(
+  Map("dll_alpha" -> dll_alpha, "dll_beta" -> dll_beta, "dll_a" -> dll_a, "dll_b" -> dll_b))(
+  (l, t)
+)
+
+val q = (l: Double, t: Double) => q_trend(
+  Map("Q_alpha" -> q_alpha, "Q_beta" -> q_beta, "Q_a" -> q_a, "Q_b" -> q_b))(
+  (l, t)
+)
+
+val lambda = (l: Double, t: Double) => loss_trend(
+  Map("lambda_alpha" -> loss_alpha, "lambda_beta" -> loss_beta, "lambda_a" -> loss_a, "lambda_b" -> loss_b))(
+  (l, t)
+)
+
+val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
+val initialPSD = (l: Double) => math.sin(omega*(l - lShellLimits._1))
+
+val groundTruth = rds.solve(q, dll, lambda)(initialPSD)
+
+val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.map(_.asDenseMatrix.t):_*)
+val measurement_noise = GaussianRV(0.0, 0.25)
+val data = ground_truth_matrix.map(v => v + measurement_noise.draw)
