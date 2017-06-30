@@ -95,4 +95,6 @@ val groundTruth = rds.solve(q, dll, lambda)(initialPSD)
 
 val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.map(_.asDenseMatrix.t):_*)
 val measurement_noise = GaussianRV(0.0, 0.25)
-val data = ground_truth_matrix.map(v => v + measurement_noise.draw)
+
+val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
+val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
