@@ -101,10 +101,10 @@ val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => initialPS
 
 val groundTruth = rds.solve(q, dll, lambda)(initialPSD)
 
-val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.map(_.asDenseMatrix.t):_*)
+val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.tail.map(_.asDenseMatrix.t):_*)
 val measurement_noise = GaussianRV(0.0, 0.25)
 
-val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
+val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT)((_, _) => measurement_noise.draw)
 val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
 
 val covL = new SECovFunc(rds.deltaL*mult, baseNoiseLevel)
@@ -149,8 +149,8 @@ val proposal_distr2 = MultStudentsTRV(hyper_params.length)(
 
 val mcmc_sampler = new GenericContinuousMCMC[
   DenseVector[Double], DenseMatrix[Double]](
-  processed_prior, likelihood, proposal_distr1,
-  burnIn = 0, dropCount = 0
+  processed_prior, likelihood, proposal_distr2,
+  burnIn = 300, dropCount = 0
 )
 
 val post = mcmc_sampler.posterior(data).iid(2000)
