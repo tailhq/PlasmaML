@@ -73,11 +73,13 @@ class StochasticRadialDiffusion[ParamsQ, ParamsD, ParamsL](
 
   protected var blocked_hyper_parameters: List[String] =
     injectionProcess.covariance.blocked_hyper_parameters ++
-      injectionProcess.noiseCovariance.blocked_hyper_parameters
+      injectionProcess.noiseCovariance.blocked_hyper_parameters ++
       diffusionProcess.covariance.blocked_hyper_parameters ++
       diffusionProcess.noiseCovariance.blocked_hyper_parameters ++
       lossProcess.covariance.blocked_hyper_parameters ++
       lossProcess.noiseCovariance.blocked_hyper_parameters ++
+      psdCovarianceL.blocked_hyper_parameters ++
+      psdCovarianceT.blocked_hyper_parameters ++
       psdCovarianceL.blocked_hyper_parameters ++
       psdCovarianceT.blocked_hyper_parameters
 

@@ -12,7 +12,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe._
   * @author mandar date 27/06/2017.
   * */
 class DiffusionPrior(
-  val trend: DiffusionParameterTrend[Map[String, Double]],
+  val trend: MagnetosphericProcessTrend[Map[String, Double]],
   val covarianceSpace: LocalScalarKernel[Double],
   val covarianceTime: LocalScalarKernel[Double],
   val noise: Double = 0.5,

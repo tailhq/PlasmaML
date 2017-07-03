@@ -2,9 +2,9 @@ import breeze.linalg._
 import breeze.stats.distributions.Gamma
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.{
-DiffusionParameterTrend, DiffusionPrior, RadialDiffusion, StochasticRadialDiffusion}
+MagnetosphericProcessTrend, DiffusionPrior,
+RadialDiffusion, StochasticRadialDiffusion}
 import io.github.mandar2812.dynaml.kernels._
-import io.github.mandar2812.dynaml.models.bayes.CoRegGPPrior
 import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
 import io.github.mandar2812.dynaml.probability._
 import io.github.mandar2812.dynaml.analysis.implicits._
@@ -34,38 +34,62 @@ val baseNoiseLevel = 1.2
 val mult = 0.8
 
 
-//Define parameters of radial diffusion system
+/*
+* Define parameters of radial diffusion system:
+*
+*  1) The diffusion field: dll
+*  2) The particle injection process: q
+*  3) The loss parameter: lambda
+*
+* Using the MagnetosphericProcessTrend class,
+* we define each unknown process using a canonical
+* parameterization of diffusion processes in the
+* magnetosphere.
+*
+* For each process we must specify 4 parameters
+* alpha, beta, a, b
+* */
+
+//Diffusion Field
 val dll_alpha = 1d
 val dll_beta = 10d
 val dll_a = -9.325
 val dll_b = 0.506
 
-val dll_trend = new DiffusionParameterTrend[Map[String, Double]](Kp)(DiffusionParameterTrend.getEncoder("dll"))
+val dll_trend = new MagnetosphericProcessTrend[Map[String, Double]](Kp)(
+  MagnetosphericProcessTrend.getEncoder("dll"))
+
 val dll_prior = new DiffusionPrior(
   dll_trend,
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
   baseNoiseLevel*mult, (dll_alpha, dll_beta, dll_a, dll_b))
 
+
+//Injection process
 val q_alpha = 1d
 val q_beta = 0d
 val q_a = 0.002d
 val q_b = 0.05d
 
-val q_trend = new DiffusionParameterTrend[Map[String, Double]](Kp)(DiffusionParameterTrend.getEncoder("Q"))
+val q_trend = new MagnetosphericProcessTrend[Map[String, Double]](Kp)(
+  MagnetosphericProcessTrend.getEncoder("Q"))
+
 val q_prior = new DiffusionPrior(
   q_trend,
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
   baseNoiseLevel*mult, (q_alpha, q_beta, q_a, q_b))
 
-
+//Loss Process
 val loss_alpha = 1d
 val loss_beta = 10d
 val loss_a = -9.325
 val loss_b = 0.506
 
-val loss_trend = new DiffusionParameterTrend[Map[String, Double]](Kp)(DiffusionParameterTrend.getEncoder("lambda"))
+val loss_trend = new MagnetosphericProcessTrend[Map[String, Double]](Kp)(
+  MagnetosphericProcessTrend.getEncoder("lambda"))
+
 val loss_prior = new DiffusionPrior(
   loss_trend,
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
@@ -99,10 +123,10 @@ val initialPSD = (l: Double) => math.sin(omega*(l - lShellLimits._1))
 
 val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => initialPSD(l)).toArray)
 
+//Create ground truth PSD data and corrupt it with statistical noise.
 val groundTruth = rds.solve(q, dll, lambda)(initialPSD)
-
 val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.tail.map(_.asDenseMatrix.t):_*)
-val measurement_noise = GaussianRV(0.0, 0.25)
+val measurement_noise = GaussianRV(0.0, 0.15)
 
 val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT)((_, _) => measurement_noise.draw)
 val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
@@ -117,8 +141,14 @@ val radialDiffusionProcess = StochasticRadialDiffusion(
   q_prior, dll_prior,
   loss_prior)
 
-radialDiffusionProcess.block_++(dll_prior.trendParamsEncoder(dll_prior._meanFuncParams).keys.toSeq:_*)
-radialDiffusionProcess.block_++(q_prior.trendParamsEncoder(q_prior._meanFuncParams).keys.toSeq:_*)
+val blocked_hyper_params = {
+  dll_prior.trendParamsEncoder(dll_prior._meanFuncParams).keys ++
+    q_prior.trendParamsEncoder(q_prior._meanFuncParams).keys
+}
+
+
+radialDiffusionProcess.block_++(blocked_hyper_params.toSeq:_*)
+
 
 
 val hyper_params = radialDiffusionProcess.effective_hyper_parameters

@@ -9,7 +9,7 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
   *
   * @author mandar2812 date 27/06/2017.
   * */
-class DiffusionParameterTrend[T](val Kp: DataPipe[Double, Double])(
+class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
   val transform: Encoder[T, (Double, Double, Double, Double)])
   extends MetaPipe[T, (Double, Double), Double] {
 
@@ -27,7 +27,7 @@ class DiffusionParameterTrend[T](val Kp: DataPipe[Double, Double])(
   }
 }
 
-object DiffusionParameterTrend {
+object MagnetosphericProcessTrend {
 
   def getEncoder(prefix: String) = Encoder(
     (c: Map[String, Double]) => (
