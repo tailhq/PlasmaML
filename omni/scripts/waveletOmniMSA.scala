@@ -1,7 +1,7 @@
 import breeze.linalg.DenseVector
 import io.github.mandar2812.PlasmaML.omni._
 import io.github.mandar2812.dynaml.analysis.VectorField
-import io.github.mandar2812.dynaml.kernels.{DiracKernel, GaussianSpectralKernel, MLPKernel, TStudentKernel}
+import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes.Encoder
 
@@ -35,6 +35,8 @@ val (center, scale) = gsm_encoder(Map("c" -> 1.5, "s" -> 10.5))
 
 val gsm = GaussianSpectralKernel[DenseVector[Double]](center, scale, gsm_encoder)
 
+val cubicSplineKernel = new CubicSplineKernel[DenseVector[Double]](1.5)
+
 val d = new DiracKernel(0.05)
 d.block_all_hyper_parameters
 
@@ -46,7 +48,7 @@ val mlpKernel = new MLPKernel(1.2901485870065708, 73.92009461973996)
 
 //val (model, scales) = OmniMSA.train(mlpKernel+tKernel, d, 4, 0.5, false, DynaMLPipe.identityPipe[Features])
 
-val metricsMT = DstMSAExperiment(mlpKernel+gsm+tKernel, d, 3, 2, useWavelets = false)
+val metricsMT = DstMSAExperiment(mlpKernel+cubicSplineKernel+tKernel, d, 3, 2, useWavelets = false)
 metricsMT.print
 
 OmniMultiOutputModels.exogenousInputs = List(24, 16)

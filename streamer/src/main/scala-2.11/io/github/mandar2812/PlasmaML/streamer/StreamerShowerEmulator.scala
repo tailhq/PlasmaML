@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.models.stp.StudentTRegression
-import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{AbstractCSA, CoupledSimulatedAnnealing, GridSearch}
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 
 import scala.util.Random
@@ -90,7 +90,7 @@ object StreamerShowerEmulator {
               .setStepSize(step)
               .setLogScale(useLogSc)
               .setMaxIterations(maxIt)
-              .setVariant(CoupledSimulatedAnnealing.MwVC)
+              .setVariant(AbstractCSA.MwVC)
           case "GS" =>
             new GridSearch(model)
               .setGridSize(grid)
@@ -138,7 +138,7 @@ object StreamerShowerEmulator {
               .setStepSize(step)
               .setLogScale(useLogSc)
               .setMaxIterations(maxIt)
-              .setVariant(CoupledSimulatedAnnealing.MwVC)
+              .setVariant(AbstractCSA.MwVC)
           case "GS" =>
             new GridSearch(model)
               .setGridSize(grid)

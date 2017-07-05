@@ -12,7 +12,6 @@ import io.github.mandar2812.dynaml.utils._
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.utils.ConfigEncoding
 
-
 val (nL,nT) = (200, 50)
 
 val lShellLimits = (1.0, 10.0)
@@ -32,7 +31,6 @@ val Kp = DataPipe((t: Double) =>
 
 val baseNoiseLevel = 1.2
 val mult = 0.8
-
 
 /*
 * Define parameters of radial diffusion system:
@@ -65,9 +63,8 @@ val dll_prior = new DiffusionPrior(
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
   baseNoiseLevel*mult, (dll_alpha, dll_beta, dll_a, dll_b))
 
-
 //Injection process
-val q_alpha = 1d
+val q_alpha = 0d
 val q_beta = 0d
 val q_a = 0.002d
 val q_b = 0.05d
@@ -83,9 +80,9 @@ val q_prior = new DiffusionPrior(
 
 //Loss Process
 val loss_alpha = 1d
-val loss_beta = 10d
-val loss_a = -9.325
-val loss_b = 0.506
+val loss_beta = 0d
+val loss_a = 0d
+val loss_b = 0d
 
 val loss_trend = new MagnetosphericProcessTrend[Map[String, Double]](Kp)(
   MagnetosphericProcessTrend.getEncoder("lambda"))
@@ -96,9 +93,7 @@ val loss_prior = new DiffusionPrior(
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
   baseNoiseLevel*mult, (loss_alpha, loss_beta, loss_a, loss_b))
 
-
 //Create ground truth diffusion parameter functions
-
 val dll = (l: Double, t: Double) => dll_trend(
   Map("dll_alpha" -> dll_alpha, "dll_beta" -> dll_beta, "dll_a" -> dll_a, "dll_b" -> dll_b))(
   (l, t)
@@ -170,27 +165,33 @@ implicit val ev = VectorField(hyper_params.length)
 
 val proposal_distr1 = MultGaussianRV(hyper_params.length)(
   DenseVector.zeros[Double](hyper_params.length),
-  DenseMatrix.eye[Double](hyper_params.length))
+  DenseMatrix.eye[Double](hyper_params.length)*0.2)
 
 val proposal_distr2 = MultStudentsTRV(hyper_params.length)(
-  3.5, DenseVector.zeros[Double](hyper_params.length),
-  DenseMatrix.eye[Double](hyper_params.length)*0.5)
+  2.5, DenseVector.zeros[Double](hyper_params.length),
+  DenseMatrix.eye[Double](hyper_params.length)*0.8)
 
 
 val mcmc_sampler = new GenericContinuousMCMC[
   DenseVector[Double], DenseMatrix[Double]](
-  processed_prior, likelihood, proposal_distr2,
-  burnIn = 300, dropCount = 0
+  processed_prior, likelihood, proposal_distr1,
+  burnIn = 400, dropCount = 0
 )
 
-val post = mcmc_sampler.posterior(data).iid(2000)
+val post = mcmc_sampler.posterior(data).iid(1000)
 
 val processed_samples: Seq[Map[String, Double]] = post.draw.map(mapEncoding.i(_))
 
 val alphaBeta = processed_samples.map(m => (m("lambda_alpha"), m("lambda_beta")))
-
+val ab = processed_samples.map(m => (m("lambda_a"), m("lambda_b")))
 
 scatter(alphaBeta)
-xAxis("Injection alpha")
-yAxis("Injection beta")
-title("Samples from Posterior P(alpha, beta | PSD data)")
+xAxis("Loss alpha")
+yAxis("Loss beta")
+title("Samples from Posterior P(lambda_alpha, lambda_beta | PSD data)")
+
+
+scatter(ab)
+xAxis("Loss Parameter a")
+yAxis("Loss Parameter b")
+title("Samples from Posterior P(lambda_a, lambda_b | PSD data)")

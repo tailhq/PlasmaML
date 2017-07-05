@@ -14,10 +14,10 @@ lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   version := mainVersion,
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.5-beta.3",
+  dynaMLVersion := "v1.5-beta.4",
   libraryDependencies in ThisBuild ++= Seq(
     "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
-    "com.github.transcendent-ai-labs.DynaML" % "dynaml_2.11" % dynaMLVersion.value,
+    "io.github.mandar2812" % "dynaml_2.11" % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
     "joda-time" % "joda-time" % "2.9.3",
     "org.json4s" % "json4s-native_2.11" % "3.3.0",
@@ -35,7 +35,7 @@ resolvers in ThisBuild ++= Seq(
 
 lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(commonSettings: _*)
-  .dependsOn(core, omni, vanAllen).settings(
+  .dependsOn(mag_core, omni, vanAllen, streamer).settings(
   name := "PlasmaML",
   version := mainVersion,
   fork in run := true,
@@ -59,11 +59,10 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
   ),
   dataDirectory := new File("data/"),
   initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""")
-  .aggregate(core, omni, vanAllen)
+  .aggregate(mag_core, omni, vanAllen, streamer)
   .settings(aggregate in update := false)
-  .settings(aggregate in publishM2 := true)
 
-lazy val core = (project in file("core")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+lazy val mag_core = (project in file("mag-core")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
     initialCommands in console :=
       """import io.github.mandar2812.PlasmaML._;"""+
@@ -72,8 +71,7 @@ lazy val core = (project in file("core")).enablePlugins(JavaAppPackaging, BuildI
         """import io.github.mandar2812.dynaml.kernels._;"""+
         """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
         """import com.quantifind.charts.Highcharts._;"""+
-        """import breeze.linalg.DenseVector;""" +
-        """io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""",
+        """import breeze.linalg.DenseVector;""" ,
     scalacOptions ++= Seq("-optimise", "-Yclosure-elim", "-Yinline"))
 
 lazy val omni =
@@ -85,9 +83,8 @@ lazy val omni =
           """import io.github.mandar2812.dynaml.kernels._;"""+
           """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
           """import com.quantifind.charts.Highcharts._;"""+
-          """import breeze.linalg.DenseVector;""" +
-          """io.github.mandar2812.PlasmaML.PlasmaML.main(Array())"""
-    ).dependsOn(core)
+          """import breeze.linalg.DenseVector;"""
+    ).dependsOn(mag_core)
 
 lazy val vanAllen =
   (project in file("vanAllen")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
@@ -101,9 +98,8 @@ lazy val vanAllen =
           """import io.github.mandar2812.dynaml.pipes._;"""+
           """import com.quantifind.charts.Highcharts._;"""+
           """import org.jsoup._;"""+
-          """import breeze.linalg.{DenseMatrix, DenseVector};""" +
-          """io.github.mandar2812.PlasmaML.PlasmaML.main(Array())"""
-    ).dependsOn(core)
+          """import breeze.linalg.{DenseMatrix, DenseVector};"""
+    ).dependsOn(mag_core)
 
 lazy val streamer =
   (project in file("streamer")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
@@ -114,6 +110,5 @@ lazy val streamer =
         """import io.github.mandar2812.dynaml.kernels._;"""+
           """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
           """import com.quantifind.charts.Highcharts._;"""+
-          """import breeze.linalg.DenseVector;""" +
-          """io.github.mandar2812.PlasmaML.PlasmaML.main(Array())"""
-    ).dependsOn(core)
+          """import breeze.linalg.DenseVector;"""
+    ).dependsOn(mag_core)
