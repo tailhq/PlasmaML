@@ -9,7 +9,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe._
   * Extension of [[io.github.mandar2812.dynaml.models.bayes.CoRegGPPrior]], adapted
   * for the plasma diffusion scheme.
   *
-  * @author mandar date 27/06/2017.
+  * @author mandar2812 date 27/06/2017.
   * */
 class DiffusionPrior(
   val trend: MagnetosphericProcessTrend[Map[String, Double]],
