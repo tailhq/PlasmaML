@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
+import io.github.mandar2812.PlasmaML.utils.MagConfigEncoding
 import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
 
 /**
@@ -29,17 +30,18 @@ class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
 
 object MagnetosphericProcessTrend {
 
-  def getEncoder(prefix: String) = Encoder(
-    (c: Map[String, Double]) => (
-      c(prefix+"_alpha"),
-      c(prefix+"_beta"),
-      c(prefix+"_a"),
-      c(prefix+"_b")),
-    (p: (Double, Double, Double, Double)) => Map(
-      prefix+"_alpha" -> p._1,
-      prefix+"_beta" -> p._2,
-      prefix+"_a" -> p._3,
-      prefix+"_b" -> p._4)
+  def getEncoder(prefix: String): MagConfigEncoding = MagConfigEncoding(
+    (prefix+"_alpha", prefix+"_beta", prefix+"_a", prefix+"_b")
   )
 
 }
+
+class MagTrend(override val Kp: DataPipe[Double, Double], prefix: String) extends
+  MagnetosphericProcessTrend[Map[String, Double]](Kp)(MagnetosphericProcessTrend.getEncoder(prefix)) {
+
+  override val transform: MagConfigEncoding = MagnetosphericProcessTrend.getEncoder(prefix)
+
+}
+
+
+class SimpleMagTrend(prefix: String) extends MagTrend(DataPipe((_: Double) => 0d), prefix)

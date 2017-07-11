@@ -1,9 +1,7 @@
 import breeze.linalg._
 import breeze.stats.distributions.Gamma
 import com.quantifind.charts.Highcharts._
-import io.github.mandar2812.PlasmaML.dynamics.diffusion.{
-MagnetosphericProcessTrend, DiffusionPrior,
-RadialDiffusion, StochasticRadialDiffusion}
+import io.github.mandar2812.PlasmaML.dynamics.diffusion._
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
 import io.github.mandar2812.dynaml.probability._
@@ -54,8 +52,7 @@ val dll_beta = 10d
 val dll_a = -9.325
 val dll_b = 0.506
 
-val dll_trend = new MagnetosphericProcessTrend[Map[String, Double]](Kp)(
-  MagnetosphericProcessTrend.getEncoder("dll"))
+val dll_trend = new MagTrend(Kp, "dll")
 
 val dll_prior = new DiffusionPrior(
   dll_trend,

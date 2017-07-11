@@ -21,7 +21,7 @@ val referenceSolution = (l: Double, t: Double) => fl(l,t)*ft(l,t)
 
 val radialDiffusionSolver = (binsL: Int, binsT: Int) => new RadialDiffusion(lShellLimits, timeLimits, binsL, binsT)
 
-val q = (l: Double, t: Double) => alpha*fl(l,t)
+val q = (l: Double, t: Double) => 0.0//alpha*fl(l,t)
 val dll = (l: Double, _: Double) => theta*l*l
 val loss = (l: Double, _: Double) => alpha - math.pow(l*omega, 2.0)*theta
 
