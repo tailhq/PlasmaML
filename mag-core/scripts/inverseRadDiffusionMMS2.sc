@@ -139,7 +139,7 @@ val proposal_distr2 = MultStudentsTRV(hyper_params.length)(
 val mcmc_sampler = new GenericContinuousMCMC[
   DenseVector[Double], DenseMatrix[Double]](
   processed_prior, likelihood, proposal_distr1,
-  burnIn = 0, dropCount = 0
+  burnIn = 500, dropCount = 0
 )
 
 val measurement_noise = GaussianRV(0.0, 0.25)

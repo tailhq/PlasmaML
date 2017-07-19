@@ -196,8 +196,12 @@ object RadialDiffusion {
 
     val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
 
-    val lSqVec = square(DenseVector.tabulate[Double](nL + 1)(i =>
-      if(i < nL) lShellLimits._1+(deltaL*i) else lShellLimits._2))
+    val lSqVec = square(
+      DenseVector.tabulate[Double](nL + 1)(i =>
+        if(i < nL) lShellLimits._1+(deltaL*i)
+        else lShellLimits._2
+      )
+    )
 
     val adjLVec = lSqVec.map(v => 0.5*v/(deltaL*deltaL))
 

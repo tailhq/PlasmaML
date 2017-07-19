@@ -1,17 +1,15 @@
 import breeze.linalg._
-import breeze.stats.distributions.{ContinuousDistr, Gamma, Gaussian}
+import breeze.numerics.Bessel
+import breeze.stats.distributions._
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-import io.github.mandar2812.dynaml.DynaMLPipe
+import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import io.github.mandar2812.dynaml.kernels._
-import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
+import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.probability._
-import io.github.mandar2812.dynaml.analysis.implicits._
-import io.github.mandar2812.dynaml.utils._
-import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.models.gp.GPOperatorModel
-import io.github.mandar2812.dynaml.probability.mcmc.HyperParameterMCMC
-import io.github.mandar2812.dynaml.utils.ConfigEncoding
+import io.github.mandar2812.dynaml.probability.mcmc._
+
 
 val (nL,nT) = (200, 50)
 
@@ -22,14 +20,16 @@ val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
 val (lShellVec, timeVec) = rds.stencil
 
-val Kp = DataPipe((t: Double) =>
+val Kp = DataPipe((t: Double) => {
   if(t<= 0d) 2.5
   else if(t < 1.5) 2.5 + 4*t
   else if (t >= 1.5 && t< 3d) 8.5
   else if(t >= 3d && t<= 5d) 17.5 - 3*t
-  else 2.5)
+  else 2.5
+})
 
 val rowSelectorRV = MultinomialRV(DenseVector.fill[Double](lShellVec.length)(1d/lShellVec.length.toDouble))
+val colSelectorRV = MultinomialRV(DenseVector.fill[Double](timeVec.length)(1d/timeVec.length.toDouble))
 
 val baseNoiseLevel = 1.2
 val mult = 0.8
@@ -53,6 +53,7 @@ val mult = 0.8
 //Diffusion Field
 val dll_alpha = 1d
 val dll_beta = 10d
+val dll_gamma = 0d
 val dll_a = -9.325
 val dll_b = 0.506
 
@@ -76,48 +77,68 @@ val tau_b = -lambda_b
 //Create ground truth diffusion parameter functions
 val dll = (l: Double, t: Double) => dll_alpha*math.pow(l, dll_beta)*math.pow(10, dll_a + dll_b*Kp(t))
 
-val q = (l: Double, t: Double) => 0d
+val Q = (_: Double, _: Double) => 0d
 
 val lambda = (l: Double, t: Double) => lambda_alpha*math.pow(l, lambda_beta)*math.pow(10, lambda_a + lambda_b*Kp(t))
 
 val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
-val initialPSD = (l: Double) => math.sin(omega*(l - lShellLimits._1))*1E4
+
+val omega_t = math.Pi*2d/rds.deltaT
+
+val initialPSD = (l: Double) => Bessel.i1(omega*(l - lShellLimits._1))*1E1
 
 val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => initialPSD(l)).toArray)
 
 //Create ground truth PSD data and corrupt it with statistical noise.
-val groundTruth = rds.solve(q, dll, lambda)(initialPSD)
-val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.tail.map(_.asDenseMatrix.t):_*)
+val groundTruth = rds.solve(Q, dll, lambda)(initialPSD)
+val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.map(_.asDenseMatrix.t):_*)
 val measurement_noise = GaussianRV(0.0, 0.1)
 
-val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT)((_, _) => measurement_noise.draw)
+val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
 val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
 
-val gp_data: Seq[((Double, Double), Double)] = (0 until nT).map(col => {
+val gp_data: Seq[((Double, Double), Double)] = {
+    (0 until 20).map(_ => {
+      val rowS = rowSelectorRV.draw
+      val colS = colSelectorRV.draw
+      val (l, t) = (lShellVec(rowS), timeVec(colS))
+      ((l,t), data(rowS, colS))
+    })
+}
 
-  val rowS = rowSelectorRV.draw
-  val (l, t) = (lShellVec(rowS), timeVec(col+1))
-  ((l,t), data(rowS, col))
-})
-
-
+val burn = 7000
 //Create the GP PDE model
 val gpKernel = new SE1dDiffusionKernel(
-  1.0, rds.deltaL, rds.deltaT, Kp)(
-  (dll_alpha, dll_beta, dll_a, dll_b),
-  (tau_alpha, -0.5, -0.5, 1.0)
+  1.0, 2.5, 5.0, Kp)(
+  (dll_alpha, dll_beta, dll_gamma, dll_a, dll_b),
+  (lambda_alpha, 0.2, 0d, dll_a, dll_b)
 )
 
-val noiseKernel = new MAKernel(0.2)
+val noiseKernel = new MAKernel(0.01)
 
 noiseKernel.block_all_hyper_parameters
-gpKernel.block(gpKernel.hyper_parameters.filter(_.contains("dll_")):_*)
+
+val blocked_hyp = {
+  gpKernel.hyper_parameters.filter(h => h.contains("dll_") || h.contains("_gamma"))
+}
+
+gpKernel.block(blocked_hyp:_*)
 
 
 implicit val dataT = DynaMLPipe.identityPipe[Seq[((Double, Double), Double)]]
 
+val psdMean = gp_data.map(_._2).sum/gp_data.length
+
+
+val p = (dll_beta - 2d)/2d
+val q = (dll_beta - 3d)/2d
+val nu = math.abs((dll_beta - 3d)/(dll_beta - 2d))
+val beta = 2d/((dll_beta - 2d)*math.sqrt(dll_alpha))
+
+val psd_trend = (l: Double, t: Double) => initialPSD(l)*math.exp(-beta*t)
+
 val model = GPOperatorModel[Seq[((Double, Double), Double)], Double, SE1dDiffusionKernel](
-  gpKernel, noiseKernel:*noiseKernel, DataPipe((_: (Double, Double)) => 0))(
+  gpKernel, noiseKernel:*noiseKernel, DataPipe((x: (Double, Double)) => psd_trend(x._1, x._2)))(
   gp_data, gp_data.length)
 
 
@@ -126,43 +147,60 @@ val hyp = gpKernel.effective_hyper_parameters ++ noiseKernel.effective_hyper_par
 
 val num_hyp = hyp.length
 
-val proposal = MultGaussianRV(
-  num_hyp)(
-  DenseVector.zeros[Double](num_hyp),
-  DenseMatrix.eye[Double](num_hyp))
-
-val proposal_distr2 = MultStudentsTRV(num_hyp)(
-  2.5, DenseVector.zeros[Double](num_hyp),
-  DenseMatrix.eye[Double](num_hyp)*0.001)
-
 val hyper_prior = {
-  hyp.filter(_.contains("base::")).map(h => (h, new Gamma(1d, 1.5d))).toMap ++
-    hyp.filterNot(_.contains("base::")).map(h => (h, new Gaussian(0d, 1.5d))).toMap
+  hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
+    hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
+    Map(
+      "tau_alpha" -> new LogNormal(0d, 2.5d),
+      "tau_beta" -> new LogNormal(0d, 2d),
+      "tau_a" -> new Gaussian(0d, 2.5),
+      "tau_b" -> new Gaussian(0d, 2.5))
 }
 
-val mcmc = HyperParameterMCMC[model.type, ContinuousDistr[Double]](
-  model, hyper_prior,
-  proposal, 5000)
+val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
 
-
-//Draw samples from the posteior
+//Draw samples from the posterior
 val samples = mcmc.iid(2000).draw
-
-scatter(samples.map(c => (c("tau_alpha"), c("tau_beta"))))
-hold()
-scatter(Seq((tau_alpha, tau_beta)))
-legend(Seq("Posterior Samples", "Ground Truth"))
-title("Posterior Samples:- Tau(l, t) = alpha*l^(beta)*10^(a*Kp(t) + b)")
-xAxis("Tau: alpha")
-yAxis("Tau: beta")
-unhold()
-
 
 scatter(samples.map(c => (c("tau_a"), c("tau_b"))))
 hold()
-scatter(Seq((tau_a, tau_b)))
+scatter(Seq((lambda_a, lambda_b)))
 legend(Seq("Posterior Samples", "Ground Truth"))
-title("Posterior Samples:- Tau(l, t) = alpha*l^(beta)*10^(a*Kp(t) + b)")
-xAxis("Tau: a")
-yAxis("Tau: b")
+title("Posterior Samples:- a vs b")
+xAxis(0x03C4.toChar+": a")
+yAxis(0x03C4.toChar+": b")
 unhold()
+
+
+
+scatter(samples.map(c => (c("tau_alpha"), c("tau_beta"))))
+hold()
+scatter(Seq((lambda_alpha, lambda_beta)))
+legend(Seq("Posterior Samples", "Ground Truth"))
+title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
+xAxis(0x03C4.toChar+": "+0x03B1.toChar)
+yAxis(0x03C4.toChar+": "+0x03B2.toChar)
+unhold()
+
+val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_a"), c("tau_b")))
+val post_moments = utils.getStats(post_vecs.toList)
+
+val quantities = Map("alpha" -> 0x03B1.toChar, "beta" -> 0x03B2.toChar, "a" -> 'a', "b" -> 'b')
+val gt = Map("alpha" -> lambda_alpha, "beta" -> lambda_beta, "a" -> lambda_a, "b" -> lambda_b)
+
+
+{
+  println("\n:::::: MCMC Sampling Report ::::::")
+
+  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(a + b*K(t))")
+
+
+  quantities.zipWithIndex.foreach(c => {
+    val ((key, char), index) = c
+    println("\n------------------------------")
+    println("Parameter: "+char)
+    println("Ground Truth:- "+gt(key))
+    println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
+  })
+
+}

@@ -1,13 +1,14 @@
 //DynaML imports
 import breeze.linalg.{DenseMatrix, DenseVector}
-import breeze.stats.distributions.{ContinuousDistr, Gamma}
+import breeze.stats.distributions._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.probability.MultGaussianRV
-import io.github.mandar2812.dynaml.probability.mcmc.HyperParameterMCMC
+import io.github.mandar2812.dynaml.probability.distributions.UnivariateGaussian
+import io.github.mandar2812.dynaml.probability.mcmc._
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 //Import Omni programs
 import io.github.mandar2812.PlasmaML.omni._
@@ -88,6 +89,7 @@ val (sgp_model, scaler_sgp) = predictPipelineSGP(OmniOSA.trainingDataSections)
 val num_hyp = model._hyper_parameters.length
 val num_hyp_sgp = sgp_model._hyper_parameters.length
 
+/*
 val proposal = MultGaussianRV(
   num_hyp)(
   DenseVector.zeros[Double](num_hyp),
@@ -97,25 +99,29 @@ val proposal_sgp = MultGaussianRV(
   num_hyp_sgp)(
   DenseVector.zeros[Double](num_hyp_sgp),
   DenseMatrix.eye[Double](num_hyp_sgp)*0.01)
+*/
+
+val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
+  model, model._hyper_parameters.map(h => (h, new LogNormal(0.0, 2.0))).toMap,
+  500)
 
 
-val mcmc = HyperParameterMCMC[model.type, ContinuousDistr[Double]](
-  model, model._hyper_parameters.map(h => (h, new Gamma(1.0, 2.0))).toMap,
-  proposal)
-
-mcmc.burnIn = 50
 
 val samples = mcmc.iid(100).draw
 
-val mcmc_sgp = HyperParameterMCMC[sgp_model.type, ContinuousDistr[Double]](
-  sgp_model, sgp_model._hyper_parameters.map(h => (h, new Gamma(1.0, 2.0))).toMap,
-  proposal_sgp)
+val sgp_hyper_prior: Map[String, ContinuousDistr[Double]] = {
+  sgp_model._hyper_parameters.filterNot(h => h.contains("skewness") || h.contains("cutoff")).map(h => (h, new LogNormal(0.0, 2.0))).toMap ++
+  Map("skewness" -> Gaussian(0d, 2d), "cutoff" -> Gaussian(0d, 2d))
+}
 
-mcmc_sgp.burnIn = 150
+val mcmc_sgp = new AdaptiveHyperParameterMCMC[sgp_model.type, ContinuousDistr[Double]](
+  sgp_model, sgp_hyper_prior,
+  500)
 
-val samples_sgp = mcmc_sgp.iid(500).draw
 
-scatter(samples_sgp.map(c => (c("MLPKernel@5209a193/w"), c("MLPKernel@5209a193/b"))))
+val samples_sgp = mcmc_sgp.iid(1000).draw
+
+scatter(samples_sgp.map(c => (c("MLPKernel@41eeeba/w"), c("MLPKernel@41eeeba/b"))))
 title("Posterior Samples")
 xAxis("MLP Kernel: w")
 yAxis("MLP Kernel: b")

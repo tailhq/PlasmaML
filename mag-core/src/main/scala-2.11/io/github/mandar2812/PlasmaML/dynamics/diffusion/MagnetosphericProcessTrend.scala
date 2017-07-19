@@ -6,32 +6,40 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
 /**
   * Specifies a trend function for radial diffusion priors.
   *
-  * h(l, t) = &alpha; l<sup>&beta;</sup 10<sup>a + b Kp(t)</sup>
+  * h(l, t) = (&alpha; l<sup>&beta;</sup> + &gamma;) 10<sup>a + b Kp(t)</sup>
   *
   * @author mandar2812 date 27/06/2017.
   * */
 class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
-  val transform: Encoder[T, (Double, Double, Double, Double)])
+  val transform: Encoder[T, (Double, Double, Double, Double, Double)])
   extends MetaPipe[T, (Double, Double), Double] {
 
 
   override def run(data: T) = {
-    val (alpha, beta, a, b) = transform(data)
+    val (alpha, beta, gamma, a, b) = transform(data)
 
     DataPipe((lt: (Double, Double)) => {
       val (l, t) = lt
 
       val kp = Kp(t)
-      alpha*math.pow(l, beta)*math.pow(10d, a + b*kp)
+      (alpha*math.pow(l, beta) + gamma)*math.pow(10d, a + b*kp)
     })
 
   }
+
+  def gradL: MetaPipe[T, (Double, Double), Double] = MetaPipe(
+    (p: T) => (lt: (Double, Double)) => {
+      val (l, t) = lt
+      val (alpha, beta, _, a, b) = transform(p)
+      val kp = Kp(t)
+      alpha*beta*math.pow(l, beta-1d)*math.pow(10d, a + b*kp)
+    })
 }
 
 object MagnetosphericProcessTrend {
 
   def getEncoder(prefix: String): MagConfigEncoding = MagConfigEncoding(
-    (prefix+"_alpha", prefix+"_beta", prefix+"_a", prefix+"_b")
+    (prefix+"_alpha", prefix+"_beta", prefix+"_gamma", prefix+"_a", prefix+"_b")
   )
 
 }
