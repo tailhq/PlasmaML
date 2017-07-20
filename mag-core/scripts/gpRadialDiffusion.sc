@@ -3,7 +3,8 @@ import breeze.numerics.Bessel
 import breeze.stats.distributions._
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
+import io.github.mandar2812.dynaml.utils._
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.probability._
@@ -98,7 +99,7 @@ val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_n
 val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
 
 val gp_data: Seq[((Double, Double), Double)] = {
-    (0 until 20).map(_ => {
+    (0 until 10).map(_ => {
       val rowS = rowSelectorRV.draw
       val colS = colSelectorRV.draw
       val (l, t) = (lShellVec(rowS), timeVec(colS))
@@ -106,7 +107,7 @@ val gp_data: Seq[((Double, Double), Double)] = {
     })
 }
 
-val burn = 7000
+val burn = 4000
 //Create the GP PDE model
 val gpKernel = new SE1dDiffusionKernel(
   1.0, 2.5, 5.0, Kp)(
@@ -125,7 +126,7 @@ val blocked_hyp = {
 gpKernel.block(blocked_hyp:_*)
 
 
-implicit val dataT = DynaMLPipe.identityPipe[Seq[((Double, Double), Double)]]
+implicit val dataT = identityPipe[Seq[((Double, Double), Double)]]
 
 val psdMean = gp_data.map(_._2).sum/gp_data.length
 
@@ -183,7 +184,7 @@ yAxis(0x03C4.toChar+": "+0x03B2.toChar)
 unhold()
 
 val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_a"), c("tau_b")))
-val post_moments = utils.getStats(post_vecs.toList)
+val post_moments = getStats(post_vecs.toList)
 
 val quantities = Map("alpha" -> 0x03B1.toChar, "beta" -> 0x03B2.toChar, "a" -> 'a', "b" -> 'b')
 val gt = Map("alpha" -> lambda_alpha, "beta" -> lambda_beta, "a" -> lambda_a, "b" -> lambda_b)

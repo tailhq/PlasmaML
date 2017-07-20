@@ -1,8 +1,9 @@
 import breeze.linalg._
 import breeze.stats.distributions._
 import com.quantifind.charts.Highcharts._
-import io.github.mandar2812.PlasmaML.dynamics.diffusion.{RadialDiffusion, SE1dDiffusionKernel, SE1dExtRadDiffusionKernel}
-import io.github.mandar2812.dynaml.DynaMLPipe
+import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+import io.github.mandar2812.dynaml.utils._
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.MAKernel
 import io.github.mandar2812.dynaml.models.gp.GPOperatorModel
 import io.github.mandar2812.dynaml.pipes.DataPipe
@@ -79,7 +80,7 @@ val blocked_hyp = {
 
 gpKernel.block(blocked_hyp:_*)
 
-implicit val dataT = DynaMLPipe.identityPipe[Seq[((Double, Double), Double)]]
+implicit val dataT = identityPipe[Seq[((Double, Double), Double)]]
 
 val psdMean = psd_data.map(_._2).sum/psd_data.length
 
@@ -93,7 +94,8 @@ val hyp = gpKernel.effective_hyper_parameters ++ noiseKernel.effective_hyper_par
 
 val hyper_prior = {
   hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
-    hyp.filterNot(h => h.contains("base::") || h.contains("gamma") || h.contains("beta")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
+    hyp.filterNot(h => h.contains("base::") || h.contains("gamma") || h.contains("beta")).map(
+      h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map("tau_gamma" -> new LogNormal(0d, 2.5d), "tau_beta" -> new LogNormal(0d, 2d))
 }
 
@@ -137,8 +139,24 @@ xAxis(0x03C4.toChar+": "+0x03B1.toChar)
 yAxis(0x03C4.toChar+": "+0x03B3.toChar)
 title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B3.toChar)
 
-//histogram(samples.map(c => c("tau_beta")))
+val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_gamma")))
+val post_moments = getStats(post_vecs.toList)
 
-//histogram(samples.map(c => c("tau_gamma")))
+val quantities = Map("alpha" -> 0x03B1.toChar, "beta" -> 0x03B2.toChar, "gamma" -> 0x03B3.toChar)
+val gt = Map("alpha" -> -omega*omega*theta, "beta" -> 2d, "gamma" -> gamma)
+
+{
+  println("\n:::::: MCMC Sampling Report ::::::")
+
+  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(a + b*K(t))")
 
 
+  quantities.zipWithIndex.foreach(c => {
+    val ((key, char), index) = c
+    println("\n------------------------------")
+    println("Parameter: "+char)
+    println("Ground Truth:- "+gt(key))
+    println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
+  })
+
+}
