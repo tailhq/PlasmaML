@@ -15,15 +15,15 @@ import scala.util.Random
 
 val (nL,nT) = (200, 50)
 
-val lMax = 10
+val lMax = 7
 val tMax = 5
 
 val lShellLimits = (1.0, 10.0)
 val timeLimits = (0.0, 5.0)
 
 val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
-val theta = 0.006
-val gamma = 0.01 + theta*math.pow(omega*lShellLimits._2, 2.0)
+val theta = 0.06
+val gamma = 0.001 + theta*math.pow(omega*lShellLimits._2, 2.0)
 
 val fl = (l: Double, _: Double) => math.sin(omega*(l - lShellLimits._1))
 val ft = (_: Double, t: Double) => math.exp(-gamma*t)
@@ -46,7 +46,7 @@ val measurement_noise = GaussianRV(0.0, 0.01)
 val lShellRV = new Uniform(lShellLimits._1, lShellLimits._2)
 val tRV = new Uniform(timeLimits._1, timeLimits._2)
 
-val num_data = 40
+val num_data = 10
 
 val psd_data: Seq[((Double, Double), Double)] = {
   (0 until num_data).map(_ => {
@@ -62,9 +62,9 @@ val psd_data: Seq[((Double, Double), Double)] = {
 val (data_features, psd_targets) = (psd_data.map(_._1), DenseVector(psd_data.toArray.map(_._2)))
 
 
-val burn = 1500
+val burn = 5000
 val gpKernel = new SE1dDiffusionKernel(
-  1.0, 5.0, 15.5, Kp)(
+  1.0, 1.5, 2.5, Kp)(
   (theta, 2d, 0d, 0d, 0d),
   (0.5, 2d, 1d, 0d, 0d)
 )
@@ -74,7 +74,7 @@ val noiseKernel = new MAKernel(math.sqrt(0.01))
 noiseKernel.block_all_hyper_parameters
 
 val blocked_hyp = {
-  gpKernel.hyper_parameters.filter(h => h.contains("dll") || h.contains("base::")) ++
+  gpKernel.hyper_parameters.filter(h => h.contains("dll")) ++
     Seq("tau_a", "tau_b")
 }
 

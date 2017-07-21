@@ -14,7 +14,7 @@ import io.github.mandar2812.dynaml.probability.mcmc._
 
 val (nL,nT) = (200, 50)
 
-val lShellLimits = (1.0, 10.0)
+val lShellLimits = (1.0, 7.0)
 val timeLimits = (0.0, 5.0)
 
 val rds = new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
@@ -107,12 +107,12 @@ val gp_data: Seq[((Double, Double), Double)] = {
     })
 }
 
-val burn = 4000
+val burn = 16000
 //Create the GP PDE model
 val gpKernel = new SE1dDiffusionKernel(
   1.0, 2.5, 5.0, Kp)(
   (dll_alpha, dll_beta, dll_gamma, dll_a, dll_b),
-  (lambda_alpha, 0.2, 0d, dll_a, dll_b)
+  (lambda_alpha, 0.2, 0d, 0.1, 0d)
 )
 
 val noiseKernel = new MAKernel(0.01)
@@ -120,7 +120,7 @@ val noiseKernel = new MAKernel(0.01)
 noiseKernel.block_all_hyper_parameters
 
 val blocked_hyp = {
-  gpKernel.hyper_parameters.filter(h => h.contains("dll_") || h.contains("_gamma"))
+  gpKernel.hyper_parameters.filter(h => h.contains("dll_") || h.contains("_gamma") || h.contains("base::"))
 }
 
 gpKernel.block(blocked_hyp:_*)
@@ -161,7 +161,7 @@ val hyper_prior = {
 val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
 
 //Draw samples from the posterior
-val samples = mcmc.iid(2000).draw
+val samples = mcmc.iid(4000).draw
 
 scatter(samples.map(c => (c("tau_a"), c("tau_b"))))
 hold()
@@ -191,7 +191,7 @@ val gt = Map("alpha" -> lambda_alpha, "beta" -> lambda_beta, "a" -> lambda_a, "b
 
 
 {
-  println("\n:::::: MCMC Sampling Report ::::::")
+  println("\n:::::: MCMC Sampling Report ::::::\n")
 
   println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(a + b*K(t))")
 
