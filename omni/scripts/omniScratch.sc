@@ -89,25 +89,13 @@ val (sgp_model, scaler_sgp) = predictPipelineSGP(OmniOSA.trainingDataSections)
 val num_hyp = model._hyper_parameters.length
 val num_hyp_sgp = sgp_model._hyper_parameters.length
 
-/*
-val proposal = MultGaussianRV(
-  num_hyp)(
-  DenseVector.zeros[Double](num_hyp),
-  DenseMatrix.eye[Double](num_hyp)*0.001)
-
-val proposal_sgp = MultGaussianRV(
-  num_hyp_sgp)(
-  DenseVector.zeros[Double](num_hyp_sgp),
-  DenseMatrix.eye[Double](num_hyp_sgp)*0.01)
-*/
-
 val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
   model, model._hyper_parameters.map(h => (h, new LogNormal(0.0, 2.0))).toMap,
   500)
 
 
 
-val samples = mcmc.iid(100).draw
+val samples = mcmc.iid(2000).draw
 
 val sgp_hyper_prior: Map[String, ContinuousDistr[Double]] = {
   sgp_model._hyper_parameters.filterNot(h => h.contains("skewness") || h.contains("cutoff")).map(h => (h, new LogNormal(0.0, 2.0))).toMap ++
@@ -119,9 +107,16 @@ val mcmc_sgp = new AdaptiveHyperParameterMCMC[sgp_model.type, ContinuousDistr[Do
   500)
 
 
-val samples_sgp = mcmc_sgp.iid(1000).draw
+val samples_sgp = mcmc_sgp.iid(2000).draw
 
-scatter(samples_sgp.map(c => (c("MLPKernel@41eeeba/w"), c("MLPKernel@41eeeba/b"))))
+
+scatter(samples.map(c => (c("MLPKernel@a668c21/w"), c("MLPKernel@a668c21/b"))))
+title("Posterior Samples")
+xAxis("MLP Kernel: w")
+yAxis("MLP Kernel: b")
+
+
+scatter(samples_sgp.map(c => (c("MLPKernel@a668c21/w"), c("MLPKernel@a668c21/b"))))
 title("Posterior Samples")
 xAxis("MLP Kernel: w")
 yAxis("MLP Kernel: b")
