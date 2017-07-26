@@ -1,13 +1,10 @@
 //DynaML imports
-import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.stats.distributions._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.neuralnets._
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
-import io.github.mandar2812.dynaml.probability.MultGaussianRV
-import io.github.mandar2812.dynaml.probability.distributions.UnivariateGaussian
+import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.probability.mcmc._
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 //Import Omni programs
@@ -91,11 +88,11 @@ val num_hyp_sgp = sgp_model._hyper_parameters.length
 
 val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
   model, model._hyper_parameters.map(h => (h, new LogNormal(0.0, 2.0))).toMap,
-  500)
+  1500)
 
 
 
-val samples = mcmc.iid(2000).draw
+val samples = mcmc.iid(4000).draw
 
 val sgp_hyper_prior: Map[String, ContinuousDistr[Double]] = {
   sgp_model._hyper_parameters.filterNot(h => h.contains("skewness") || h.contains("cutoff")).map(h => (h, new LogNormal(0.0, 2.0))).toMap ++
@@ -110,10 +107,20 @@ val mcmc_sgp = new AdaptiveHyperParameterMCMC[sgp_model.type, ContinuousDistr[Do
 val samples_sgp = mcmc_sgp.iid(2000).draw
 
 
-scatter(samples.map(c => (c("MLPKernel@a668c21/w"), c("MLPKernel@a668c21/b"))))
+scatter(samples.map(c => (c("MLPKernel@38cbe1c9/w"), c("MLPKernel@38cbe1c9/b"))))
 title("Posterior Samples")
 xAxis("MLP Kernel: w")
 yAxis("MLP Kernel: b")
+
+scatter(samples.map(c => (c("MLPKernel@38cbe1c9/w"), c("TStudentKernel@10a0e958/d"))))
+title("Posterior Samples")
+xAxis("MLP Kernel: w")
+yAxis("T Kernel: d")
+
+scatter(samples.map(c => (c("TStudentKernel@10a0e958/d"), c("noiseLevel"))))
+title("Posterior Samples")
+xAxis("T Kernel: d")
+yAxis("noise")
 
 
 scatter(samples_sgp.map(c => (c("MLPKernel@a668c21/w"), c("MLPKernel@a668c21/b"))))

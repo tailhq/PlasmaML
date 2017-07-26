@@ -67,13 +67,8 @@ val q_b = 0.0d
 //Loss Process
 val lambda_alpha = math.pow(10d, -4)/2.4
 val lambda_beta = 1d
-val lambda_a = 2.5
+val lambda_a = -2.5
 val lambda_b = 0.18
-
-val tau_alpha = 1/lambda_alpha
-val tau_beta = -lambda_beta
-val tau_a = -lambda_a
-val tau_b = -lambda_b
 
 //Create ground truth diffusion parameter functions
 val dll = (l: Double, t: Double) => dll_alpha*math.pow(l, dll_beta)*math.pow(10, dll_a + dll_b*Kp(t))
@@ -107,7 +102,7 @@ val gp_data: Seq[((Double, Double), Double)] = {
     })
 }
 
-val burn = 16000
+val burn = 14000
 //Create the GP PDE model
 val gpKernel = new SE1dDiffusionKernel(
   1.0, 2.5, 5.0, Kp)(
