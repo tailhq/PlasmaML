@@ -44,3 +44,5 @@ data/*storm*.csv
 data/osa_training.csv
 data/osa_validation.csv
 data/all_results.txt
+.ensime_cache
+.ensime
