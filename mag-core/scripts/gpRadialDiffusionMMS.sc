@@ -18,7 +18,7 @@ val (nL,nT) = (200, 50)
 val lMax = 7
 val tMax = 5
 
-val lShellLimits = (1.0, 10.0)
+val lShellLimits = (1.0, 7.0)
 val timeLimits = (0.0, 5.0)
 
 val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
@@ -63,10 +63,10 @@ val (data_features, psd_targets) = (psd_data.map(_._1), DenseVector(psd_data.toA
 
 
 val burn = 5000
-val gpKernel = new SE1dDiffusionKernel(
-  1.0, 1.5, 2.5, Kp)(
-  (theta, 2d, 0d, 0d, 0d),
-  (0.5, 2d, 1d, 0d, 0d)
+val gpKernel = new GenExpDiffusionKernel(
+  1.0, 2.5, 5.5, Kp)(
+  (theta, 2d, 0d, 0d),
+  (0.5, 2d, 1d, 0d), "L2", "L1"
 )
 
 val noiseKernel = new MAKernel(math.sqrt(0.01))
@@ -74,8 +74,8 @@ val noiseKernel = new MAKernel(math.sqrt(0.01))
 noiseKernel.block_all_hyper_parameters
 
 val blocked_hyp = {
-  gpKernel.hyper_parameters.filter(h => h.contains("dll")) ++
-    Seq("tau_a", "tau_b")
+  gpKernel.hyper_parameters.filter(h => h.contains("dll") /*|| h.contains("base::")*/) ++
+    Seq("tau_b")
 }
 
 gpKernel.block(blocked_hyp:_*)
@@ -84,7 +84,7 @@ implicit val dataT = identityPipe[Seq[((Double, Double), Double)]]
 
 val psdMean = psd_data.map(_._2).sum/psd_data.length
 
-val model = GPOperatorModel[Seq[((Double, Double), Double)], Double, SE1dDiffusionKernel](
+val model = GPOperatorModel[Seq[((Double, Double), Double)], Double, GenExpDiffusionKernel](
   gpKernel, noiseKernel:*noiseKernel, DataPipe((lt: (Double, Double)) => initialPSD(lt._1)))(
   psd_data, psd_data.length)
 

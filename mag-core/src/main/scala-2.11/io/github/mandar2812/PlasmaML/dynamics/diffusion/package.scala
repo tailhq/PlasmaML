@@ -21,6 +21,10 @@ package object diffusion {
     math.pow(x-y, 2.0)
   })
 
+  val l1NormDouble = DataPipe2((x: Double, y: Double) => {
+    math.abs(x-y)
+  })
+
   def gradSqNormDouble(order_x: Int, order_y: Int)(x: Double, y: Double): Double = {
     require(
       order_x >= 0 && order_y >= 0,
@@ -34,6 +38,21 @@ package object diffusion {
       case (0, 1) => -2d*math.abs(x-y)
       case (1, 1) => -2d
       case _ => 2d
+    }
+  }
+
+  def gradL1NormDouble(order_x: Int, order_y: Int)(x: Double, y: Double): Double = {
+    require(
+      order_x >= 0 && order_y >= 0,
+      "Orders of differentiation must be non negative!!")
+
+    val order = order_x + order_y
+    if(order > 1) 0d
+    else if (order == 0) l1NormDouble(x,y)
+    else (order_x, order_y) match {
+      case (1, 0) => 1d
+      case (0, 1) => 1d
+      case _ => 1d
     }
   }
 

@@ -67,7 +67,7 @@ val q_b = 0.0d
 //Loss Process
 val lambda_alpha = math.pow(10d, -4)/2.4
 val lambda_beta = 1d
-val lambda_a = -2.5
+val lambda_a = 2.5
 val lambda_b = 0.18
 
 //Create ground truth diffusion parameter functions
@@ -102,12 +102,12 @@ val gp_data: Seq[((Double, Double), Double)] = {
     })
 }
 
-val burn = 14000
+val burn = 5000
 //Create the GP PDE model
-val gpKernel = new SE1dDiffusionKernel(
-  1.0, 2.5, 5.0, Kp)(
-  (dll_alpha, dll_beta, dll_gamma, dll_a, dll_b),
-  (lambda_alpha, 0.2, 0d, 0.1, 0d)
+val gpKernel = new GenExpDiffusionKernel(
+  1.0, 2.5, 10.0, Kp)(
+  (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
+  (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L1"
 )
 
 val noiseKernel = new MAKernel(0.01)
@@ -115,7 +115,7 @@ val noiseKernel = new MAKernel(0.01)
 noiseKernel.block_all_hyper_parameters
 
 val blocked_hyp = {
-  gpKernel.hyper_parameters.filter(h => h.contains("dll_") || h.contains("_gamma") || h.contains("base::"))
+  gpKernel.hyper_parameters.filter(h => h.contains("dll_") || h.contains("_gamma") /*|| h.contains("base::")*/)
 }
 
 gpKernel.block(blocked_hyp:_*)
@@ -133,7 +133,7 @@ val beta = 2d/((dll_beta - 2d)*math.sqrt(dll_alpha))
 
 val psd_trend = (l: Double, t: Double) => initialPSD(l)*math.exp(-beta*t)
 
-val model = GPOperatorModel[Seq[((Double, Double), Double)], Double, SE1dDiffusionKernel](
+val model = GPOperatorModel[Seq[((Double, Double), Double)], Double, GenExpDiffusionKernel](
   gpKernel, noiseKernel:*noiseKernel, DataPipe((x: (Double, Double)) => psd_trend(x._1, x._2)))(
   gp_data, gp_data.length)
 
@@ -149,7 +149,6 @@ val hyper_prior = {
     Map(
       "tau_alpha" -> new LogNormal(0d, 2.5d),
       "tau_beta" -> new LogNormal(0d, 2d),
-      "tau_a" -> new Gaussian(0d, 2.5),
       "tau_b" -> new Gaussian(0d, 2.5))
 }
 
@@ -158,12 +157,12 @@ val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](m
 //Draw samples from the posterior
 val samples = mcmc.iid(4000).draw
 
-scatter(samples.map(c => (c("tau_a"), c("tau_b"))))
+scatter(samples.map(c => (c("tau_alpha"), c("tau_b"))))
 hold()
-scatter(Seq((lambda_a, lambda_b)))
+scatter(Seq((lambda_alpha*math.pow(10d, lambda_a), lambda_b)))
 legend(Seq("Posterior Samples", "Ground Truth"))
-title("Posterior Samples:- a vs b")
-xAxis(0x03C4.toChar+": a")
+title("Posterior Samples:- "+0x03B1.toChar+" vs b")
+xAxis(0x03C4.toChar+": "+0x03B1.toChar)
 yAxis(0x03C4.toChar+": b")
 unhold()
 
@@ -178,17 +177,17 @@ xAxis(0x03C4.toChar+": "+0x03B1.toChar)
 yAxis(0x03C4.toChar+": "+0x03B2.toChar)
 unhold()
 
-val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_a"), c("tau_b")))
+val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
 val post_moments = getStats(post_vecs.toList)
 
-val quantities = Map("alpha" -> 0x03B1.toChar, "beta" -> 0x03B2.toChar, "a" -> 'a', "b" -> 'b')
-val gt = Map("alpha" -> lambda_alpha, "beta" -> lambda_beta, "a" -> lambda_a, "b" -> lambda_b)
+val quantities = Map("alpha" -> 0x03B1.toChar, "beta" -> 0x03B2.toChar, "b" -> 'b')
+val gt = Map("alpha" -> lambda_alpha*math.pow(10d, lambda_a), "beta" -> lambda_beta, "b" -> lambda_b)
 
 
 {
   println("\n:::::: MCMC Sampling Report ::::::\n")
 
-  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(a + b*K(t))")
+  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
 
 
   quantities.zipWithIndex.foreach(c => {
