@@ -8,8 +8,15 @@ class SE1dExtRadDiffusionKernel(
   sigma: Double, theta_space: Double,
   theta_time: Double, val Kp: DataPipe[Double, Double])(
   dll_params: (Double, Double, Double, Double),
-  tau_params: (Double, Double, Double, Double)) extends
+  tau_params: (Double, Double, Double, Double),
+  normSpace: String = "L2", normTime: String = "L2") extends
   GenRadialDiffusionKernel[Double] {
+
+
+  private val spaceNorm = if(normSpace == "L2") sqNormDouble else l1NormDouble
+
+  private val timeNorm = if(normTime == "L2") sqNormDouble else l1NormDouble
+
 
   override val baseKernel = new GenExpSpaceTimeKernel[Double](
     sigma, theta_space, theta_time)(
@@ -63,9 +70,13 @@ class SE1dExtRadDiffusionKernel(
       val (l,t) = x
       val (l_tilda, t_tilda) = x_tilda
 
-      def grT(i: Int, j: Int) = gradSqNormDouble(i, j)(t, t_tilda)
+      def grT(i: Int, j: Int) =
+        if(normTime == "L2") gradSqNormDouble(i, j)(t, t_tilda)
+        else gradL1NormDouble(i, j)(t, t_tilda)
 
-      def grL(i: Int, j: Int) = gradSqNormDouble(i, j)(l, l_tilda)
+      def grL(i: Int, j: Int) =
+        if(normSpace == "L2") gradSqNormDouble(i, j)(l, l_tilda)
+        else gradL1NormDouble(i, j)(l, l_tilda)
 
       val sq = (s: Double) => s*s
 
@@ -88,7 +99,10 @@ class SE1dExtRadDiffusionKernel(
   }
 
 
-  override def evaluateAt(config: Map[String, Double])(x: (Double, Double), x_tilda: (Double, Double)) = {
+  override def evaluateAt(
+    config: Map[String, Double])(
+    x: (Double, Double),
+    x_tilda: (Double, Double)) = {
 
     val base_kernel_state = config.filterKeys(_.contains(baseID)).map(c => (c._1.replace(baseID, "").tail, c._2))
 
@@ -101,9 +115,13 @@ class SE1dExtRadDiffusionKernel(
     val (l,t) = x
     val (l_tilda, t_tilda) = x_tilda
 
-    def grT(i: Int, j: Int) = gradSqNormDouble(i, j)(t, t_tilda)
+    def grT(i: Int, j: Int) =
+      if(normTime == "L2") gradSqNormDouble(i, j)(t, t_tilda)
+      else gradL1NormDouble(i, j)(t, t_tilda)
 
-    def grL(i: Int, j: Int) = gradSqNormDouble(i, j)(l, l_tilda)
+    def grL(i: Int, j: Int) =
+      if(normSpace == "L2") gradSqNormDouble(i, j)(l, l_tilda)
+      else gradL1NormDouble(i, j)(l, l_tilda)
 
     val sq = (s: Double) => s*s
 
@@ -157,7 +175,10 @@ class SE1dExtRadDiffusionKernel(
   }
 
   //TODO: Complete implementation of gradient
-  override def gradientAt(config: Map[String, Double])(x: (Double, Double), x_tilda: (Double, Double)) = {
+  override def gradientAt(
+    config: Map[String, Double])(
+    x: (Double, Double),
+    x_tilda: (Double, Double)) = {
 
     val base_kernel_state = config.filterKeys(_.contains(baseID)).map(c => (c._1.replace(baseID, "").tail, c._2))
 
