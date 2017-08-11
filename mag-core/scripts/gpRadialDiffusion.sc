@@ -107,10 +107,10 @@ import io.github.mandar2812.dynaml.probability.mcmc._
 
 
 {
-  val burn = 24000
+  val burn = 100000
   //Create the GP PDE model
   val gpKernel = new SE1dExtRadDiffusionKernel(
-    1.0, 2.5, 5.0, Kp)(
+    1.0, rds.deltaL, rds.deltaT, Kp)(
     (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
       (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L2"
   )

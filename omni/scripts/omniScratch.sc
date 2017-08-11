@@ -107,12 +107,14 @@ val mcmc_sgp = new AdaptiveHyperParameterMCMC[sgp_model.type, ContinuousDistr[Do
 val samples_sgp = mcmc_sgp.iid(2000).draw
 
 
-scatter(samples.map(c => (c("MLPKernel@38cbe1c9/w"), c("MLPKernel@38cbe1c9/b"))))
+
+
+scatter(samples.map(c => (c("MLPKernel@25494a71/w"), c("MLPKernel@25494a71/b"))))
 title("Posterior Samples")
 xAxis("MLP Kernel: w")
 yAxis("MLP Kernel: b")
 
-scatter(samples.map(c => (c("MLPKernel@38cbe1c9/w"), c("TStudentKernel@10a0e958/d"))))
+scatter(samples.map(c => (c("MLPKernel@25494a71/w"), c("TStudentKernel@10a0e958/d"))))
 title("Posterior Samples")
 xAxis("MLP Kernel: w")
 yAxis("T Kernel: d")
@@ -123,7 +125,7 @@ xAxis("T Kernel: d")
 yAxis("noise")
 
 
-scatter(samples_sgp.map(c => (c("MLPKernel@a668c21/w"), c("MLPKernel@a668c21/b"))))
+scatter(samples_sgp.map(c => (c("MLPKernel@25494a71/w"), c("MLPKernel@25494a71/b"))))
 title("Posterior Samples")
 xAxis("MLP Kernel: w")
 yAxis("MLP Kernel: b")
