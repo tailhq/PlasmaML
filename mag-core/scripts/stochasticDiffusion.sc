@@ -94,7 +94,7 @@ val radialDiffusionProcess = StochasticRadialDiffusion(
 
 val result = radialDiffusionProcess.forwardModel(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
 
-radialDiffusionProcess.ensembleMode = true
+radialDiffusionProcess.ensembleMode = false
 
 val result_marg = radialDiffusionProcess.forwardModel(lShellLimits, nL, timeLimits, nT)(initialPSDGT)
 

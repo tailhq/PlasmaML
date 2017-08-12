@@ -1,17 +1,17 @@
-import breeze.linalg._
-import breeze.numerics.Bessel
-import breeze.stats.distributions._
-import com.quantifind.charts.Highcharts._
-import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-import io.github.mandar2812.dynaml.utils._
-import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.kernels._
-import io.github.mandar2812.dynaml.pipes.DataPipe
-import io.github.mandar2812.dynaml.probability._
-import io.github.mandar2812.dynaml.models.gp.GPOperatorModel
-import io.github.mandar2812.dynaml.probability.mcmc._
-
 {
+  import breeze.linalg._
+  import breeze.numerics.Bessel
+  import breeze.stats.distributions._
+  import com.quantifind.charts.Highcharts._
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+  import io.github.mandar2812.dynaml.utils._
+  import io.github.mandar2812.dynaml.DynaMLPipe._
+  import io.github.mandar2812.dynaml.kernels._
+  import io.github.mandar2812.dynaml.pipes.DataPipe
+  import io.github.mandar2812.dynaml.probability._
+  import io.github.mandar2812.dynaml.models.gp.GPOperatorModel
+  import io.github.mandar2812.dynaml.probability.mcmc._
+
   val (nL,nT) = (200, 50)
 
   val lShellLimits = (1.0, 7.0)
@@ -107,7 +107,7 @@ import io.github.mandar2812.dynaml.probability.mcmc._
 
 
 {
-  val burn = 100000
+  val burn = 15000
   //Create the GP PDE model
   val gpKernel = new SE1dExtRadDiffusionKernel(
     1.0, rds.deltaL, rds.deltaT, Kp)(

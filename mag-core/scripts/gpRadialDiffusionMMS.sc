@@ -1,18 +1,18 @@
-import breeze.linalg._
-import breeze.stats.distributions._
-import com.quantifind.charts.Highcharts._
-import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-import io.github.mandar2812.dynaml.utils._
-import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.kernels.MAKernel
-import io.github.mandar2812.dynaml.models.gp.GPOperatorModel
-import io.github.mandar2812.dynaml.pipes.DataPipe
-import io.github.mandar2812.dynaml.probability.mcmc._
-import io.github.mandar2812.dynaml.probability._
-import io.github.mandar2812.dynaml.analysis.VectorField
-import scala.util.Random
-
 {
+  import breeze.linalg._
+  import breeze.stats.distributions._
+  import com.quantifind.charts.Highcharts._
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+  import io.github.mandar2812.dynaml.utils._
+  import io.github.mandar2812.dynaml.DynaMLPipe._
+  import io.github.mandar2812.dynaml.kernels.MAKernel
+  import io.github.mandar2812.dynaml.models.gp.GPOperatorModel
+  import io.github.mandar2812.dynaml.pipes.DataPipe
+  import io.github.mandar2812.dynaml.probability.mcmc._
+  import io.github.mandar2812.dynaml.probability._
+  import io.github.mandar2812.dynaml.analysis.VectorField
+  import scala.util.Random
+
   val (nL,nT) = (200, 50)
 
   val lMax = 7
@@ -62,15 +62,14 @@ import scala.util.Random
   val (data_features, psd_targets) = (psd_data.map(_._1), DenseVector(psd_data.toArray.map(_._2)))
 
 }
-
 {
   val burn = 5000
   val gpKernel =
     new SE1dExtRadDiffusionKernel(
-      1.0, 2.5, 5.5, Kp)(
+      1.0, 0.15, 0.05, Kp)(
       (theta, 2d, 0d, 0d),
-      (0.5, 2d, 1d, 0d),
-      "L2", "L2"
+        (0.5, 2d, 1d, 0d),
+        "L2", "L2"
     )
 
   val noiseKernel = new MAKernel(math.sqrt(0.01))
@@ -109,7 +108,7 @@ import scala.util.Random
   implicit val ev = VectorField(num_hyp)
 
 
-  val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
+  val mcmc = new HyperParameterSCAM[model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
   //Draw samples from the posteior
@@ -126,7 +125,6 @@ import scala.util.Random
 
 
 }
-
 {
   println("\n:::::: MCMC Sampling Report ::::::")
 
