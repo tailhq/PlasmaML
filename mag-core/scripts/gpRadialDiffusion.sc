@@ -112,7 +112,7 @@
   val gpKernel = new SE1dExtRadDiffusionKernel(
     1.0, rds.deltaL, 0.1*rds.deltaT, Kp)(
     (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
-      (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L2"
+      (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L1"
   )
 
   val noiseKernel = new MAKernel(0.01)
@@ -136,7 +136,7 @@
   val nu = math.abs((dll_beta - 3d)/(dll_beta - 2d))
   val beta = 2d/((dll_beta - 2d)*math.sqrt(dll_alpha))
 
-  val psd_trend = (l: Double, t: Double) => initialPSD(l)*math.exp(-beta*t)
+  val psd_trend = (l: Double, t: Double) => initialPSD(l)//*math.exp(-beta*t)
 
   val model = GPOperatorModel[Seq[((Double, Double), Double)], Double, SE1dExtRadDiffusionKernel](
     gpKernel, noiseKernel:*noiseKernel, DataPipe((x: (Double, Double)) => psd_trend(x._1, x._2)))(

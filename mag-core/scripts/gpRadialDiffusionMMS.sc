@@ -63,13 +63,13 @@
 
 }
 {
-  val burn = 10000
+  val burn = 15000
   val gpKernel =
     new SE1dExtRadDiffusionKernel(
       1.0, rds.deltaL, 0.1*rds.deltaT, Kp)(
       (theta, 2d, 0d, 0d),
         (0.5, 2d, 1d, 0d),
-        "L2", "L2"
+        "L2", "L1"
     )
 
   val noiseKernel = new MAKernel(math.sqrt(0.01))
