@@ -63,10 +63,10 @@
 
 }
 {
-  val burn = 5000
+  val burn = 10000
   val gpKernel =
     new SE1dExtRadDiffusionKernel(
-      1.0, 0.15, 0.05, Kp)(
+      1.0, rds.deltaL, 0.1*rds.deltaT, Kp)(
       (theta, 2d, 0d, 0d),
         (0.5, 2d, 1d, 0d),
         "L2", "L2"
@@ -108,12 +108,12 @@
   implicit val ev = VectorField(num_hyp)
 
 
-  val mcmc = new HyperParameterSCAM[model.type, ContinuousDistr[Double]](
+  val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
   //Draw samples from the posteior
 
-  val samples: Stream[Map[String, Double]] = mcmc.iid(2000).draw
+  val samples: Stream[Map[String, Double]] = mcmc.iid(4000).draw
 
   val post_beta_tau = samples.map(c => c("tau_beta")).sum/2000d
 

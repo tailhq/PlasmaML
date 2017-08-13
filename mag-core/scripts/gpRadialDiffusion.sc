@@ -107,10 +107,10 @@
 
 
 {
-  val burn = 15000
+  val burn = 12000
   //Create the GP PDE model
   val gpKernel = new SE1dExtRadDiffusionKernel(
-    1.0, rds.deltaL, rds.deltaT, Kp)(
+    1.0, rds.deltaL, 0.1*rds.deltaT, Kp)(
     (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
       (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L2"
   )
@@ -157,7 +157,7 @@
       "tau_b" -> new Gaussian(0d, 2.5))
   }
 
-  val mcmc = new HyperParameterSCAM[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
+  val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
 
   //Draw samples from the posterior
   val samples = mcmc.iid(4000).draw
