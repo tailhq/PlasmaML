@@ -17,6 +17,10 @@ trait GenRadialDiffusionKernel[I] extends
 
   val lossTimeScale: MetaPipe[Map[String, Double], (I, Double), Double]
 
+  val diffusionFieldGradL: MetaPipe[Map[String, Double], (I, Double), Double]
+
+  protected val gradDByLSq: MetaPipe[Map[String, Double], (I, Double), Double]
+
 
 }
 
@@ -46,9 +50,9 @@ class GenExpDiffusionKernel(
 
   override val lossTimeScale: MagTrend = new MagTrend(Kp, "tau")
 
-  val diffusionFieldGradL = diffusionField.gradL
+  override val diffusionFieldGradL: MetaPipe[Map[String, Double], (Double, Double), Double]  = diffusionField.gradL
 
-  protected val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
+  override protected val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
     MetaPipe((hyper_params: Map[String, Double]) => (x: (Double, Double)) => {
       diffusionFieldGradL(hyper_params)(x) - 2d*diffusionField(hyper_params)(x)/x._1
     })
@@ -221,7 +225,5 @@ class GenExpDiffusionKernel(
     baseKernel.gradientAt(base_kernel_state)(x, x_tilda).map(c => (baseID+"/"+c._1, c._2*tau*tau_tilda*delta)) ++
       operator_hyper_parameters.map(h => (h, 0d))
   }
-
-
 
 }

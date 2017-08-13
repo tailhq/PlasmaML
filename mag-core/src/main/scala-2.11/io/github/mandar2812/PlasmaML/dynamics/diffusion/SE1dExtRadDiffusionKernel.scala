@@ -45,9 +45,9 @@ class SE1dExtRadDiffusionKernel(
     baseKernel.hyper_parameters.map(h => baseID+"/"+h) ++
       operator_hyper_parameters
 
-  val diffusionFieldGradL = diffusionField.gradL
+  override val diffusionFieldGradL = diffusionField.gradL
 
-  protected val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
+  override protected val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
     MetaPipe((hyper_params: Map[String, Double]) => (x: (Double, Double)) => {
       diffusionFieldGradL(hyper_params)(x) - 2d*diffusionField(hyper_params)(x)/x._1
     })
