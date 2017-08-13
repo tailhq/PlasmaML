@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
+import scala.reflect.ClassTag
 import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.probability.MultGaussianRV
 import io.github.mandar2812.dynaml.algebra.{PartitionedVector, PartitionedPSDMatrix}
@@ -29,7 +30,7 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe2, MetaPipe}
   *                          coefficients.
   * @author mandar2812 date 2017/08/13
   * */
-abstract class GPRadialDiffusionModel[I, K <: GenRadialDiffusionKernel[I]](
+class GPRadialDiffusionModel[I: ClassTag, K <: GenRadialDiffusionKernel[I]](
   cov: K, n: LocalScalarKernel[(I, Double)],
   data: Stream[((I, Double), Double)], num: Int,
   basisFunc: DataPipe[(I, Double), DenseVector[Double]],
@@ -51,6 +52,7 @@ abstract class GPRadialDiffusionModel[I, K <: GenRadialDiffusionKernel[I]](
       cov.baseKernel.evaluate)
 
 
+  override def dataAsSeq(data: Stream[((I, Double), Double)]): Seq[((I, Double), Double)] = data
 
 
 }

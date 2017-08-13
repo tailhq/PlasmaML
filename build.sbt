@@ -33,35 +33,6 @@ resolvers in ThisBuild ++= Seq(
   Resolver.sonatypeRepo("public")
 )
 
-lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
-  .settings(commonSettings: _*)
-  .dependsOn(mag_core, omni, vanAllen, streamer).settings(
-  name := "PlasmaML",
-  version := mainVersion,
-  fork in run := true,
-  mainClass in Compile := Some("io.github.mandar2812.PlasmaML.PlasmaML"),
-  buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
-  buildInfoPackage := "io.github.mandar2812.PlasmaML",
-  buildInfoUsePackageAsPath := true,
-  mappings in Universal ++= Seq({
-    // we are using the reference.conf as default application.conf
-    // the user can override settings here
-    val init = (resourceDirectory in Compile).value / "DynaMLInit.scala"
-    init -> "conf/DynaMLInit.scala"
-  }, {
-    val banner = (resourceDirectory in Compile).value / "banner.txt"
-    banner -> "conf/banner.txt"
-  }),
-  javaOptions in Universal ++= Seq(
-    // -J params will be added as jvm parameters
-    "-J-Xmx2048m",
-    "-J-Xms64m"
-  ),
-  dataDirectory := new File("data/"),
-  initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""")
-  .aggregate(mag_core, omni, vanAllen, streamer)
-  .settings(aggregate in update := false)
-
 lazy val mag_core = (project in file("mag-core")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
     initialCommands in console :=
@@ -73,6 +44,7 @@ lazy val mag_core = (project in file("mag-core")).enablePlugins(JavaAppPackaging
         """import com.quantifind.charts.Highcharts._;"""+
         """import breeze.linalg.DenseVector;""" ,
     scalacOptions ++= Seq("-optimise", "-Yclosure-elim", "-Yinline"))
+
 
 lazy val omni =
   (project in file("omni")).enablePlugins(JavaAppPackaging, BuildInfoPlugin).settings(commonSettings: _*)
@@ -112,3 +84,35 @@ lazy val streamer =
           """import com.quantifind.charts.Highcharts._;"""+
           """import breeze.linalg.DenseVector;"""
     ).dependsOn(mag_core)
+
+
+
+lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+  .settings(commonSettings: _*)
+  .dependsOn(mag_core, omni, vanAllen, streamer).settings(
+  name := "PlasmaML",
+  version := mainVersion,
+  fork in run := true,
+  mainClass in Compile := Some("io.github.mandar2812.PlasmaML.PlasmaML"),
+  buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+  buildInfoPackage := "io.github.mandar2812.PlasmaML",
+  buildInfoUsePackageAsPath := true,
+  mappings in Universal ++= Seq({
+    // we are using the reference.conf as default application.conf
+    // the user can override settings here
+    val init = (resourceDirectory in Compile).value / "DynaMLInit.scala"
+    init -> "conf/DynaMLInit.scala"
+  }, {
+    val banner = (resourceDirectory in Compile).value / "banner.txt"
+    banner -> "conf/banner.txt"
+  }),
+  javaOptions in Universal ++= Seq(
+    // -J params will be added as jvm parameters
+    "-J-Xmx2048m",
+    "-J-Xms64m"
+  ),
+  dataDirectory := new File("data/"),
+  initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""")
+  .aggregate(mag_core, omni, vanAllen, streamer)
+  .settings(aggregate in update := false)
+
