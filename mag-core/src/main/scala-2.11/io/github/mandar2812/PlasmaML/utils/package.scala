@@ -18,7 +18,7 @@ package object utils {
 
     override def run(omega: Double, components: Int): DataPipe[Double, DenseVector[Double]] = {
 
-      DataPipe((x: Double) => DenseVector((0 to components).map(i => math.sin(i*omega*x)).toArray))
+      DataPipe((x: Double) => DenseVector((0 to components).map(i => if(i == 0) 1d else math.sin(i*omega*x)).toArray))
     }
 
   }
