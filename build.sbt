@@ -2,22 +2,41 @@ import java.io.File
 
 import sbt._
 
-val dynaMLVersion = settingKey[String]("The version of DynaML used.")
-
 val mainVersion = "v0.1"
+
+val status = "dev" 
+
+val dynaMLVersion = settingKey[String]("The version of DynaML used.")
 
 val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
+val dynamlGroupID = settingKey[String]("Group ID for DynaML dependency")
 
-lazy val commonSettings = Seq(
+val dynamlArtifact = settingKey[String]("Artifact ID for DynaML dependency")
+
+lazy val dynaMLSettings = if(status == "dev") {
+  Seq(
+    dynaMLVersion := "v1.5.1-beta.1",
+    dynamlGroupID := "io.github.mandar2812",
+    dynamlArtifact := "dynaml_2.11"
+  )
+} else {
+  Seq(
+    dynaMLVersion := "v1.5",
+    dynamlGroupID := "com.github.transcendent-ai-labs.DynaML",
+    dynamlArtifact := "dynaml_2.11"
+  )
+}
+
+
+lazy val commonSettings = dynaMLSettings ++ Seq(
   name := "PlasmaML",
   organization := "io.github.mandar2812",
   version := mainVersion,
   scalaVersion in ThisBuild := "2.11.8",
-  dynaMLVersion := "v1.5",
   libraryDependencies in ThisBuild ++= Seq(
     "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
-    "com.github.transcendent-ai-labs" % "DynaML" % dynaMLVersion.value,
+    dynamlGroupID.value % dynamlArtifact.value % dynaMLVersion.value,
     "org.jsoup" % "jsoup" % "1.9.1",
     "joda-time" % "joda-time" % "2.9.3",
     "org.json4s" % "json4s-native_2.11" % "3.3.0",
