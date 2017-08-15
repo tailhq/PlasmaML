@@ -1,16 +1,21 @@
 {
+  import scala.util.Random
   import breeze.linalg._
   import breeze.numerics.Bessel
   import breeze.stats.distributions._
   import com.quantifind.charts.Highcharts._
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+
   import io.github.mandar2812.dynaml.utils._
+  import io.github.mandar2812.dynaml.optimization.RegularizedLSSolver
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.pipes.DataPipe
   import io.github.mandar2812.dynaml.probability._
-  import io.github.mandar2812.dynaml.models.gp.GPOperatorModel
+  import io.github.mandar2812.dynaml.models.gp._
   import io.github.mandar2812.dynaml.probability.mcmc._
+  
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+  import io.github.mandar2812.PlasmaML.utils._
 
   val (nL,nT) = (200, 50)
 
@@ -92,9 +97,9 @@
 
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
-
+  val num_data = 10
   val gp_data: Seq[((Double, Double), Double)] = {
-    (0 until 10).map(_ => {
+    (0 until num_data).map(_ => {
       val rowS = rowSelectorRV.draw
       val colS = colSelectorRV.draw
       val (l, t) = (lShellVec(rowS), timeVec(colS))
@@ -104,13 +109,11 @@
 
 
 }
-
-
 {
-  val burn = 12000
+  val burn = 15000
   //Create the GP PDE model
   val gpKernel = new SE1dExtRadDiffusionKernel(
-    1.0, rds.deltaL, 0.1*rds.deltaT, Kp)(
+    1.0, rds.deltaL, 1d*rds.deltaT, Kp)(
     (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
       (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L1"
   )
@@ -130,7 +133,6 @@
 
   val psdMean = gp_data.map(_._2).sum/gp_data.length
 
-
   val p = (dll_beta - 2d)/2d
   val q = (dll_beta - 3d)/2d
   val nu = math.abs((dll_beta - 3d)/(dll_beta - 2d))
@@ -138,9 +140,39 @@
 
   val psd_trend = (l: Double, t: Double) => initialPSD(l)//*math.exp(-beta*t)
 
-  val model = GPOperatorModel[Seq[((Double, Double), Double)], Double, SE1dExtRadDiffusionKernel](
-    gpKernel, noiseKernel:*noiseKernel, DataPipe((x: (Double, Double)) => psd_trend(x._1, x._2)))(
-    gp_data, gp_data.length)
+
+  val num_components = 15
+  val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
+
+  //Calculate Regularized Least Squares solution to basis function OLS problem
+  //and use that as parameter mean.
+
+  val designMatrix = DenseMatrix.vertcat[Double](
+    gp_data.map(p => fourier_series_map(p._1._1).toDenseMatrix):_*
+  )
+
+  val responseVector = DenseVector(gp_data.map(_._2).toArray)
+
+  val s = new RegularizedLSSolver
+  s.setRegParam(0.01)
+
+  val b = s.optimize(
+    num_data,
+    (designMatrix.t*designMatrix, designMatrix.t*responseVector),
+    DenseVector.zeros[Double](num_components+1)
+  )
+
+
+  val basis_prior = MultGaussianRV(
+    //DenseVector.tabulate[Double](num_components+1)(i => if(i == 0) psdMean else 1d/(gamma + math.pow(i*omega, 2d))),
+    b, DenseMatrix.eye[Double](num_components+1)
+  )(VectorField(num_components+1))
+
+
+  val model = AbstractGPRegressionModel[Seq[((Double, Double), Double)], (Double, Double)](
+    gpKernel, noiseKernel:*noiseKernel,
+    DataPipe((x: (Double, Double)) => fourier_series_map(x._1)),
+    basis_prior)(gp_data, gp_data.length)
 
 
   //Create the MCMC sampler
@@ -152,9 +184,9 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
-      "tau_alpha" -> new LogNormal(0d, 2.5d),
-      "tau_beta" -> new LogNormal(0d, 2d),
-      "tau_b" -> new Gaussian(0d, 2.5))
+      "tau_alpha" -> new LogNormal(0d, 1d),
+      "tau_beta" -> new LogNormal(0d, 1d),
+      "tau_b" -> new Gaussian(0d, 1.0))
   }
 
   val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)

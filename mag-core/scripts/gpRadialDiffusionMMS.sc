@@ -1,16 +1,20 @@
 {
+  import scala.util.Random
+
   import breeze.linalg._
   import breeze.stats.distributions._
   import com.quantifind.charts.Highcharts._
+
   import io.github.mandar2812.dynaml.utils._
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels.MAKernel
+  import io.github.mandar2812.dynaml.optimization.RegularizedLSSolver
   import io.github.mandar2812.dynaml.models.gp._
   import io.github.mandar2812.dynaml.pipes.DataPipe
   import io.github.mandar2812.dynaml.probability.mcmc._
   import io.github.mandar2812.dynaml.probability._
   import io.github.mandar2812.dynaml.analysis.VectorField
-  import scala.util.Random
+  
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils._
 
@@ -64,7 +68,7 @@
 
 }
 {
-  val burn = 15000
+  val burn = 4000
   val gpKernel =
     new SE1dExtRadDiffusionKernel(
       1.0, rds.deltaL, 0.1*rds.deltaT, Kp)(
@@ -91,9 +95,27 @@
   val num_components = 10
   val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
 
+  //Calculate Regularized Least Squares solution to basis function OLS problem
+  //and use that as parameter mean.
+
+  val designMatrix = DenseMatrix.vertcat[Double](
+    psd_data.map(p => fourier_series_map(p._1._1).toDenseMatrix):_*
+  )
+
+  val responseVector = DenseVector(psd_data.map(_._2).toArray)
+
+  val s = new RegularizedLSSolver
+  s.setRegParam(0.001)
+
+  val b = s.optimize(
+    num_data,
+    (designMatrix.t*designMatrix, designMatrix.t*responseVector),
+    DenseVector.zeros[Double](num_components+1)
+  )
+
   val basis_prior = MultGaussianRV(
-    DenseVector.tabulate[Double](num_components+1)(i => 1d/(gamma + math.pow(i*omega, 2d))),
-    DenseMatrix.eye[Double](num_components+1)
+    //DenseVector.tabulate[Double](num_components+1)(i => if(i == 0) psdMean else 1d/(gamma + math.pow(i*omega, 2d))),
+    b, DenseMatrix.eye[Double](num_components+1)
   )(VectorField(num_components+1))
 
   val model = AbstractGPRegressionModel[Seq[((Double, Double), Double)], (Double, Double)](
@@ -123,9 +145,10 @@
 
   //Draw samples from the posteior
 
-  val samples: Stream[Map[String, Double]] = mcmc.iid(4000).draw
+  val num_post_samples = 4000
+  val samples: Stream[Map[String, Double]] = mcmc.iid(num_post_samples).draw
 
-  val post_beta_tau = samples.map(c => c("tau_beta")).sum/4000d
+  val post_beta_tau = samples.map(c => c("tau_beta")).sum/num_post_samples
 
   val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_gamma")))
   val post_moments = getStats(post_vecs.toList)
