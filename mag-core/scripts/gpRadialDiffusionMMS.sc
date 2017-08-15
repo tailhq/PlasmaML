@@ -105,7 +105,7 @@
   val responseVector = DenseVector(psd_data.map(_._2).toArray)
 
   val s = new RegularizedLSSolver
-  s.setRegParam(0.001)
+  s.setRegParam(0.01)
 
   val b = s.optimize(
     num_data,
