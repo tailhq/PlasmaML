@@ -6,6 +6,7 @@
   import com.quantifind.charts.Highcharts._
 
   import io.github.mandar2812.dynaml.utils._
+  import io.github.mandar2812.dynaml.analysis._
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels.MAKernel
   import io.github.mandar2812.dynaml.optimization.RegularizedLSSolver
@@ -51,14 +52,14 @@
   val lShellRV = new Uniform(lShellLimits._1, lShellLimits._2)
   val tRV = new Uniform(timeLimits._1, timeLimits._2)
 
-  val num_data = 5
+  val num_data = 10
 
   val psd_data: Seq[((Double, Double), Double)] = {
-    (0 until num_data).map(_ => {
+    (0 until num_data/2).map(_ => {
 
       val (l, t) = (lShellRV.draw(), tRV.draw())
       ((l,t), referenceSolution(l, t) + measurement_noise.draw)
-    }) ++ (0 until num_data).map(_ => {
+    }) ++ (0 until num_data/2).map(_ => {
       val (l, t) = (if(Random.nextDouble() <= 0.5) lShellLimits._2 else lShellLimits._1, tRV.draw())
       ((l,t), referenceSolution(l, t) + measurement_noise.draw)
     })
@@ -94,12 +95,15 @@
 
   val num_components = 10
   val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
+  val spline_series_map = CubicSplineGenerator(0 until num_components)
+
+  val basis = fourier_series_map
 
   //Calculate Regularized Least Squares solution to basis function OLS problem
   //and use that as parameter mean.
 
   val designMatrix = DenseMatrix.vertcat[Double](
-    psd_data.map(p => fourier_series_map(p._1._1).toDenseMatrix):_*
+    psd_data.map(p => basis(p._1._1).toDenseMatrix):_*
   )
 
   val responseVector = DenseVector(psd_data.map(_._2).toArray)
@@ -120,7 +124,7 @@
 
   val model = AbstractGPRegressionModel[Seq[((Double, Double), Double)], (Double, Double)](
     gpKernel, noiseKernel:*noiseKernel,
-    DataPipe((x: (Double, Double)) => fourier_series_map(x._1)),
+    DataPipe((x: (Double, Double)) => basis(x._1)),
     basis_prior)(psd_data, psd_data.length)
 
 

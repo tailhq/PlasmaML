@@ -6,6 +6,7 @@
   import com.quantifind.charts.Highcharts._
 
   import io.github.mandar2812.dynaml.utils._
+  import io.github.mandar2812.dynaml.analysis._
   import io.github.mandar2812.dynaml.optimization.RegularizedLSSolver
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
@@ -143,18 +144,23 @@
 
   val num_components = 15
   val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
+  val chebyshev_series_map: DataPipe[Double, DenseVector[Double]] = ChebyshevSeriesGenerator(num_components, 2)
+  val spline_series_map = CubicSplineGenerator(0 until num_components)
+
+  val basis = fourier_series_map
+
 
   //Calculate Regularized Least Squares solution to basis function OLS problem
   //and use that as parameter mean.
 
   val designMatrix = DenseMatrix.vertcat[Double](
-    gp_data.map(p => fourier_series_map(p._1._1).toDenseMatrix):_*
+    gp_data.map(p => basis(p._1._1).toDenseMatrix):_*
   )
 
   val responseVector = DenseVector(gp_data.map(_._2).toArray)
 
   val s = new RegularizedLSSolver
-  s.setRegParam(0.01)
+  s.setRegParam(0.03)
 
   val b = s.optimize(
     num_data,
@@ -171,7 +177,7 @@
 
   val model = AbstractGPRegressionModel[Seq[((Double, Double), Double)], (Double, Double)](
     gpKernel, noiseKernel:*noiseKernel,
-    DataPipe((x: (Double, Double)) => fourier_series_map(x._1)),
+    DataPipe((x: (Double, Double)) => basis(x._1)),
     basis_prior)(gp_data, gp_data.length)
 
 
