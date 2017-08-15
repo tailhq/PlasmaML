@@ -3,6 +3,7 @@
   import breeze.linalg._
   import breeze.numerics.Bessel
   import breeze.stats.distributions._
+  import spire.implicits._
   import com.quantifind.charts.Highcharts._
 
   import io.github.mandar2812.dynaml.utils._
@@ -142,12 +143,12 @@
   val psd_trend = (l: Double, t: Double) => initialPSD(l)//*math.exp(-beta*t)
 
 
-  val num_components = 15
+  val num_components = 4
   val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
   val chebyshev_series_map: DataPipe[Double, DenseVector[Double]] = ChebyshevSeriesGenerator(num_components, 2)
   val spline_series_map = CubicSplineGenerator(0 until num_components)
 
-  val basis = fourier_series_map
+  val basis = chebyshev_series_map
 
 
   //Calculate Regularized Least Squares solution to basis function OLS problem
