@@ -73,9 +73,9 @@
   val q_b = 0.0d
 
   //Loss Process
-  val lambda_alpha = math.pow(10d, -4)/2.4
-  val lambda_beta = 1d
-  val lambda_a = 2.5
+  val lambda_alpha = 2.0//math.pow(10d, -4)/2.4
+  val lambda_beta = 4d
+  val lambda_a = -0.5
   val lambda_b = 0.18
 
   //Create ground truth diffusion parameter functions
@@ -113,10 +113,10 @@
 
 }
 {
-  val burn = 15000
+  val burn = 50000
   //Create the GP PDE model
   val gpKernel = new SE1dExtRadDiffusionKernel(
-    1.0, rds.deltaL, 1d*rds.deltaT, Kp)(
+    1.0, 0.1*rds.deltaL, 0.1*rds.deltaT, Kp)(
     (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
       (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L1"
   )
@@ -167,7 +167,7 @@
   val responseVector = DenseVector(gp_data.map(_._2).toArray)
 
   val s = new RegularizedLSSolver
-  s.setRegParam(0.03)
+  s.setRegParam(0.001)
 
   val b = s.optimize(
     num_data,
@@ -197,8 +197,8 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
-      "tau_alpha" -> new LogNormal(0d, 1d),
-      "tau_beta" -> new LogNormal(0d, 1d),
+      "tau_alpha" -> new LogNormal(0d, 3d),
+      "tau_beta" -> new LogNormal(0d, 3d),
       "tau_b" -> new Gaussian(0d, 1.0))
   }
 
