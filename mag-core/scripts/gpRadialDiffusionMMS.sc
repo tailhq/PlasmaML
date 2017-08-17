@@ -69,7 +69,7 @@
 
 }
 {
-  val burn = 4000
+  val burn = 25000
   val gpKernel =
     new SE1dExtRadDiffusionKernel(
       1.0, rds.deltaL, 0.1*rds.deltaT, Kp)(
@@ -97,6 +97,10 @@
   val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
   val spline_series_map = CubicSplineGenerator(0 until num_components)
 
+  val rbf_centers = gp_data.map(_._1._1)
+  val rbf_scales = Seq.fill[Double](gp_data.length)(rds.deltaL)
+  val rbf_basis = RBFGenerator.gaussianBasis[Double](rbf_centers, rbf_scales)
+
   val basis = fourier_series_map
 
   //Calculate Regularized Least Squares solution to basis function OLS problem
@@ -109,7 +113,7 @@
   val responseVector = DenseVector(psd_data.map(_._2).toArray)
 
   val s = new RegularizedLSSolver
-  s.setRegParam(0.01)
+  s.setRegParam(0.03)
 
   val b = s.optimize(
     num_data,
@@ -136,7 +140,7 @@
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
       "tau_alpha" -> new Gaussian(0d, 2.5d),
-      "tau_beta" -> new LogNormal(0d, 2d),
+      "tau_beta" -> new LogNormal(0d, 1d),
       "tau_gamma" -> new Gaussian(0d, 2.5))
   }
 
@@ -205,6 +209,13 @@
   xAxis(0x03C4.toChar+": "+0x03B1.toChar)
   yAxis(0x03C4.toChar+": "+0x03B3.toChar)
   title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B3.toChar)
+
+  histogram(samples.map(_("tau_beta")), 200)
+  hold()
+  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 200)
+  legend(Seq("Posterior Samples", "Prior Samples"))
+  unhold()
+  title("Histogram: "+0x03B2.toChar)
 
 }
 

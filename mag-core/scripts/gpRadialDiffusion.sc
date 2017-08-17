@@ -8,6 +8,7 @@
 
   import io.github.mandar2812.dynaml.utils._
   import io.github.mandar2812.dynaml.analysis._
+  import io.github.mandar2812.dynaml.analysis.implicits._
   import io.github.mandar2812.dynaml.optimization.RegularizedLSSolver
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
@@ -143,12 +144,17 @@
   val psd_trend = (l: Double, t: Double) => initialPSD(l)//*math.exp(-beta*t)
 
 
+  //Define some basis function expansions
   val num_components = 4
   val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
   val chebyshev_series_map: DataPipe[Double, DenseVector[Double]] = ChebyshevSeriesGenerator(num_components, 2)
   val spline_series_map = CubicSplineGenerator(0 until num_components)
 
-  val basis = chebyshev_series_map
+  val rbf_centers = gp_data.map(_._1._1)
+  val rbf_scales = Seq.fill[Double](gp_data.length)(rds.deltaL)
+  val rbf_basis = RBFGenerator.invMultiquadricBasis[Double](rbf_centers, rbf_scales)
+
+  val basis = rbf_basis
 
 
   //Calculate Regularized Least Squares solution to basis function OLS problem
@@ -166,14 +172,14 @@
   val b = s.optimize(
     num_data,
     (designMatrix.t*designMatrix, designMatrix.t*responseVector),
-    DenseVector.zeros[Double](num_components+1)
+    DenseVector.zeros[Double](designMatrix.cols)
   )
 
 
   val basis_prior = MultGaussianRV(
     //DenseVector.tabulate[Double](num_components+1)(i => if(i == 0) psdMean else 1d/(gamma + math.pow(i*omega, 2d))),
-    b, DenseMatrix.eye[Double](num_components+1)
-  )(VectorField(num_components+1))
+    b, DenseMatrix.eye[Double](designMatrix.cols)
+  )(VectorField(designMatrix.cols))
 
 
   val model = AbstractGPRegressionModel[Seq[((Double, Double), Double)], (Double, Double)](
