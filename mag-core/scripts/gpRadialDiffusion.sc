@@ -74,8 +74,8 @@
 
   //Loss Process
   val lambda_alpha = math.pow(10d, -4)/2.4
-  val lambda_beta = 2d
-  val lambda_a = 2.5
+  val lambda_beta = 4d
+  val lambda_a = 2d
   val lambda_b = 0.18
 
   //Create ground truth diffusion parameter functions
@@ -87,7 +87,7 @@
 
   val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 
-  val omega_t = math.Pi*2d/rds.deltaT
+  val omega_t = math.Pi*2d/(timeLimits._2 - timeLimits._1)
 
   val initialPSD = (l: Double) => Bessel.i1(omega*(l - lShellLimits._1))*1E1
 
@@ -113,10 +113,10 @@
 
 }
 {
-  val burn = 20000
+  val burn = 25000
   //Create the GP PDE model
-  val gpKernel = new SE1dExtRadDiffusionKernel(
-    1.0, 0.1*rds.deltaL, 0.1*rds.deltaT, Kp)(
+  val gpKernel = new GenExpDiffusionKernel(
+    1.0, 1d*rds.deltaL, 1d*rds.deltaT, Kp)(
     (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
       (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L1"
   )
@@ -145,23 +145,28 @@
 
 
   //Define some basis function expansions
-  val num_components = 4
+  val num_components = 6
   val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
-  val chebyshev_series_map: DataPipe[Double, DenseVector[Double]] = ChebyshevSeriesGenerator(num_components, 2)
-  val spline_series_map = CubicSplineGenerator(0 until num_components)
+  val chebyshev_series_map: DataPipe[Double, DenseVector[Double]] = ChebyshevSeriesGenerator(num_components, 1)
+  val spline_series_map = BernsteinSplineSeriesGenerator(0 until num_components)
+  val hermite_basis = HermiteSeriesGenerator(num_components)
+
 
   val rbf_centers = gp_data.map(_._1._1)
   val rbf_scales = Seq.fill[Double](gp_data.length)(rds.deltaL)
   val rbf_basis = RBFGenerator.invMultiquadricBasis[Double](rbf_centers, rbf_scales)
 
-  val basis = rbf_basis
+  val basis = chebyshev_series_map
+
+  val basis_time = Kp > PolynomialSeriesGenerator(2)//FourierSeriesGenerator(omega_t, num_components)
 
 
+  val net_basis = DataPipe((x: (Double, Double)) => (basis(x._1)*basis_time(x._2).t).toDenseVector)
   //Calculate Regularized Least Squares solution to basis function OLS problem
   //and use that as parameter mean.
 
   val designMatrix = DenseMatrix.vertcat[Double](
-    gp_data.map(p => basis(p._1._1).toDenseMatrix):_*
+    gp_data.map(p => net_basis(p._1).toDenseMatrix):_*
   )
 
   val responseVector = DenseVector(gp_data.map(_._2).toArray)
@@ -177,15 +182,13 @@
 
 
   val basis_prior = MultGaussianRV(
-    //DenseVector.tabulate[Double](num_components+1)(i => if(i == 0) psdMean else 1d/(gamma + math.pow(i*omega, 2d))),
     b, DenseMatrix.eye[Double](designMatrix.cols)
   )(VectorField(designMatrix.cols))
 
 
   val model = AbstractGPRegressionModel[Seq[((Double, Double), Double)], (Double, Double)](
     gpKernel, noiseKernel:*noiseKernel,
-    DataPipe((x: (Double, Double)) => basis(x._1)),
-    basis_prior)(gp_data, gp_data.length)
+    net_basis, basis_prior)(gp_data, gp_data.length)
 
 
   //Create the MCMC sampler
@@ -197,8 +200,8 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
-      "tau_alpha" -> new LogNormal(0d, 3d),
-      "tau_beta" -> new LogNormal(0d, 3d),
+      "tau_alpha" -> new Gamma(1d, 2d),
+      "tau_beta" -> new Gamma(5d, 1d),
       "tau_b" -> new Gaussian(0d, 1.0))
   }
 
@@ -227,6 +230,66 @@
     println("Ground Truth:- "+gt(key))
     println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
   })
+
+}
+
+{
+  val lMax = 10
+  val tMax = 10
+
+  val solution = groundTruth
+
+  /*
+   *
+   * First set of plots
+   *
+   * */
+
+  spline(timeVec.zip(solution.map(_(0))))
+  hold()
+
+  (0 until lMax).foreach(l => {
+    spline(timeVec.zip(solution.map(_(l*20))))
+  })
+
+  unhold()
+
+  legend(DenseVector.tabulate[Double](lMax+1)(i =>
+    if(i < nL) lShellLimits._1+(rds.deltaL*i*20)
+    else lShellLimits._2).toArray.map(s => "L = "+"%3f".format(s)))
+  title("Evolution of Phase Space Density f(L,t)")
+  xAxis("time")
+  yAxis("f(L,t)")
+
+
+  /*
+   *
+   * Second set of plots
+   *
+   * */
+  spline(lShellVec.toArray.toSeq.zip(solution.head.toArray.toSeq))
+  hold()
+
+  (0 until tMax).foreach(t => {
+    spline(lShellVec.toArray.toSeq.zip(solution(t*5).toArray.toSeq))
+  })
+
+  (0 until tMax).foreach(t => {
+    spline(lShellVec.toArray.toSeq.map(lS => (lS, b.t*net_basis((lS, timeVec(t*5))))))
+  })
+
+  
+
+  unhold()
+
+  legend(DenseVector.tabulate[Double](tMax+1)(i =>
+    if(i < nL) timeLimits._1+(rds.deltaT*i*5)
+    else timeLimits._2).toArray
+    .toSeq.map(s => "t = "+"%3f".format(s)) ++ Seq.tabulate(tMax)(t => "Mean t="+"%3f".format(timeVec(5*t))))
+
+  title("Variation of Phase Space Density f(L,t)")
+  xAxis("L")
+  yAxis("f(L,t)")
 
 }
 

@@ -210,9 +210,9 @@
   yAxis(0x03C4.toChar+": "+0x03B3.toChar)
   title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B3.toChar)
 
-  histogram(samples.map(_("tau_beta")), 200)
+  histogram(samples.map(_("tau_beta")), 1000)
   hold()
-  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 200)
+  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 1000)
   legend(Seq("Posterior Samples", "Prior Samples"))
   unhold()
   title("Histogram: "+0x03B2.toChar)
