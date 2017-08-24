@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
-import io.github.mandar2812.dynaml.kernels.{GenExpSpaceTimeKernel, LinearPDEKernel}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, DataPipe2, MetaPipe}
+import io.github.mandar2812.dynaml.kernels.GenExpSpaceTimeKernel
+import io.github.mandar2812.dynaml.pipes.{DataPipe, MetaPipe}
 
 
 class SE1dExtRadDiffusionKernel(
@@ -47,7 +47,7 @@ class SE1dExtRadDiffusionKernel(
 
   override val diffusionFieldGradL = diffusionField.gradL
 
-  override protected val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
+  override val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
     MetaPipe((hyper_params: Map[String, Double]) => (x: (Double, Double)) => {
       diffusionFieldGradL(hyper_params)(x) - 2d*diffusionField(hyper_params)(x)/x._1
     })

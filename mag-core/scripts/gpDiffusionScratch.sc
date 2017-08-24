@@ -16,9 +16,14 @@
   import io.github.mandar2812.dynaml.probability._
   import io.github.mandar2812.dynaml.models.gp._
   import io.github.mandar2812.dynaml.probability.mcmc._
-  
+
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils._
+
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion.{InverseRadialDiffusion, SE1dExtRadDiffusionKernel}
+  import io.github.mandar2812.dynaml.kernels.MAKernel
+
+
 
   val (nL,nT) = (200, 50)
 
@@ -74,7 +79,7 @@
 
   //Loss Process
   val lambda_alpha = math.pow(10d, -4)/2.4
-  val lambda_beta = 1.05d
+  val lambda_beta = 1.15d
   val lambda_a = 2.5d
   val lambda_b = 0.18
 
@@ -101,24 +106,35 @@
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
   val num_data = 10
-  val gp_data: Seq[((Double, Double), Double)] = {
+  val num_dummy_data = 500
+
+  val gp_data: Stream[((Double, Double), Double)] = {
     (0 until num_data).map(_ => {
       val rowS = rowSelectorRV.draw
       val colS = colSelectorRV.draw
       val (l, t) = (lShellVec(rowS), timeVec(colS))
       ((l,t), data(rowS, colS))
-    })
+    }).toStream
   }
 
+  val psdVar = getStats(gp_data.map(p => DenseVector(p._1._1)).toList)._2(0)
 
-}
-{
-  val burn = 25000
+  val impulse_data: Stream[((Double, Double), Double)] = {
+    (0 until num_dummy_data).map(_ => {
+      val rowS = rowSelectorRV.draw
+      val colS = colSelectorRV.draw
+      val (l, t) = (lShellVec(rowS), timeVec(colS))
+      ((l,t), measurement_noise.draw)
+    }).toStream
+
+  }
+
+  val burn = 400
   //Create the GP PDE model
   val gpKernel = new SE1dExtRadDiffusionKernel(
-    1.0, 1d*rds.deltaL, 1d*rds.deltaT, Kp)(
+    psdVar, 1.5, 1.5, Kp)(
     (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
-      (lambda_alpha*math.pow(10d, 0.1), 0.2, 0d, 0d), "L2", "L1"
+      (0.1, 0.2, 0d, 0d), "L2", "L1"
   )
 
   val noiseKernel = new MAKernel(0.01)
@@ -134,64 +150,12 @@
 
   implicit val dataT = identityPipe[Seq[((Double, Double), Double)]]
 
-  val psdMean = gp_data.map(_._2).sum/gp_data.length
-
-  val p = (dll_beta - 2d)/2d
-  val q = (dll_beta - 3d)/2d
-  val nu = math.abs((dll_beta - 3d)/(dll_beta - 2d))
-  val beta = 2d/((dll_beta - 2d)*math.sqrt(dll_alpha))
-
-  val psd_trend = (l: Double, t: Double) => initialPSD(l)//*math.exp(-beta*t)
-
-
-  //Define some basis function expansions
-  val num_components = 15
-  val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierBasisGenerator(omega, num_components)
-  val chebyshev_series_map: DataPipe[Double, DenseVector[Double]] = ChebyshevBasisGenerator(num_components, 1)
-  val spline_series_map = BernsteinSplineSeriesGenerator(0 until num_components)
-  val hermite_basis = HermiteBasisGenerator(num_components)
-  val polynomial_basis = PolynomialBasisGenerator(num_components)
-
-
-  val rbf_centers = gp_data.map(_._1._1)
-  val rbf_scales = Seq.fill[Double](gp_data.length)(5*rds.deltaL)
-  val rbf_basis = RadialBasis.gaussianBasis[Double](rbf_centers, rbf_scales)
-
-  val basis = polynomial_basis
-
-  val basis_time = Kp > FourierBasisGenerator(omega_t, num_components)//PolynomialBasisGenerator(2)
-
-
-  val net_basis = DataPipe((x: (Double, Double)) => (basis(x._1)*basis_time(x._2).t).toDenseVector)
-  //Calculate Regularized Least Squares solution to basis function OLS problem
-  //and use that as parameter mean.
-
-  val designMatrix = DenseMatrix.vertcat[Double](
-    gp_data.map(p => net_basis(p._1).toDenseMatrix):_*
-  )
-
-  val responseVector = DenseVector(gp_data.map(_._2).toArray)
-
-  val s = new RegularizedLSSolver
-  s.setRegParam(0.1)
-
-  val b = s.optimize(
-    num_data,
-    (designMatrix.t*designMatrix, designMatrix.t*responseVector),
-    DenseVector.zeros[Double](designMatrix.cols)
-  )
-
-
-  val basis_prior = MultGaussianRV(
-    b, DenseMatrix.eye[Double](designMatrix.cols)
-  )(VectorField(designMatrix.cols))
-
-
-  val model = AbstractGPRegressionModel[Seq[((Double, Double), Double)], (Double, Double)](
+  val model = new InverseRadialDiffusion[gpKernel.type](
     gpKernel, noiseKernel:*noiseKernel,
-    net_basis, basis_prior)(gp_data, gp_data.length)
+    gp_data, impulse_data,
+    new PSDRadialBasis(lShellLimits, 40, timeLimits, 10))
 
-
+  model.reg = 0.02d
   //Create the MCMC sampler
   val hyp = gpKernel.effective_hyper_parameters ++ noiseKernel.effective_hyper_parameters
 
@@ -209,10 +173,8 @@
   val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
 
   //Draw samples from the posterior
-  val samples = mcmc.iid(4000).draw
-}
+  val samples = mcmc.iid(500).draw
 
-{
   val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
   val post_moments = getStats(post_vecs.toList)
 
@@ -232,9 +194,6 @@
     println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
   })
 
-}
-
-{
   val lMax = 10
   val tMax = 10
 
@@ -275,9 +234,9 @@
     spline(lShellVec.toArray.toSeq.zip(solution(t*5).toArray.toSeq))
   })
 
-  (0 until tMax).foreach(t => {
+  /*(0 until tMax).foreach(t => {
     spline(lShellVec.toArray.toSeq.map(lS => (lS, b.t*net_basis((lS, timeVec(t*5))))))
-  })
+  })*/
 
   
 
@@ -286,16 +245,12 @@
   legend(DenseVector.tabulate[Double](tMax+1)(i =>
     if(i < nL) timeLimits._1+(rds.deltaT*i*5)
     else timeLimits._2).toArray
-    .toSeq.map(s => "t = "+"%3f".format(s)) ++ Seq.tabulate(tMax)(t => "Mean t="+"%3f".format(timeVec(5*t))))
+    .toSeq.map(s => "t = "+"%3f".format(s)) /*++ Seq.tabulate(tMax)(t => "Mean t="+"%3f".format(timeVec(5*t)))*/)
 
   title("Variation of Phase Space Density f(L,t)")
   xAxis("L")
   yAxis("f(L,t)")
 
-}
-
-
-{
 
   scatter(samples.map(c => (c("tau_alpha"), c("tau_b"))))
   hold()

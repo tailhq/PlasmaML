@@ -44,7 +44,7 @@ object MagnetosphericProcessTrend {
 
 }
 
-class MagTrend(override val Kp: DataPipe[Double, Double], prefix: String) extends
+class MagTrend(override val Kp: DataPipe[Double, Double], val prefix: String) extends
   MagnetosphericProcessTrend[Map[String, Double]](Kp)(MagnetosphericProcessTrend.getEncoder(prefix)) {
 
   override val transform: MagConfigEncoding = MagnetosphericProcessTrend.getEncoder(prefix)

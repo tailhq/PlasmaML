@@ -19,7 +19,7 @@ trait GenRadialDiffusionKernel[I] extends
 
   val diffusionFieldGradL: MetaPipe[Map[String, Double], (I, Double), Double]
 
-  protected val gradDByLSq: MetaPipe[Map[String, Double], (I, Double), Double]
+  val gradDByLSq: MetaPipe[Map[String, Double], (I, Double), Double]
 
 
 }
@@ -52,7 +52,7 @@ class GenExpDiffusionKernel(
 
   override val diffusionFieldGradL: MetaPipe[Map[String, Double], (Double, Double), Double]  = diffusionField.gradL
 
-  override protected val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
+  override val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
     MetaPipe((hyper_params: Map[String, Double]) => (x: (Double, Double)) => {
       diffusionFieldGradL(hyper_params)(x) - 2d*diffusionField(hyper_params)(x)/x._1
     })
