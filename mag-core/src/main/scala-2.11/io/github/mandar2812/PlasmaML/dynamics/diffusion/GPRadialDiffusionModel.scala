@@ -1,71 +1,18 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
-import scala.reflect.ClassTag
-import spire.implicits._
-import breeze.linalg.{DenseMatrix, DenseVector, det, norm}
-import io.github.mandar2812.dynaml.utils._
-import io.github.mandar2812.dynaml.analysis._
-import io.github.mandar2812.dynaml.kernels._
-import io.github.mandar2812.dynaml.models.gp._
-import io.github.mandar2812.dynaml.optimization.{GloballyOptimizable, RegularizedLSSolver}
+import breeze.linalg.{DenseMatrix, DenseVector, norm}
+import io.github.mandar2812.dynaml.analysis.Basis
+import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
+import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
 import io.github.mandar2812.dynaml.pipes._
-import io.github.mandar2812.dynaml.probability.MultGaussianRV
 import io.github.mandar2812.dynaml.probability.distributions.MVGaussian
+import io.github.mandar2812.dynaml.utils._
 import org.apache.log4j.Logger
-
-
-/**
-  * <h3>Gaussian Process Radial Diffusion Model</h3>
-  *
-  * Implementation of a space-time magnetospheric radial diffusion system
-  * as a gaussian process regression model.
-  *
-  * Can be used for likelihood based inverse parameter estimation or
-  * forward predictive/emulation problems.
-  * 
-  * @tparam K A subtype/implementation of [[GenRadialDiffusionKernel]]
-  * @tparam I The type of the space variable.
-  *
-  * @param cov The covariance structure of the process
-  * @param n The measurement noise inherent in the recorded target values.
-  * @param data Measurements of the field at select space-time locations.
-  * @param basisFunc A transformation which takes as input space time coordinates
-  *                  and outputs the basis function representation.
-  * @param basis_param_prior The prior probabililty distribution over basis function
-  *                          coefficients.
-  * @author mandar2812 date 2017/08/13
-  * */
-class GPRadialDiffusionModel[I: ClassTag, K <: GenRadialDiffusionKernel[I]](
-  cov: K, n: LocalScalarKernel[(I, Double)],
-  data: Stream[((I, Double), Double)], num: Int,
-  basisFunc: DataPipe[(I, Double), DenseVector[Double]],
-  basis_param_prior: MultGaussianRV) extends GPBasisFuncRegressionModel[
-  Stream[((I, Double), Double)], (I, Double)](
-  cov, n, data, num, basisFunc, basis_param_prior) {
-
-
-  override protected def getCrossKernelMatrix[U <: Seq[(I, Double)]](test: U) =
-    SVMKernel.crossPartitonedKernelMatrix(
-      trainingData, test,
-      _blockSize, _blockSize,
-      cov.invOperatorKernel)
-
-  override protected def getTestKernelMatrix[U <: Seq[(I, Double)]](test: U) =
-    SVMKernel.buildPartitionedKernelMatrix(
-      test, test.length.toLong,
-      _blockSize, _blockSize,
-      cov.baseKernel.evaluate)
-
-
-  override def dataAsSeq(data: Stream[((I, Double), Double)]): Seq[((I, Double), Double)] = data
-
-
-}
 
 /**
   * Inverse inference over plasma radial diffusion parameters.
   * */
-class InverseRadialDiffusion(
+class GPRadialDiffusionModel(
   val Kp: DataPipe[Double, Double],
   dll_params: (Double, Double, Double, Double),
   tau_params: (Double, Double, Double, Double))(
@@ -99,11 +46,11 @@ class InverseRadialDiffusion(
   private lazy val targets = DenseVector(psd_data.map(_._2).toArray)
 
   private val (covStEncoder, noiseStEncoder) = (
-    InverseRadialDiffusion.stateEncoder(baseCovID),
-    InverseRadialDiffusion.stateEncoder(baseNoiseID)
+    GPRadialDiffusionModel.stateEncoder(baseCovID),
+    GPRadialDiffusionModel.stateEncoder(baseNoiseID)
     )
 
-  private val designMatrixFlow = InverseRadialDiffusion.metaDesignMatFlow(basis)
+  private val designMatrixFlow = GPRadialDiffusionModel.metaDesignMatFlow(basis)
 
   lazy val injection = DenseVector(injection_data.map(_._2).toArray)
 
@@ -169,7 +116,7 @@ class InverseRadialDiffusion(
 
   def block(hyp: String*): Unit = {
 
-    val (blocked_cov_hyp, blocked_op_hyp) = hyp.partition(c => c.contains(baseCovID) || c.contains(baseNoiseID))
+    val (blocked_cov_hyp, _) = hyp.partition(c => c.contains(baseCovID) || c.contains(baseNoiseID))
 
     val proc_cov_hyp = blocked_cov_hyp.filter(_.contains(baseCovID)).map(h => h.replace(baseCovID, "").tail)
     val proc_noise_hyp = blocked_cov_hyp.filter(_.contains(baseNoiseID)).map(h => h.replace(baseNoiseID, "").tail)
@@ -310,7 +257,7 @@ class InverseRadialDiffusion(
 
 }
 
-object InverseRadialDiffusion {
+object GPRadialDiffusionModel {
 
   def stateEncoder(prefix: String): Encoder[Map[String, Double], Map[String, Double]] = Encoder(
     (s: Map[String, Double]) => s.map(h => (prefix+"/"+h._1, h._2)),

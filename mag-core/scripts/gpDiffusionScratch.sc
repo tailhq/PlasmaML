@@ -1,5 +1,4 @@
 {
-  import scala.util.Random
   import breeze.linalg._
   import breeze.numerics.Bessel
   import breeze.stats.distributions._
@@ -7,20 +6,15 @@
   import com.quantifind.charts.Highcharts._
 
   import io.github.mandar2812.dynaml.utils._
-  import io.github.mandar2812.dynaml.analysis._
-  import io.github.mandar2812.dynaml.analysis.implicits._
-  import io.github.mandar2812.dynaml.optimization.RegularizedLSSolver
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.pipes.DataPipe
   import io.github.mandar2812.dynaml.probability._
-  import io.github.mandar2812.dynaml.models.gp._
   import io.github.mandar2812.dynaml.probability.mcmc._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-  import io.github.mandar2812.PlasmaML.utils._
 
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion.{InverseRadialDiffusion, SE1dExtRadDiffusionKernel}
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion.GPRadialDiffusionModel
   import io.github.mandar2812.dynaml.kernels.MAKernel
 
 
@@ -132,10 +126,6 @@
   val burn = 600
   //Create the GP PDE model
 
-  val spaceKernel = new SECovFunc(0.15, math.sqrt(psdVar))
-
-  val timeKernel = new SECovFunc(0.15, math.sqrt(psdVar))
-
   val gpKernel = new GenExpSpaceTimeKernel[Double](
     psdVar, 0.15, 0.15)(
     sqNormDouble, l1NormDouble)
@@ -153,7 +143,7 @@
     lShellLimits, 40, timeLimits, 10,
     normSpace = "L2", normTime = "L2")
 
-  val model = new InverseRadialDiffusion(
+  val model = new GPRadialDiffusionModel(
     Kp, (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
     (0.1, 0.2, 0d, 0d))(
     gpKernel, noiseKernel:*noiseKernel,
@@ -180,7 +170,7 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
-      "tau_alpha" -> new Gamma(1d, 2d),
+      "tau_alpha" -> new LogNormal(0d, 3d),
       "tau_beta" -> new LogNormal(0d, 2d),
       "tau_b" -> new Gaussian(0d, 2.0))
   }
@@ -238,13 +228,6 @@
   (0 until tMax).foreach(t => {
     spline(lShellVec.toArray.toSeq.zip(solution(t*5).toArray.toSeq))
   })
-
-  /*(0 until tMax).foreach(t => {
-    spline(lShellVec.toArray.toSeq.map(lS => (lS, b.t*net_basis((lS, timeVec(t*5))))))
-  })*/
-
-  
-
   unhold()
 
   legend(DenseVector.tabulate[Double](tMax+1)(i =>

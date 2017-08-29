@@ -1,9 +1,5 @@
 package io.github.mandar2812.PlasmaML
 
-import breeze.linalg._
-import io.github.mandar2812.dynaml.pipes._
-import io.github.mandar2812.dynaml.analysis._
-
 /**
   * Miscellaneous utilities for the PlasmaML software distribution.
   *
