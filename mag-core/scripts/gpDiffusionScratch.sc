@@ -185,8 +185,10 @@
 
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
 
+  val num_post_samples = 1000
+
   //Draw samples from the posterior
-  val samples = mcmc_sampler.iid(1000).draw
+  val samples = mcmc_sampler.iid(num_post_samples).draw
 
   val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
   val post_moments = getStats(post_vecs.toList)
@@ -285,4 +287,12 @@
   xAxis(0x03C4.toChar+": "+0x03B1.toChar)
   yAxis(0x03C4.toChar+": "+0x03B2.toChar)
   unhold()
+
+  histogram(samples.map(_("tau_beta")), 1000)
+  hold()
+  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 1000)
+  legend(Seq("Posterior Samples", "Prior Samples"))
+  unhold()
+  title("Histogram: "+0x03B2.toChar)
+
 }

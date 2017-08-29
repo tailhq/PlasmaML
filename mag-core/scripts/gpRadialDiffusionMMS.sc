@@ -67,8 +67,6 @@
 
   val (data_features, psd_targets) = (psd_data.map(_._1), DenseVector(psd_data.toArray.map(_._2)))
 
-}
-{
   val burn = 25000
   val gpKernel =
     new SE1dExtRadDiffusionKernel(
@@ -94,12 +92,12 @@
   val psdMean = psd_data.map(_._2).sum/psd_data.length
 
   val num_components = 10
-  val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierSeriesGenerator(omega, num_components)
+  val fourier_series_map: DataPipe[Double, DenseVector[Double]] = FourierBasisGenerator(omega, num_components)
   val spline_series_map = CubicSplineGenerator(0 until num_components)
 
-  val rbf_centers = gp_data.map(_._1._1)
-  val rbf_scales = Seq.fill[Double](gp_data.length)(rds.deltaL)
-  val rbf_basis = RBFGenerator.gaussianBasis[Double](rbf_centers, rbf_scales)
+  val rbf_centers = psd_data.map(_._1._1)
+  val rbf_scales = Seq.fill[Double](psd_data.length)(rds.deltaL)
+  val rbf_basis = RadialBasis.gaussianBasis[Double](rbf_centers, rbf_scales)
 
   val basis = fourier_series_map
 
@@ -165,8 +163,6 @@
   val gt = Map("alpha" -> -omega*omega*theta, "beta" -> 2d, "gamma" -> gamma)
 
 
-}
-{
   println("\n:::::: MCMC Sampling Report ::::::")
 
   println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(a + b*K(t))")
@@ -180,9 +176,7 @@
     println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
   })
 
-}
 
-{
   scatter(samples.map(c => (c("tau_alpha"), c("tau_beta"))))
   hold()
   scatter(Seq((-omega*omega*theta, 2.0)))
