@@ -20,7 +20,7 @@ class GPRadialDiffusionModel(
   val noise_psd: LocalScalarKernel[(Double, Double)],
   val psd_data: Stream[((Double, Double), Double)],
   val injection_data: Stream[((Double, Double), Double)],
-  val basis: PSDRadialBasis) extends GloballyOptimizable {
+  val basis: PSDGaussianBasis) extends GloballyOptimizable {
 
   protected val logger: Logger = Logger.getLogger(this.getClass)
 
@@ -191,13 +191,8 @@ class GPRadialDiffusionModel(
         grid_centers.zip(grid_scales).map(c => {
           val ((l_tilda, t_tilda), (theta_s, theta_t)) = c
 
-          def grT(i: Int, j: Int) =
-            if(basis.normTime == "L2") gradSqNormDouble(i, j)(t, t_tilda)
-            else gradL1NormDouble(i, j)(t, t_tilda)
-
-          def grL(i: Int, j: Int) =
-            if(basis.normSpace == "L2") gradSqNormDouble(i, j)(l, l_tilda)
-            else gradL1NormDouble(i, j)(l, l_tilda)
+          val grT = (i: Int, j: Int) => gradSqNormDouble(i, j)(t, t_tilda)
+          val grL = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
 
 
           val sq = (s: Double) => s*s

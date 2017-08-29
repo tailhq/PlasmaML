@@ -139,9 +139,9 @@
 
   implicit val dataT = identityPipe[Seq[((Double, Double), Double)]]
 
-  val radial_basis = new PSDRadialBasis(
-    lShellLimits, 40, timeLimits, 10,
-    normSpace = "L2", normTime = "L2")
+  val radial_basis = new PSDGaussianBasis(
+    lShellLimits, 40, timeLimits, 10
+  )
 
   val model = new GPRadialDiffusionModel(
     Kp, (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),

@@ -13,11 +13,9 @@ import io.github.mandar2812.dynaml.pipes.{Encoder, TupleIntegerEncoder}
   * with nodes placed on a regular space time mesh.
   *
   * */
-class PSDRadialBasis(
+class PSDGaussianBasis(
   val lShellLimits: (Double, Double), val nL: Int,
-  val timeLimits: (Double, Double), val nT: Int,
-  val normSpace: String = "L2",
-  val normTime: String = "L2") extends
+  val timeLimits: (Double, Double), val nT: Int) extends
   Basis[(Double, Double)] {
 
   var mult = 4d
@@ -35,10 +33,8 @@ class PSDRadialBasis(
   val scalesT = Seq.fill(tSeq.length)(deltaT*mult)
 
   val (basisL, basisT) = (
-    if(normSpace == "L2") RadialBasis.gaussianBasis(lSeq, scalesL, bias = false)
-    else RadialBasis.laplacianBasis(lSeq, scalesL, bias = false),
-    if(normTime == "L2") RadialBasis.gaussianBasis(tSeq, scalesT, bias = false)
-    else RadialBasis.laplacianBasis(tSeq, scalesT, bias = false))
+    RadialBasis.gaussianBasis(lSeq, scalesL, bias = false),
+    RadialBasis.gaussianBasis(tSeq, scalesT, bias = false))
 
   val productBasis = basisL*basisT
 
