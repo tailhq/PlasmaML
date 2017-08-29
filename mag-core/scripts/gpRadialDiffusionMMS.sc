@@ -15,6 +15,7 @@
   import io.github.mandar2812.dynaml.probability.mcmc._
   import io.github.mandar2812.dynaml.probability._
   import io.github.mandar2812.dynaml.analysis.VectorField
+  import io.github.mandar2812.dynaml.analysis.implicits._
   
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils._

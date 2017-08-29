@@ -111,8 +111,6 @@
   }
 
 
-}
-{
   val burn = 25000
   //Create the GP PDE model
   val gpKernel = new SE1dExtRadDiffusionKernel(
@@ -210,9 +208,7 @@
 
   //Draw samples from the posterior
   val samples = mcmc.iid(4000).draw
-}
 
-{
   val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
   val post_moments = getStats(post_vecs.toList)
 
@@ -232,9 +228,6 @@
     println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
   })
 
-}
-
-{
   val lMax = 10
   val tMax = 10
 
@@ -292,10 +285,6 @@
   xAxis("L")
   yAxis("f(L,t)")
 
-}
-
-
-{
 
   scatter(samples.map(c => (c("tau_alpha"), c("tau_b"))))
   hold()

@@ -129,7 +129,7 @@
 
   }
 
-  val burn = 2000
+  val burn = 600
   //Create the GP PDE model
 
   val spaceKernel = new SECovFunc(0.15, math.sqrt(psdVar))
@@ -137,8 +137,8 @@
   val timeKernel = new SECovFunc(0.15, math.sqrt(psdVar))
 
   val gpKernel = new GenExpSpaceTimeKernel[Double](
-  psdVar, 0.15, 0.15)(
-  sqNormDouble, l1NormDouble)
+    psdVar, 0.15, 0.15)(
+    sqNormDouble, l1NormDouble)
 
   val noiseKernel = new MAKernel(0.01)
 
@@ -198,19 +198,6 @@
   val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B2.toChar, "tau_b" -> 'b')
   val gt = Map("tau_alpha" -> lambda_alpha*math.pow(10d, lambda_a), "tau_beta" -> lambda_beta, "tau_b" -> lambda_b)
 
-  println("\n:::::: MCMC Sampling Report ::::::\n")
-
-  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
-
-  println("Markov Chain Acceptance Rate = "+mcmc_sampler.sampleAcceptenceRate)
-
-  quantities.zipWithIndex.foreach(c => {
-    val ((key, char), index) = c
-    println("\n------------------------------")
-    println("Parameter: "+char)
-    println("Ground Truth:- "+gt(key))
-    println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
-  })
 
   val lMax = 10
   val tMax = 10
@@ -296,5 +283,21 @@
   legend(Seq("Posterior Samples", "Prior Samples"))
   unhold()
   title("Histogram: "+0x03B2.toChar)
+
+
+  println("\n:::::: MCMC Sampling Report ::::::\n")
+
+  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
+
+  println("Markov Chain Acceptance Rate = "+mcmc_sampler.sampleAcceptenceRate)
+
+  quantities.zipWithIndex.foreach(c => {
+    val ((key, char), index) = c
+    println("\n------------------------------")
+    println("Parameter: "+char)
+    println("Ground Truth:- "+gt(key))
+    println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
+  })
+
 
 }
