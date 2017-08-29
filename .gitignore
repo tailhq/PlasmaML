@@ -46,3 +46,4 @@ data/osa_validation.csv
 data/all_results.txt
 .ensime_cache
 .ensime
+*result*.csv

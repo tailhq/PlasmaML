@@ -79,7 +79,7 @@
 
   //Loss Process
   val lambda_alpha = math.pow(10d, -4)/2.4
-  val lambda_beta = 1.15d
+  val lambda_beta = 1.25d
   val lambda_a = 2.5d
   val lambda_b = 0.18
 
@@ -106,7 +106,7 @@
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
   val num_data = 10
-  val num_dummy_data = 500
+  val num_dummy_data = 1000
 
   val gp_data: Stream[((Double, Double), Double)] = {
     (0 until num_data).map(_ => {
@@ -129,35 +129,48 @@
 
   }
 
-  val burn = 400
+  val burn = 2000
   //Create the GP PDE model
-  val gpKernel = new SE1dExtRadDiffusionKernel(
-    psdVar, 1.5, 1.5, Kp)(
-    (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
-      (0.1, 0.2, 0d, 0d), "L2", "L1"
-  )
+
+  val spaceKernel = new SECovFunc(0.15, math.sqrt(psdVar))
+
+  val timeKernel = new SECovFunc(0.15, math.sqrt(psdVar))
+
+  val gpKernel = spaceKernel :* timeKernel
 
   val noiseKernel = new MAKernel(0.01)
 
   noiseKernel.block_all_hyper_parameters
 
-  val blocked_hyp = {
-    gpKernel.hyper_parameters.filter(h => h.contains("dll_") || h.contains("_gamma") || h.contains("base::"))
-  }
-
-  gpKernel.block(blocked_hyp:_*)
+  gpKernel.block_all_hyper_parameters
 
 
   implicit val dataT = identityPipe[Seq[((Double, Double), Double)]]
 
-  val model = new InverseRadialDiffusion[gpKernel.type](
+  val radial_basis = new PSDRadialBasis(
+    lShellLimits, 40, timeLimits, 10,
+    normSpace = "L2", normTime = "L2")
+
+  val model = new InverseRadialDiffusion(
+    Kp, (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
+    (0.1, 0.2, 0d, 0d))(
     gpKernel, noiseKernel:*noiseKernel,
     gp_data, impulse_data,
-    new PSDRadialBasis(lShellLimits, 40, timeLimits, 10))
+    radial_basis
+  )
 
-  model.reg = 0.02d
+  model.reg = 0.01
+
+  val blocked_hyp = {
+    model.blocked_hyper_parameters ++
+      model.hyper_parameters.filter(c => c.contains("dll") || c.contains("amplitude") || c.contains("tau_gamma"))
+  }
+
+
+  model.block(blocked_hyp:_*)
   //Create the MCMC sampler
-  val hyp = gpKernel.effective_hyper_parameters ++ noiseKernel.effective_hyper_parameters
+  val hyp = model.effective_hyper_parameters
+  //gpKernel.effective_hyper_parameters ++ noiseKernel.effective_hyper_parameters
 
   val num_hyp = hyp.length
 
@@ -166,25 +179,26 @@
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
       "tau_alpha" -> new Gamma(1d, 2d),
-      "tau_beta" -> new Gamma(5d, 1d),
-      "tau_b" -> new Gaussian(0d, 1.0))
+      "tau_beta" -> new LogNormal(0d, 2d),
+      "tau_b" -> new Gaussian(0d, 2.0))
   }
 
-  val mcmc = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
+  val mcmc_sampler = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
 
   //Draw samples from the posterior
-  val samples = mcmc.iid(500).draw
+  val samples = mcmc_sampler.iid(1000).draw
 
   val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
   val post_moments = getStats(post_vecs.toList)
 
-  val quantities = Map("alpha" -> 0x03B1.toChar, "beta" -> 0x03B2.toChar, "b" -> 'b')
-  val gt = Map("alpha" -> lambda_alpha*math.pow(10d, lambda_a), "beta" -> lambda_beta, "b" -> lambda_b)
+  val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B2.toChar, "tau_b" -> 'b')
+  val gt = Map("tau_alpha" -> lambda_alpha*math.pow(10d, lambda_a), "tau_beta" -> lambda_beta, "tau_b" -> lambda_b)
 
   println("\n:::::: MCMC Sampling Report ::::::\n")
 
   println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
 
+  println("Markov Chain Acceptance Rate = "+mcmc_sampler.sampleAcceptenceRate)
 
   quantities.zipWithIndex.foreach(c => {
     val ((key, char), index) = c
