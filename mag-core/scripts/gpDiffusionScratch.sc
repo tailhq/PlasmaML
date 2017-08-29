@@ -136,7 +136,9 @@
 
   val timeKernel = new SECovFunc(0.15, math.sqrt(psdVar))
 
-  val gpKernel = spaceKernel :* timeKernel
+  val gpKernel = new GenExpSpaceTimeKernel[Double](
+  psdVar, 0.15, 0.15)(
+  sqNormDouble, l1NormDouble)
 
   val noiseKernel = new MAKernel(0.01)
 

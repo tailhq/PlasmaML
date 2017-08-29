@@ -20,7 +20,7 @@ class SE1dExtRadDiffusionKernel(
 
   override val baseKernel = new GenExpSpaceTimeKernel[Double](
     sigma, theta_space, theta_time)(
-    sqNormDouble, sqNormDouble)
+    spaceNorm, timeNorm)
 
   override val diffusionField: MagTrend = new MagTrend(Kp, "dll")
 
