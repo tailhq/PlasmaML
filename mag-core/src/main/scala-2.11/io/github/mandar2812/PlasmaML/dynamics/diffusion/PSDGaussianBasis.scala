@@ -2,9 +2,9 @@ package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.utils._
-import io.github.mandar2812.dynaml.analysis.{Basis, RadialBasis}
+import io.github.mandar2812.dynaml.analysis.RadialBasis
 import io.github.mandar2812.dynaml.analysis.implicits._
-import io.github.mandar2812.dynaml.pipes.{Encoder, TupleIntegerEncoder}
+import io.github.mandar2812.dynaml.pipes.{Encoder, TupleIntegerEncoder, Basis}
 
 /**
   * <h3>Phase Space Density: Mesh-Radial Basis<h3>

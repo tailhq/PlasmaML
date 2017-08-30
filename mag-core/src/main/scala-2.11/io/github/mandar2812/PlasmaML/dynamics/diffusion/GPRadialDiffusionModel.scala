@@ -1,7 +1,6 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector, norm}
-import io.github.mandar2812.dynaml.analysis.Basis
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
 import io.github.mandar2812.dynaml.pipes._
