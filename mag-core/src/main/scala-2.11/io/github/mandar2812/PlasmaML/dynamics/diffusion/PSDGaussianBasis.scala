@@ -4,7 +4,7 @@ import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.utils._
 import io.github.mandar2812.dynaml.analysis.RadialBasis
 import io.github.mandar2812.dynaml.analysis.implicits._
-import io.github.mandar2812.dynaml.pipes.{Encoder, TupleIntegerEncoder, Basis}
+import io.github.mandar2812.dynaml.pipes._
 
 /**
   * <h3>Phase Space Density: Mesh-Radial Basis<h3>
@@ -14,48 +14,57 @@ import io.github.mandar2812.dynaml.pipes.{Encoder, TupleIntegerEncoder, Basis}
   *
   * */
 class PSDGaussianBasis(
-  val lShellLimits: (Double, Double), val nL: Int,
-  val timeLimits: (Double, Double), val nT: Int) extends
-  Basis[(Double, Double)] {
+  lShellLimits: (Double, Double), nL: Int,
+  timeLimits: (Double, Double), nT: Int)
+  extends PSDRadialBasis(lShellLimits, nL, timeLimits, nT) {
 
-  var mult = 4d
+  val scalesL: Seq[Double] = Seq.fill(lSeq.length)(deltaL*mult)
 
-  val (lSeq, tSeq) = RadialDiffusion.buildStencil(
-    lShellLimits, nL,
-    timeLimits, nT)
+  val scalesT: Seq[Double] = Seq.fill(tSeq.length)(deltaT*mult)
 
-  val (deltaL, deltaT) = (
-    (lShellLimits._2 - lShellLimits._1)/nL,
-    (timeLimits._2-timeLimits._1)/nT)
-
-  val scalesL = Seq.fill(lSeq.length)(deltaL*mult)
-
-  val scalesT = Seq.fill(tSeq.length)(deltaT*mult)
+  override protected val scales: Seq[(Double, Double)] = combine(Seq(scalesL, scalesT)).map(s => (s.head, s.last))
 
   val (basisL, basisT) = (
     RadialBasis.gaussianBasis(lSeq, scalesL, bias = false),
     RadialBasis.gaussianBasis(tSeq, scalesT, bias = false))
 
-  val productBasis = basisL*basisT
-
-  val tupleListEnc = Encoder(
-    (t: (Int, Int)) => List(t._1, t._2),
-    (l: List[Int]) => (l.head, l.last)
-  )
-
-  private val centers = combine(Seq(lSeq, tSeq)).map(s => (s.head, s.last))
-
-  def _centers = centers
-
-  val dimension = lSeq.length*tSeq.length
-
-  val dimensionL = lSeq.length
-
-  val dimensionT = tSeq.length
-
-  val indexEncoder = tupleListEnc > TupleIntegerEncoder(List(lSeq.length, tSeq.length))
+  val productBasis: Basis[(Double, Double)] = basisL*basisT
 
   override protected val f: ((Double, Double)) => DenseVector[Double] =
     (x: (Double, Double)) => productBasis(x)
+
+  /**
+    * Calculate the function which must be multiplied to the current
+    * basis in order to obtain the operator transformed basis.
+    **/
+  override def operator_basis(
+    diffusionField: DataPipe[(Double, Double), Double],
+    diffusionFieldGradL: DataPipe[(Double, Double), Double],
+    lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] =
+    Basis((x: (Double, Double)) => {
+
+      val (l, t) = x
+
+      val dll = diffusionField(x)
+      val alpha = diffusionFieldGradL(x) - 2d*diffusionField(x)/x._1
+      val lambda = lossTimeScale(x)
+
+      DenseVector(
+        centers.zip(scales).map(c => {
+          val ((l_tilda, t_tilda), (theta_s, theta_t)) = c
+
+          val grT = (i: Int, j: Int) => gradSqNormDouble(i, j)(t, t_tilda)
+          val grL = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
+
+
+          val sq = (s: Double) => s*s
+
+          val (invThetaS, invThetaT) = (1/theta_s, 1/theta_t)
+
+          val gs = 0.5*invThetaS*sq(grL(1, 0)) - grL(2, 0)
+
+          0.5*invThetaS*dll*gs - 0.5*invThetaS*alpha*grL(1, 0) + 0.5*invThetaT*grT(1, 0) - lambda
+        }).toArray)
+    })
 
 }

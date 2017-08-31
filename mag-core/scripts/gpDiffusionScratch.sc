@@ -99,7 +99,7 @@
 
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
-  val num_data = 10
+  val num_data = 20
   val num_dummy_data = 1000
 
   val gp_data: Stream[((Double, Double), Double)] = {
@@ -136,9 +136,6 @@
 
   gpKernel.block_all_hyper_parameters
 
-
-  implicit val dataT = identityPipe[Seq[((Double, Double), Double)]]
-
   val radial_basis = new PSDGaussianBasis(
     lShellLimits, 40, timeLimits, 10
   )
@@ -170,12 +167,14 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
-      "tau_alpha" -> new LogNormal(0d, 3d),
-      "tau_beta" -> new LogNormal(0d, 2d),
+      "tau_alpha" -> new Gamma(0.5d, 1d),
+      "tau_beta" -> new Gamma(2d, 2d),
       "tau_b" -> new Gaussian(0d, 2.0))
   }
 
-  val mcmc_sampler = new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](model, hyper_prior, burn)
+  val mcmc_sampler = new AdaptiveHyperParameterMCMC[
+    model.type, ContinuousDistr[Double]](
+    model, hyper_prior, burn)
 
   val num_post_samples = 1000
 
@@ -260,9 +259,9 @@
   yAxis(0x03C4.toChar+": "+0x03B2.toChar)
   unhold()
 
-  histogram(samples.map(_("tau_beta")), 1000)
+  histogram(samples.map(_("tau_beta")), 500)
   hold()
-  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 1000)
+  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 500)
   legend(Seq("Posterior Samples", "Prior Samples"))
   unhold()
   title("Histogram: "+0x03B2.toChar)

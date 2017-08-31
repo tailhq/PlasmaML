@@ -19,17 +19,17 @@ class GPRadialDiffusionModel(
   val noise_psd: LocalScalarKernel[(Double, Double)],
   val psd_data: Stream[((Double, Double), Double)],
   val injection_data: Stream[((Double, Double), Double)],
-  val basis: PSDGaussianBasis) extends GloballyOptimizable {
+  val basis: PSDBasis) extends GloballyOptimizable {
 
   protected val logger: Logger = Logger.getLogger(this.getClass)
 
-  val baseCovID = "base::"+covariance.toString.split("\\.").last
+  val baseCovID: String = "base::"+covariance.toString.split("\\.").last
 
-  val baseNoiseID = "base_noise::"+noise_psd.toString.split("\\.").last
+  val baseNoiseID: String = "base_noise::"+noise_psd.toString.split("\\.").last
 
   val diffusionField: MagTrend = new MagTrend(Kp, "dll")
 
-  val diffusionFieldGradL = diffusionField.gradL
+  val diffusionFieldGradL: MetaPipe[Map[String, Double], (Double, Double), Double] = diffusionField.gradL
 
   val lossTimeScale: MagTrend = new MagTrend(Kp, "tau")
 
@@ -38,7 +38,7 @@ class GPRadialDiffusionModel(
       diffusionFieldGradL(hyper_params)(x) - 2d*diffusionField(hyper_params)(x)/x._1
     })
 
-  val psd_data_size = psd_data.length
+  val psd_data_size: Int = psd_data.length
 
   val psd_mean: Double = psd_data.map(_._2).sum/psd_data_size
 
@@ -47,7 +47,7 @@ class GPRadialDiffusionModel(
   private val (covStEncoder, noiseStEncoder) = (
     GPRadialDiffusionModel.stateEncoder(baseCovID),
     GPRadialDiffusionModel.stateEncoder(baseNoiseID)
-    )
+  )
 
   private val designMatrixFlow = GPRadialDiffusionModel.metaDesignMatFlow(basis)
 
@@ -61,13 +61,7 @@ class GPRadialDiffusionModel(
     (ph*ph.t, ph*y)
   }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
 
-
-  private val grid_centers = combine(Seq(basis.lSeq, basis.tSeq)).map(s => (s.head, s.last))
-
-  private val grid_scales = combine(Seq(basis.scalesL, basis.scalesT)).map(s => (s.head, s.last))
-
-
-  def _operator_hyper_parameters = operator_hyper_parameters
+  def _operator_hyper_parameters: List[String] = operator_hyper_parameters
 
   protected val operator_hyper_parameters: List[String] = {
 
@@ -127,7 +121,7 @@ class GPRadialDiffusionModel(
 
   }
 
-  def block_++(h: String*) = block(blocked_hyper_parameters.union(h):_*)
+  def block_++(h: String*): Unit = block(blocked_hyper_parameters.union(h):_*)
 
   def effective_hyper_parameters: List[String] =
     hyper_parameters.filterNot(h => blocked_hyper_parameters.contains(h))
@@ -178,31 +172,11 @@ class GPRadialDiffusionModel(
     logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
 
 
-    val g_basis = Basis((x: (Double, Double)) => {
+    val dll = diffusionField(operator_state)
+    val grad_dll = diffusionFieldGradL(operator_state)
+    val lambda = lossTimeScale(operator_state)
 
-      val (l, t) = x
-
-      val dll = diffusionField(operator_state)(x)
-      val alpha = gradDByLSq(operator_state)(x)
-      val lambda = lossTimeScale(operator_state)(x)
-
-      DenseVector(
-        grid_centers.zip(grid_scales).map(c => {
-          val ((l_tilda, t_tilda), (theta_s, theta_t)) = c
-
-          val grT = (i: Int, j: Int) => gradSqNormDouble(i, j)(t, t_tilda)
-          val grL = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
-
-
-          val sq = (s: Double) => s*s
-
-          val (invThetaS, invThetaT) = (1/theta_s, 1/theta_t)
-
-          val gs = 0.5*invThetaS*sq(grL(1, 0)) - grL(2, 0)
-
-          0.5*invThetaS*dll*gs - 0.5*invThetaS*alpha*grL(1, 0) + 0.5*invThetaT*grT(1, 0) - lambda
-        }).toArray)
-    })
+    val g_basis = basis.operator_basis(dll, grad_dll, lambda)
 
     val (bMat, c) = injection_data.map(p => {
       val ph = basis(p._1) *:* g_basis(p._1)
