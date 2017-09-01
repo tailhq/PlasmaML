@@ -99,7 +99,7 @@
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
   val num_data = 20
-  val num_dummy_data = 1000
+  val num_dummy_data = 500
 
   val gp_data: Stream[((Double, Double), Double)] = {
     (0 until num_data).map(_ => {
@@ -135,7 +135,7 @@
 
   gpKernel.block_all_hyper_parameters
 
-  val radial_basis = new GaussianPSDBasis(
+  val radial_basis = new InverseMQPSDBasis(1d)(
     lShellLimits, 40, timeLimits, 10
   )
 
@@ -147,7 +147,7 @@
     radial_basis
   )
 
-  model.reg = 0.01
+  model.reg = 0.001
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
@@ -167,7 +167,7 @@
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
       "tau_alpha" -> new Gamma(0.5d, 1d),
-      "tau_beta" -> new Gamma(2d, 2d),
+      "tau_beta" -> new LogNormal(0d, 2d),
       "tau_b" -> new Gaussian(0d, 2.0))
   }
 

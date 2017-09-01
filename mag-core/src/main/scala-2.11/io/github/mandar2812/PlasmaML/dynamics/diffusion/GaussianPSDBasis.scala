@@ -15,7 +15,11 @@ import io.github.mandar2812.dynaml.pipes._
 class GaussianPSDBasis(
   lShellLimits: (Double, Double), nL: Int,
   timeLimits: (Double, Double), nT: Int)
-  extends PSDRadialBasis(lShellLimits, nL, timeLimits, nT) {
+  extends PSDRadialBasis(
+    lShellLimits, nL,
+    timeLimits, nT) {
+
+  mult = 1
 
   val (basisL, basisT) = (
     RadialBasis.gaussianBasis(lSeq, scalesL, bias = false),
@@ -52,7 +56,7 @@ class GaussianPSDBasis(
 
           val sq = (s: Double) => s*s
 
-          val (invThetaS, invThetaT) = (1/theta_s, 1/theta_t)
+          val (invThetaS, invThetaT) = (sq(1/theta_s), sq(1/theta_t))
 
           val gs = 0.5*invThetaS*sq(grL(1, 0)) - grL(2, 0)
 
