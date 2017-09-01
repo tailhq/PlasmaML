@@ -58,14 +58,14 @@ abstract class PSDRadialBasis(
     if(logScaleFlags._1) Seq.tabulate(lSeq.length)(i =>
       if(i == 0) math.exp(deltaL)
       else if(i < nL) math.exp((i+1)*deltaL) - math.exp(i*deltaL)
-      else math.exp((nL+1)*deltaL) - math.exp(nL*deltaL))
+      else math.exp((nL+1)*deltaL) - math.exp(nL*deltaL)).map(_*mult)
     else Seq.fill(lSeq.length)(deltaL*mult)
 
   val scalesT: Seq[Double] =
     if(logScaleFlags._2) Seq.tabulate(tSeq.length)(i =>
       if(i == 0) math.exp(deltaT)
       else if(i < nL) math.exp((i+1)*deltaT) - math.exp(i*deltaT)
-      else math.exp((nL+1)*deltaT) - math.exp(nL*deltaT))
+      else math.exp((nL+1)*deltaT) - math.exp(nL*deltaT)).map(_*mult)
     else Seq.fill(tSeq.length)(deltaT*mult)
 
   val tupleListEnc = Encoder(
