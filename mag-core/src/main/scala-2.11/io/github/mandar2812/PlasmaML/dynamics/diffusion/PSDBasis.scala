@@ -35,23 +35,38 @@ trait PSDBasis extends Basis[(Double, Double)]{
 
 abstract class PSDRadialBasis(
   val lShellLimits: (Double, Double), val nL: Int,
-  val timeLimits: (Double, Double), val nT: Int)
+  val timeLimits: (Double, Double), val nT: Int,
+  val logScaleFlags: (Boolean, Boolean) = (false, false))
   extends PSDBasis {
 
-  var mult = 4d
+  var mult = 1d
 
   val (lSeq, tSeq) = RadialDiffusion.buildStencil(
     lShellLimits, nL,
-    timeLimits, nT)
+    timeLimits, nT,
+    logScaleFlags)
 
-  val (deltaL, deltaT) = (
-    (lShellLimits._2 - lShellLimits._1)/nL,
-    (timeLimits._2-timeLimits._1)/nT)
+  val deltaL: Double =
+    if(logScaleFlags._1) math.log(lShellLimits._2 - lShellLimits._1)/nL
+    else (lShellLimits._2 - lShellLimits._1)/nL
 
-  val (scalesL, scalesT) = (
-    Seq.fill(lSeq.length)(deltaL*mult),
-    Seq.fill(tSeq.length)(deltaT*mult)
-  )
+  val deltaT: Double =
+    if(logScaleFlags._2) math.log(timeLimits._2 - timeLimits._1)/nT
+    else (timeLimits._2 - timeLimits._1)/nT
+
+  val scalesL: Seq[Double] =
+    if(logScaleFlags._1) Seq.tabulate(lSeq.length)(i =>
+      if(i == 0) math.exp(deltaL)
+      else if(i < nL) math.exp((i+1)*deltaL) - math.exp(i*deltaL)
+      else math.exp((nL+1)*deltaL) - math.exp(nL*deltaL))
+    else Seq.fill(lSeq.length)(deltaL*mult)
+
+  val scalesT: Seq[Double] =
+    if(logScaleFlags._2) Seq.tabulate(tSeq.length)(i =>
+      if(i == 0) math.exp(deltaT)
+      else if(i < nL) math.exp((i+1)*deltaT) - math.exp(i*deltaT)
+      else math.exp((nL+1)*deltaT) - math.exp(nL*deltaT))
+    else Seq.fill(tSeq.length)(deltaT*mult)
 
   val tupleListEnc = Encoder(
     (t: (Int, Int)) => List(t._1, t._2),

@@ -136,7 +136,7 @@
   gpKernel.block_all_hyper_parameters
 
   val radial_basis = new InverseMQPSDBasis(1d)(
-    lShellLimits, 40, timeLimits, 10
+    lShellLimits, 40, timeLimits, 10, (true, false)
   )
 
   val model = new GPRadialDiffusionModel(

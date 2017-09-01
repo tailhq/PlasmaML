@@ -14,12 +14,14 @@ import spire.algebra.InnerProductSpace
   * */
 class InverseMQPSDBasis(beta: Double)(
   lShellLimits: (Double, Double), nL: Int,
-  timeLimits: (Double, Double), nT: Int)
-  extends PSDRadialBasis(lShellLimits, nL, timeLimits, nT) {
+  timeLimits: (Double, Double), nT: Int,
+  logScales: (Boolean, Boolean) = (false, false))
+  extends PSDRadialBasis(
+    lShellLimits, nL,
+    timeLimits, nT,
+    logScales) {
 
   require(beta > 0, "Beta parameter must be positive")
-
-  mult = 1
 
   val activation = RadialBasis.invMultiQuadric(beta)
 

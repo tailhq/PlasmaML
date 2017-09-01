@@ -109,28 +109,53 @@ object RadialDiffusion {
     * */
   def buildStencil(
     lShellLimits: (Double, Double), nL: Int,
-    timeLimits: (Double, Double), nT: Int): (Seq[Double], Seq[Double]) = {
+    timeLimits: (Double, Double), nT: Int,
+    logScaleFlags: (Boolean, Boolean) = (false, false)): (Seq[Double], Seq[Double]) = {
 
     logger.info("----------------------------------")
     logger.info("Domain stencil: \n")
 
-    val (deltaL, deltaT) = ((lShellLimits._2 - lShellLimits._1)/nL, (timeLimits._2 - timeLimits._1)/nT)
+    val deltaL =
+      if(logScaleFlags._1) math.log(lShellLimits._2 - lShellLimits._1)/nL
+      else (lShellLimits._2 - lShellLimits._1)/nL
+
+    val deltaT =
+      if(logScaleFlags._2) math.log(timeLimits._2 - timeLimits._1)/nT
+      else (timeLimits._2 - timeLimits._1)/nT
+
     logger.info("Space")
+    if(logScaleFlags._1) logger.info("Logarithmic Scale")
     logger.info(lShellLimits._1+" =< L =< "+lShellLimits._2)
     logger.info("ΔL = "+deltaL+"\n")
 
     logger.info("Time")
+    if(logScaleFlags._2) logger.info("Logarithmic Scale")
     logger.info(timeLimits._1+" =< t =< "+timeLimits._2)
     logger.info("Δt = "+deltaT)
     logger.info("----------------------------------")
 
-    val lShellVec = Seq.tabulate[Double](nL+1)(i =>
-      if(i < nL) lShellLimits._1+(deltaL*i)
-      else lShellLimits._2)
 
-    val timeVec = Seq.tabulate[Double](nT+1)(i =>
-      if(i < nT) timeLimits._1+(deltaT*i)
-      else timeLimits._2)
+    val lShellVec = if(logScaleFlags._1) {
+      Seq.tabulate[Double](nL+1)(i =>
+        if(i == 0) lShellLimits._1
+        else if(i < nL) lShellLimits._1+math.exp(deltaL*i)
+        else lShellLimits._2)
+    } else {
+      Seq.tabulate[Double](nL+1)(i =>
+        if(i < nL) lShellLimits._1+(deltaL*i)
+        else lShellLimits._2)
+    }
+
+    val timeVec = if(logScaleFlags._2) {
+      Seq.tabulate[Double](nT+1)(i =>
+        if(i ==0) timeLimits._1
+        else if(i < nT) timeLimits._1+math.exp(deltaT*i)
+        else timeLimits._2)
+    } else {
+      Seq.tabulate[Double](nT+1)(i =>
+        if(i < nT) timeLimits._1+(deltaT*i)
+        else timeLimits._2)
+    }
 
     (lShellVec, timeVec)
   }

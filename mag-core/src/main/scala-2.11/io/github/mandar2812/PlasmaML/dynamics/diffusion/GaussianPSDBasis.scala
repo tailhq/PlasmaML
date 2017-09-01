@@ -14,12 +14,12 @@ import io.github.mandar2812.dynaml.pipes._
   * */
 class GaussianPSDBasis(
   lShellLimits: (Double, Double), nL: Int,
-  timeLimits: (Double, Double), nT: Int)
+  timeLimits: (Double, Double), nT: Int,
+  logScales: (Boolean, Boolean) = (false, false))
   extends PSDRadialBasis(
     lShellLimits, nL,
-    timeLimits, nT) {
-
-  mult = 1
+    timeLimits, nT,
+    logScales) {
 
   val (basisL, basisT) = (
     RadialBasis.gaussianBasis(lSeq, scalesL, bias = false),
