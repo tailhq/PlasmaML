@@ -5,11 +5,33 @@ import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.distributions.MVGaussian
-import io.github.mandar2812.dynaml.utils._
 import org.apache.log4j.Logger
 
 /**
   * Inverse inference over plasma radial diffusion parameters.
+  *
+  * @param Kp A function which returns the Kp value for a given
+  *           time coordinate. Must be cast as a [[DataPipe]]
+  *
+  * @param dll_params A [[Tuple4]] containing the diffusion field
+  *                   parameters. See [[io.github.mandar2812.PlasmaML.utils.MagConfigEncoding]] and
+  *                   [[MagnetosphericProcessTrend]].
+  *
+  * @param tau_params A [[Tuple4]] containing the loss process parameters.
+  *
+  * @param covariance A kernel function representing the covariance of
+  *                   the Phase Space Density at a pair of space time locations.
+  *
+  * @param noise_psd A kernel function representing the measurement noise of the
+  *                  Phase Space Density at a pair of space time locations.
+  *
+  * @param psd_data A Stream of space time locations and measured PSD values.
+  *
+  * @param injection_data A Stream of space time locations and measured particle
+  *                       injection rates.
+  *
+  * @param basis A basis function expansion for the PSD, as an instance
+  *              of [[PSDBasis]].
   * */
 class GPRadialDiffusionModel(
   val Kp: DataPipe[Double, Double],
@@ -29,14 +51,7 @@ class GPRadialDiffusionModel(
 
   val diffusionField: MagTrend = new MagTrend(Kp, "dll")
 
-  val diffusionFieldGradL: MetaPipe[Map[String, Double], (Double, Double), Double] = diffusionField.gradL
-
   val lossTimeScale: MagTrend = new MagTrend(Kp, "tau")
-
-  val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
-    MetaPipe((hyper_params: Map[String, Double]) => (x: (Double, Double)) => {
-      diffusionFieldGradL(hyper_params)(x) - 2d*diffusionField(hyper_params)(x)/x._1
-    })
 
   val psd_data_size: Int = psd_data.length
 
@@ -74,6 +89,10 @@ class GPRadialDiffusionModel(
     )
   }
 
+  /**
+    * Stores the value of the operator parameters
+    * as a [[Map]].
+    * */
   protected var operator_state: Map[String, Double] = {
     val dll_hyp = diffusionField.transform.keys
     val tau_hyp = lossTimeScale.transform.keys
@@ -173,7 +192,7 @@ class GPRadialDiffusionModel(
 
 
     val dll = diffusionField(operator_state)
-    val grad_dll = diffusionFieldGradL(operator_state)
+    val grad_dll = diffusionField.gradL(operator_state)
     val lambda = lossTimeScale(operator_state)
 
     val g_basis = basis.operator_basis(dll, grad_dll, lambda)
