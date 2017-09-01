@@ -48,6 +48,10 @@ abstract class PSDRadialBasis(
     (lShellLimits._2 - lShellLimits._1)/nL,
     (timeLimits._2-timeLimits._1)/nT)
 
+  val (scalesL, scalesT) = (
+    Seq.fill(lSeq.length)(deltaL*mult),
+    Seq.fill(tSeq.length)(deltaT*mult)
+  )
 
   val tupleListEnc = Encoder(
     (t: (Int, Int)) => List(t._1, t._2),
@@ -56,7 +60,7 @@ abstract class PSDRadialBasis(
 
   protected val centers: Seq[(Double, Double)] = combine(Seq(lSeq, tSeq)).map(s => (s.head, s.last))
 
-  protected val scales: Seq[(Double, Double)]
+  protected val scales: Seq[(Double, Double)] = combine(Seq(scalesL, scalesT)).map(s => (s.head, s.last))
 
   def _centers: Seq[(Double, Double)] = centers
 

@@ -1,28 +1,21 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.DenseVector
-import io.github.mandar2812.dynaml.utils._
 import io.github.mandar2812.dynaml.analysis.RadialBasis
 import io.github.mandar2812.dynaml.analysis.implicits._
 import io.github.mandar2812.dynaml.pipes._
 
 /**
-  * <h3>Phase Space Density: Mesh-Radial Basis<h3>
+  * <h3>Phase Space Density: Gaussian Mesh-Based Radial Basis<h3>
   *
-  * Implements a radial basis expansion for the phase space density
+  * Implements a gaussian radial basis expansion for the phase space density
   * with nodes placed on a regular space time mesh.
   *
   * */
-class PSDGaussianBasis(
+class GaussianPSDBasis(
   lShellLimits: (Double, Double), nL: Int,
   timeLimits: (Double, Double), nT: Int)
   extends PSDRadialBasis(lShellLimits, nL, timeLimits, nT) {
-
-  val scalesL: Seq[Double] = Seq.fill(lSeq.length)(deltaL*mult)
-
-  val scalesT: Seq[Double] = Seq.fill(tSeq.length)(deltaT*mult)
-
-  override protected val scales: Seq[(Double, Double)] = combine(Seq(scalesL, scalesT)).map(s => (s.head, s.last))
 
   val (basisL, basisT) = (
     RadialBasis.gaussianBasis(lSeq, scalesL, bias = false),

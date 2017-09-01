@@ -6,7 +6,6 @@
   import com.quantifind.charts.Highcharts._
 
   import io.github.mandar2812.dynaml.utils._
-  import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.pipes.DataPipe
   import io.github.mandar2812.dynaml.probability._
@@ -136,7 +135,7 @@
 
   gpKernel.block_all_hyper_parameters
 
-  val radial_basis = new PSDGaussianBasis(
+  val radial_basis = new GaussianPSDBasis(
     lShellLimits, 40, timeLimits, 10
   )
 
