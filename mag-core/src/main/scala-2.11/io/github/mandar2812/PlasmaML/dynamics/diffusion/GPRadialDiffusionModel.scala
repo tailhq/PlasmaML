@@ -1,6 +1,9 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector, norm}
+import ammonite.ops._
+import com.quantifind.charts.Highcharts._
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
 import io.github.mandar2812.dynaml.pipes._
@@ -256,6 +259,38 @@ object GPRadialDiffusionModel {
       StreamDataPipe((v: DenseVector[Double]) => v.toDenseMatrix) >
       DataPipe((s: Stream[DenseMatrix[Double]]) => DenseMatrix.vertcat(s:_*)))(s)
   )
+
+  def loadCachedResults(
+    lambda_alpha: Double, lambda_beta: Double,
+    lambda_a: Double, lambda_b: Double)(file: String): Unit = {
+
+    val strToVector = StreamDataPipe((p: String) => DenseVector(p.split(",").map(_.toDouble)))
+
+    val load_results = fileToStream > strToVector
+
+    val post_samples = load_results(".cache/"+file)
+
+    scatter(post_samples.map(c => (c(0), c(2))))
+    hold()
+    scatter(Seq((lambda_alpha*math.pow(10d, lambda_a), lambda_b)))
+    legend(Seq("Posterior Samples", "Ground Truth"))
+    title("Posterior Samples:- "+0x03B1.toChar+" vs b")
+    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
+    yAxis(0x03C4.toChar+": b")
+    unhold()
+
+
+
+    scatter(post_samples.map(c => (c(0), c(1))))
+    hold()
+    scatter(Seq((lambda_alpha*math.pow(10d, lambda_a), lambda_beta)))
+    legend(Seq("Posterior Samples", "Ground Truth"))
+    title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
+    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
+    yAxis(0x03C4.toChar+": "+0x03B2.toChar)
+    unhold()
+
+  }
 
 
 }

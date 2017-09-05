@@ -9,6 +9,7 @@
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.pipes.DataPipe
   import io.github.mandar2812.dynaml.probability._
+  import io.github.mandar2812.dynaml.probability.distributions._
   import io.github.mandar2812.dynaml.probability.mcmc._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
@@ -38,9 +39,6 @@
   val rowSelectorRV = MultinomialRV(DenseVector.fill[Double](lShellVec.length)(1d/lShellVec.length.toDouble))
   val colSelectorRV = MultinomialRV(DenseVector.fill[Double](timeVec.length)(1d/timeVec.length.toDouble))
 
-  val baseNoiseLevel = 1.2
-  val mult = 0.8
-
   /*
    * Define parameters of radial diffusion system:
    *
@@ -64,15 +62,9 @@
   val dll_a = -9.325
   val dll_b = 0.506
 
-  //Injection process
-  val q_alpha = 0d
-  val q_beta = 0d
-  val q_a = 0.0d
-  val q_b = 0.0d
-
   //Loss Process
   val lambda_alpha = math.pow(10d, -4)/2.4
-  val lambda_beta = 1.25d
+  val lambda_beta = 3d
   val lambda_a = 2.5d
   val lambda_b = 0.18
 
@@ -98,8 +90,8 @@
 
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
-  val num_data = 20
-  val num_dummy_data = 500
+  val num_data = 30
+  val num_dummy_data = 100
 
   val gp_data: Stream[((Double, Double), Double)] = {
     (0 until num_data).map(_ => {
@@ -122,32 +114,32 @@
 
   }
 
-  val burn = 600
+  val burn = 1000
   //Create the GP PDE model
 
   val gpKernel = new GenExpSpaceTimeKernel[Double](
-    psdVar, 0.15, 0.15)(
+    psdVar, 3d, 1.5)(
     sqNormDouble, l1NormDouble)
 
-  val noiseKernel = new MAKernel(0.01)
+  val noiseKernel = new MAKernel(0.1) :* new MAKernel(0.1)
 
   noiseKernel.block_all_hyper_parameters
 
   gpKernel.block_all_hyper_parameters
 
   val radial_basis = new InverseMQPSDBasis(1d)(
-    lShellLimits, 40, timeLimits, 10, (true, false)
+    lShellLimits, 20, timeLimits, 10, (true, false)
   )
 
   val model = new GPRadialDiffusionModel(
     Kp, (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
     (0.1, 0.2, 0d, 0d))(
-    gpKernel, noiseKernel:*noiseKernel,
+    gpKernel, noiseKernel,
     gp_data, impulse_data,
     radial_basis
   )
 
-  model.reg = 0.001
+  model.reg = num_data.toDouble/num_dummy_data
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
@@ -158,16 +150,13 @@
   model.block(blocked_hyp:_*)
   //Create the MCMC sampler
   val hyp = model.effective_hyper_parameters
-  //gpKernel.effective_hyper_parameters ++ noiseKernel.effective_hyper_parameters
-
-  val num_hyp = hyp.length
 
   val hyper_prior = {
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
       "tau_alpha" -> new Gamma(0.5d, 1d),
-      "tau_beta" -> new LogNormal(0d, 2d),
+      "tau_beta" -> Gamma(2d, 2d),
       "tau_b" -> new Gaussian(0d, 2.0))
   }
 
@@ -175,7 +164,7 @@
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 1000
+  val num_post_samples = 2000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
@@ -213,6 +202,18 @@
   title("Evolution of Phase Space Density f(L,t)")
   xAxis("time")
   yAxis("f(L,t)")
+
+
+
+  line(timeVec.map(t => (t, Kp(t))).toSeq)
+  xAxis("time")
+  yAxis("Kp")
+  title("Evolution of Kp")
+
+  spline(lShellVec.map(l => (l, initialPSD(l))).toSeq)
+  xAxis("L")
+  yAxis("f(L, 0)")
+  title("Phase Space Density Profile, t = 0")
 
 
   /*
@@ -258,9 +259,9 @@
   yAxis(0x03C4.toChar+": "+0x03B2.toChar)
   unhold()
 
-  histogram(samples.map(_("tau_beta")), 500)
+  histogram(samples.map(_("tau_beta")), 100)
   hold()
-  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 500)
+  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 100)
   legend(Seq("Posterior Samples", "Prior Samples"))
   unhold()
   title("Histogram: "+0x03B2.toChar)
