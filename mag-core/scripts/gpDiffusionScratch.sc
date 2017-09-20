@@ -77,11 +77,7 @@
 
   val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 
-  val omega_t = math.Pi*2d/(timeLimits._2 - timeLimits._1)
-
   val initialPSD = (l: Double) => Bessel.i1(omega*(l - lShellLimits._1))*1E2
-
-  val initialPSDGT: DenseVector[Double] = DenseVector(lShellVec.map(l => initialPSD(l)).toArray)
 
   //Create ground truth PSD data and corrupt it with statistical noise.
   val groundTruth = rds.solve(Q, dll, lambda)(initialPSD)
@@ -90,7 +86,7 @@
 
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
-  val num_data = 30
+  val num_data = 40
   val num_dummy_data = 100
 
   val gp_data: Stream[((Double, Double), Double)] = {
@@ -118,17 +114,15 @@
   //Create the GP PDE model
 
   val gpKernel = new GenExpSpaceTimeKernel[Double](
-    psdVar, 3d, 1.5)(
+    psdVar, rds.deltaL, rds.deltaT)(
     sqNormDouble, l1NormDouble)
 
   val noiseKernel = new MAKernel(0.1) :* new MAKernel(0.1)
 
   noiseKernel.block_all_hyper_parameters
 
-  gpKernel.block_all_hyper_parameters
-
   val radial_basis = new InverseMQPSDBasis(1d)(
-    lShellLimits, 20, timeLimits, 10, (true, false)
+    lShellLimits, 30, timeLimits, 20, (true, false)
   )
 
   val model = new GPRadialDiffusionModel(
@@ -139,11 +133,13 @@
     radial_basis
   )
 
-  model.reg = num_data.toDouble/num_dummy_data
+  model.reg = 0.5//num_data.toDouble/num_dummy_data
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
-      model.hyper_parameters.filter(c => c.contains("dll") || c.contains("amplitude") || c.contains("tau_gamma"))
+      model.hyper_parameters.filter(
+        c => c.contains("dll") || c.contains("base::") || c.contains("tau_gamma")
+      )
   }
 
 
@@ -174,6 +170,20 @@
 
   val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B2.toChar, "tau_b" -> 'b')
   val gt = Map("tau_alpha" -> lambda_alpha*math.pow(10d, lambda_a), "tau_beta" -> lambda_beta, "tau_b" -> lambda_b)
+
+  println("\n:::::: MCMC Sampling Report ::::::\n")
+
+  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
+
+  println("Markov Chain Acceptance Rate = "+mcmc_sampler.sampleAcceptenceRate)
+
+  quantities.zipWithIndex.foreach(c => {
+    val ((key, char), index) = c
+    println("\n------------------------------")
+    println("Parameter: "+char)
+    println("Ground Truth:- "+gt(key))
+    println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
+  })
 
 
   val lMax = 10
@@ -265,21 +275,5 @@
   legend(Seq("Posterior Samples", "Prior Samples"))
   unhold()
   title("Histogram: "+0x03B2.toChar)
-
-
-  println("\n:::::: MCMC Sampling Report ::::::\n")
-
-  println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
-
-  println("Markov Chain Acceptance Rate = "+mcmc_sampler.sampleAcceptenceRate)
-
-  quantities.zipWithIndex.foreach(c => {
-    val ((key, char), index) = c
-    println("\n------------------------------")
-    println("Parameter: "+char)
-    println("Ground Truth:- "+gt(key))
-    println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
-  })
-
 
 }
