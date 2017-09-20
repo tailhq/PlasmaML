@@ -212,6 +212,9 @@ class GPRadialDiffusionModel(
 
     val mean = phi*params
 
+    val modelVariance = norm(targets - mean)/targets.length
+    logger.info("variance: "+modelVariance)
+
     /*
     * Construct partitioned covariance matrix
     * */
@@ -233,15 +236,13 @@ class GPRadialDiffusionModel(
       psd_data.map(_._1),
       psd_data_size).getKernelMatrix
 
-    logger.info("err: "+norm(targets - mean)/targets.length)
-
     val gaussian = MVGaussian(mean, k_uu + noise_mat_psd)
 
     try {
       -1d*gaussian.logPdf(targets)
     } catch {
       case _: breeze.linalg.NotConvergedException => Double.PositiveInfinity
-      case _: breeze.linalg.MatrixNotSymmetricException => Double.PositiveInfinity
+      case _: breeze.linalg.MatrixNotSymmetricException => Double.NaN
     }
   }
 
