@@ -4,7 +4,7 @@ import sbt._
 
 val mainVersion = "v0.1"
 
-val status = "dev" 
+val status = "prod"
 
 val dynaMLVersion = settingKey[String]("The version of DynaML used.")
 
@@ -16,13 +16,13 @@ val dynamlArtifact = settingKey[String]("Artifact ID for DynaML dependency")
 
 lazy val dynaMLSettings = if(status == "dev") {
   Seq(
-    dynaMLVersion := "v1.5.1-beta.1",
+    dynaMLVersion := "v1.5.2-beta.1",
     dynamlGroupID := "io.github.mandar2812",
     dynamlArtifact := "dynaml_2.11"
   )
 } else {
   Seq(
-    dynaMLVersion := "v1.5",
+    dynaMLVersion := "v1.5.1",
     dynamlGroupID := "com.github.transcendent-ai-labs.DynaML",
     dynamlArtifact := "dynaml_2.11"
   )
