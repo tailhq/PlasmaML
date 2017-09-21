@@ -4,7 +4,7 @@ import sbt._
 
 val mainVersion = "v0.1"
 
-val status = "prod"
+val status = "dev"
 
 val dynaMLVersion = settingKey[String]("The version of DynaML used.")
 

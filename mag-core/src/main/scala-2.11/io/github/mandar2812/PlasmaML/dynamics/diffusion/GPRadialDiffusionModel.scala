@@ -5,6 +5,7 @@ import ammonite.ops._
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
+import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
 import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.distributions.MVGaussian
@@ -127,7 +128,7 @@ class GPRadialDiffusionModel(
     covariance.blocked_hyper_parameters.map(h => baseCovID+"/"+h) ++
     noise_psd.blocked_hyper_parameters.map(h => baseNoiseID+"/"+h)
 
-  var reg: Double = 0.01
+  var reg: Double = 1d
 
   def block(hyp: String*): Unit = {
 
@@ -236,10 +237,8 @@ class GPRadialDiffusionModel(
       psd_data.map(_._1),
       psd_data_size).getKernelMatrix
 
-    val gaussian = MVGaussian(mean, k_uu + noise_mat_psd)
-
     try {
-      -1d*gaussian.logPdf(targets)
+      AbstractGPRegressionModel.logLikelihood(targets - mean, k_uu + noise_mat_psd)
     } catch {
       case _: breeze.linalg.NotConvergedException => Double.PositiveInfinity
       case _: breeze.linalg.MatrixNotSymmetricException => Double.NaN
