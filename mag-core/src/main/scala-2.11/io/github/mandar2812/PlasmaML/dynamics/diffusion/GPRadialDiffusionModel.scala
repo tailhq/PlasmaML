@@ -157,8 +157,15 @@ class GPRadialDiffusionModel(
       effective_hyper_parameters.forall(h.contains),
       "All Hyper-parameters must be contained in state assignment")
 
-    val base_kernel_state = h.filterKeys(_.contains(baseCovID)).map(c => (c._1.replace(baseCovID, "").tail, c._2))
-    val base_noise_state = h.filterKeys(_.contains(baseNoiseID)).map(c => (c._1.replace(baseNoiseID, "").tail, c._2))
+    val base_kernel_state = h.filterKeys(
+      _.contains(baseCovID)).map(
+      c => (c._1.replace(baseCovID, "").tail, c._2)
+    )
+
+    val base_noise_state = h.filterKeys(
+      _.contains(baseNoiseID)).map(
+      c => (c._1.replace(baseNoiseID, "").tail, c._2)
+    )
 
     covariance.setHyperParameters(base_kernel_state)
     noise_psd.setHyperParameters(base_noise_state)
@@ -226,11 +233,6 @@ class GPRadialDiffusionModel(
     val k_uu = covariance.buildKernelMatrix(
       psd_data.map(_._1),
       psd_data_size).getKernelMatrix
-
-
-    /*logger.info("Partition K_phi")
-    lazy val k_phi = phi*(ss\phi.t)
-    logger.info("Volume of K_phi = "+det(k_phi))*/
 
     logger.info("Partition K_nn")
     val noise_mat_psd = noise_psd.buildKernelMatrix(

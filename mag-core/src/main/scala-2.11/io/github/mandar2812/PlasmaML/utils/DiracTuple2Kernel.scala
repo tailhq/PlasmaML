@@ -1,7 +1,6 @@
 package io.github.mandar2812.PlasmaML.utils
 
-import breeze.linalg.DenseMatrix
-import io.github.mandar2812.dynaml.kernels.{KernelMatrix, LocalSVMKernel, SVMKernelMatrix}
+import io.github.mandar2812.dynaml.kernels.LocalSVMKernel
 
 class DiracTuple2Kernel(private var noiseLevel: Double = 1.0)
   extends LocalSVMKernel[(Double, Double)]
@@ -25,9 +24,5 @@ class DiracTuple2Kernel(private var noiseLevel: Double = 1.0)
     config: Map[String, Double])(
     x: (Double, Double), y: (Double, Double)): Map[String, Double] =
     Map("noiseLevel" -> 1.0*evaluateAt(config)(x,y)/math.abs(config("noiseLevel")))
-
-  /*override def buildKernelMatrix[S <: Seq[(Double, Double)]](
-    mappedData: S, length: Int): KernelMatrix[DenseMatrix[Double]] =
-    new SVMKernelMatrix(DenseMatrix.eye[Double](length)*state("noiseLevel"), length)*/
 
 }
