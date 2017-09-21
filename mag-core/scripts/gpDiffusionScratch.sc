@@ -13,6 +13,7 @@
   import io.github.mandar2812.dynaml.probability.mcmc._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+  import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.GPRadialDiffusionModel
   import io.github.mandar2812.dynaml.kernels.MAKernel
@@ -37,7 +38,7 @@
   })
 
   val rowSelectorRV = MultinomialRV(DenseVector.fill[Double](lShellVec.length)(1d/lShellVec.length.toDouble))
-  val colSelectorRV = MultinomialRV(DenseVector.fill[Double](timeVec.length)(1d/timeVec.length.toDouble))
+  val colSelectorRV = MultinomialRV(DenseVector.fill[Double](timeVec.length-1)(1d/timeVec.length.toDouble))
 
   /*
    * Define parameters of radial diffusion system:
@@ -82,24 +83,36 @@
   //Create ground truth PSD data and corrupt it with statistical noise.
   val groundTruth = rds.solve(Q, dll, lambda)(initialPSD)
   val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.map(_.asDenseMatrix.t):_*)
-  val measurement_noise = GaussianRV(0.0, 0.1)
+  val measurement_noise = GaussianRV(0.0, 0.5)
 
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
-  val num_data = 40
+
+  val num_boundary_data = 50
+  val num_bulk_data = 50
+  val num_data = num_boundary_data + num_bulk_data
   val num_dummy_data = 100
 
-  val gp_data: Stream[((Double, Double), Double)] = {
-    (0 until num_data).map(_ => {
-      val rowS = rowSelectorRV.draw
-      val colS = colSelectorRV.draw
-      val (l, t) = (lShellVec(rowS), timeVec(colS))
-      ((l,t), data(rowS, colS))
+  val coordinateIndices = combine(Seq(lShellVec.indices, timeVec.tail.indices)).map(s => (s.head, s.last))
+
+
+  val boundary_data = lShellVec.indices
+    .filter(_ => Rand.uniform.draw() <= num_boundary_data.toDouble/lShellVec.length)
+    .map(lIndex => {
+      ((lShellVec(lIndex),0d), data(lIndex, 0))
     }).toStream
-  }
+
+  val bulk_data = coordinateIndices
+    .filter(_ => Rand.uniform.draw() <= num_bulk_data.toDouble/coordinateIndices.length)
+    .map((lt) => {
+      val (l, t) = (lShellVec(lt._1), timeVec(lt._2+1))
+      ((l,t), data(lt._1, lt._2+1))
+    }).toStream
+
+  val gp_data: Stream[((Double, Double), Double)] = boundary_data ++ bulk_data
 
   val psdVar = getStats(gp_data.map(p => DenseVector(p._1._1)).toList)._2(0)
-
+  println("PSD Observational Variance = "+psdVar)
   val impulse_data: Stream[((Double, Double), Double)] = {
     (0 until num_dummy_data).map(_ => {
       val rowS = rowSelectorRV.draw
@@ -110,6 +123,21 @@
 
   }
 
+  scatter(boundary_data.map(_._1))
+  hold()
+  scatter(bulk_data.map(_._1))
+  xAxis("L")
+  yAxis("t")
+  legend(Seq("Boundary", "Bulk"))
+  title("Observation points")
+  unhold()
+
+  histogram(gp_data.map(_._2))
+  title("Histogram PSD Observations")
+
+
+
+
   val burn = 1000
   //Create the GP PDE model
 
@@ -117,7 +145,7 @@
     psdVar, rds.deltaL, rds.deltaT)(
     sqNormDouble, l1NormDouble)
 
-  val noiseKernel = new MAKernel(0.1) :* new MAKernel(0.1)
+  val noiseKernel = new DiracTuple2Kernel(0.5)
 
   noiseKernel.block_all_hyper_parameters
 
@@ -133,7 +161,7 @@
     radial_basis
   )
 
-  model.reg = 0.5//num_data.toDouble/num_dummy_data
+  //model.reg = num_data.toDouble/(num_dummy_data + num_data)
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
