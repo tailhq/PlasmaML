@@ -340,7 +340,7 @@ object GPRadialDiffusionModel {
 
     scatter(post_samples.map(c => (c(0), c(2))))
     hold()
-    scatter(Seq((lambda_alpha*math.pow(10d, lambda_a), lambda_b)))
+    scatter(Seq((math.log(math.exp(lambda_alpha)*math.pow(10d, lambda_a)), lambda_b)))
     legend(Seq("Posterior Samples", "Ground Truth"))
     title("Posterior Samples:- "+0x03B1.toChar+" vs b")
     xAxis(0x03C4.toChar+": "+0x03B1.toChar)
@@ -351,7 +351,7 @@ object GPRadialDiffusionModel {
 
     scatter(post_samples.map(c => (c(0), c(1))))
     hold()
-    scatter(Seq((lambda_alpha*math.pow(10d, lambda_a), lambda_beta)))
+    scatter(Seq((math.log(math.exp(lambda_alpha)*math.pow(10d, lambda_a)), lambda_beta)))
     legend(Seq("Posterior Samples", "Ground Truth"))
     title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
     xAxis(0x03C4.toChar+": "+0x03B1.toChar)
