@@ -4,7 +4,8 @@ import io.github.mandar2812.PlasmaML.utils.MagConfigEncoding
 import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
 
 /**
-  * Specifies a trend function for radial diffusion priors.
+  * Specifies a Brautingham &amp; Albert type
+  * trend function for radial diffusion priors.
   *
   * h(l, t) = (&alpha; l<sup>&beta;</sup> + &gamma;) 10<sup>b &times; Kp(t)</sup>
   *

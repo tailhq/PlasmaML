@@ -16,7 +16,6 @@
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.GPRadialDiffusionModel
-  import io.github.mandar2812.dynaml.kernels.MAKernel
 
 
 
@@ -40,6 +39,7 @@
   val rowSelectorRV = MultinomialRV(DenseVector.fill[Double](lShellVec.length)(1d/lShellVec.length.toDouble))
   val colSelectorRV = MultinomialRV(DenseVector.fill[Double](timeVec.length-1)(1d/timeVec.length.toDouble))
 
+  val measurement_noise = GaussianRV(0.0, 0.5)
   /*
    * Define parameters of radial diffusion system:
    *
@@ -57,24 +57,28 @@
    * */
 
   //Diffusion Field
-  val dll_alpha = 1d
+  val dll_alpha = 0d//1d
   val dll_beta = 10d
   val dll_gamma = 0d
   val dll_a = -9.325
   val dll_b = 0.506
 
   //Loss Process
-  val lambda_alpha = math.pow(10d, -4)/2.4
-  val lambda_beta = 3d
+  val lambda_alpha = math.log(math.pow(10d, -4)/2.4)
+  val lambda_beta = 1.0d
   val lambda_a = 2.5d
   val lambda_b = 0.18
 
+  val (q_alpha, q_beta, q_gamma, q_b) = (Double.NegativeInfinity, 0d, 0d, 0d)
+
   //Create ground truth diffusion parameter functions
-  val dll = (l: Double, t: Double) => dll_alpha*math.pow(l, dll_beta)*math.pow(10, dll_a + dll_b*Kp(t))
+  val dll = (l: Double, t: Double) =>
+    math.exp(dll_alpha)*math.pow(l, dll_beta)*math.pow(10, dll_a + dll_b*Kp(t))
 
-  val Q = (_: Double, _: Double) => 0d
+  val Q = (l: Double, t: Double) => 0d//(math.exp(q_alpha)*math.pow(l, q_beta) + q_gamma)*math.pow(10, q_b*Kp(t))
 
-  val lambda = (l: Double, t: Double) => lambda_alpha*math.pow(l, lambda_beta)*math.pow(10, lambda_a + lambda_b*Kp(t))
+  val lambda = (l: Double, t: Double) =>
+    math.exp(lambda_alpha)*math.pow(l, lambda_beta)*math.pow(10, lambda_a + lambda_b*Kp(t))
 
   val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 
@@ -83,13 +87,13 @@
   //Create ground truth PSD data and corrupt it with statistical noise.
   val groundTruth = rds.solve(Q, dll, lambda)(initialPSD)
   val ground_truth_matrix = DenseMatrix.horzcat(groundTruth.map(_.asDenseMatrix.t):_*)
-  val measurement_noise = GaussianRV(0.0, 0.5)
+
 
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
 
-  val num_boundary_data = 50
-  val num_bulk_data = 50
+  val num_boundary_data = 10
+  val num_bulk_data = 10
   val num_data = num_boundary_data + num_bulk_data
   val num_dummy_data = 100
 
@@ -113,32 +117,25 @@
 
   val psdVar = getStats(gp_data.map(p => DenseVector(p._1._1)).toList)._2(0)
   println("PSD Observational Variance = "+psdVar)
-  val impulse_data: Stream[((Double, Double), Double)] = {
+
+
+  val imq_basis = new InverseMQPSDBasis(1d)(
+    lShellLimits, 20, timeLimits, 20, (false, false)
+  )
+
+  val colocation_points: Stream[(Double, Double)] = {
     (0 until num_dummy_data).map(_ => {
       val rowS = rowSelectorRV.draw
       val colS = colSelectorRV.draw
-      val (l, t) = (lShellVec(rowS), timeVec(colS))
-      ((l,t), measurement_noise.draw)
+      //val (l, t) = (lShellVec(rowS), timeVec(colS))
+      //((l,t), measurement_noise.draw)
+      (lShellVec(rowS), timeVec(colS))
     }).toStream
 
+    //imq_basis._centers.toStream
   }
 
-  scatter(boundary_data.map(_._1))
-  hold()
-  scatter(bulk_data.map(_._1))
-  xAxis("L")
-  yAxis("t")
-  legend(Seq("Boundary", "Bulk"))
-  title("Observation points")
-  unhold()
-
-  histogram(gp_data.map(_._2))
-  title("Histogram PSD Observations")
-
-
-
-
-  val burn = 1000
+  val burn = 2000
   //Create the GP PDE model
 
   val gpKernel = new GenExpSpaceTimeKernel[Double](
@@ -149,24 +146,20 @@
 
   noiseKernel.block_all_hyper_parameters
 
-  val radial_basis = new InverseMQPSDBasis(1d)(
-    lShellLimits, 30, timeLimits, 20, (true, false)
-  )
-
   val model = new GPRadialDiffusionModel(
-    Kp, (dll_alpha*math.pow(10d, dll_a), dll_beta, dll_gamma, dll_b),
-    (0.1, 0.2, 0d, 0d))(
+    Kp,
+    (math.log(math.exp(dll_alpha)*math.pow(10d, dll_a)), dll_beta, dll_gamma, dll_b),
+    (0d, 0.2, 0d, 0.0),
+    (q_alpha, q_beta, q_gamma, q_b))(
     gpKernel, noiseKernel,
-    gp_data, impulse_data,
-    radial_basis
+    gp_data, colocation_points,
+    imq_basis
   )
-
-  //model.reg = num_data.toDouble/(num_dummy_data + num_data)
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
       model.hyper_parameters.filter(
-        c => c.contains("dll") || c.contains("base::") || c.contains("tau_gamma")
+        c => c.contains("dll") || c.contains("base::") || c.contains("tau_gamma") || c.contains("Q_")
       )
   }
 
@@ -179,16 +172,19 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
     hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
     Map(
-      "tau_alpha" -> new Gamma(0.5d, 1d),
-      "tau_beta" -> Gamma(2d, 2d),
+      "tau_alpha" -> new Gaussian(0d, 1d),
+      "tau_beta" -> TruncatedGaussian(1d, 1d, 0d, 3.5d),
       "tau_b" -> new Gaussian(0d, 2.0))
   }
+
+  model.regCol = 0.0d
+  model.regObs = 0.001d
 
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 2000
+  val num_post_samples = 4000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
@@ -196,8 +192,16 @@
   val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
   val post_moments = getStats(post_vecs.toList)
 
-  val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B2.toChar, "tau_b" -> 'b')
-  val gt = Map("tau_alpha" -> lambda_alpha*math.pow(10d, lambda_a), "tau_beta" -> lambda_beta, "tau_b" -> lambda_b)
+  val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B1.toChar, "tau_b" -> 'b')
+
+  val gt = Map(
+    "tau_alpha" -> math.log(math.exp(lambda_alpha)*math.pow(10d, lambda_a)),
+    "tau_beta" -> lambda_beta,
+    "tau_b" -> lambda_b,
+    "Q_alpha" -> math.log(math.exp(q_alpha)),
+    "Q_beta" -> q_beta,
+    "Q_gamma" -> q_gamma,
+    "Q_b" -> q_b)
 
   println("\n:::::: MCMC Sampling Report ::::::\n")
 
@@ -279,7 +283,7 @@
 
   scatter(samples.map(c => (c("tau_alpha"), c("tau_b"))))
   hold()
-  scatter(Seq((lambda_alpha*math.pow(10d, lambda_a), lambda_b)))
+  scatter(Seq((gt("tau_alpha"), gt("tau_b"))))
   legend(Seq("Posterior Samples", "Ground Truth"))
   title("Posterior Samples:- "+0x03B1.toChar+" vs b")
   xAxis(0x03C4.toChar+": "+0x03B1.toChar)
@@ -290,7 +294,7 @@
 
   scatter(samples.map(c => (c("tau_alpha"), c("tau_beta"))))
   hold()
-  scatter(Seq((lambda_alpha*math.pow(10d, lambda_a), lambda_beta)))
+  scatter(Seq((gt("tau_alpha"), gt("tau_beta"))))
   legend(Seq("Posterior Samples", "Ground Truth"))
   title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
   xAxis(0x03C4.toChar+": "+0x03B1.toChar)

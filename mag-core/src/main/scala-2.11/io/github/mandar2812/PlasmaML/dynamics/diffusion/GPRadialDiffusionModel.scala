@@ -1,14 +1,12 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector, norm}
-import ammonite.ops._
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
 import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
 import io.github.mandar2812.dynaml.pipes._
-import io.github.mandar2812.dynaml.probability.distributions.MVGaussian
 import org.apache.log4j.Logger
 
 /**
@@ -31,8 +29,8 @@ import org.apache.log4j.Logger
   *
   * @param psd_data A Stream of space time locations and measured PSD values.
   *
-  * @param injection_data A Stream of space time locations and measured particle
-  *                       injection rates.
+  * @param ghost_points A collection of "ghost" points on which Particle diffusion is computed
+  *                     and its dependence on PSD is enforced with square loss.
   *
   * @param basis A basis function expansion for the PSD, as an instance
   *              of [[PSDBasis]].
@@ -40,11 +38,12 @@ import org.apache.log4j.Logger
 class GPRadialDiffusionModel(
   val Kp: DataPipe[Double, Double],
   dll_params: (Double, Double, Double, Double),
-  tau_params: (Double, Double, Double, Double))(
+  tau_params: (Double, Double, Double, Double),
+  q_params: (Double, Double, Double, Double))(
   val covariance: LocalScalarKernel[(Double, Double)],
   val noise_psd: LocalScalarKernel[(Double, Double)],
   val psd_data: Stream[((Double, Double), Double)],
-  val injection_data: Stream[((Double, Double), Double)],
+  val ghost_points: Stream[(Double, Double)],
   val basis: PSDBasis) extends GloballyOptimizable {
 
   protected val logger: Logger = Logger.getLogger(this.getClass)
@@ -57,9 +56,13 @@ class GPRadialDiffusionModel(
 
   val lossTimeScale: MagTrend = new MagTrend(Kp, "tau")
 
-  val psd_data_size: Int = psd_data.length
+  val injection_process: MagTrend = new MagTrend(Kp, "Q")
 
-  val psd_mean: Double = psd_data.map(_._2).sum/psd_data_size
+  val num_observations: Int = psd_data.length
+
+  val num_colocation_points: Int = ghost_points.length
+
+  val psd_mean: Double = psd_data.map(_._2).sum/num_observations
 
   private lazy val targets = DenseVector(psd_data.map(_._2).toArray)
 
@@ -69,8 +72,6 @@ class GPRadialDiffusionModel(
   )
 
   private val designMatrixFlow = GPRadialDiffusionModel.metaDesignMatFlow(basis)
-
-  lazy val injection = DenseVector(injection_data.map(_._2).toArray)
 
   lazy val phi = designMatrixFlow(psd_data.map(_._1))
 
@@ -86,10 +87,12 @@ class GPRadialDiffusionModel(
 
     val dll_hyp = diffusionField.transform.keys
     val tau_hyp = lossTimeScale.transform.keys
+    val q_hyp = injection_process.transform.keys
 
     List(
       dll_hyp._1, dll_hyp._2, dll_hyp._3, dll_hyp._4,
-      tau_hyp._1, tau_hyp._2, tau_hyp._3, tau_hyp._4
+      tau_hyp._1, tau_hyp._2, tau_hyp._3, tau_hyp._4,
+      q_hyp._1, q_hyp._2, q_hyp._3, q_hyp._4
     )
   }
 
@@ -100,12 +103,15 @@ class GPRadialDiffusionModel(
   protected var operator_state: Map[String, Double] = {
     val dll_hyp = diffusionField.transform.keys
     val tau_hyp = lossTimeScale.transform.keys
+    val q_hyp = injection_process.transform.keys
 
     Map(
       dll_hyp._1 -> dll_params._1, dll_hyp._2 -> dll_params._2,
       dll_hyp._3 -> dll_params._3, dll_hyp._4 -> dll_params._4,
       tau_hyp._1 -> tau_params._1, tau_hyp._2 -> tau_params._2,
-      tau_hyp._3 -> tau_params._3, tau_hyp._4 -> tau_params._4
+      tau_hyp._3 -> tau_params._3, tau_hyp._4 -> tau_params._4,
+      q_hyp._1 -> q_params._1, q_hyp._2 -> q_params._2,
+      q_hyp._3 -> q_params._3, q_hyp._4 -> q_params._4
     )
   }
 
@@ -129,6 +135,8 @@ class GPRadialDiffusionModel(
     noise_psd.blocked_hyper_parameters.map(h => baseNoiseID+"/"+h)
 
   var reg: Double = 1d
+
+  var (regObs, regCol): (Double, Double) = (1d, 1d)
 
   def block(hyp: String*): Unit = {
 
@@ -180,6 +188,78 @@ class GPRadialDiffusionModel(
 
   }
 
+  def getBasisParams(h: Map[String, Double]): DenseVector[Double] = {
+    setState(h)
+
+    logger.info("Constructing Radial Basis Model for PSD")
+    logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
+
+    val dll = diffusionField(operator_state)
+    val grad_dll = diffusionField.gradL(operator_state)
+    val lambda = lossTimeScale(operator_state)
+    val q = injection_process(operator_state)
+
+    val g_basis = basis.operator_basis(dll, grad_dll, lambda)
+
+    val (bMat, c) = ghost_points.map(p => {
+      val ph = basis(p) *:* g_basis(p)
+      val y: Double = q(p)
+      (ph*ph.t, ph*y)
+    }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
+
+    lazy val ss = aMat + bMat*reg
+
+    ss\(b + c)
+  }
+
+
+  def getGalerkinParams(h: Map[String, Double]): (DenseVector[Double], DenseMatrix[Double]) = {
+    setState(h)
+
+    logger.info("Constructing Radial Basis Model for PSD")
+    logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
+
+    val dll = diffusionField(operator_state)
+    val grad_dll = diffusionField.gradL(operator_state)
+    val lambda = lossTimeScale(operator_state)
+    val q = injection_process(operator_state)
+
+    val g_basis = basis.operator_basis(dll, grad_dll, lambda)
+
+    val (psi_stream, f_stream) = ghost_points.map(p => {
+      val ph = basis(p) *:* g_basis(p)
+      val y: Double = q(p)
+      (ph, y)
+    }).unzip
+
+    val (psi,f) = (
+      DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix):_*),
+      DenseVector(f_stream.toArray))
+
+    val (no, nc) = (num_observations, num_colocation_points)
+
+    val ones_obs = DenseVector.fill[Double](no)(1d)
+
+    val zeros_col = DenseVector.zeros[Double](nc)
+
+    val omega_phi = phi*phi.t
+
+    val omega_cross = phi*psi.t
+
+    val omega_psi = psi*psi.t
+
+    val responses = DenseVector.vertcat(DenseVector(0d), targets, f)
+
+    def I(n: Int) = DenseMatrix.eye[Double](n)
+
+    val A = DenseMatrix.vertcat(
+      DenseMatrix.horzcat(DenseMatrix(0d), ones_obs.toDenseMatrix, zeros_col.toDenseMatrix),
+      DenseMatrix.horzcat(ones_obs.toDenseMatrix.t, omega_phi+I(no)*regObs, omega_cross),
+      DenseMatrix.horzcat(zeros_col.toDenseMatrix.t, omega_cross.t, omega_psi+I(nc)*regCol)
+    )
+
+    (A\responses, psi)
+  }
 
   /**
     * Calculates the energy of the configuration,
@@ -196,29 +276,15 @@ class GPRadialDiffusionModel(
     h: Map[String, Double],
     options: Map[String, String] = Map()): Double = {
 
-    setState(h)
+    val (params, psi) = getGalerkinParams(h)//getBasisParams(h)
 
-    logger.info("Constructing Radial Basis Model for PSD")
-    logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
+    val dMat = DenseMatrix.vertcat(
+      DenseVector.ones[Double](num_observations).toDenseMatrix,
+      phi*phi.t,
+      psi*phi.t
+    )
 
-
-    val dll = diffusionField(operator_state)
-    val grad_dll = diffusionField.gradL(operator_state)
-    val lambda = lossTimeScale(operator_state)
-
-    val g_basis = basis.operator_basis(dll, grad_dll, lambda)
-
-    val (bMat, c) = injection_data.map(p => {
-      val ph = basis(p._1) *:* g_basis(p._1)
-      val y = p._2
-      (ph*ph.t, ph*y)
-    }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
-
-    lazy val ss = aMat + bMat*reg
-
-    val params = ss\(b + c)
-
-    val mean = phi*params
+    val mean = dMat.t*params
 
     val modelVariance = norm(targets - mean)/targets.length
     logger.info("variance: "+modelVariance)
@@ -232,12 +298,12 @@ class GPRadialDiffusionModel(
     logger.info("Partition K_uu")
     val k_uu = covariance.buildKernelMatrix(
       psd_data.map(_._1),
-      psd_data_size).getKernelMatrix
+      num_observations).getKernelMatrix
 
     logger.info("Partition K_nn")
     val noise_mat_psd = noise_psd.buildKernelMatrix(
       psd_data.map(_._1),
-      psd_data_size).getKernelMatrix
+      num_observations).getKernelMatrix
 
     try {
       AbstractGPRegressionModel.logLikelihood(targets - mean, k_uu + noise_mat_psd)
