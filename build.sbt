@@ -30,9 +30,7 @@ lazy val dynaMLSettings = if(status == "dev") {
 
 
 lazy val commonSettings = dynaMLSettings ++ Seq(
-  name := "PlasmaML",
   organization := "io.github.mandar2812",
-  version := mainVersion,
   scalaVersion in ThisBuild := "2.11.8",
   libraryDependencies in ThisBuild ++= Seq(
     "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
@@ -41,18 +39,18 @@ lazy val commonSettings = dynaMLSettings ++ Seq(
     "joda-time" % "joda-time" % "2.9.3",
     "org.json4s" % "json4s-native_2.11" % "3.3.0",
     "com.typesafe.slick" %% "slick" % "3.1.1"
+  ),
+  resolvers in ThisBuild ++= Seq(
+    "jitpack" at "https://jitpack.io",
+    "jzy3d-releases" at "http://maven.jzy3d.org/releases",
+    "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
+    "BeDataDriven" at "https://nexus.bedatadriven.com/content/groups/public",
+    Resolver.sonatypeRepo("public")
   )
 )
 
-resolvers in ThisBuild ++= Seq(
-  "jitpack" at "https://jitpack.io",
-  "jzy3d-releases" at "http://maven.jzy3d.org/releases",
-  "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
-  "BeDataDriven" at "https://nexus.bedatadriven.com/content/groups/public",
-  Resolver.sonatypeRepo("public")
-)
-
 lazy val mag_core = (project in file("mag-core")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+  .settings(commonSettings: _*)
   .settings(
     initialCommands in console :=
       """import io.github.mandar2812.PlasmaML._;"""+
