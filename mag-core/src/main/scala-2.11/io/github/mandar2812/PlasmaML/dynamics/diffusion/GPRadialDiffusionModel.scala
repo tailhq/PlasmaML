@@ -330,7 +330,7 @@ object GPRadialDiffusionModel {
 
   def loadCachedResults(
     lambda_alpha: Double, lambda_beta: Double,
-    lambda_a: Double, lambda_b: Double)(file: String): Unit = {
+    lambda_a: Double, lambda_b: Double)(file: String): Stream[DenseVector[Double]] = {
 
     val strToVector = StreamDataPipe((p: String) => DenseVector(p.split(",").map(_.toDouble)))
 
@@ -358,6 +358,7 @@ object GPRadialDiffusionModel {
     yAxis(0x03C4.toChar+": "+0x03B2.toChar)
     unhold()
 
+    post_samples
   }
 
 
