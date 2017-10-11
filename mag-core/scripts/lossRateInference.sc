@@ -93,8 +93,7 @@
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
 
   val num_boundary_data = 10
-  val num_bulk_data = 10
-  val num_data = num_boundary_data + num_bulk_data
+  val num_bulk_data = 50
   val num_dummy_data = 100
 
   val coordinateIndices = combine(Seq(lShellVec.indices, timeVec.tail.indices)).map(s => (s.head, s.last))
@@ -123,6 +122,10 @@
     lShellLimits, 20, timeLimits, 20, (false, false)
   )
 
+  val mq_basis = new MQPSDBasis(
+    lShellLimits, 20, timeLimits, 20, (false, false)
+  )
+
   val colocation_points: Stream[(Double, Double)] = {
     (0 until num_dummy_data).map(_ => {
       val rowS = rowSelectorRV.draw
@@ -135,7 +138,7 @@
     //imq_basis._centers.toStream
   }
 
-  val burn = 2000
+  val burn = 4000
   //Create the GP PDE model
 
   val gpKernel = new GenExpSpaceTimeKernel[Double](
@@ -153,7 +156,7 @@
     (q_alpha, q_beta, q_gamma, q_b))(
     gpKernel, noiseKernel,
     gp_data, colocation_points,
-    imq_basis
+    mq_basis
   )
 
   val blocked_hyp = {
@@ -177,8 +180,8 @@
       "tau_b" -> new Gaussian(0d, 2.0))
   }
 
-  model.regCol = 0.0d
-  model.regObs = 0.001d
+  model.regCol = 0.001d
+  model.regObs = 0.1d
 
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
@@ -192,7 +195,7 @@
   val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
   val post_moments = getStats(post_vecs.toList)
 
-  val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B1.toChar, "tau_b" -> 'b')
+  val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B2.toChar, "tau_b" -> 'b')
 
   val gt = Map(
     "tau_alpha" -> math.log(math.exp(lambda_alpha)*math.pow(10d, lambda_a)),
