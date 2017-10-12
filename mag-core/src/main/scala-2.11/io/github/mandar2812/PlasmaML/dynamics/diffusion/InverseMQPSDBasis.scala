@@ -1,4 +1,5 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
+
 import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.analysis.RadialBasis
 import io.github.mandar2812.dynaml.pipes.{Basis, DataPipe}
@@ -8,8 +9,9 @@ import spire.algebra.InnerProductSpace
 /**
   * <h3>Phase Space Density: Inverse Multi-Quadric Mesh-Based Radial Basis<h3>
   *
-  * Implements a gaussian radial basis expansion for the phase space density
-  * with nodes placed on a regular space time mesh.
+  * Implements a inverse multi-quadric radial basis expansion
+  * for the phase space density with nodes placed on a regular
+  * space time mesh.
   *
   * */
 class InverseMQPSDBasis(beta: Double)(

@@ -9,8 +9,9 @@ import spire.algebra.InnerProductSpace
 /**
   * <h3>Phase Space Density: Multi-Quadric Mesh-Based Radial Basis<h3>
   *
-  * Implements a gaussian radial basis expansion for the phase space density
-  * with nodes placed on a regular space time mesh.
+  * Implements a multi-quadric radial basis expansion
+  * for the phase space density with nodes placed on a
+  * regular space time mesh.
   *
   * */
 class MQPSDBasis(
