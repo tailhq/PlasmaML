@@ -58,7 +58,7 @@ class MQPSDBasis(
 
           beta*invThetaS*dll*(sq(d._1)*(0.5*beta+1) - f)/math.pow(f, 2+0.5*beta) -
             beta*invThetaS*alpha*math.abs(d._1)/f +
-            beta*invThetaT*alpha*math.abs(d._2)/f -
+            beta*invThetaT*math.abs(d._2)/f -
             lambda
         }).toArray)
     })
