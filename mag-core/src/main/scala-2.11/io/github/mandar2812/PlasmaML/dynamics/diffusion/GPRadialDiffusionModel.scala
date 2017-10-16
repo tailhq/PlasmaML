@@ -274,7 +274,7 @@ class GPRadialDiffusionModel(
     * */
   def energy(
     h: Map[String, Double],
-    options: Map[String, String] = Map()): Double = {
+    options: Map[String, String] = Map()): Double = try {
 
     val (params, psi) = getGalerkinParams(h)//getBasisParams(h)
 
@@ -305,12 +305,12 @@ class GPRadialDiffusionModel(
       psd_data.map(_._1),
       num_observations).getKernelMatrix
 
-    try {
-      AbstractGPRegressionModel.logLikelihood(targets - mean, k_uu + noise_mat_psd)
-    } catch {
-      case _: breeze.linalg.NotConvergedException => Double.PositiveInfinity
-      case _: breeze.linalg.MatrixNotSymmetricException => Double.NaN
-    }
+
+    AbstractGPRegressionModel.logLikelihood(targets - mean, k_uu + noise_mat_psd)
+  } catch {
+    case _: breeze.linalg.MatrixSingularException => Double.NaN
+    case _: breeze.linalg.NotConvergedException => Double.PositiveInfinity
+    case _: breeze.linalg.MatrixNotSymmetricException => Double.NaN
   }
 
 }
