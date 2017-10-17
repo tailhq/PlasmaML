@@ -23,7 +23,7 @@ class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
       val (l, t) = lt
 
       val kp = Kp(t)
-      (alpha*math.pow(l, beta) + gamma)*math.pow(10d, b*kp)
+      (math.exp(alpha)*math.pow(l, beta) + gamma)*math.pow(10d, b*kp)
     })
 
   }
@@ -33,7 +33,7 @@ class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
       val (l, t) = lt
       val (alpha, beta, _, b) = transform(p)
       val kp = Kp(t)
-      alpha*beta*math.pow(l, beta-1d)*math.pow(10d, b*kp)
+      math.exp(alpha)*beta*math.pow(l, beta-1d)*math.pow(10d, b*kp)
     })
 }
 

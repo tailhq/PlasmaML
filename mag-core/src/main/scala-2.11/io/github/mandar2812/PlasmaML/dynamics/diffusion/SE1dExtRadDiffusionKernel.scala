@@ -17,7 +17,6 @@ class SE1dExtRadDiffusionKernel(
 
   private val timeNorm = if(normTime == "L2") sqNormDouble else l1NormDouble
 
-
   override val baseKernel = new GenExpSpaceTimeKernel[Double](
     sigma, theta_space, theta_time)(
     spaceNorm, timeNorm)
@@ -26,9 +25,7 @@ class SE1dExtRadDiffusionKernel(
 
   override val lossTimeScale: MagTrend = new MagTrend(Kp, "tau")
 
-  override val baseID = "base::"+baseKernel.toString.split("\\.").last
-
-  override def _operator_hyper_parameters = operator_hyper_parameters
+  override val baseID: String = "base::"+baseKernel.toString.split("\\.").last
 
   protected val operator_hyper_parameters: List[String] = {
 
@@ -41,13 +38,17 @@ class SE1dExtRadDiffusionKernel(
     )
   }
 
-  override val hyper_parameters =
+  override val hyper_parameters: List[String] =
     baseKernel.hyper_parameters.map(h => baseID+"/"+h) ++
       operator_hyper_parameters
 
-  override val diffusionFieldGradL = diffusionField.gradL
+  override def _operator_hyper_parameters: List[String] = operator_hyper_parameters
 
-  override val gradDByLSq: MetaPipe[Map[String, Double], (Double, Double), Double] =
+  def _base_hyper_parameters: List[String] = hyper_parameters.filter(_.contains(baseID))
+
+  override val diffusionFieldGradL: MetaPipe[Map[String, Double], exIndexSet, Double] = diffusionField.gradL
+
+  override val gradDByLSq: MetaPipe[Map[String, Double], exIndexSet, Double] =
     MetaPipe((hyper_params: Map[String, Double]) => (x: (Double, Double)) => {
       diffusionFieldGradL(hyper_params)(x) - 2d*diffusionField(hyper_params)(x)/x._1
     })
@@ -55,10 +56,13 @@ class SE1dExtRadDiffusionKernel(
   protected var operator_state: Map[String, Double] =
     diffusionField.transform.i(dll_params) ++ lossTimeScale.transform.i(tau_params)
 
+  def _operator_state: Map[String, Double] = operator_state
+
   state = baseKernel.state.map(c => (baseID+"/"+c._1, c._2)) ++ operator_state
 
+  def _base_state: Map[String, Double] = state.filterKeys(_.contains(baseID))
 
-  override def invOperatorKernel = {
+  override def invOperatorKernel: (exIndexSet, exIndexSet) => Double = {
     val (theta_s, theta_t) = (baseKernel.state("spaceScale"), baseKernel.state("timeScale"))
 
     val (invThetaS, invThetaT) = (1/theta_s, 1/theta_t)
@@ -102,7 +106,7 @@ class SE1dExtRadDiffusionKernel(
   override def evaluateAt(
     config: Map[String, Double])(
     x: (Double, Double),
-    x_tilda: (Double, Double)) = {
+    x_tilda: (Double, Double)): Double = {
 
     val base_kernel_state = config.filterKeys(_.contains(baseID)).map(c => (c._1.replace(baseID, "").tail, c._2))
 
@@ -178,7 +182,7 @@ class SE1dExtRadDiffusionKernel(
   override def gradientAt(
     config: Map[String, Double])(
     x: (Double, Double),
-    x_tilda: (Double, Double)) = {
+    x_tilda: (Double, Double)): Map[String, Double] = {
 
     val base_kernel_state = config.filterKeys(_.contains(baseID)).map(c => (c._1.replace(baseID, "").tail, c._2))
 

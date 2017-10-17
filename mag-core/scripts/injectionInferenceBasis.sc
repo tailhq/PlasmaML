@@ -15,7 +15,7 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion.GPRadialDiffusionModel
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
 
 
 
@@ -146,7 +146,7 @@ val dll_beta = 10d
 
   noiseKernel.block_all_hyper_parameters
 
-  val model = new GPRadialDiffusionModel(
+  val model = new BasisFuncRadialDiffusionModel(
     Kp,
     (math.log(math.exp(dll_alpha)*math.pow(10d, dll_a)), dll_beta, dll_gamma, dll_b),
     (math.log(math.exp(lambda_alpha)*math.pow(10d, lambda_a)), lambda_beta, 0d, lambda_b),

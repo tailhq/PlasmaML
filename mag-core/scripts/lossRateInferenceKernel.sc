@@ -15,9 +15,6 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion.GPRadialDiffusionModel
-
-
 
   val (nL,nT) = (200, 50)
 
@@ -65,9 +62,9 @@
 
   //Loss Process
   val lambda_alpha = math.log(math.pow(10d, -4)/2.4)
-  val lambda_beta = 1.0d
+  val lambda_beta = 3d
   val lambda_a = 2.5d
-  val lambda_b = 0.18
+  val lambda_b = -0.5
 
   val (q_alpha, q_beta, q_gamma, q_b) = (Double.NegativeInfinity, 0d, 0d, 0d)
 
@@ -92,9 +89,9 @@
   val noise_mat = DenseMatrix.tabulate[Double](nL+1, nT+1)((_, _) => measurement_noise.draw)
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
 
-  val num_boundary_data = 10
-  val num_bulk_data = 50
-  val num_dummy_data = 100
+  val num_boundary_data = 50
+  val num_bulk_data = 100
+  val num_dummy_data = 200
 
   val coordinateIndices = combine(Seq(lShellVec.indices, timeVec.tail.indices)).map(s => (s.head, s.last))
 
@@ -117,46 +114,36 @@
   val psdVar = getStats(gp_data.map(p => DenseVector(p._1._1)).toList)._2(0)
   println("PSD Observational Variance = "+psdVar)
 
-
-  val imq_basis = new InverseMQPSDBasis(1d)(
-    lShellLimits, 20, timeLimits, 20, (false, false)
-  )
-
-  val mq_basis = new MQPSDBasis(
-    lShellLimits, 20, timeLimits, 20, (false, false)
+  val hybrid_basis = new HybridMQPSDBasis(0.75)(
+    lShellLimits, 50, timeLimits, 30, (false, false)
   )
 
   val colocation_points: Stream[(Double, Double)] = {
     (0 until num_dummy_data).map(_ => {
       val rowS = rowSelectorRV.draw
       val colS = colSelectorRV.draw
-      //val (l, t) = (lShellVec(rowS), timeVec(colS))
-      //((l,t), measurement_noise.draw)
       (lShellVec(rowS), timeVec(colS))
     }).toStream
-
-    //imq_basis._centers.toStream
   }
 
-  val burn = 4000
+  val burn = 3000
   //Create the GP PDE model
 
-  val gpKernel = new GenExpSpaceTimeKernel[Double](
-    psdVar, rds.deltaL, rds.deltaT)(
-    sqNormDouble, l1NormDouble)
+  val noiseKernel = new DiracTuple2Kernel(10d)
 
-  val noiseKernel = new DiracTuple2Kernel(0.5)
+  val noiseKernelInj = new DiracTuple2Kernel(1E-7)
 
+  noiseKernelInj.block_all_hyper_parameters
   noiseKernel.block_all_hyper_parameters
 
-  val model = new GPRadialDiffusionModel(
+  val model = new KernelRadialDiffusionModel(
     Kp,
     (math.log(math.exp(dll_alpha)*math.pow(10d, dll_a)), dll_beta, dll_gamma, dll_b),
     (0d, 0.2, 0d, 0.0),
     (q_alpha, q_beta, q_gamma, q_b))(
-    gpKernel, noiseKernel,
-    gp_data, colocation_points,
-    mq_basis
+    1d, 1d, 2d,
+    noiseKernel, noiseKernelInj,
+    gp_data, colocation_points
   )
 
   val blocked_hyp = {
@@ -173,21 +160,18 @@
 
   val hyper_prior = {
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
-    hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
-    Map(
-      "tau_alpha" -> new Gaussian(0d, 1d),
-      "tau_beta" -> TruncatedGaussian(1d, 1d, 0d, 3.5d),
-      "tau_b" -> new Gaussian(0d, 2.0))
+      hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
+      Map(
+        "tau_alpha" -> new Gaussian(0d, 1d),
+        "tau_beta" -> new Gamma(2d, 2d),
+        "tau_b" -> new Gaussian(0d, 2.0))
   }
-
-  model.regCol = 0.001d
-  model.regObs = 0.1d
 
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 4000
+  val num_post_samples = 2000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
@@ -304,7 +288,7 @@
   yAxis(0x03C4.toChar+": "+0x03B2.toChar)
   unhold()
 
-  histogram(samples.map(_("tau_beta")), 100)
+  histogram(samples.map(_("tau_beta")), 50)
   hold()
   histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 100)
   legend(Seq("Posterior Samples", "Prior Samples"))

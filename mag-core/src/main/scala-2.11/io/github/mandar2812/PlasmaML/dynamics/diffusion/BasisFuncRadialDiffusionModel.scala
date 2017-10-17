@@ -2,6 +2,7 @@ package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector, norm}
 import com.quantifind.charts.Highcharts._
+import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
@@ -35,13 +36,13 @@ import org.apache.log4j.Logger
   * @param basis A basis function expansion for the PSD, as an instance
   *              of [[PSDBasis]].
   * */
-class GPRadialDiffusionModel(
+class BasisFuncRadialDiffusionModel(
   val Kp: DataPipe[Double, Double],
   dll_params: (Double, Double, Double, Double),
   tau_params: (Double, Double, Double, Double),
   q_params: (Double, Double, Double, Double))(
   val covariance: LocalScalarKernel[(Double, Double)],
-  val noise_psd: LocalScalarKernel[(Double, Double)],
+  val noise_psd: DiracTuple2Kernel,
   val psd_data: Stream[((Double, Double), Double)],
   val ghost_points: Stream[(Double, Double)],
   val basis: PSDBasis) extends GloballyOptimizable {
@@ -67,11 +68,11 @@ class GPRadialDiffusionModel(
   private lazy val targets = DenseVector(psd_data.map(_._2).toArray)
 
   private val (covStEncoder, noiseStEncoder) = (
-    GPRadialDiffusionModel.stateEncoder(baseCovID),
-    GPRadialDiffusionModel.stateEncoder(baseNoiseID)
+    BasisFuncRadialDiffusionModel.stateEncoder(baseCovID),
+    BasisFuncRadialDiffusionModel.stateEncoder(baseNoiseID)
   )
 
-  private val designMatrixFlow = GPRadialDiffusionModel.metaDesignMatFlow(basis)
+  private val designMatrixFlow = BasisFuncRadialDiffusionModel.metaDesignMatFlow(basis)
 
   lazy val phi = designMatrixFlow(psd_data.map(_._1))
 
@@ -195,7 +196,7 @@ class GPRadialDiffusionModel(
     logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
 
     val dll = diffusionField(operator_state)
-    val grad_dll = diffusionField.gradL(operator_state)
+    val grad_dll = diffusionField.gradL.apply(operator_state)
     val lambda = lossTimeScale(operator_state)
     val q = injection_process(operator_state)
 
@@ -220,7 +221,7 @@ class GPRadialDiffusionModel(
     logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
 
     val dll = diffusionField(operator_state)
-    val grad_dll = diffusionField.gradL(operator_state)
+    val grad_dll = diffusionField.gradL.apply(operator_state)
     val lambda = lossTimeScale(operator_state)
     val q = injection_process(operator_state)
 
@@ -315,7 +316,7 @@ class GPRadialDiffusionModel(
 
 }
 
-object GPRadialDiffusionModel {
+object BasisFuncRadialDiffusionModel {
 
   def stateEncoder(prefix: String): Encoder[Map[String, Double], Map[String, Double]] = Encoder(
     (s: Map[String, Double]) => s.map(h => (prefix+"/"+h._1, h._2)),
