@@ -15,7 +15,7 @@
 
   num_bulk_data = 50
 
-  num_dummy_data = 50
+  num_dummy_data = 200
 
   lambda_params = (
     math.log(math.pow(10d, -4)*math.pow(10d, 2.5d)/2.4),
@@ -29,15 +29,6 @@
   )
 
   val burn = 1500
-  //Create the GP PDE model
-
-  val splineKernel = new CubicSplineARDKernel[(Double, Double)](
-    (deltaL, deltaT),
-    Encoder(
-      (c: Map[String, Double]) => (c("spaceScale"), c("timeScale")),
-      (c: (Double, Double)) => Map("spaceScale" -> c._1, "timeScale" -> c._2)
-    )
-  )
 
   val seKernel = new GenExpSpaceTimeKernel[Double](
     10d, deltaL, deltaT)(
@@ -71,14 +62,14 @@
 
 
   model.block(blocked_hyp:_*)
-  //Create the MCMC sampler
-  val hyp = model.effective_hyper_parameters
 
+  val hyp = model.effective_hyper_parameters
   val hyper_prior = RDExperiment.hyper_prior(hyp)
 
   model.regCol = regColocation
   model.regObs = regData
 
+  //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)

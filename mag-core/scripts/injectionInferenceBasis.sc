@@ -1,10 +1,6 @@
 {
   import breeze.stats.distributions._
-  import spire.implicits._
-
-  import io.github.mandar2812.dynaml.analysis.implicits._
   import io.github.mandar2812.dynaml.kernels._
-  import io.github.mandar2812.dynaml.pipes._
   import io.github.mandar2812.dynaml.probability.mcmc._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
@@ -78,7 +74,7 @@
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 4000
+  val num_post_samples = 2000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
