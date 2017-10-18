@@ -277,7 +277,7 @@ class BasisFuncRadialDiffusionModel(
     h: Map[String, Double],
     options: Map[String, String] = Map()): Double = try {
 
-    val (params, psi) = getGalerkinParams(h)//getBasisParams(h)
+    val (params, psi) = getGalerkinParams(h)
 
     val dMat = DenseMatrix.vertcat(
       DenseVector.ones[Double](num_observations).toDenseMatrix,
