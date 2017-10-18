@@ -90,8 +90,8 @@
   val data: DenseMatrix[Double] = ground_truth_matrix + noise_mat
 
   val num_boundary_data = 50
-  val num_bulk_data = 100
-  val num_dummy_data = 200
+  val num_bulk_data = 200
+  val num_dummy_data = 300
 
   val coordinateIndices = combine(Seq(lShellVec.indices, timeVec.tail.indices)).map(s => (s.head, s.last))
 
@@ -126,7 +126,7 @@
     }).toStream
   }
 
-  val burn = 3000
+  val burn = 1000
   //Create the GP PDE model
 
   val noiseKernel = new DiracTuple2Kernel(10d)
@@ -141,7 +141,7 @@
     (math.log(math.exp(dll_alpha)*math.pow(10d, dll_a)), dll_beta, dll_gamma, dll_b),
     (0d, 0.2, 0d, 0.0),
     (q_alpha, q_beta, q_gamma, q_b))(
-    1d, 1d, 2d,
+    10d, 5d, 5d,
     noiseKernel, noiseKernelInj,
     gp_data, colocation_points
   )
