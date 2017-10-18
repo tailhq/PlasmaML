@@ -13,6 +13,14 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
+  num_bulk_data = 50
+
+  num_dummy_data = 50
+
+  lambda_params = (
+    math.log(math.pow(10d, -4)*math.pow(10d, 2.5d)/2.4),
+    1.75d, 0d, 0.18)
+
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
 
@@ -20,7 +28,7 @@
     lShellLimits, 50, timeLimits, 30, (false, false)
   )
 
-  val burn = 1000
+  val burn = 1500
   //Create the GP PDE model
 
   val splineKernel = new CubicSplineARDKernel[(Double, Double)](
@@ -39,9 +47,6 @@
 
   noiseKernel.block_all_hyper_parameters
 
-
-  num_bulk_data = 50
-
   val (solution, data, colocation_points) = RDExperiment.generateData(
     rds, dll, lambda, Q, initialPSD)(
     measurement_noise, num_boundary_data,
@@ -56,8 +61,11 @@
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
-      model.hyper_parameters.filter(
-        c => c.contains("dll") || c.contains("base::") || c.contains("tau_gamma") || c.contains("Q_")
+      model.hyper_parameters.filter(c =>
+        c.contains("dll") ||
+        c.contains("base::") ||
+        c.contains("tau_gamma") ||
+        c.contains("Q_")
       )
   }
 
@@ -84,6 +92,5 @@
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
-  RDExperiment.visualiseResults(samples, gt, hyper_prior)
-
+  RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
 }

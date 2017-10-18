@@ -192,7 +192,7 @@ object RDExperiment {
 
   }
 
-  def visualiseResults(
+  def visualiseResultsLoss(
     samples: Stream[Map[String, Double]],
     gt: Map[String, Double],
     hyper_prior: Map[String, ContinuousDistr[Double]]): Unit = {
@@ -221,6 +221,41 @@ object RDExperiment {
     legend(Seq("Posterior Samples", "Prior Samples"))
     unhold()
     title("Histogram: "+0x03B2.toChar)
+  }
+
+  def visualiseResultsInjection(
+    samples: Stream[Map[String, Double]],
+    gt: Map[String, Double],
+    hyper_prior: Map[String, ContinuousDistr[Double]]) = {
+
+
+    scatter(samples.map(c => (c("Q_alpha"), c("Q_b"))))
+    hold()
+    scatter(Seq((gt("Q_alpha"), gt("Q_b"))))
+    legend(Seq("Posterior Samples", "Ground Truth"))
+    title("Posterior Samples:- "+0x03B1.toChar+" vs b")
+    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
+    yAxis(0x03C4.toChar+": b")
+    unhold()
+
+
+
+    scatter(samples.map(c => (c("Q_alpha"), c("Q_beta"))))
+    hold()
+    scatter(Seq((gt("Q_alpha"), gt("Q_beta"))))
+    legend(Seq("Posterior Samples", "Ground Truth"))
+    title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
+    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
+    yAxis(0x03C4.toChar+": "+0x03B2.toChar)
+    unhold()
+
+    histogram(samples.map(_("Q_b")), 100)
+    hold()
+    histogram((1 to samples.length).map(_ => hyper_prior("Q_b").draw), 100)
+    legend(Seq("Posterior Samples", "Prior Samples"))
+    unhold()
+    title("Histogram: "+"b")
+
   }
 
 
