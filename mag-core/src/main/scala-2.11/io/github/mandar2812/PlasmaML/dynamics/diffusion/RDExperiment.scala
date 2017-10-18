@@ -4,7 +4,7 @@ import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.numerics.Bessel
 import breeze.stats.distributions._
 import com.quantifind.charts.Highcharts.{histogram, hold, legend, line, scatter, spline, title, unhold, xAxis, yAxis}
-import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings.{gt, _}
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.probability.{GaussianRV, MultinomialRV, RandomVariable}
 import io.github.mandar2812.dynaml.utils.{combine, getStats}
@@ -16,7 +16,6 @@ import io.github.mandar2812.dynaml.utils.{combine, getStats}
   * up inference routines in the radial diffusion setting.
   * */
 object RDExperiment {
-
 
   /**
     * Create the radial diffusion solver

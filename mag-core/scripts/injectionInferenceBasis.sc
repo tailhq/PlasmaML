@@ -79,7 +79,7 @@
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
 
-  RDExperiment.samplingReport(samples, quantities_loss, gt, mcmc_sampler.sampleAcceptenceRate)
+  RDExperiment.samplingReport(samples, quantities_injection, gt, mcmc_sampler.sampleAcceptenceRate)
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
