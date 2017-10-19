@@ -225,7 +225,7 @@ object RDExperiment {
   def visualiseResultsInjection(
     samples: Stream[Map[String, Double]],
     gt: Map[String, Double],
-    hyper_prior: Map[String, ContinuousDistr[Double]]) = {
+    hyper_prior: Map[String, ContinuousDistr[Double]]): Unit = {
 
 
     scatter(samples.map(c => (c("Q_alpha"), c("Q_b"))))
