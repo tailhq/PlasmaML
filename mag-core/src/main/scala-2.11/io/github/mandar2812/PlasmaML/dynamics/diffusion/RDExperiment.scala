@@ -90,7 +90,7 @@ object RDExperiment {
       Map(
         "tau_alpha" -> new Gaussian(0d, 1d),
         "tau_beta" -> new Gamma(2d, 2d),
-        "tau_b" -> new Gaussian(0d, 2.0))
+        "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains _)
   }
 
   def samplingReport(
