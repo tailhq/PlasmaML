@@ -8,6 +8,10 @@ import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.probability.{GaussianRV, MultinomialRV, RandomVariable}
 import io.github.mandar2812.dynaml.utils.{combine, getStats}
+import org.joda.time.DateTime
+import org.joda.time.format.DateTimeFormat
+import ammonite.ops._
+import org.apache.log4j.Logger
 
 /**
   * <h3>Radial Diffusion Experiments</h3>
@@ -16,6 +20,8 @@ import io.github.mandar2812.dynaml.utils.{combine, getStats}
   * up inference routines in the radial diffusion setting.
   * */
 object RDExperiment {
+
+  private val logger = Logger.getLogger(this.getClass)
 
   /**
     * Create the radial diffusion solver
@@ -293,6 +299,87 @@ object RDExperiment {
 
   }
 
+  def writeResults(
+    solution: Stream[DenseVector[Double]],
+    boundary_data: Stream[((Double, Double), Double)],
+    bulk_data: Stream[((Double, Double), Double)],
+    colocation_points: Stream[(Double, Double)],
+    hyper_prior: Map[String, ContinuousDistr[Double]],
+    samples: Stream[Map[String, Double]],
+    basisSize: (Int, Int), basisType: String,
+    reg: (Double, Double)): Path = {
+
+    val dateTime = new DateTime()
+
+    val dtString = dateTime.toString(DateTimeFormat.forPattern("yyyy_MM_dd_H_mm"))
+
+    val resultsPath = pwd/".cache"/("radial-diffusion-exp_"+dtString)
+
+    logger.info("Writing results of radial diffusion experiment in directory: "+resultsPath.toString())
+
+    logger.info("Writing domain information in "+"diffusion_domain.csv")
+
+    write(resultsPath/"diffusion_domain.csv", domainSpec.keys.mkString(",")+"\n"+domainSpec.values.mkString(","))
+
+    val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
+
+    val initialcond = lShellVec.map(l => Seq(l, initialPSD(l)))
+    val kp = timeVec.map(t => Seq(t, Kp(t)))
+
+    logger.info("Writing initial PSD in "+"initial_psd.csv")
+    write(resultsPath/"initial_psd.csv", initialcond.map(_.mkString(",")).mkString("\n"))
+
+    logger.info("Writing Kp profile in "+"kp_profile.csv")
+    write(resultsPath/"kp_profile.csv", kp.map(_.mkString(",")).mkString("\n"))
+
+    logger.info("Writing Diffusion parameters in "+"diffusion_params.csv")
+    write(resultsPath/"diffusion_params.csv", gt.keys.mkString(",")+"\n"+gt.values.mkString(","))
+
+    logger.info("Writing discretised solution produced by solver in "+"diffusion_solution.csv")
+    write(resultsPath/"diffusion_solution.csv", solution.map(_.toArray.mkString(",")).mkString("\n"))
+
+    logger.info("Writing observed boundary data in "+"boundary_data.csv")
+    write(
+      resultsPath/"boundary_data.csv",
+      boundary_data.map(t => List(t._1._1, t._1._2, t._2).mkString(",")).mkString("\n"))
+
+    logger.info("Writing observed bulk data in "+"bulk_data.csv")
+    write(
+      resultsPath/"bulk_data.csv",
+      bulk_data.map(t => List(t._1._1, t._1._2, t._2).mkString(",")).mkString("\n"))
+
+    logger.info("Writing coordinates of colocation points in "+"colocation_points.csv")
+    write(
+      resultsPath/"colocation_points.csv",
+      colocation_points.map(t => List(t._1, t._2).mkString(",")).mkString("\n"))
+
+
+    val prior_samples = (1 to samples.length).map(_ => hyper_prior.mapValues(_.draw()))
+
+    val prior_samples_file_content =
+      prior_samples.head.keys.mkString(",") + "\n" + samples.map(_.values.mkString(",")).mkString("\n")
+
+    logger.info("Writing model info")
+
+    val modelInfo = Map(
+      "type" -> basisType, "nL" -> basisSize._1, "nT" -> basisSize._2,
+      "regCol" -> reg._1, "regData" -> reg._2)
+
+    write(resultsPath/"model_info.csv", modelInfo.keys.mkString(",")+"\n"+modelInfo.values.mkString(","))
+
+    logger.info("Writing samples generated from prior distribution in "+"prior_samples.csv")
+    write(resultsPath/"prior_samples.csv", prior_samples_file_content)
+
+    val samples_file_content =
+      samples.head.keys.mkString(",") + "\n" + samples.map(_.values.mkString(",")).mkString("\n")
+
+    logger.info("Writing samples generated from posterior distribution in "+"posterior_samples.csv")
+    write(resultsPath/"posterior_samples.csv", samples_file_content)
+
+    logger.info("Done writing results for experiment")
+    resultsPath
+  }
+
 
 
 }
@@ -304,6 +391,15 @@ object RDSettings {
 
   var lShellLimits: (Double, Double) = (1.0, 7.0)
   var timeLimits: (Double, Double) = (0.0, 5.0)
+
+  def domainSpec: Map[String, Double] = Map(
+    "nL" -> nL.toDouble,
+    "nT" -> nT.toDouble,
+    "lMin" -> lShellLimits._1,
+    "lMax" -> lShellLimits._2,
+    "tMin" -> timeLimits._1,
+    "tMax" -> timeLimits._2
+  )
 
   def deltaL = (lShellLimits._2 - lShellLimits._1)/nL
 
@@ -332,8 +428,13 @@ object RDSettings {
   )
 
   def gt = Map(
+    "dll_alpha" -> dll_params._1,
+    "dll_beta" -> dll_params._2,
+    "dll_gamma" -> dll_params._3,
+    "dll_b" -> dll_params._4,
     "tau_alpha" -> lambda_params._1,
     "tau_beta" -> lambda_params._2,
+    "tau_gamma" -> lambda_params._3,
     "tau_b" -> lambda_params._4,
     "Q_alpha" -> q_params._1,
     "Q_beta" -> q_params._2,

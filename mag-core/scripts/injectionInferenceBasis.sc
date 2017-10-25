@@ -1,10 +1,7 @@
 {
-  import org.joda.time._
-  import org.joda.time.format.DateTimeFormat
   import breeze.stats.distributions._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
-  import io.github.mandar2812.dynaml.DynaMLPipe._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
@@ -17,17 +14,18 @@
 
   num_dummy_data = 50
 
-  q_params = (Double.NegativeInfinity, 0d, 1.5, 1.75)
+  q_params = (Double.NegativeInfinity, 0d, 1.5, 0.2)
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val hybrid_basis = new HybridMQPSDBasis(1d)(
-    lShellLimits, 50, timeLimits, 30, (false, false)
+  val basisSize = (49, 29)
+  val hybrid_basis = new HybridMQPSDBasis(0.75d)(
+    lShellLimits, basisSize._1, timeLimits, basisSize._2, (false, false)
   )
 
   val burn = 1500
 
-  val (solution, data, colocation_points) = RDExperiment.generateData(
+  val (solution, (boundary_data, bulk_data), colocation_points) = RDExperiment.generateData(
     rds, dll, lambda, Q, initialPSD)(
     measurement_noise, num_boundary_data,
     num_bulk_data, num_dummy_data)
@@ -45,7 +43,7 @@
     Kp, dll_params, lambda_params,
     (Double.NegativeInfinity, 0d, 0.01, 0.01))(
     gpKernel, noiseKernel,
-    data._1 ++ data._2, colocation_points,
+    boundary_data ++ bulk_data, colocation_points,
     hybrid_basis
   )
 
@@ -72,8 +70,8 @@
         "Q_b" -> new Gaussian(0d, 2d))
   }
 
-  model.regCol = regColocation
-  model.regObs = regData
+  model.regCol = 0d
+  model.regObs = 1E-3
 
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
@@ -88,12 +86,10 @@
     samples, hyp.map(c => (c, quantities_injection(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate)
 
-  val dateTime = new DateTime()
-
-  val dtString = dateTime.toString(DateTimeFormat.forPattern("yyyy_mm_dd_H"))
-
-  streamToFile(".cache/radial_diffusion_injection_"+dtString+".csv").run(
-    samples.map(s => s.values.toArray.mkString(",")))
+  val resPath = RDExperiment.writeResults(
+    solution, boundary_data, bulk_data, colocation_points,
+    hyper_prior, samples, basisSize, "HybridMQ",
+    (model.regCol, model.regObs))
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 

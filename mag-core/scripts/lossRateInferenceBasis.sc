@@ -1,8 +1,5 @@
 {
-  import org.joda.time._
-  import org.joda.time.format.DateTimeFormat
   import breeze.stats.distributions._
-  import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
 
@@ -20,13 +17,14 @@
 
   lambda_params = (
     math.log(math.pow(10d, -4)*math.pow(10d, 2.5d)/2.4),
-    2.75d, 0d, 0.18)
+    2.0, 0d, 0.18)
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
 
+  val basisSize = (49, 49)
   val hybrid_basis = new HybridMQPSDBasis(0.75d)(
-    lShellLimits, 49, timeLimits, 49, (false, false)
+    lShellLimits, basisSize._1, timeLimits, basisSize._2, (false, false)
   )
 
 
@@ -75,7 +73,7 @@
         "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains)
   }
 
-  model.regCol = 0d
+  model.regCol = regColocation
   model.regObs = 1E-3
 
   //Create the MCMC sampler
@@ -88,13 +86,10 @@
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
 
-  val dateTime = new DateTime()
-
-  val dtString = dateTime.toString(DateTimeFormat.forPattern("yyyy_mm_dd_H"))
-
-  streamToFile(".cache/radial_diffusion_loss_"+dtString+".csv").run(samples.map(s => s.values.toArray.mkString(",")))
-
-  //repl.sess.save("Experiment_beta_2.75")
+  val resPath = RDExperiment.writeResults(
+    solution, boundary_data, bulk_data, colocation_points,
+    hyper_prior, samples, basisSize, "HybridMQ",
+    (model.regCol, model.regObs))
 
   RDExperiment.samplingReport(
     samples, hyp.map(c => (c, quantities_loss(c))).toMap,
