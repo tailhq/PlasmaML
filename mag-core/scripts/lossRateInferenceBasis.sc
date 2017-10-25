@@ -1,4 +1,6 @@
 {
+  import org.joda.time._
+  import org.joda.time.format.DateTimeFormat
   import breeze.stats.distributions._
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
@@ -86,7 +88,11 @@
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
 
-  streamToFile(".cache/radial_diffusion_loss_25_10_4.csv").run(samples.map(s => s.values.toArray.mkString(",")))
+  val dateTime = new DateTime()
+
+  val dtString = dateTime.toString(DateTimeFormat.forPattern("yyyy_mm_dd_H"))
+
+  streamToFile(".cache/radial_diffusion_loss_"+dtString+".csv").run(samples.map(s => s.values.toArray.mkString(",")))
 
   //repl.sess.save("Experiment_beta_2.75")
 

@@ -1,4 +1,6 @@
 {
+  import org.joda.time._
+  import org.joda.time.format.DateTimeFormat
   import breeze.stats.distributions._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
@@ -86,7 +88,12 @@
     samples, hyp.map(c => (c, quantities_injection(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate)
 
-  streamToFile(".cache/radial_diffusion_injection_25_10_4.csv").run(samples.map(s => s.values.toArray.mkString(",")))
+  val dateTime = new DateTime()
+
+  val dtString = dateTime.toString(DateTimeFormat.forPattern("yyyy_mm_dd_H"))
+
+  streamToFile(".cache/radial_diffusion_injection_"+dtString+".csv").run(
+    samples.map(s => s.values.toArray.mkString(",")))
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
