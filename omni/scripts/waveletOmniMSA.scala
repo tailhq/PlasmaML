@@ -1,9 +1,11 @@
 import breeze.linalg.DenseVector
+import io.github.mandar2812.PlasmaML.omni.OmniMSA.Features
 import io.github.mandar2812.PlasmaML.omni._
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.neuralnets._
-import io.github.mandar2812.dynaml.pipes.Encoder
+import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder}
 
 OmniMSA.quietTimeSegment = ("2014/01/01/20", "2014/01/06/20")
 OmniMultiOutputModels.exogenousInputs = List(24,16)
@@ -46,9 +48,13 @@ tKernel.block_all_hyper_parameters
 val mlpKernel = new MLPKernel(1.2901485870065708, 73.92009461973996)
 
 
-//val (model, scales) = OmniMSA.train(mlpKernel+tKernel, d, 4, 0.5, false, DynaMLPipe.identityPipe[Features])
+val (model, scales) = OmniMSA.train(
+  mlpKernel+cubicSplineKernel+tKernel, d, 2, 0.5, false,
+  DstMSAExperiment.globalOpt, DstMSAExperiment.it,
+  DataPipe((x: Features) => DenseVector.vertcat(x, (x*x.t).toDenseVector, DenseVector(1d))))
 
-val metricsMT = DstMSAExperiment(mlpKernel+cubicSplineKernel+tKernel, d, 3, 2, useWavelets = false)
+val metricsMT = DstMSAExperiment(mlpKernel+cubicSplineKernel+gsm, d, 3, 2, useWavelets = false)
+
 metricsMT.print
 
 OmniMultiOutputModels.exogenousInputs = List(24, 16)
