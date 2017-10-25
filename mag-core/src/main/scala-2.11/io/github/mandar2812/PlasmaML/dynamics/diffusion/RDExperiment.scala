@@ -85,7 +85,7 @@ object RDExperiment {
       }).toStream
     }
 
-    (groundTruth, gp_data, colocation_points)
+    (groundTruth, (boundary_data, bulk_data), colocation_points)
   }
 
   def hyper_prior(hyp: List[String]) = {
