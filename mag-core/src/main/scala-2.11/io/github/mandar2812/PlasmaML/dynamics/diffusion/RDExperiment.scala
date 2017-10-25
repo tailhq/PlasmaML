@@ -78,8 +78,6 @@ object RDExperiment {
         }).toStream
     }
 
-    val gp_data: Stream[((Double, Double), Double)] = boundary_data ++ bulk_data
-
     val rowSelectorRV = MultinomialRV(DenseVector.fill[Double](lShellVec.length)(1d/lShellVec.length.toDouble))
     val colSelectorRV = MultinomialRV(DenseVector.fill[Double](timeVec.length-1)(1d/timeVec.length.toDouble))
 
@@ -362,8 +360,8 @@ object RDExperiment {
     logger.info("Writing model info")
 
     val modelInfo = Map(
-      "type" -> basisType, "nL" -> basisSize._1, "nT" -> basisSize._2,
-      "regCol" -> reg._1, "regData" -> reg._2)
+      "type" -> basisType, "nL" -> basisSize._1.toString, "nT" -> basisSize._2.toString,
+      "regCol" -> reg._1.toString, "regData" -> reg._2.toString)
 
     write(resultsPath/"model_info.csv", modelInfo.keys.mkString(",")+"\n"+modelInfo.values.mkString(","))
 
