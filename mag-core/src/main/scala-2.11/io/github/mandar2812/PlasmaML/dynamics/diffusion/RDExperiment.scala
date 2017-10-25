@@ -200,6 +200,8 @@ object RDExperiment {
     gt: Map[String, Double],
     hyper_prior: Map[String, ContinuousDistr[Double]]): Unit = {
 
+    val (prior_alpha, prior_beta, prior_b) = (hyper_prior("tau_alpha"), hyper_prior("tau_beta"), hyper_prior("tau_b"))
+
     scatter(samples.map(c => (c("tau_alpha"), c("tau_b"))))
     hold()
     scatter(Seq((gt("tau_alpha"), gt("tau_b"))))
@@ -218,12 +220,29 @@ object RDExperiment {
     yAxis(0x03C4.toChar+": "+0x03B2.toChar)
     unhold()
 
-    histogram(samples.map(_("tau_beta")), 100)
+
+    histogram((1 to samples.length).map(_ => prior_alpha.draw), 100)
     hold()
-    histogram((1 to samples.length).map(_ => hyper_prior("tau_beta").draw), 100)
-    legend(Seq("Posterior Samples", "Prior Samples"))
+    histogram(samples.map(_("tau_alpha")), 100)
+    legend(Seq("Prior Samples", "Posterior Samples"))
+    title("Histogram: "+0x03B1.toChar)
     unhold()
+
+
+    histogram((1 to samples.length).map(_ => prior_beta.draw), 100)
+    hold()
+    histogram(samples.map(_("tau_beta")), 100)
+    legend(Seq("Prior Samples", "Posterior Samples"))
     title("Histogram: "+0x03B2.toChar)
+    unhold()
+
+    histogram((1 to samples.length).map(_ => prior_b.draw), 100)
+    hold()
+    histogram(samples.map(_("tau_b")), 100)
+    legend(Seq("Prior Samples", "Posterior Samples"))
+    title("Histogram: b")
+    unhold()
+
   }
 
   def visualiseResultsInjection(
@@ -232,16 +251,17 @@ object RDExperiment {
     hyper_prior: Map[String, ContinuousDistr[Double]]): Unit = {
 
 
-    scatter(samples.map(c => (c("Q_alpha"), c("Q_b"))))
+    scatter(samples.map(c => (c("Q_gamma"), c("Q_b"))))
     hold()
-    scatter(Seq((gt("Q_alpha"), gt("Q_b"))))
+    scatter(Seq((gt("Q_gamma"), gt("Q_b"))))
     legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples:- "+0x03B1.toChar+" vs b")
-    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
-    yAxis(0x03C4.toChar+": b")
+    title("Posterior Samples:- "+0x03B3.toChar+" vs b")
+    xAxis("Q: "+0x03B3.toChar)
+    yAxis("Q: b")
     unhold()
 
 
+/*
 
     scatter(samples.map(c => (c("Q_alpha"), c("Q_beta"))))
     hold()
@@ -251,13 +271,25 @@ object RDExperiment {
     xAxis(0x03C4.toChar+": "+0x03B1.toChar)
     yAxis(0x03C4.toChar+": "+0x03B2.toChar)
     unhold()
+*/
 
-    histogram(samples.map(_("Q_b")), 100)
+    val prior_b = hyper_prior("Q_b")
+    val prior_gamma = hyper_prior("Q_gamma")
+
+    histogram((1 to samples.length).map(_ => prior_b.draw), 100)
     hold()
-    histogram((1 to samples.length).map(_ => hyper_prior("Q_b").draw), 100)
-    legend(Seq("Posterior Samples", "Prior Samples"))
-    unhold()
+    histogram(samples.map(_("Q_b")), 100)
+    legend(Seq("Prior Samples", "Posterior Samples"))
     title("Histogram: "+"b")
+    unhold()
+
+    histogram((1 to samples.length).map(_ => prior_gamma.draw), 100)
+    hold()
+    histogram(samples.map(_("Q_gamma")), 100)
+    legend(Seq("Prior Samples", "Posterior Samples"))
+    title("Histogram: "+0x03B3.toChar)
+    unhold()
+
 
   }
 

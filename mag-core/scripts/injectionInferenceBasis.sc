@@ -2,6 +2,7 @@
   import breeze.stats.distributions._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
+  import io.github.mandar2812.dynaml.DynaMLPipe._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
@@ -14,7 +15,7 @@
 
   num_dummy_data = 50
 
-  q_params = (Double.NegativeInfinity, 0d, 1.5d, 0.35)
+  q_params = (Double.NegativeInfinity, 0d, 1.5, 1.75)
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
@@ -65,8 +66,6 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
       hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
-//        "Q_alpha" -> new Gaussian(0d, 1d),
-//        "Q_beta" -> new Gamma(2d, 2d),
         "Q_gamma" -> new LogNormal(0d, 2d),
         "Q_b" -> new Gaussian(0d, 2d))
   }
@@ -86,6 +85,8 @@
   RDExperiment.samplingReport(
     samples, hyp.map(c => (c, quantities_injection(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate)
+
+  streamToFile(".cache/radial_diffusion_injection_25_10_4.csv").run(samples.map(s => s.values.toArray.mkString(",")))
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 

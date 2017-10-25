@@ -3,7 +3,6 @@
   import io.github.mandar2812.dynaml.DynaMLPipe._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
-  import io.github.mandar2812.dynaml.probability.distributions.TruncatedGaussian
 
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
@@ -29,7 +28,7 @@
   )
 
 
-  val burn = 2000
+  val burn = 1500
 
   val seKernel = new GenExpSpaceTimeKernel[Double](
     10d, deltaL, deltaT)(
@@ -71,7 +70,7 @@
       Map(
         "tau_alpha" -> new Gaussian(0d, 1d),
         "tau_beta" -> new Gamma(1d, 1d),
-        "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains _)
+        "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains)
   }
 
   model.regCol = 0d
@@ -82,12 +81,12 @@
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 500
+  val num_post_samples = 1000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
 
-  streamToFile(".cache/radial_diffusion_results_25_10_4.csv").run(samples.map(s => s.values.toArray.mkString(",")))
+  streamToFile(".cache/radial_diffusion_loss_25_10_4.csv").run(samples.map(s => s.values.toArray.mkString(",")))
 
   //repl.sess.save("Experiment_beta_2.75")
 
