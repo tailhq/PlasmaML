@@ -61,12 +61,16 @@ object RDExperiment {
         ((lShellVec(lIndex),0d), data(lIndex, 0))
       }).toStream
 
-    val bulk_data = coordinateIndices
-      .filter(_ => Rand.uniform.draw() <= num_bulk_points.toDouble/coordinateIndices.length)
-      .map((lt) => {
-        val (l, t) = (lShellVec(lt._1), timeVec(lt._2+1))
-        ((l,t), data(lt._1, lt._2+1))
-      }).toStream
+    val bulk_data = if(num_bulk_points == 0) {
+      Stream.empty[((Double, Double), Double)]
+    } else {
+      coordinateIndices
+        .filter(_ => Rand.uniform.draw() < num_bulk_points.toDouble/coordinateIndices.length)
+        .map((lt) => {
+          val (l, t) = (lShellVec(lt._1), timeVec(lt._2+1))
+          ((l,t), data(lt._1, lt._2+1))
+        }).toStream
+    }
 
     val gp_data: Stream[((Double, Double), Double)] = boundary_data ++ bulk_data
 
@@ -214,7 +218,7 @@ object RDExperiment {
     yAxis(0x03C4.toChar+": "+0x03B2.toChar)
     unhold()
 
-    histogram(samples.map(_("tau_beta")), 50)
+    histogram(samples.map(_("tau_beta")), 100)
     hold()
     histogram((1 to samples.length).map(_ => hyper_prior("tau_beta").draw), 100)
     legend(Seq("Posterior Samples", "Prior Samples"))

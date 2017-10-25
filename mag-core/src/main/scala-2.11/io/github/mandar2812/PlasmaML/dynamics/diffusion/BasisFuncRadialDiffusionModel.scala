@@ -192,8 +192,8 @@ class BasisFuncRadialDiffusionModel(
   def getBasisParams(h: Map[String, Double]): DenseVector[Double] = {
     setState(h)
 
-    logger.info("Constructing Radial Basis Model for PSD")
-    logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
+    println("Constructing Radial Basis Model for PSD")
+    println("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
 
     val dll = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)
@@ -217,8 +217,8 @@ class BasisFuncRadialDiffusionModel(
   def getGalerkinParams(h: Map[String, Double]): (DenseVector[Double], DenseMatrix[Double]) = {
     setState(h)
 
-    logger.info("Constructing Radial Basis Model for PSD")
-    logger.info("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
+    println("Constructing Radial Basis Model for PSD")
+    println("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
 
     val dll = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)
@@ -288,20 +288,21 @@ class BasisFuncRadialDiffusionModel(
     val mean = dMat.t*params
 
     val modelVariance = norm(targets - mean)/targets.length
-    logger.info("variance: "+modelVariance)
+    print("variance = ")
+    pprint.pprintln(modelVariance)
 
     /*
     * Construct partitioned covariance matrix
     * */
 
-    logger.info("Constructing partitions of covariance matrix")
+    println("Constructing partitions of covariance matrix")
 
-    logger.info("Partition K_uu")
+    println("Partition K_uu")
     val k_uu = covariance.buildKernelMatrix(
       psd_data.map(_._1),
       num_observations).getKernelMatrix
 
-    logger.info("Partition K_nn")
+    println("Partition K_nn")
     val noise_mat_psd = noise_psd.buildKernelMatrix(
       psd_data.map(_._1),
       num_observations).getKernelMatrix
