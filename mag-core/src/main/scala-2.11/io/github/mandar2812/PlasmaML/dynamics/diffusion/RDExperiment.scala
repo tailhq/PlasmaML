@@ -4,7 +4,6 @@ import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.numerics.Bessel
 import breeze.stats.distributions._
 import com.quantifind.charts.Highcharts.{histogram, hold, legend, line, scatter, spline, title, unhold, xAxis, yAxis}
-import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.probability.{GaussianRV, MultinomialRV, RandomVariable}
 import io.github.mandar2812.dynaml.utils.{combine, getStats}
@@ -20,6 +19,8 @@ import org.apache.log4j.Logger
   * up inference routines in the radial diffusion setting.
   * */
 object RDExperiment {
+
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
   private val logger = Logger.getLogger(this.getClass)
 
@@ -355,7 +356,7 @@ object RDExperiment {
     val prior_samples = (1 to samples.length).map(_ => hyper_prior.mapValues(_.draw()))
 
     val prior_samples_file_content =
-      prior_samples.head.keys.mkString(",") + "\n" + samples.map(_.values.mkString(",")).mkString("\n")
+      prior_samples.head.keys.mkString(",") + "\n" + prior_samples.map(_.values.mkString(",")).mkString("\n")
 
     logger.info("Writing model info")
 
