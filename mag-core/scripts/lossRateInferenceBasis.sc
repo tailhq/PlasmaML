@@ -20,12 +20,16 @@
     math.log(math.pow(10d, -4)*math.pow(10d, 2.5d)/2.4),
     2.0, 0d, 0.18)
 
+
+  nL = 300
+  nT = 200
+
   q_params = (0d, 0.5d, 0.05, 0.45)
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
 
-  val basisSize = (49, 49)
+  val basisSize = (79, 49)
   val hybrid_basis = new HybridMQPSDBasis(0.75d)(
     lShellLimits, basisSize._1, timeLimits, basisSize._2, (false, false)
   )
@@ -96,7 +100,7 @@
 
   val scriptPath = pwd / "mag-core" / 'scripts / "visualiseSamplingResults.R"
 
-  %%('Rscript, scriptPath.toString, resPath.toString, "Q")
+  %%('Rscript, scriptPath.toString, resPath.toString, "loss")
 
 
   RDExperiment.samplingReport(
