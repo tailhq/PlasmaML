@@ -2,7 +2,8 @@
   import breeze.stats.distributions._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
-
+  import ammonite.ops._
+  import ammonite.ops.ImplicitWd._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
@@ -18,6 +19,8 @@
   lambda_params = (
     math.log(math.pow(10d, -4)*math.pow(10d, 2.5d)/2.4),
     2.0, 0d, 0.18)
+
+  q_params = (0d, 0.5d, 0.05, 0.45)
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
@@ -90,6 +93,11 @@
     solution, boundary_data, bulk_data, colocation_points,
     hyper_prior, samples, basisSize, "HybridMQ",
     (model.regCol, model.regObs))
+
+  val scriptPath = pwd / "mag-core" / 'scripts / "visualiseSamplingResults.R"
+
+  %%('Rscript, scriptPath.toString, resPath.toString, "Q")
+
 
   RDExperiment.samplingReport(
     samples, hyp.map(c => (c, quantities_loss(c))).toMap,

@@ -39,6 +39,28 @@ object RDExperiment {
     nL: Int, nT: Int): RadialDiffusion =
     new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
+  /**
+    * Generate synthetic PSD data for an inference experiment.
+    *
+    * @param rds A radial diffusion solver of type [[RadialDiffusion]]
+    * @param dll Diffusion field.
+    * @param lambda Loss rate.
+    * @param q Particle injection rate.
+    * @param initialPSD The PSD at t = 0
+    * @param noise Measurement noise to be added to the generated
+    *              PSD profile.
+    * @param num_boundary_points Number of points from the initial PSD state
+    *                            to be sampled.
+    * @param num_bulk_points Number of points to be sampled from the interior
+    *                        of the space-time domain.
+    * @param num_colocation_points Number of "co-location" points, i.e. points
+    *                              where the radial diffusion PDE is enforced (with
+    *                              some slack).
+    *
+    * @return The generated PSD profile, noisy observations (boundary and bulk) and
+    *         co-location points.
+    *
+    * */
   def generateData(
     rds: RadialDiffusion,
     dll: (Double, Double) => Double,
@@ -93,6 +115,10 @@ object RDExperiment {
     (groundTruth, (boundary_data, bulk_data), colocation_points)
   }
 
+  /**
+    * Defines a sensible default hyper-prior over diffusion
+    * parameters.
+    * */
   def hyper_prior(hyp: List[String]) = {
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
       hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
@@ -102,6 +128,15 @@ object RDExperiment {
         "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains)
   }
 
+  /**
+    * Print a sampling report to the console.
+    * @param samples Posterior samples.
+    * @param quantities Key quantities (hyper-parameters) which are
+    *                   sampled, with their string representations for
+    *                   pretty print.
+    * @param acceptanceRate The sample acceptance rate as empirically
+    *                       computed by the sampling procedure.
+    * */
   def samplingReport(
     samples: Stream[Map[String, Double]],
     quantities: Map[String, Char],
@@ -128,6 +163,15 @@ object RDExperiment {
     })
   }
 
+  /**
+    * Render plots of a PSD profile returned by [[generateData()]].
+    *
+    * @param lShellLimits L-shell limits
+    * @param timeLimits Time limits.
+    * @param initialPSD The initial PSD profile (t = 0)
+    * @param solution Generated PSD profile as returned by [[RadialDiffusion]]
+    * @param Kp Kp index as a function ([[DataPipe]]) of time.
+    * */
   def visualisePSD(
     lShellLimits: (Double, Double),
     timeLimits: (Double, Double), nL: Int, nT: Int)(
@@ -140,6 +184,15 @@ object RDExperiment {
 
     val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
 
+    line(timeVec.map(t => (t, Kp(t))).toSeq)
+    xAxis("time")
+    yAxis("Kp")
+    title("Evolution of Kp")
+
+    spline(lShellVec.map(l => (l, initialPSD(l))).toSeq)
+    xAxis("L")
+    yAxis("f(L, 0)")
+    title("Phase Space Density Profile, t = 0")
 
     /*
      *
@@ -163,24 +216,11 @@ object RDExperiment {
     xAxis("time")
     yAxis("f(L,t)")
 
-
-
-    line(timeVec.map(t => (t, Kp(t))).toSeq)
-    xAxis("time")
-    yAxis("Kp")
-    title("Evolution of Kp")
-
-    spline(lShellVec.map(l => (l, initialPSD(l))).toSeq)
-    xAxis("L")
-    yAxis("f(L, 0)")
-    title("Phase Space Density Profile, t = 0")
-
-
-    /*
-     *
-     * Second set of plots
-     *
-     * */
+   /*
+    *
+    *  Second set of plots
+    *
+    * */
     spline(lShellVec.toArray.toSeq.zip(solution.head.toArray.toSeq))
     hold()
 
@@ -200,6 +240,15 @@ object RDExperiment {
 
   }
 
+  /**
+    * Render plots of a sampling experiment performed
+    * for loss rate parameters.
+    *
+    * @param samples Posterior samples.
+    * @param gt Ground truth values of the parameters.
+    * @param hyper_prior Prior distributions over the hyper-parameters.
+    *
+    * */
   def visualiseResultsLoss(
     samples: Stream[Map[String, Double]],
     gt: Map[String, Double],
@@ -250,6 +299,15 @@ object RDExperiment {
 
   }
 
+  /**
+    * Render plots of a sampling experiment performed
+    * for injection rate parameters.
+    *
+    * @param samples Posterior samples.
+    * @param gt Ground truth values of the parameters.
+    * @param hyper_prior Prior distributions over the hyper-parameters.
+    *
+    * */
   def visualiseResultsInjection(
     samples: Stream[Map[String, Double]],
     gt: Map[String, Double],
@@ -298,6 +356,23 @@ object RDExperiment {
 
   }
 
+  /**
+    * Write the experiment configuration and results to
+    * disk.
+    *
+    * @param solution PSD profile.
+    * @param boundary_data Boundary observations.
+    * @param bulk_data Bulk observations.
+    * @param colocation_points Co-location points in the domain.
+    * @param hyper_prior Prior defined over model hyper-parameters.
+    * @param samples Posterior samples.
+    * @param basisSize The number of space and time nodes in the PSD
+    *                  basis expansion used by [[BasisFuncRadialDiffusionModel]].
+    * @param basisType The type of basis expansion.
+    * @param reg The regularisation parameters used by [[BasisFuncRadialDiffusionModel]]
+    *
+    * @return The path where results are written.
+    * */
   def writeResults(
     solution: Stream[DenseVector[Double]],
     boundary_data: Stream[((Double, Double), Double)],
@@ -332,7 +407,7 @@ object RDExperiment {
     write(resultsPath/"kp_profile.csv", kp.map(_.mkString(",")).mkString("\n"))
 
     logger.info("Writing Diffusion parameters in "+"diffusion_params.csv")
-    write(resultsPath/"diffusion_params.csv", gt.keys.mkString(",")+"\n"+gt.values.mkString(","))
+    write(resultsPath/"diffusion_params.csv", gt.keys.mkString(",")+"\n"+gt.values.mkString(",")+"\n")
 
     logger.info("Writing discretised solution produced by solver in "+"diffusion_solution.csv")
     write(resultsPath/"diffusion_solution.csv", solution.map(_.toArray.mkString(",")).mkString("\n"))
@@ -449,17 +524,17 @@ object RDSettings {
   })
 
   def dll = (l: Double, t: Double) =>
-    math.exp(dll_params._1)*math.pow(l, dll_params._2)*math.pow(10, dll_params._4*Kp(t))
+    (math.exp(dll_params._1)*math.pow(l, dll_params._2) + dll_params._3)*math.pow(10, dll_params._4*Kp(t))
 
   def Q = (l: Double, t: Double) =>
     (math.exp(q_params._1)*math.pow(l, q_params._2) + q_params._3)*math.pow(10, q_params._4*Kp(t))
 
   def lambda = (l: Double, t: Double) =>
-    math.exp(lambda_params._1)*math.pow(l, lambda_params._2)*math.pow(10, lambda_params._4*Kp(t))
+    (math.exp(lambda_params._1)*math.pow(l, lambda_params._2) + lambda_params._3)*math.pow(10, lambda_params._4*Kp(t))
 
   protected def omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 
-  var initialPSD = (l: Double) => Bessel.i1(omega*(l - lShellLimits._1))*1E2
+  var initialPSD = (l: Double) => Bessel.i1(omega*(l - lShellLimits._1))*1E2 + 100
 
   var measurement_noise = GaussianRV(0.0, 0.5)
 

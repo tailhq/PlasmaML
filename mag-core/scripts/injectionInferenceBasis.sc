@@ -2,6 +2,8 @@
   import breeze.stats.distributions._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
+  import ammonite.ops._
+  import ammonite.ops.ImplicitWd._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
@@ -14,7 +16,10 @@
 
   num_dummy_data = 50
 
-  q_params = (Double.NegativeInfinity, 0d, 1.5, 0.2)
+  nL = 300
+  nT = 200
+
+  q_params = (0d, 0.5d, 0.05, 0.45)
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
@@ -41,7 +46,7 @@
 
   val model = new BasisFuncRadialDiffusionModel(
     Kp, dll_params, lambda_params,
-    (Double.NegativeInfinity, 0d, 0.01, 0.01))(
+    (0.01, 0.01d, 0.01, 0.01))(
     gpKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
     hybrid_basis
@@ -52,9 +57,9 @@
       model.hyper_parameters.filter(c =>
         c.contains("dll") ||
           c.contains("base::") ||
-          c.contains("tau_") ||
+          c.contains("tau_") /*||
           c.contains("Q_alpha") ||
-          c.contains("Q_beta")
+          c.contains("Q_beta")*/
       )
   }
 
@@ -66,11 +71,14 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
       hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
+        "Q_alpha" -> new Gaussian(0d, 2d),
+        "Q_beta" -> new Gamma(1d, 1d),
         "Q_gamma" -> new LogNormal(0d, 2d),
-        "Q_b" -> new Gaussian(0d, 2d))
+        "Q_b" -> new Gaussian(0d, 2d)
+      ).filterKeys(hyp.contains)
   }
 
-  model.regCol = 0d
+  model.regCol = regColocation
   model.regObs = 1E-3
 
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
@@ -90,6 +98,10 @@
     solution, boundary_data, bulk_data, colocation_points,
     hyper_prior, samples, basisSize, "HybridMQ",
     (model.regCol, model.regObs))
+
+  val scriptPath = pwd / "mag-core" / 'scripts / "visualiseSamplingResults.R"
+
+  %%('Rscript, scriptPath.toString, resPath.toString, "Q")
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
