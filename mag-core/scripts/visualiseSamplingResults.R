@@ -38,9 +38,10 @@ if(lossFlag == "loss") {
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-    xlab("beta") +
+    theme_gray(base_size = 24) +
+    xlab(expression(beta)) +
     geom_vline(aes(xintercept=ground_truth$tau_beta),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=.5)
+               color="red", linetype="dashed", size=.75)
   ggsave("histogram_beta_prior.png")
 
   ggplot(posterior_samples, aes(x=tau_beta)) +
@@ -48,9 +49,10 @@ if(lossFlag == "loss") {
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-    xlab("beta") +
+    theme_gray(base_size = 24) +
+    xlab(expression(beta)) +
     geom_vline(aes(xintercept=ground_truth$tau_beta),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=.5)
+               color="red", linetype="dashed", size=.75)
   ggsave("histogram_beta_posterior.png")
 
 
@@ -59,9 +61,10 @@ if(lossFlag == "loss") {
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+    theme_gray(base_size = 24) +
     xlab("b") +
     geom_vline(aes(xintercept=ground_truth$tau_b),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=0.5)
+               color="red", linetype="dashed", size=0.75)
   ggsave("histogram_b_prior.png")
 
   ggplot(posterior_samples, aes(x=tau_b)) +
@@ -69,9 +72,10 @@ if(lossFlag == "loss") {
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+    theme_gray(base_size = 24) +
     xlab("b") +
     geom_vline(aes(xintercept=ground_truth$tau_b),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=0.5)
+               color="red", linetype="dashed", size=0.75)
   ggsave("histogram_b_posterior.png")
 
   ggplot(prior_samples, aes(x=exp(tau_alpha))) +
@@ -79,9 +83,10 @@ if(lossFlag == "loss") {
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-    xlab("alpha") +
+    theme_gray(base_size = 24) +
+    xlab(expression(alpha)) +
     geom_vline(aes(xintercept=exp(ground_truth$tau_alpha)),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=0.5)
+               color="red", linetype="dashed", size=0.75)
   ggsave("histogram_alpha_prior.png")
 
   ggplot(posterior_samples, aes(x=exp(tau_alpha))) +
@@ -89,9 +94,10 @@ if(lossFlag == "loss") {
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-    xlab("alpha") +
+    theme_gray(base_size = 24) +
+    xlab(expression(alpha)) +
     geom_vline(aes(xintercept=exp(ground_truth$tau_alpha)),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=0.5)
+               color="red", linetype="dashed", size=0.75)
   ggsave("histogram_alpha_posterior.png")
 
 } else {
@@ -113,7 +119,7 @@ if(lossFlag == "loss") {
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
     xlab(expression(gamma)) +
     geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=.5)
+               color="red", linetype="dashed", size=.75)
   ggsave("histogram_gamma_prior.png")
 
   ggplot(posterior_samples, aes(x=Q_gamma)) +
@@ -123,7 +129,7 @@ if(lossFlag == "loss") {
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
     xlab(expression(gamma)) +
     geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=.5)
+               color="red", linetype="dashed", size=.75)
   ggsave("histogram_gamma_posterior.png")
 
 
@@ -134,7 +140,7 @@ if(lossFlag == "loss") {
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
     xlab("b") +
     geom_vline(aes(xintercept=ground_truth$Q_b),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=0.5)
+               color="red", linetype="dashed", size=0.75)
   ggsave("histogram_b_prior.png")
 
 
@@ -145,7 +151,7 @@ if(lossFlag == "loss") {
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
     xlab("b") +
     geom_vline(aes(xintercept=ground_truth$Q_b),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=0.5)
+               color="red", linetype="dashed", size=0.75)
   ggsave("histogram_b_posterior.png")
 
 }

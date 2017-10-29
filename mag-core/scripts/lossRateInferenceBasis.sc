@@ -17,8 +17,7 @@
   num_dummy_data = 50
 
   lambda_params = (
-    math.log(math.pow(10d, -4)*math.pow(10d, 2.5d)/2.4),
-    2.0, 0d, 0.18)
+    -1, 0.5, 0d, -0.2)
 
 
   nL = 300
