@@ -415,6 +415,12 @@ object RDExperiment {
     logger.info("Writing discretised solution produced by solver in "+"diffusion_solution.csv")
     write(resultsPath/"diffusion_solution.csv", solution.map(_.toArray.mkString(",")).mkString("\n"))
 
+    val (m, v) = (measurement_noise.mu, measurement_noise.sigma)
+    write(
+      resultsPath/"measurement_noise.csv",
+      "mean,sigma\n"+m+","+v+"\n"
+    )
+
     logger.info("Writing observed boundary data in "+"boundary_data.csv")
     write(
       resultsPath/"boundary_data.csv",

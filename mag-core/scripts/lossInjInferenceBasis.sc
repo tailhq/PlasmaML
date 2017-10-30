@@ -2,6 +2,7 @@
   import breeze.stats.distributions._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
+  import io.github.mandar2812.dynaml.probability.GaussianRV
   import ammonite.ops._
   import ammonite.ops.ImplicitWd._
 
@@ -11,6 +12,8 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
+
+  measurement_noise = GaussianRV(0.0, 0.5)
   num_bulk_data = 50
   num_boundary_data = 20
 
@@ -108,7 +111,7 @@
 
   RDExperiment.samplingReport(
     samples, hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
-    gt, mcmc_sampler.sampleAcceptenceRate)
+    gt, mcmc_sampler.sampleAcceptenceRate, "loss")
 
   RDExperiment.samplingReport(
     samples, hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,

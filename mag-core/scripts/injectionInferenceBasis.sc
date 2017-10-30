@@ -7,9 +7,12 @@
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
+  import io.github.mandar2812.dynaml.probability.GaussianRV
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
+
+  measurement_noise = GaussianRV(0.0, 0.5)
 
   num_bulk_data = 50
   num_boundary_data = 20
