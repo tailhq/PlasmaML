@@ -95,7 +95,7 @@
 
   RDExperiment.samplingReport(
     samples, hyp.map(c => (c, quantities_injection(c))).toMap,
-    gt, mcmc_sampler.sampleAcceptenceRate)
+    gt, mcmc_sampler.sampleAcceptenceRate, "injection")
 
   val resPath = RDExperiment.writeResults(
     solution, boundary_data, bulk_data, colocation_points,

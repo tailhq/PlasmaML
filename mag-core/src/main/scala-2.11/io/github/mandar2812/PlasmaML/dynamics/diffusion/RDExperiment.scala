@@ -141,7 +141,8 @@ object RDExperiment {
     samples: Stream[Map[String, Double]],
     quantities: Map[String, Char],
     gt: Map[String, Double],
-    acceptanceRate: Double): Unit = {
+    acceptanceRate: Double,
+    inferred_quantity: String = "loss"): Unit = {
 
     val post_vecs = samples.map(c => DenseVector(c.values.toArray))
 
@@ -150,7 +151,9 @@ object RDExperiment {
 
     println("\n:::::: MCMC Sampling Report ::::::\n")
 
-    println("Quantity: "+0x03C4.toChar+"(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
+    println(
+      "Quantity: "+diffusion_quantities(inferred_quantity)+
+      "(l,t) = "+0x03B1.toChar+"l^("+0x03B2.toChar+")*10^(b*K(t))")
 
     println("Markov Chain Acceptance Rate = "+acceptanceRate)
 
@@ -499,6 +502,12 @@ object RDSettings {
     "Q_beta" -> 0x03B2.toChar,
     "Q_gamma" -> 0x03B3.toChar,
     "Q_b" -> 'b'
+  )
+
+  val diffusion_quantities = Map(
+    "loss" -> 0x03BB.toChar,
+    "injection" -> 'Q',
+    "diffusion" -> 0x03BA.toChar
   )
 
   def gt = Map(

@@ -101,14 +101,18 @@
     hyper_prior, samples, basisSize, "HybridMQ",
     (model.regCol, model.regObs))
 
-  val scriptPath = pwd / "mag-core" / 'scripts / "visualiseSamplingResults.R"
+  val scriptPath = pwd / "mag-core" / 'scripts / "visualiseCombSamplingResults.R"
 
-  %%('Rscript, scriptPath.toString, resPath.toString, "loss")
+  %%('Rscript, scriptPath.toString, resPath.toString)
 
 
   RDExperiment.samplingReport(
-    samples, hyp.map(c => (c, quantities_loss(c))).toMap,
+    samples, hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate)
+
+  RDExperiment.samplingReport(
+    samples, hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
+    gt, mcmc_sampler.sampleAcceptenceRate, "injection")
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
