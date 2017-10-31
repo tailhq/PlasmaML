@@ -513,13 +513,23 @@ object RDExperiment {
       (read.lines! resultsPath/"measurement_noise.csv").head.split(',').toSeq)(
       resultsPath/"measurement_noise.csv").head
 
+    val groundTruth = readAsMap(
+      (read.lines! resultsPath/"diffusion_params.csv").head.split(',').toSeq)(
+      resultsPath/"diffusion_params.csv").head
+
+    dll_params = (groundTruth("dll_alpha"), groundTruth("dll_beta"), groundTruth("dll_gamma"), groundTruth("dll_b"))
+
+    q_params = (groundTruth("Q_alpha"), groundTruth("Q_beta"), groundTruth("Q_gamma"), groundTruth("Q_b"))
+
+    lambda_params = (groundTruth("tau_alpha"), groundTruth("tau_beta"), groundTruth("tau_gamma"), groundTruth("tau_b"))
+
     nL = domainInfo("nL").toInt
 
     nT = domainInfo("nT").toInt
 
     lShellLimits = (domainInfo("lMin"), domainInfo("lMax"))
     timeLimits = (domainInfo("tMin"), domainInfo("tMax"))
-    measurement_noise = new GaussianRV(noiseInfo("mean"), noiseInfo("sigma"))
+    measurement_noise = GaussianRV(noiseInfo("mean"), noiseInfo("sigma"))
 
     (solution, (boundary_data, bulk_data), colocation_points, samples, basisInfo)
 
