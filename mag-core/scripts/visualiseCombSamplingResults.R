@@ -114,6 +114,7 @@ ggplot(prior_samples[prior_samples$Q_gamma,], aes(x=Q_gamma)) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+  theme_gray(base_size = 24) +
   xlab(expression(gamma)) +
   geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
              color="red", linetype="dashed", size=.75)
@@ -124,6 +125,7 @@ ggplot(posterior_samples, aes(x=Q_gamma)) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+  theme_gray(base_size = 24) +
   xlab(expression(gamma)) +
   geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
              color="red", linetype="dashed", size=.75)
@@ -135,6 +137,7 @@ ggplot(prior_samples, aes(x=Q_b)) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+  theme_gray(base_size = 24) +
   xlab("b") +
   geom_vline(aes(xintercept=ground_truth$Q_b),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
@@ -146,6 +149,7 @@ ggplot(posterior_samples, aes(x=Q_b)) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+  theme_gray(base_size = 24) +
   xlab("b") +
   geom_vline(aes(xintercept=ground_truth$Q_b),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
@@ -156,7 +160,8 @@ ggplot(prior_samples, aes(x=Q_beta)) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-  xlab("b") +
+  theme_gray(base_size = 24) +
+  xlab(expression(beta)) +
   geom_vline(aes(xintercept=ground_truth$Q_beta),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
 ggsave("histogram_Q_beta_prior.png")
@@ -167,7 +172,8 @@ ggplot(posterior_samples, aes(x=Q_beta)) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-  xlab("b") +
+  theme_gray(base_size = 24) +
+  xlab(expression(beta)) +
   geom_vline(aes(xintercept=ground_truth$Q_beta),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
 ggsave("histogram_Q_beta_posterior.png")
@@ -178,7 +184,8 @@ ggplot(prior_samples, aes(x=exp(Q_alpha))) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-  xlab("b") +
+  theme_gray(base_size = 24) +
+  xlab(expression(alpha)) +
   geom_vline(aes(xintercept=exp(ground_truth$Q_alpha)),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
 ggsave("histogram_Q_alpha_prior.png")
@@ -189,7 +196,8 @@ ggplot(posterior_samples, aes(x=exp(Q_alpha))) +
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-  xlab("b") +
+  theme_gray(base_size = 24) +
+  xlab(expression(alpha)) +
   geom_vline(aes(xintercept=exp(ground_truth$Q_alpha)),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
 ggsave("histogram_Q_alpha_posterior.png")
