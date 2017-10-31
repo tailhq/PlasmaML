@@ -4,7 +4,8 @@ import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.numerics.Bessel
 import breeze.stats.distributions._
 import com.quantifind.charts.Highcharts.{histogram, hold, legend, line, scatter, spline, title, unhold, xAxis, yAxis}
-import io.github.mandar2812.dynaml.pipes.DataPipe
+import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.probability.{GaussianRV, MultinomialRV, RandomVariable}
 import io.github.mandar2812.dynaml.utils.{combine, getStats}
 import org.joda.time.DateTime
@@ -461,6 +462,67 @@ object RDExperiment {
 
     logger.info("Done writing results for experiment")
     resultsPath
+  }
+
+  def loadCachedResults(resultsPath: Path) = {
+
+    logger.info("Reading results of radial diffusion experiment in directory: "+resultsPath.toString())
+
+    val readFile = DataPipe((p: Path) => (read.lines! p).toStream)
+
+    val processLines = StreamDataPipe((s: String) => s.split(',').map(_.toDouble))
+
+    val readObservations = readFile > processLines > StreamDataPipe((a: Array[Double]) => ((a.head, a(1)), a.last))
+
+    val readColocation = readFile > processLines > StreamDataPipe((a: Array[Double]) => (a.head, a(1)))
+
+
+    val hyp = (read.lines! resultsPath/"posterior_samples.csv").head.split(',').toSeq
+
+    def readAsMap(h: Seq[String]) =
+      readFile > dropHead > processLines > StreamDataPipe((s: Array[Double]) => h.zip(s).toMap)
+
+    val readSamples = readAsMap(hyp)
+
+    val boundary_data = readObservations(resultsPath/"boundary_data.csv")
+    val bulk_data = readObservations(resultsPath/"bulk_data.csv")
+
+    val colocation_points = readColocation(resultsPath/"colocation_points.csv")
+
+    val samples = readSamples(resultsPath/"posterior_samples.csv")
+
+    val model_params = (read.lines! resultsPath/"model_info.csv").head.split(',').toSeq
+    val model_info = (readFile > dropHead > StreamDataPipe((s: String) => s.split(',')))(resultsPath/"model_info.csv")
+
+    val m_info = model_params.zip(model_info.head).toMap
+
+    regColocation = m_info("regCol").toDouble
+    regData = m_info("regData").toDouble
+
+    val basisInfo = (m_info("type"), (m_info("nL").toInt, m_info("nT").toInt))
+
+    val solution = (readFile > processLines > StreamDataPipe((v: Array[Double]) => DenseVector(v)))(
+      resultsPath/"diffusion_solution.csv"
+    )
+
+    val domainInfo = readAsMap(
+      (read.lines! resultsPath/"diffusion_domain.csv").head.split(',').toSeq)(
+      resultsPath/"diffusion_domain.csv").head
+
+    val noiseInfo = readAsMap(
+      (read.lines! resultsPath/"measurement_noise.csv").head.split(',').toSeq)(
+      resultsPath/"measurement_noise.csv").head
+
+    nL = domainInfo("nL").toInt
+
+    nT = domainInfo("nT").toInt
+
+    lShellLimits = (domainInfo("lMin"), domainInfo("lMax"))
+    timeLimits = (domainInfo("tMin"), domainInfo("tMax"))
+    measurement_noise = new GaussianRV(noiseInfo("mean"), noiseInfo("sigma"))
+
+    (solution, (boundary_data, bulk_data), colocation_points, samples, basisInfo)
+
   }
 
 
