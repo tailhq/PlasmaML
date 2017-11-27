@@ -1,0 +1,80 @@
+import java.io.File
+
+import sbt._
+
+object Dependencies {
+
+  val scala = "2.11.8"
+
+  val status = "dev"
+
+  val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
+
+  val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
+    if(status == "dev") ("io.github.mandar2812", "dynaml_2.11", "v1.5.2-beta.2")
+    else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "v1.5.1")
+
+  val platform: String = {
+    // Determine platform name using code similar to javacpp
+    // com.googlecode.javacpp.Loader.java line 60-84
+    val jvmName = System.getProperty("java.vm.name").toLowerCase
+    var osName = System.getProperty("os.name").toLowerCase
+    var osArch = System.getProperty("os.arch").toLowerCase
+    if (jvmName.startsWith("dalvik") && osName.startsWith("linux")) {
+      osName = "android"
+    } else if (jvmName.startsWith("robovm") && osName.startsWith("darwin")) {
+      osName = "ios"
+      osArch = "arm"
+    } else if (osName.startsWith("mac os x")) {
+      osName = "macosx"
+    } else {
+      val spaceIndex = osName.indexOf(' ')
+      if (spaceIndex > 0) {
+        osName = osName.substring(0, spaceIndex)
+      }
+    }
+    if (osArch.equals("i386") || osArch.equals("i486") || osArch.equals("i586") || osArch.equals("i686")) {
+      osArch = "x86"
+    } else if (osArch.equals("amd64") || osArch.equals("x86-64") || osArch.equals("x64")) {
+      osArch = "x86_64"
+    } else if (osArch.startsWith("arm")) {
+      osArch = "arm"
+    }
+    val platformName = osName + "-" + osArch
+    println("platform: " + platformName)
+    platformName
+  }
+
+  val gpuFlag: Boolean = false
+
+  val tensorflow_classifier: String = {
+    val platform_splits = platform.split("-")
+    val (os, arch) = (platform_splits.head, platform_splits.last)
+
+    val tf_c =
+      if (os.contains("macosx")) "darwin-cpu-"+arch
+      else if(os.contains("linux")) {
+        if(gpuFlag) "linux-gpu-"+arch else "linux-cpu-"+arch
+      } else ""
+    println("Tensorflow-Scala Classifier: "+tf_c)
+    tf_c
+  }
+
+  val commonDependencies = Seq(
+    "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
+    "org.jsoup" % "jsoup" % "1.9.1",
+    "joda-time" % "joda-time" % "2.9.3",
+    "org.json4s" % "json4s-native_2.11" % "3.3.0",
+    "com.typesafe.slick" %% "slick" % "3.1.1"
+  )
+
+  val dynaMLDependency = Seq(
+    dynamlGroupID % dynamlArtifact % dynaMLVersion)
+    .map(_.exclude("org.platanios", "tensorflow_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-data_2.11"))
+
+  val tensorflowDependency = Seq(
+    "org.platanios" % "tensorflow_2.11" % "0.1.0-SNAPSHOT" classifier tensorflow_classifier,
+    "org.platanios" % "tensorflow-data_2.11" % "0.1.0-SNAPSHOT"
+  ).map(_.exclude("org.typelevel", "spire_2.11"))
+}

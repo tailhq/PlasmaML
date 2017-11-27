@@ -1,45 +1,14 @@
 import java.io.File
 
 import sbt._
+import Dependencies._
 
 val mainVersion = "v0.1"
 
-val status = "dev"
-
-val dynaMLVersion = settingKey[String]("The version of DynaML used.")
-
-val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
-
-val dynamlGroupID = settingKey[String]("Group ID for DynaML dependency")
-
-val dynamlArtifact = settingKey[String]("Artifact ID for DynaML dependency")
-
-lazy val dynaMLSettings = if(status == "dev") {
-  Seq(
-    dynaMLVersion := "v1.5.2-beta.1",
-    dynamlGroupID := "io.github.mandar2812",
-    dynamlArtifact := "dynaml_2.11"
-  )
-} else {
-  Seq(
-    dynaMLVersion := "v1.5.1",
-    dynamlGroupID := "com.github.transcendent-ai-labs.DynaML",
-    dynamlArtifact := "dynaml_2.11"
-  )
-}
-
-
-lazy val commonSettings = dynaMLSettings ++ Seq(
+lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
-  scalaVersion in ThisBuild := "2.11.8",
-  libraryDependencies in ThisBuild ++= Seq(
-    "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
-    dynamlGroupID.value % dynamlArtifact.value % dynaMLVersion.value,
-    "org.jsoup" % "jsoup" % "1.9.1",
-    "joda-time" % "joda-time" % "2.9.3",
-    "org.json4s" % "json4s-native_2.11" % "3.3.0",
-    "com.typesafe.slick" %% "slick" % "3.1.1"
-  ),
+  scalaVersion in ThisBuild := scala,
+  libraryDependencies in ThisBuild ++= (commonDependencies ++ dynaMLDependency ++ tensorflowDependency),
   resolvers in ThisBuild ++= Seq(
     "jitpack" at "https://jitpack.io",
     "jzy3d-releases" at "http://maven.jzy3d.org/releases",
