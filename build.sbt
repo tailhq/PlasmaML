@@ -71,11 +71,20 @@ lazy val streamer =
           """import breeze.linalg.DenseVector;"""
     ).dependsOn(mag_core)
 
-
+lazy val helios =
+  (project in file("helios")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+    .settings(commonSettings: _*)
+    .settings(
+      initialCommands in console :=
+        """import io.github.mandar2812.dynaml.kernels._;"""+
+          """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
+          """import com.quantifind.charts.Highcharts._;"""+
+          """import breeze.linalg.DenseVector;"""
+    ).dependsOn(mag_core)
 
 lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(commonSettings: _*)
-  .dependsOn(mag_core, omni, vanAllen, streamer).settings(
+  .dependsOn(mag_core, omni, vanAllen, streamer, helios).settings(
   name := "PlasmaML",
   version := mainVersion,
   fork in run := true,
@@ -99,6 +108,6 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
   ),
   dataDirectory := new File("data/"),
   initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""")
-  .aggregate(mag_core, omni, vanAllen, streamer)
+  .aggregate(mag_core, omni, vanAllen, streamer, helios)
   .settings(aggregate in update := false)
 
