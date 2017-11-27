@@ -58,7 +58,7 @@ object SOHOLoader {
   def fetch_urls(path: Path)(instrument: String, size: Int = 512)(year: Int, month: Int, day: Int) = {
 
     //Construct the url to download file manifest for date in question.
-    val download_url = base_url+year+"/"+instrument+"/"+year+month+day+"/"
+    val download_url = base_url+year+"/"+instrument+"/"+year+"%02d".format(month)+day+"/"
 
     val doc = Jsoup.connect(download_url)
       .timeout(0)
