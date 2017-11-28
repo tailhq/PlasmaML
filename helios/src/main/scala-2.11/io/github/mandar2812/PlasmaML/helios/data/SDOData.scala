@@ -2,49 +2,62 @@ package io.github.mandar2812.PlasmaML.helios.data
 
 import collection.JavaConverters._
 import ammonite.ops._
-import org.joda.time.{Interval, LocalDate, Period}
+import org.joda.time.LocalDate
 import org.jsoup.Jsoup
 
 /**
   * Helper class for downloading solar images from the
-  * <a href="https://sohowww.nascom.nasa.gov">SOHO</a> archive.
+  * <a href="https://sdo.gsfc.nasa.gov">Solar Dynamics Observatory</a> archive.
   * @author mandar2812 date 27/11/2017
   * */
-object SOHO {
+object SDOData {
 
   /**
     * The url for FTP download
     * */
-  val base_url = "https://sohowww.nascom.nasa.gov/data/REPROCESSING/Completed/"
+  val base_url = "https://sdo.gsfc.nasa.gov/assets/img/browse/"
 
   /**
-    * Instrument codes for the SOHO satellite
+    * Instrument codes for the SDO satellite
     * */
   object Instruments {
 
-    val MDIMAG = "mdimag"
+    val HMIIC = "HMIIC"
 
-    val MDIIGR = "mdiigr"
+    val HMIIF = "HMIIF"
 
-    val EIT171 = "eit171"
+    val HMID = "HMID"
 
-    val EIT195 = "eit195"
+    val AIA171 = "0171"
 
-    val EIT284 = "eit284"
+    val AIA131 = "0131"
 
-    val EIT304 = "eit304"
+    val AIA193 = "0193"
+
+    val AIA211 = "0211"
+
+    val AIA1600 = "1600"
+
+    val AIA94 = "0094"
+
+    val AIA335 = "0335"
+
+    val AIA304 = "0304"
   }
 
   object Resolutions {
     val s512 = 512
     val s1024 = 1014
+    val s2048 = 2048
+    val s4096 = 4096
   }
 
 }
 
-object SOHOLoader {
 
-  import SOHO._
+object SDOLoader {
+
+  import SDOData._
 
   /**
     * Download all the available images
@@ -54,7 +67,7 @@ object SOHOLoader {
   def fetch_urls(path: Path)(instrument: String, size: Int = 512)(year: Int, month: Int, day: Int) = {
 
     //Construct the url to download file manifest for date in question.
-    val download_url = base_url+year+"/"+instrument+"/"+year+"%02d".format(month)+"%02d".format(day)+"/"
+    val download_url = base_url+year+"/"+"%02d".format(month)+"/"+"%02d".format(day)+"/"
 
     val doc = Jsoup.connect(download_url)
       .timeout(0)
@@ -65,14 +78,9 @@ object SOHOLoader {
       .iterator()
       .asScala
 
-    val hrefs = elements.map(_.attr("href")).filter(_.contains(size+".jpg")).toList
+    val hrefs = elements.map(_.attr("href")).filter(_.contains("_"+size+"_"+instrument+".jpg")).toList
 
-    print("Number of files = ")
-    pprint.pprintln(hrefs.length)
-
-    println("Files identified: ")
-
-    pprint.pprintln(hrefs)
+    println("Number of files = "+hrefs.length)
 
     hrefs.map(s => download_url+s)
   }
@@ -84,14 +92,10 @@ object SOHOLoader {
     *             the downloader appends soho/[instrument]/[year] to
     *             the path supplied and places the images in there if
     *             the createDirTree flag is set to true.
-    *
     * @param createDirTree If this is set to false, then the images
     *                      are placed directly in the path supplied.
-    *
-    * @param instrument The instrument code as a string, see [[SOHO.Instruments]]
-    *
+    * @param instrument The instrument code as a string, see [[SDOData.Instruments]]
     * @param size The resolution of the images, defaults to 512 &times; 512
-    *
     * @param date a Joda time [[LocalDate]] instance.
     * */
   def download(
@@ -100,18 +104,13 @@ object SOHOLoader {
     date: LocalDate): Unit = {
     val (year, month, day) = (date.getYear, date.getMonthOfYear, date.getDayOfMonth)
 
-    val download_path = if(createDirTree) path/'soho/instrument/year.toString else path
+    val download_path = if(createDirTree) path/'sdo/instrument/year.toString else path
 
     if(!(exists! download_path)) {
       mkdir! download_path
     }
 
-    print("Downloading image manifest from the SOHO Archive for ")
-    pprint.pprintln(date)
-
-
-    print("Downloading images to ")
-    pprint.pprintln(download_path)
+    println("Downloading image manifest from the SOHO Archive for: "+date+"\nDownload Path: "+path)
 
     download_batch(download_path)(fetch_urls(path)(instrument, size)(year, month, day))
   }

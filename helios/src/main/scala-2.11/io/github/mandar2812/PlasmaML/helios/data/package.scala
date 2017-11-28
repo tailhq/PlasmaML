@@ -19,8 +19,13 @@ package object data {
     * */
   def download_range(download: (LocalDate) => Unit)(start: LocalDate, end: LocalDate): Unit = {
 
-    val num_days = new Period(start, end).getDays
+    val num_days = Period.fieldDifference(start, end).getDays
 
     (0 to num_days).map(start.plusDays).par.foreach(download)
   }
+
+  sealed trait Source
+  case class SOHO(instrument: String, size: Int = SOHOData.Resolutions.s512) extends Source
+  case class SDO(instrument: String, size: Int = SDOData.Resolutions.s512) extends Source
+
 }
