@@ -1,7 +1,9 @@
 package io.github.mandar2812.PlasmaML.helios.data
 
-import ammonite.ops.Path
+import ammonite.ops._
+import org.joda.time.YearMonth
 import org.jsoup.Jsoup
+
 import collection.JavaConverters._
 
 object GOESData {
@@ -10,14 +12,14 @@ object GOESData {
 
   object Quantities {
 
-    val PROTON_FLUX_1m = "_eps_1m_"
-    val PROTON_FLUX_5m = "_eps_5m_"
+    val PROTON_FLUX_1m = "eps_1m_"
+    val PROTON_FLUX_5m = "eps_5m_"
 
-    val MAG_FIELD_1m = "_magneto_1m"
-    val MAG_FIELD_5m = "_magneto_5m"
+    val MAG_FIELD_1m = "magneto_1m"
+    val MAG_FIELD_5m = "magneto_5m"
 
-    val XRAY_FLUX_1m = "_xrs_1m"
-    val XRAY_FLUX_5m = "_xrs_5m"
+    val XRAY_FLUX_1m = "xrs_1m"
+    val XRAY_FLUX_5m = "xrs_5m"
   }
 
   object Formats {
@@ -55,7 +57,7 @@ object GOESLoader {
           .iterator()
           .asScala
 
-        elements_mission.map(_.attr("href")).filter(_.contains(quantity)).toList
+        elements_mission.map(h => link+format+"/"+h.attr("href")).filter(_.contains(quantity)).toList
       }).toList
 
     } catch {
@@ -68,6 +70,53 @@ object GOESLoader {
     println("Number of files = "+hrefs.length)
 
     hrefs.map(s => download_url+s)
+  }
+
+  /**
+    * Download GOES data from a specified month YYYY-MM.
+    *
+    * @param path The root path where the data will be downloaded,
+    *             the downloader appends soho/[instrument]/[year] to
+    *             the path supplied and places the images in there if
+    *             the createDirTree flag is set to true.
+    *
+    * @param createDirTree If this is set to false, then the images
+    *                      are placed directly in the path supplied.
+    *
+    * @param quantity The quantity to download, see [[GOESData.Quantities]]
+    *
+    * @param format The format of the data, can be either "csv" or "netcdf",
+    *               see [[GOESData.Formats]]
+    *
+    * @param date a Joda time [[YearMonth]] instance.
+    * */
+  def download(
+    path: Path, createDirTree: Boolean = true)(
+    quantity: String, format: String = GOESData.Formats.CSV)(
+    date: YearMonth): Unit = {
+
+    val (year, month) = (date.getYear, date.getMonthOfYear)
+
+    val download_path = if(createDirTree) path/'goes/quantity/year.toString/"%02d".format(month) else path
+
+    if(!(exists! download_path)) {
+      mkdir! download_path
+    }
+
+    println("Downloading GOES data from the NOAA Archive for: "+date+"\nDownload Path: "+download_path)
+
+    download_batch(download_path)(fetch_urls(path)(quantity, format)(year, month))
+  }
+
+  /**
+    * Perform a bulk download of GOES data within some year-month range
+    * */
+  def bulk_download(
+    path: Path, createDirTree: Boolean = true)(
+    instrument: String, format: String = GOESData.Formats.CSV)(
+    start: YearMonth, end: YearMonth): Unit = {
+
+    download_month_range(download(path, createDirTree)(instrument, format))(start, end)
   }
 
 

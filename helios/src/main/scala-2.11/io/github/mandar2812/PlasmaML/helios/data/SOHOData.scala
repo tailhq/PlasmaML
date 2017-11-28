@@ -114,7 +114,7 @@ object SOHOLoader {
     instrument: String, size: Int = 512)(
     start: LocalDate, end: LocalDate): Unit = {
 
-    download_range(download(path, createDirTree)(instrument, size))(start, end)
+    download_day_range(download(path, createDirTree)(instrument, size))(start, end)
   }
 
 }
