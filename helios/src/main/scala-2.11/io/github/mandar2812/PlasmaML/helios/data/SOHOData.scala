@@ -56,16 +56,20 @@ object SOHOLoader {
     //Construct the url to download file manifest for date in question.
     val download_url = base_url+year+"/"+instrument+"/"+year+"%02d".format(month)+"%02d".format(day)+"/"
 
-    val doc = Jsoup.connect(download_url)
-      .timeout(0)
-      .get()
+    val hrefs = try {
+      val doc = Jsoup.connect(download_url).timeout(0).get()
+      //Extract the elements containing the data file urls
+      val elements = doc.select("a[href]")
+        .iterator()
+        .asScala
 
-    //Extract the elements containing the data file urls
-    val elements = doc.select("a[href]")
-      .iterator()
-      .asScala
-
-    val hrefs = elements.map(_.attr("href")).filter(_.contains(size+".jpg")).toList
+      elements.map(_.attr("href")).filter(_.contains(size+".jpg")).toList
+    } catch {
+      case _: org.jsoup.HttpStatusException =>
+        println("Not found: "+download_url)
+        List.empty[String]
+      case _: Exception => List.empty[String]
+    }
 
     println("Number of files = "+hrefs.length)
 
