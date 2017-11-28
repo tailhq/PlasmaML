@@ -27,5 +27,6 @@ package object data {
   sealed trait Source
   case class SOHO(instrument: String, size: Int = SOHOData.Resolutions.s512) extends Source
   case class SDO(instrument: String, size: Int = SDOData.Resolutions.s512) extends Source
+  case class GOES(quantity: String = GOESData.Quantities.XRAY_FLUX_5m) extends Source
 
 }
