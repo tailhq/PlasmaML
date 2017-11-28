@@ -110,7 +110,7 @@ object SDOLoader {
       mkdir! download_path
     }
 
-    println("Downloading image manifest from the SOHO Archive for: "+date+"\nDownload Path: "+path)
+    println("Downloading image manifest from the SOHO Archive for: "+date+"\nDownload Path: "+download_path)
 
     download_batch(download_path)(fetch_urls(path)(instrument, size)(year, month, day))
   }
