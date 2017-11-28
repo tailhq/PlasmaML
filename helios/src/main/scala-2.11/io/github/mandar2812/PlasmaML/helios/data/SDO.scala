@@ -2,45 +2,55 @@ package io.github.mandar2812.PlasmaML.helios.data
 
 import collection.JavaConverters._
 import ammonite.ops._
-import io.github.mandar2812.dynaml.utils
 import org.joda.time.LocalDate
 import org.jsoup.Jsoup
 
 /**
   * Helper class for downloading solar images from the
-  * <a href="https://sohowww.nascom.nasa.gov">SOHO</a> archive.
+  * <a href="https://sdo.gsfc.nasa.gov">Solar Dynamics Observatory</a> archive.
   * @author mandar2812 date 27/11/2017
   * */
-object SOHO {
+object SDO {
 
   /**
     * The url for FTP download
     * */
-  val base_url = "https://sohowww.nascom.nasa.gov/data/REPROCESSING/Completed/"
+  val base_url = "https://sdo.gsfc.nasa.gov/assets/img/browse/"
 
   /**
-    * Instrument codes for the SOHO satellite
+    * Instrument codes for the SDO satellite
     * */
   object Instruments {
 
-    val MDIMAG = "mdimag"
+    val HMIIC = "HMIIC"
 
-    val MDIIGR = "mdiigr"
+    val HMIIF = "HMIIF"
 
-    val EIT171 = "eit171"
+    val HMID = "HMID"
 
-    val EIT195 = "eit195"
+    val AIA171 = "0171"
 
-    val EIT284 = "eit284"
+    val AIA131 = "0131"
 
-    val EIT304 = "eit304"
+    val AIA193 = "0193"
+
+    val AIA211 = "0211"
+
+    val AIA1600 = "1600"
+
+    val AIA94 = "0094"
+
+    val AIA335 = "0335"
+
+    val AIA304 = "0304"
   }
 
 }
 
-object SOHOLoader {
 
-  import SOHO._
+object SDOLoader {
+
+  import SDO._
 
   /**
     * Download all the available images
@@ -50,7 +60,7 @@ object SOHOLoader {
   def fetch_urls(path: Path)(instrument: String, size: Int = 512)(year: Int, month: Int, day: Int) = {
 
     //Construct the url to download file manifest for date in question.
-    val download_url = base_url+year+"/"+instrument+"/"+year+"%02d".format(month)+day+"/"
+    val download_url = base_url+year+"/"+"%02d".format(month)+"/"+day+"/"
 
     val doc = Jsoup.connect(download_url)
       .timeout(0)
@@ -61,7 +71,7 @@ object SOHOLoader {
       .iterator()
       .asScala
 
-    val hrefs = elements.map(_.attr("href")).filter(_.contains(size+".jpg")).toList
+    val hrefs = elements.map(_.attr("href")).filter(_.contains("_"+size+"_"+instrument+".jpg")).toList
 
     println("Files identified: ")
 
@@ -73,7 +83,7 @@ object SOHOLoader {
   def download(path: Path)(instrument: String, size: Int = 512)(date: LocalDate): Unit = {
     val (year, month, day) = (date.getYear, date.getMonthOfYear, date.getDayOfMonth)
 
-    val download_path = path/'soho/instrument/year.toString
+    val download_path = path/'sdo/instrument/year.toString
 
     if(!(exists! download_path)) {
       mkdir! download_path
