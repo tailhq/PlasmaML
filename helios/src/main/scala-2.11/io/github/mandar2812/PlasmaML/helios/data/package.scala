@@ -2,6 +2,7 @@ package io.github.mandar2812.PlasmaML.helios
 
 import ammonite.ops.Path
 import io.github.mandar2812.dynaml.utils
+import org.joda.time.{LocalDate, Period}
 
 package object data {
 
@@ -11,5 +12,15 @@ package object data {
     * */
   def download_batch(path: Path)(urls: List[String]): Unit = {
     urls.par.foreach(s => utils.downloadURL(s, (path/s.split('/').last).toString()))
+  }
+
+  /**
+    * Perform a bulk download of images within some date range
+    * */
+  def download_range(download: (LocalDate) => Unit)(start: LocalDate, end: LocalDate): Unit = {
+
+    val num_days = new Period(start, end).getDays
+
+    (0 to num_days).map(start.plusDays).par.foreach(download)
   }
 }
