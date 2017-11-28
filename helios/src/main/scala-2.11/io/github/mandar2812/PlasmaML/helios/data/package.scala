@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.helios
 
 import ammonite.ops.Path
 import io.github.mandar2812.dynaml.utils
-import org.joda.time.{LocalDate, Period}
+import org.joda.time.{Duration, LocalDate}
 
 package object data {
 
@@ -19,7 +19,7 @@ package object data {
     * */
   def download_range(download: (LocalDate) => Unit)(start: LocalDate, end: LocalDate): Unit = {
 
-    val num_days = Period.fieldDifference(start, end).getDays
+    val num_days = new Duration(start.toDateTimeAtStartOfDay, end.toDateTimeAtStartOfDay).getStandardDays.toInt
 
     (0 to num_days).map(start.plusDays).par.foreach(download)
   }
