@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.helios.data
 
 import collection.JavaConverters._
 import ammonite.ops._
-import org.joda.time.{Interval, LocalDate, Period}
+import org.joda.time.LocalDate
 import org.jsoup.Jsoup
 
 /**
@@ -91,7 +91,7 @@ object SOHOLoader {
     date: LocalDate): Unit = {
     val (year, month, day) = (date.getYear, date.getMonthOfYear, date.getDayOfMonth)
 
-    val download_path = if(createDirTree) path/'soho/instrument/year.toString else path
+    val download_path = if(createDirTree) path/'soho/instrument/year.toString/"%02d".format(month) else path
 
     if(!(exists! download_path)) {
       mkdir! download_path

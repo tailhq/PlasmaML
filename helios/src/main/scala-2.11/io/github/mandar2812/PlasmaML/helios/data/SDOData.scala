@@ -104,7 +104,7 @@ object SDOLoader {
     date: LocalDate): Unit = {
     val (year, month, day) = (date.getYear, date.getMonthOfYear, date.getDayOfMonth)
 
-    val download_path = if(createDirTree) path/'sdo/instrument/year.toString else path
+    val download_path = if(createDirTree) path/'sdo/instrument/year.toString/"%02d".format(month) else path
 
     if(!(exists! download_path)) {
       mkdir! download_path
