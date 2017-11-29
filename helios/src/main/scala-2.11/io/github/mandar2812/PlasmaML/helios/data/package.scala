@@ -26,10 +26,11 @@ package object data {
 
   def download_month_range(download: (YearMonth) => Unit)(start: YearMonth, end: YearMonth): Unit = {
 
-    val num_months = new Period(
+    val period = new Period(
       start.toLocalDate(1).toDateTimeAtStartOfDay,
       end.toLocalDate(30).toDateTimeAtStartOfDay)
-      .getMonths
+
+    val num_months = (12*period.getYears) + period.getMonths
 
     (0 to num_months).map(start.plusMonths).par.foreach(download)
   }
