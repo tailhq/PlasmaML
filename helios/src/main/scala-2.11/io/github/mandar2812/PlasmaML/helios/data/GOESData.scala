@@ -1,11 +1,18 @@
 package io.github.mandar2812.PlasmaML.helios.data
 
 import ammonite.ops._
-import org.joda.time.YearMonth
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+import org.joda.time.{DateTime, DateTimeZone, Instant, YearMonth}
 import org.jsoup.Jsoup
 
 import collection.JavaConverters._
+import scala.util.matching.Regex
 
+/**
+  * Helper object for downloading solar images from the
+  * <a href="http://www.swpc.noaa.gov/products/goes-x-ray-flux">GOES</a> archive.
+  * @author mandar2812 date 27/11/2017
+  * */
 object GOESData {
 
   val base_url = "https://satdat.ngdc.noaa.gov/sem/goes/data/avg/"
@@ -26,11 +33,18 @@ object GOESData {
     val CSV = "csv"
     val NETCDF = "netcdf"
   }
+
+  //A regular expression which extracts the data segment of
+  //a goes csv file.
+  val cleanRegex: Regex = """time_tag,xs,xl([.\s\w$,-:]+)""".r
+
 }
 
 object GOESLoader {
+
   import GOESData._
 
+  DateTimeZone.setDefault(DateTimeZone.UTC)
 
   /**
     * Download all the available images
@@ -119,5 +133,39 @@ object GOESLoader {
     download_month_range(download(path, createDirTree)(instrument, format))(start, end)
   }
 
+  /**
+    * Parse a GOES X-Ray flux csv file.
+    *
+    * @param file The path of the data file as an
+    *             ammonite [[Path]].
+    *
+    * @return A sequence of time stamped x-ray fluxes.
+    * */
+  def parse_file(file: Path) = {
+
+    /*
+    * The parsing follows in three steps:
+    *
+    *   1. Read the file into a string
+    *
+    *   2. Extract the data section of the csv,
+    *      discarding the meta-data,
+    *      using a regular expression match.
+    *
+    *   3. Extract the x-ray fluxes in a collection
+    *      along with the time stamps.
+    *
+    * */
+
+    read! file |>
+      ((c) => cleanRegex.findAllIn(c).matchData.map(_.group(1)).toList.head.split("\\r?\\n").drop(1)) |
+      (line => {
+        val splits = line.split(',')
+
+        val date_time = DateTime.parse(splits.head, DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS"))
+
+        (date_time, Seq(splits(1).toDouble, splits.last.toDouble))
+      })
+  }
 
 }

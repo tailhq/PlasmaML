@@ -2,11 +2,13 @@ package io.github.mandar2812.PlasmaML.helios.data
 
 import collection.JavaConverters._
 import ammonite.ops._
-import org.joda.time.LocalDate
+import org.joda.time._
 import org.jsoup.Jsoup
 
+import scala.util.matching.Regex
+
 /**
-  * Helper class for downloading solar images from the
+  * Helper object for downloading solar images from the
   * <a href="https://sohowww.nascom.nasa.gov">SOHO</a> archive.
   * @author mandar2812 date 27/11/2017
   * */
@@ -40,12 +42,26 @@ object SOHOData {
     val s1024 = 1014
   }
 
+  def getFilePattern(date: LocalDate, source: SOHO): Regex = {
+    val (year, month, day) = (date.getYear.toString, date.getMonthOfYear.toString, date.dayOfMonth.toString)
+
+    (year+month+day+"""_(\d{4}?)_"""+source.instrument+"_"+source.size+".jpg").r
+  }
+
+  def getFilePattern(date: YearMonth, source: SOHO): Regex = {
+    val (year, month) = (date.getYear.toString, date.getMonthOfYear.toString)
+
+    (year+month+"""(\d{2}?)_(\d{4}?)_"""+source.instrument+"_"+source.size+".jpg").r
+  }
+
 }
 
 object SOHOLoader {
 
   import SOHOData._
 
+  DateTimeZone.setDefault(DateTimeZone.UTC)
+  
   /**
     * Download all the available images
     * for a given date, corresponding to
@@ -115,6 +131,59 @@ object SOHOLoader {
     start: LocalDate, end: LocalDate): Unit = {
 
     download_day_range(download(path, createDirTree)(instrument, size))(start, end)
+  }
+
+
+  /**
+    * Load paths to SOHO images from the disk.
+    *
+    * @param soho_files_path The base directory in which soho data is stored.
+    *
+    * @param year_month The year-month from which the images were taken.
+    *
+    * @param soho_source A data source i.e. a [[SOHO]] instance.
+    *
+    * @param dirTreeCreated If SOHO directory structure has been
+    *                       created inside the soho_files_path,
+    *                       defaults to true.
+    *
+    * @return Time stamped images for some soho instrument and image resolution.
+    * */
+  def load_images(
+    soho_files_path: Path, year_month: YearMonth,
+    soho_source: SOHO, dirTreeCreated: Boolean = true) = {
+
+
+    val (year, month) = (year_month.getYear.toString, year_month.getMonthOfYear.toString)
+    val filePattern = getFilePattern(year_month, soho_source)
+
+    val image_paths = if(dirTreeCreated) {
+      ls! soho_files_path |? (s => s.isDir && s.segments.last == soho_source.instrument) ||
+        (d => {
+          ls! d |?
+            (s => s.isDir && s.segments.contains(year)) ||
+            (ls! _) |?
+            (_.segments.contains(month))
+        }) ||
+        (ls! _ )
+    } else {
+      ls.rec! soho_files_path
+    }
+
+    image_paths | (file => {
+      (filePattern.findFirstMatchIn(file.segments.last), file)
+    }) |? (_._1.isDefined) | (c => {
+      val Some(matchStr) = c._1
+
+      val (day, time) = (matchStr.group(1), matchStr.group(2))
+
+      (
+        new DateTime(
+          year.toInt, month.toInt, day.toInt,
+          time.take(2).toInt, time.takeRight(2).toInt),
+        c._2
+      )
+    })
   }
 
 }
