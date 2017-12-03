@@ -45,7 +45,7 @@ object SOHOData {
   def getFilePattern(date: LocalDate, source: SOHO): Regex = {
     val (year, month, day) = (date.getYear.toString, date.getMonthOfYear.toString, date.dayOfMonth.toString)
 
-    (year+month+day+"""_(\d{4}?)_"""+source.instrument+"_"+source.size+".jpg").r
+    (year+month+day+"""_(\d{4}?)_"""+source.instrument+"_"+source.size+"""\.jpg""").r
   }
 
   def getFilePattern(date: YearMonth, source: SOHO): Regex = {
@@ -61,7 +61,7 @@ object SOHOLoader {
   import SOHOData._
 
   DateTimeZone.setDefault(DateTimeZone.UTC)
-  
+
   /**
     * Download all the available images
     * for a given date, corresponding to

@@ -31,12 +31,19 @@ object GOESData {
 
   object Formats {
     val CSV = "csv"
-    val NETCDF = "netcdf"
+    val NETCDF = "cdf"
   }
 
   //A regular expression which extracts the data segment of
   //a goes csv file.
   val cleanRegex: Regex = """time_tag,xs,xl([.\s\w$,-:]+)""".r
+
+
+  def getFilePattern(date: YearMonth, source: GOES): Regex = {
+    val (year, month) = (date.getYear.toString, date.getMonthOfYear.toString)
+
+    ("""g\w+_""" +source.quantity+"""_"""+year+month+"""\d{2}?_"""+year+month+"""\d{2}?\."""+source.format).r
+  }
 
 }
 
@@ -166,6 +173,28 @@ object GOESLoader {
 
         (date_time, Seq(splits(1).toDouble, splits.last.toDouble))
       })
+  }
+
+  def load_goes_data(
+    goes_files_path: Path, year_month: YearMonth,
+    goes_source: GOES, dirTreeCreated: Boolean = true) = {
+
+    val (year, month) = (year_month.getYear.toString, year_month.getMonthOfYear.toString)
+
+    val filePattern = getFilePattern(year_month, goes_source)
+
+    val files = if(dirTreeCreated) {
+
+      ls! goes_files_path/goes_source.quantity/year/month
+
+    } else {
+      ls! goes_files_path
+    }
+
+    files |?
+      (_.isFile) |?
+      (f => filePattern.findFirstMatchIn(f.segments.last).isDefined) ||
+      parse_file |> (_.groupBy(_._1))
   }
 
 }
