@@ -172,11 +172,11 @@ object GOESLoader {
 
         val date_time = DateTime.parse(splits.head, DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS"))
 
-        val xray_low_freq = if (splits(1) == missingValue) Double.NaN else splits(1).toString
+        val xray_low_freq = if (splits(1) == missingValue) Double.NaN else splits(1).toDouble
 
-        val xray_high_freq = if (splits.last == missingValue) Double.NaN else splits.last.toString
+        val xray_high_freq = if (splits.last == missingValue) Double.NaN else splits.last.toDouble
 
-        (date_time, Seq(xray_low_freq, xray_high_freq))
+        (date_time, (xray_low_freq, xray_high_freq))
       })
   }
 
