@@ -38,6 +38,7 @@ object GOESData {
   //a goes csv file.
   val cleanRegex: Regex = """time_tag,xs,xl([.\s\w$,-:]+)""".r
 
+  val missingValue: String = "-99999.0"
 
   def getFilePattern(date: YearMonth, source: GOES): Regex = {
     val (year, month) = (date.getYear.toString, date.getMonthOfYear.toString)
@@ -171,7 +172,11 @@ object GOESLoader {
 
         val date_time = DateTime.parse(splits.head, DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS"))
 
-        (date_time, Seq(splits(1).toDouble, splits.last.toDouble))
+        val xray_low_freq = if (splits(1) == missingValue) Double.NaN else splits(1).toString
+
+        val xray_high_freq = if (splits.last == missingValue) Double.NaN else splits.last.toString
+
+        (date_time, Seq(xray_low_freq, xray_high_freq))
       })
   }
 
@@ -194,7 +199,8 @@ object GOESLoader {
     files |?
       (_.isFile) |?
       (f => filePattern.findFirstMatchIn(f.segments.last).isDefined) ||
-      parse_file |> (_.groupBy(_._1))
+      parse_file |>
+      (_.groupBy(_._1).mapValues(_.map(_._2)).toSeq.sortBy(_._1.getMillis))
   }
 
 }
