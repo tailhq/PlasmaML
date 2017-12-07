@@ -191,7 +191,7 @@ ggplot(prior_samples, aes(x=exp(Q_alpha))) +
 ggsave("histogram_Q_alpha_prior.png")
 
 
-ggplot(posterior_samples, aes(x=exp(Q_alpha))) +
+ggplot(posterior_samples[exp(posterior_samples$"Q_alpha") < 50,], aes(x=exp(Q_alpha))) +
   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                  binwidth=.5,
                  colour="black", fill="white") +
@@ -201,3 +201,21 @@ ggplot(posterior_samples, aes(x=exp(Q_alpha))) +
   geom_vline(aes(xintercept=exp(ground_truth$Q_alpha)),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
 ggsave("histogram_Q_alpha_posterior.png")
+
+# plot the Kp profile
+
+kp <- read.csv("kp_profile.csv", header = FALSE, col.names = c("time", "Kp"))
+
+ggplot(kp, aes(x=time, y=Kp)) +
+  geom_line(size=1.15, linetype=5) +
+  theme_gray(base_size = 22)
+
+ggsave("kp_profile.png")
+
+initial <- read.csv("initial_psd.csv", header = FALSE, col.names = c("L", "f"))
+
+ggplot(initial, aes(x=L, y=f)) +
+  geom_line(size=1.15, linetype=5) +
+  theme_gray(base_size = 22) + ylab(expression(f(0)))
+
+ggsave("initial_psd.png")
