@@ -149,7 +149,7 @@ object GOESLoader {
     *
     * @return A sequence of time stamped x-ray fluxes.
     * */
-  def parse_file(file: Path) = {
+  def parse_file(file: Path): Stream[(DateTime, (Double, Double))] = {
 
     /*
     * The parsing follows in three steps:
@@ -165,7 +165,7 @@ object GOESLoader {
     *
     * */
 
-    read! file |>
+    (read! file |>
       ((c) => cleanRegex.findAllIn(c).matchData.map(_.group(1)).toList.head.split("\\r?\\n").drop(1)) |
       (line => {
         val splits = line.split(',')
@@ -177,12 +177,12 @@ object GOESLoader {
         val xray_high_freq = if (splits.last == missingValue) Double.NaN else splits.last.toDouble
 
         (date_time, (xray_low_freq, xray_high_freq))
-      })
+      })).toStream
   }
 
   def load_goes_data(
     goes_files_path: Path, year_month: YearMonth,
-    goes_source: GOES, dirTreeCreated: Boolean = true) = {
+    goes_source: GOES, dirTreeCreated: Boolean = true): Stream[(DateTime, Seq[(Double, Double)])] = {
 
     val (year, month) = (year_month.getYear.toString, year_month.getMonthOfYear.toString)
 
@@ -200,7 +200,7 @@ object GOESLoader {
       (_.isFile) |?
       (f => filePattern.findFirstMatchIn(f.segments.last).isDefined) ||
       parse_file |>
-      (_.groupBy(_._1).mapValues(_.map(_._2)).toSeq.sortBy(_._1.getMillis))
+      (_.groupBy(_._1).mapValues(_.map(_._2)).toStream.sortBy(_._1.getMillis))
   }
 
 }

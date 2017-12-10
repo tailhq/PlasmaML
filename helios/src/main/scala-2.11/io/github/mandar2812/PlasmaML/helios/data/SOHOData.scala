@@ -151,7 +151,7 @@ object SOHOLoader {
     * */
   def load_images(
     soho_files_path: Path, year_month: YearMonth,
-    soho_source: SOHO, dirTreeCreated: Boolean = true) = {
+    soho_source: SOHO, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] = {
 
 
     val (year, month) = (year_month.getYear.toString, year_month.getMonthOfYear.toString)
@@ -170,7 +170,7 @@ object SOHOLoader {
       ls.rec! soho_files_path
     }
 
-    image_paths | (file => {
+    (image_paths | (file => {
       (filePattern.findFirstMatchIn(file.segments.last), file)
     }) |? (_._1.isDefined) | (c => {
       val Some(matchStr) = c._1
@@ -183,7 +183,7 @@ object SOHOLoader {
           time.take(2).toInt, time.takeRight(2).toInt),
         c._2
       )
-    })
+    })).toStream
   }
 
 }
