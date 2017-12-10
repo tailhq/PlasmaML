@@ -8,9 +8,9 @@ import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 
 
-val data_dir_name = "tmp"//"data_repo"
+val data_dir_name = "data_repo"//"tmp"//
 
-val data_dir = home/'tmp/'helios
+val data_dir = home/data_dir_name///'helios
 val soho_dir = data_dir/'soho
 val goes_dir = data_dir/'goes
 
@@ -19,16 +19,6 @@ val tempdir = home/"tmp"
 val (year, month, day) = ("2003", "10", "28")
 
 val halloween_start = new DateTime(2003, 10, 28, 8, 59)
-
-/*
-val eit195_images = helios.load_images(
-  soho_dir, new YearMonth(year.toInt, month.toInt),
-  SOHO(SOHOData.Instruments.EIT195, 512))
-
-val avgd_goes_data = helios.load_fluxes(
-  goes_dir, new YearMonth(year.toInt, month.toInt),
-  GOES(GOESData.Quantities.XRAY_FLUX_5m))
-*/
 
 val reduce_fn = (gr: Stream[(DateTime, (Double, Double))]) => {
 
@@ -71,7 +61,7 @@ val trainData =
 
 println("Building the regression model.")
 val input = tf.learn.Input(
-  FLOAT32,
+  UINT8,
   Shape(
     -1,
     dataSet.trainData.shape(1),
@@ -81,7 +71,7 @@ val input = tf.learn.Input(
 
 val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
 
-val layer = /*tf.learn.Cast(FLOAT32) >>*/
+val layer = tf.learn.Cast(FLOAT32) >>
   tf.learn.Conv2D(Shape(2, 2, 4, 16), 1, 1, SamePadding, name = "Conv2D_0") >>
   tf.learn.AddBias(name = "Bias_0") >>
   tf.learn.ReLU(0.1f) >>
@@ -95,7 +85,7 @@ val layer = /*tf.learn.Cast(FLOAT32) >>*/
   tf.learn.Linear(1, name = "OutputLayer")
 
 val trainingInputLayer = tf.learn.Cast(INT64)
-val loss = tf.learn.L2Loss() /*>> tf.learn.Mean()*/ >> tf.learn.ScalarSummary("Loss")
+val loss = tf.learn.L2Loss() >> tf.learn.Mean() >> tf.learn.ScalarSummary("Loss")
 val optimizer = tf.train.AdaGrad(0.1)
 
 val model = tf.learn.Model(input, layer, trainInput, trainingInputLayer, loss, optimizer)

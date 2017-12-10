@@ -158,7 +158,7 @@ package object helios {
       val scaled_image = im.copy.scale(scaleDown)
 
       val im_tensor = dtf.tensor_from(
-        "FLOAT32", 1, scaled_image.height, scaled_image.width, 4)(
+        "UINT8", 1, scaled_image.height, scaled_image.width, 4)(
         scaled_image.argb.toSeq.flatten)
 
       val label = dtf.tensor_from("FLOAT32", 1, 2)(Seq(data_label._1, data_label._2))
@@ -184,7 +184,7 @@ package object helios {
       val (_, (path, data_label)) = entry
 
       val im = Image.fromPath(path.toNIO)
-      val im_tensor = dtf.tensor_from("FLOAT32", 1, 32, 32, 4)(im.copy.scale(0.0625).argb.toSeq.flatten)
+      val im_tensor = dtf.tensor_from("UINT8", 1, 32, 32, 4)(im.copy.scale(0.0625).argb.toSeq.flatten)
 
       val label = dtf.tensor_from("FLOAT32", 1, 2)(Seq(data_label._1, data_label._2))
 
