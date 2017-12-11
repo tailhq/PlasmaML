@@ -92,7 +92,7 @@ val model = tf.learn.Model(input, layer, trainInput, trainingInputLayer, loss, o
 
 println("Training the linear regression model.")
 val summariesDir = java.nio.file.Paths.get((tempdir/"helios_goes_soho_summaries").toString())
-val estimator = tf.learn.FileBasedEstimator(
+val estimator = tf.learn.InMemoryEstimator(
   model,
   tf.learn.Configuration(Some(summariesDir)),
   tf.learn.StopCriteria(maxSteps = Some(100000)),
@@ -101,7 +101,7 @@ val estimator = tf.learn.FileBasedEstimator(
     tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
     tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
   tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
-estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(500)))
+estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(2000)))
 
 def accuracy(images: Tensor, labels: Tensor): Float = {
   val predictions = estimator.infer(() => images)
