@@ -5,13 +5,26 @@ import org.joda.time._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 
+/*
+* Mind your surroundings!
+* */
 val os_name = System.getProperty("os.name")
 
 println("OS: "+os_name)
 
+val user_name = System.getProperty("user.name")
+
+println("Running as user: "+user_name)
+
 val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
-val data_dir = home_dir_prefix/'mandar/"data_repo"/'helios
+
+/*
+* Create a collated data set,
+* extract GOES flux data and join it
+* with eit195 (green filter) images.
+* */
+val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
 val soho_dir = data_dir/'soho
 val goes_dir = data_dir/'goes
 

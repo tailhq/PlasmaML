@@ -12,6 +12,10 @@ val os_name = System.getProperty("os.name")
 
 println("OS: "+os_name)
 
+val user_name = System.getProperty("user.name")
+
+println("Running as user: "+user_name)
+
 val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
 
@@ -20,7 +24,7 @@ val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 * extract GOES flux data and join it
 * with eit195 (green filter) images.
 * */
-val data_dir = home_dir_prefix/'mandar/"data_repo"/'helios
+val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
 val soho_dir = data_dir/'soho
 val goes_dir = data_dir/'goes
 
