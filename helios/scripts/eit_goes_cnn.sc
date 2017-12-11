@@ -7,6 +7,8 @@ import org.platanios.tensorflow.api.ops.NN.SamePadding
 
 val os_name = System.getProperty("os.name")
 
+println("OS: "+os_name)
+
 val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
 val data_dir = home_dir_prefix/'mandar/"data_repo"/'helios
@@ -106,7 +108,7 @@ val estimator = tf.learn.InMemoryEstimator(
     tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
     tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
   tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
-estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(2000)))
+estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(5000)))
 
 def accuracy(images: Tensor, labels: Tensor): Float = {
   val predictions = estimator.infer(() => images)
