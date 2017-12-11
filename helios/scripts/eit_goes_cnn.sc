@@ -50,7 +50,13 @@ val dataSet = helios.create_helios_data_set(collated_data, _ => scala.util.Rando
 
 val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
-val trainLabels = tf.data.TensorSlicesDataset(dataSet.trainLabels(::, 0))
+val train_labels = dataSet.trainLabels(::, 0)
+
+val labels_mean = train_labels.mean()
+
+val labels_stddev = train_labels.subtract(labels_mean).square.mean().sqrt
+
+val trainLabels = tf.data.TensorSlicesDataset(train_labels.subtract(labels_mean).divide(labels_stddev))
 
 val trainData =
   trainImages.zip(trainLabels)
@@ -86,7 +92,7 @@ val layer = tf.learn.Cast(FLOAT32) >>
 
 val trainingInputLayer = tf.learn.Cast(INT64)
 val loss = tf.learn.L2Loss() >> tf.learn.Mean() >> tf.learn.ScalarSummary("Loss")
-val optimizer = tf.train.AdaGrad(0.1)
+val optimizer = tf.train.AdaGrad(0.05)
 
 val model = tf.learn.Model(input, layer, trainInput, trainingInputLayer, loss, optimizer)
 
@@ -110,7 +116,7 @@ def accuracy(images: Tensor, labels: Tensor): Float = {
 
 val (trainAccuracy, testAccuracy) = (
   accuracy(dataSet.trainData, dataSet.trainLabels),
-  accuracy(dataSet.testData, dataSet.testLabels))
+  accuracy(dataSet.testData, dataSet.testLabels(::, 0).subtract(labels_mean).divide(labels_stddev)))
 
 print("Train accuracy = ")
 pprint.pprintln(trainAccuracy)
