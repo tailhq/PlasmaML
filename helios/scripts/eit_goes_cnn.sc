@@ -1,16 +1,15 @@
-import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import ammonite.ops._
-import com.sksamuel.scrimage.Image
 import org.joda.time._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 
+val os_name = System.getProperty("os.name")
 
-val data_dir_name = "data_repo"//"tmp"//
+val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
-val data_dir = home/data_dir_name///'helios
+val data_dir = home_dir_prefix/'mandar/"data_repo"/'helios
 val soho_dir = data_dir/'soho
 val goes_dir = data_dir/'goes
 
