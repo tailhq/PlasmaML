@@ -81,7 +81,7 @@ val trainData =
   trainImages.zip(trainLabels)
     .repeat()
     .shuffle(10000)
-    .batch(32)
+    .batch(128)
     .prefetch(10)
 
 /*
