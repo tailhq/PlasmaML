@@ -138,7 +138,7 @@ val estimator = tf.learn.InMemoryEstimator(
     tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
     tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(500))),
   tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
-estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(20000)))
+estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(80000)))
 
 def accuracy(images: Tensor, labels: Tensor): Float = {
   val predictions = estimator.infer(() => images)
