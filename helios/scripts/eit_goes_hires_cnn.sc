@@ -69,7 +69,7 @@ val collated_data = helios.collate_data(
 val dataSet = helios.create_helios_data_set(
   collated_data,
   _ => scala.util.Random.nextDouble() <= 0.8,
-  scaleDownFactor = 2)
+  scaleDownFactor = 3)
 
 val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
@@ -104,26 +104,30 @@ val input = tf.learn.Input(
 val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
 
 val layer = tf.learn.Cast(FLOAT32) >>
-  tf.learn.Conv2D(Shape(8, 8, 4, 16), 1, 1, SamePadding, name = "Conv2D_0") >>
+  tf.learn.Conv2D(Shape(2, 2, 4, 64), 1, 1, SamePadding, name = "Conv2D_0") >>
   tf.learn.AddBias(name = "Bias_0") >>
   tf.learn.ReLU(0.1f) >>
-  tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_0") >>
-  tf.learn.Conv2D(Shape(4, 4, 16, 32), 1, 1, SamePadding, name = "Conv2D_1") >>
+  tf.learn.Dropout(0.6F) >>
+  tf.learn.Conv2D(Shape(2, 2, 64, 32), 2, 2, SamePadding, name = "Conv2D_1") >>
   tf.learn.AddBias(name = "Bias_1") >>
   tf.learn.ReLU(0.1f) >>
-  tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_1") >>
-  tf.learn.Conv2D(Shape(2, 2, 32, 16), 1, 1, SamePadding, name = "Conv2D_2") >>
+  tf.learn.Dropout(0.6F) >>
+  tf.learn.Conv2D(Shape(2, 2, 32, 16), 4, 4, SamePadding, name = "Conv2D_2") >>
   tf.learn.AddBias(name = "Bias_2") >>
   tf.learn.ReLU(0.1f) >>
   tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_2") >>
   tf.learn.Flatten() >>
+  tf.learn.Linear(128, name = "Layer_2") >>
+  tf.learn.ReLU(0.1f) >>
   tf.learn.Linear(64, name = "Layer_2") >>
   tf.learn.ReLU(0.1f) >>
+  tf.learn.Linear(8, name = "Layer_2") >>
+  tf.learn.Sigmoid() >>
   tf.learn.Linear(1, name = "OutputLayer")
 
 val trainingInputLayer = tf.learn.Cast(INT64)
 val loss = tf.learn.L2Loss() >> tf.learn.Mean() >> tf.learn.ScalarSummary("Loss")
-val optimizer = tf.train.AdaGrad(0.06)
+val optimizer = tf.train.AdaGrad(0.0001)
 
 val model = tf.learn.Model(input, layer, trainInput, trainingInputLayer, loss, optimizer)
 
@@ -138,7 +142,7 @@ val estimator = tf.learn.InMemoryEstimator(
     tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
     tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(500))),
   tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
-estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(80000)))
+estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(100000)))
 
 def accuracy(images: Tensor, labels: Tensor): Float = {
   val predictions = estimator.infer(() => images)
