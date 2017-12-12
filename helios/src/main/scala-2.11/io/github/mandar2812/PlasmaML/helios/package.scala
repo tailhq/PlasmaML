@@ -139,6 +139,18 @@ package object helios {
       .sortBy(_._1.getMillis)
   }
 
+  /**
+    * Create a processed tensor data set as a [[HeliosDataSet]] instance.
+    *
+    * @param collated_data A Stream of date times, image paths and fluxes.
+    *
+    * @param tt_partition A function which takes each data element and
+    *                     determines if it goes into the train or test split.
+    *
+    * @param scaleDownFactor The exponent of 2 which determines how much the
+    *                        image will be scaled down. i.e. scaleDownFactor = 4
+    *                        corresponds to a 16 fold decrease in image size.
+    * */
   def create_helios_data_set(
     collated_data: Stream[(DateTime, (Path, (Double, Double)))],
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
@@ -148,9 +160,55 @@ package object helios {
 
     val (train_set, test_set) = collated_data.partition(tt_partition)
 
-    var working_set = HeliosDataSet(null, null, null, null)
+    val (scaled_height, scaled_width, num_channels) = {
 
-    train_set.foreach(entry => {
+      val im = Image.fromPath(train_set.head._2._1.toNIO)
+
+      val scaled_image = im.copy.scale(scaleDown)
+
+      (scaled_image.height, scaled_image.width, scaled_image.argb(0, 0).length)
+
+    }
+
+    val working_set = HeliosDataSet(null, null, null, null)
+
+    val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) = train_set.map(entry => {
+      val (_, (path, data_label)) = entry
+
+      val im = Image.fromPath(path.toNIO)
+
+      val scaled_image = im.copy.scale(scaleDown)
+
+      (scaled_image.argb.flatten.map(_.toByte), Seq(data_label._1, data_label._2))
+
+    }).unzip
+
+    val features_tensor_train = dtf.tensor_from_buffer(
+      "UINT8", train_set.length, scaled_height, scaled_width, num_channels)(
+      features_train.toArray.flatten[Byte])
+
+    val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, 2)(labels_train.flatten[Double])
+
+
+    val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
+      val (_, (path, data_label)) = entry
+
+      val im = Image.fromPath(path.toNIO)
+
+      val scaled_image = im.copy.scale(scaleDown)
+
+      (scaled_image.argb.flatten.map(_.toByte), Seq(data_label._1, data_label._2))
+
+    }).unzip
+
+    val features_tensor_test = dtf.tensor_from_buffer(
+      "UINT8", test_set.length, scaled_height, scaled_width, num_channels)(
+      features_test.toArray.flatten[Byte])
+
+    val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, 2)(labels_test.flatten[Double])
+
+
+/*    train_set.foreach(entry => {
       val (_, (path, data_label)) = entry
 
       val im = Image.fromPath(path.toNIO)
@@ -203,9 +261,14 @@ package object helios {
 
       working_set = working_set.copy(testData = testImages, testLabels = testTargets)
 
-    })
+    })*/
 
-    working_set
+    working_set.copy(
+      trainData   = features_tensor_train,
+      trainLabels = labels_tensor_train,
+      testData    = features_tensor_test,
+      testLabels  = labels_tensor_test
+    )
   }
 
 }
