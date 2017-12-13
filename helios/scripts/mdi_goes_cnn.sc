@@ -33,7 +33,10 @@ val goes_dir = data_dir/'goes
 
 val (year, month, day) = ("2003", "10", "28")
 
-val halloween_start = new DateTime(2003, 10, 28, 8, 59)
+val halloween_start = new DateTime(2003, 10, 28, 8, 0)
+
+val halloween_end = new DateTime(2003, 10, 29, 12, 0)
+
 
 val reduce_fn = (gr: Stream[(DateTime, (Double, Double))]) => {
 
@@ -55,7 +58,7 @@ val round_date = (d: DateTime) => {
 }
 
 val collated_data = helios.collate_data_range(
-  new YearMonth(2001, month.toInt), new YearMonth(year.toInt, month.toInt))(
+  new YearMonth(2001, 1), new YearMonth(2005, 12))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
   goes_aggregation = 2,
@@ -63,6 +66,11 @@ val collated_data = helios.collate_data_range(
   SOHO(SOHOData.Instruments.MDIMAG, 512),
   soho_dir,
   dt_round_off = round_date)
+
+
+val tt_partition = (p: (DateTime, (Path, (Double, Double)))) =>
+  if(p._1.isAfter(halloween_start) && p._1.isBefore(halloween_end)) true
+  else scala.util.Random.nextDouble() <= 0.7
 
 /*
 * After data has been joined/collated,
@@ -72,7 +80,7 @@ val collated_data = helios.collate_data_range(
 
 val dataSet = helios.create_helios_data_set(
   collated_data,
-  _ => scala.util.Random.nextDouble() <= 0.7,
+  tt_partition,
   scaleDownFactor = 3)
 
 val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
