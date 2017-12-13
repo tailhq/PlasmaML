@@ -109,9 +109,9 @@ val layer = tf.learn.Cast(FLOAT32) >>
   tf.learn.Linear(128, name = "FC_Layer_0") >>
   tf.learn.ReLU(0.1f) >>
   tf.learn.Linear(64, name = "FC_Layer_1") >>
-  tf.learn.SELU() >>
+  tf.learn.ReLU(0.1f) >>
   tf.learn.Linear(8, name = "FC_Layer_2") >>
-  tf.learn.SELU() >>
+  tf.learn.Sigmoid() >>
   tf.learn.Linear(1, name = "OutputLayer")
 
 

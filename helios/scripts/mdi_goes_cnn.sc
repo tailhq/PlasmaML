@@ -124,9 +124,9 @@ val layer = tf.learn.Cast(FLOAT32) >>
   tf.learn.Linear(128, name = "FC_Layer_0") >>
   tf.learn.ReLU(0.1f) >>
   tf.learn.Linear(64, name = "FC_Layer_1") >>
-  tf.learn.SELU() >>
+  tf.learn.ReLU(0.1f) >>
   tf.learn.Linear(8, name = "FC_Layer_2") >>
-  tf.learn.SELU() >>
+  tf.learn.Sigmoid() >>
   tf.learn.Linear(1, name = "OutputLayer")
 
 val trainingInputLayer = tf.learn.Cast(INT64)
@@ -149,7 +149,7 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
       tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
       tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(500))),
     tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
-  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(20000)))
+  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(50000)))
 
   (model, estimator)
 }

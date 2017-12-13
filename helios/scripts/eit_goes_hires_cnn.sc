@@ -105,6 +105,12 @@ val input = tf.learn.Input(
 
 val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
 
+/*
+* Architecture Notes:
+*
+* Convolutional Unit:= Conv >> ReLU >> Dropout
+*
+* */
 val layer = tf.learn.Cast(FLOAT32) >>
   tf.learn.Conv2D(Shape(2, 2, 4, 64), 1, 1, SamePadding, name = "Conv2D_0") >>
   tf.learn.AddBias(name = "Bias_0") >>
@@ -122,9 +128,9 @@ val layer = tf.learn.Cast(FLOAT32) >>
   tf.learn.Linear(128, name = "FC_Layer_0") >>
   tf.learn.ReLU(0.1f) >>
   tf.learn.Linear(64, name = "FC_Layer_1") >>
-  tf.learn.SELU() >>
+  tf.learn.ReLU(0.1f) >>
   tf.learn.Linear(8, name = "FC_Layer_2") >>
-  tf.learn.SELU() >>
+  tf.learn.Sigmoid() >>
   tf.learn.Linear(1, name = "OutputLayer")
 
 val trainingInputLayer = tf.learn.Cast(INT64)
