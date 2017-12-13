@@ -54,18 +54,8 @@ val round_date = (d: DateTime) => {
     minutes*num_minutes)
 }
 
-val collated_data_oct = helios.collate_data(
-  new YearMonth(year.toInt, month.toInt))(
-  GOES(GOESData.Quantities.XRAY_FLUX_5m),
-  goes_dir,
-  goes_aggregation = 2,
-  goes_reduce_func = reduce_fn,
-  SOHO(SOHOData.Instruments.MDIMAG, 512),
-  soho_dir,
-  dt_round_off = round_date)
-
-val collated_data_sept = helios.collate_data(
-  new YearMonth(year.toInt, 9))(
+val collated_data = helios.collate_data_range(
+  new YearMonth(year.toInt, 7), new YearMonth(year.toInt, month.toInt))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
   goes_aggregation = 2,
@@ -81,7 +71,7 @@ val collated_data_sept = helios.collate_data(
 * */
 
 val dataSet = helios.create_helios_data_set(
-  collated_data_sept ++ collated_data_oct,
+  collated_data,
   _ => scala.util.Random.nextDouble() <= 0.7,
   scaleDownFactor = 3)
 
@@ -155,9 +145,9 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
     tf.learn.Configuration(Some(summariesDir)),
     tf.learn.StopCriteria(maxSteps = Some(100000)),
     Set(
-      tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(500)),
+      tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(1000)),
       tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
-      tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(500))),
+      tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(1000))),
     tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
   estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(50000)))
 
