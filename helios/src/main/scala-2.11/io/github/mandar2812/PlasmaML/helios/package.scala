@@ -180,7 +180,7 @@ package object helios {
 
     val num_months = (12*period.getYears) + period.getMonths
 
-    (0 to num_months).map(start_year_month.plusMonths).flatMap(prepare_data)
+    (0 to num_months).map(start_year_month.plusMonths).flatMap(prepare_data).toStream
   }
 
   /**
