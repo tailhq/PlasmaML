@@ -28,7 +28,7 @@ package object data {
 
     val period = new Period(
       start.toLocalDate(1).toDateTimeAtStartOfDay,
-      end.toLocalDate(30).toDateTimeAtStartOfDay)
+      end.toLocalDate(31).toDateTimeAtStartOfDay)
 
     val num_months = (12*period.getYears) + period.getMonths
 

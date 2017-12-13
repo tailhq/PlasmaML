@@ -4,7 +4,7 @@ import ammonite.ops.Path
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.dynaml.tensorflow.dtf
-import org.joda.time.{DateTime, LocalDate, YearMonth}
+import org.joda.time._
 
 package object helios {
 
@@ -137,6 +137,50 @@ package object helios {
       .filter(k => k._2._2.isDefined)
       .map(k => (k._1, (k._2._1, k._2._2.get)))
       .sortBy(_._1.getMillis)
+  }
+
+  /**
+    * Calls [[collate_data()]] over a time period and returns the collected data.
+    *
+    * @param start_year_month Starting Year-Month
+    *
+    * @param end_year_month Ending Year-Month
+    *
+    * @param goes_data_path GOES data path.
+    *
+    * @param images_path path containing images.
+    *
+    * @param goes_aggregation The number of goes entries to group for
+    *                         calculating running statistics.
+    *
+    * @param goes_reduce_func A function which computes some aggregation of a group
+    *                         of GOES data entries.
+    *
+    * @param dt_round_off A function which appropriately rounds off date time instances
+    *                     for the image data, enabling it to be joined to the GOES data
+    *                     based on date time stamps.
+    * */
+  def collate_data_range(
+    start_year_month: YearMonth, end_year_month: YearMonth)(
+    goes_source: GOES,
+    goes_data_path: Path,
+    goes_aggregation: Int,
+    goes_reduce_func: (Stream[(DateTime, (Double, Double))]) => (DateTime, (Double, Double)),
+    image_source: SOHO, images_path: Path,
+    dt_round_off: (DateTime) => DateTime,
+    dirTreeCreated: Boolean = true) = {
+
+    val prepare_data = (ym: YearMonth) => collate_data(ym)(
+      goes_source, goes_data_path, goes_aggregation, goes_reduce_func,
+      image_source, images_path, dt_round_off)
+
+    val period = new Period(
+      start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
+      end_year_month.toLocalDate(31).toDateTimeAtStartOfDay)
+
+    val num_months = (12*period.getYears) + period.getMonths
+
+    (0 to num_months).map(start_year_month.plusMonths).flatMap(prepare_data)
   }
 
   /**
