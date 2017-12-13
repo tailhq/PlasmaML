@@ -55,7 +55,7 @@ val round_date = (d: DateTime) => {
 }
 
 val collated_data = helios.collate_data_range(
-  new YearMonth(year.toInt, 7), new YearMonth(year.toInt, month.toInt))(
+  new YearMonth(2001, month.toInt), new YearMonth(year.toInt, month.toInt))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
   goes_aggregation = 2,
