@@ -19,10 +19,7 @@ println("Running as user: "+user_name)
 val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
 val tempdir = home/"tmp"
-
-val inst = SOHOData.Instruments.EIT171
-
-val tf_summary_dir = tempdir/"helios_goes_"+inst+"_summaries"
+val tf_summary_dir = tempdir/"helios_goes_mdiigr_summaries"
 
 
 /*
@@ -33,7 +30,6 @@ val tf_summary_dir = tempdir/"helios_goes_"+inst+"_summaries"
 val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
 val soho_dir = data_dir/'soho
 val goes_dir = data_dir/'goes
-
 
 val (year, month, day) = ("2003", "10", "28")
 
@@ -50,23 +46,27 @@ val reduce_fn = (gr: Stream[(DateTime, (Double, Double))]) => {
 }
 
 val round_date = (d: DateTime) => {
-  val minutes: Int = d.getMinuteOfHour/10
+
+  val num_minutes = 10
+
+  val minutes: Int = d.getMinuteOfHour/num_minutes
 
   new DateTime(
     d.getYear, d.getMonthOfYear,
     d.getDayOfMonth, d.getHourOfDay,
-    minutes*10)
+    minutes*num_minutes)
 }
 
-val collated_data =  helios.collate_data_range(
-  new YearMonth(2001, 1), new YearMonth(2005, 12))(
+val collated_data = helios.collate_data_range(
+  new YearMonth(2001, 1), new YearMonth(2006, 12))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
   goes_aggregation = 2,
   goes_reduce_func = reduce_fn,
-  SOHO(inst, 512),
+  SOHO(SOHOData.Instruments.MDIIGR, 512),
   soho_dir,
   dt_round_off = round_date)
+
 
 val tt_partition = (p: (DateTime, (Path, (Double, Double)))) =>
   if(p._1.isAfter(halloween_start) && p._1.isBefore(halloween_end)) true
@@ -81,7 +81,7 @@ val tt_partition = (p: (DateTime, (Path, (Double, Double)))) =>
 val dataSet = helios.create_helios_data_set(
   collated_data,
   tt_partition,
-  scaleDownFactor = 3)
+  scaleDownFactor = 2)
 
 val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
@@ -97,7 +97,7 @@ val trainData =
   trainImages.zip(trainLabels)
     .repeat()
     .shuffle(10000)
-    .batch(128)
+    .batch(32)
     .prefetch(10)
 
 /*
@@ -115,12 +115,6 @@ val input = tf.learn.Input(
 
 val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
 
-/*
-* Architecture Notes:
-*
-* Convolutional Unit:= Conv >> ReLU >> Dropout
-*
-* */
 val layer = tf.learn.Cast(FLOAT32) >>
   tf.learn.Conv2D(Shape(2, 2, 4, 64), 1, 1, SamePadding, name = "Conv2D_0") >>
   tf.learn.AddBias(name = "Bias_0") >>
@@ -145,7 +139,7 @@ val layer = tf.learn.Cast(FLOAT32) >>
 
 val trainingInputLayer = tf.learn.Cast(INT64)
 val loss = tf.learn.L2Loss() >> tf.learn.Mean() >> tf.learn.ScalarSummary("Loss")
-val optimizer = tf.train.AdaGrad(0.0001)
+val optimizer = tf.train.AdaGrad(0.002)
 
 val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
@@ -157,11 +151,11 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
   val estimator = tf.learn.InMemoryEstimator(
     model,
     tf.learn.Configuration(Some(summariesDir)),
-    tf.learn.StopCriteria(maxSteps = Some(200000)),
+    tf.learn.StopCriteria(maxSteps = Some(100000)),
     Set(
-      tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(500)),
+      tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(1000)),
       tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
-      tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(500))),
+      tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(1000))),
     tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
   estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(100000)))
 
