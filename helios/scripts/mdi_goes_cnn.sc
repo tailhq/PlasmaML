@@ -54,8 +54,18 @@ val round_date = (d: DateTime) => {
     minutes*num_minutes)
 }
 
-val collated_data = helios.collate_data(
+val collated_data_oct = helios.collate_data(
   new YearMonth(year.toInt, month.toInt))(
+  GOES(GOESData.Quantities.XRAY_FLUX_5m),
+  goes_dir,
+  goes_aggregation = 2,
+  goes_reduce_func = reduce_fn,
+  SOHO(SOHOData.Instruments.MDIMAG, 512),
+  soho_dir,
+  dt_round_off = round_date)
+
+val collated_data_sept = helios.collate_data(
+  new YearMonth(year.toInt, 9))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
   goes_aggregation = 2,
@@ -71,8 +81,8 @@ val collated_data = helios.collate_data(
 * */
 
 val dataSet = helios.create_helios_data_set(
-  collated_data,
-  _ => scala.util.Random.nextDouble() <= 0.8,
+  collated_data_sept ++ collated_data_oct,
+  _ => scala.util.Random.nextDouble() <= 0.7,
   scaleDownFactor = 3)
 
 val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
