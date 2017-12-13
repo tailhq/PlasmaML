@@ -18,6 +18,8 @@ println("Running as user: "+user_name)
 
 val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
+val tempdir = home/"tmp"
+val tf_summary_dir = tempdir/"helios_goes_mdi_summaries"
 
 /*
 * Create a collated data set,
@@ -28,7 +30,6 @@ val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
 val soho_dir = data_dir/'soho
 val goes_dir = data_dir/'goes
 
-val tempdir = home/"tmp"
 
 val (year, month, day) = ("2003", "10", "28")
 
@@ -92,36 +93,53 @@ val input = tf.learn.Input(
 val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
 
 val layer = tf.learn.Cast(FLOAT32) >>
-  tf.learn.Conv2D(Shape(2, 2, 4, 16), 1, 1, SamePadding, name = "Conv2D_0") >>
+  tf.learn.Conv2D(Shape(2, 2, 4, 64), 1, 1, SamePadding, name = "Conv2D_0") >>
   tf.learn.AddBias(name = "Bias_0") >>
   tf.learn.ReLU(0.1f) >>
-  tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_0") >>
-  tf.learn.Conv2D(Shape(2, 2, 16, 32), 1, 1, SamePadding, name = "Conv2D_1") >>
+  tf.learn.Dropout(0.6f) >>
+  tf.learn.Conv2D(Shape(2, 2, 64, 32), 2, 2, SamePadding, name = "Conv2D_1") >>
   tf.learn.AddBias(name = "Bias_1") >>
   tf.learn.ReLU(0.1f) >>
-  tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_1") >>
+  tf.learn.Dropout(0.6f) >>
+  tf.learn.Conv2D(Shape(2, 2, 32, 16), 4, 4, SamePadding, name = "Conv2D_2") >>
+  tf.learn.AddBias(name = "Bias_2") >>
+  tf.learn.ReLU(0.1f) >>
+  tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_0") >>
   tf.learn.Flatten() >>
-  tf.learn.Linear(256, name = "Layer_2") >> tf.learn.ReLU(0.1f) >>
+  tf.learn.Linear(128, name = "FC_Layer_0") >>
+  tf.learn.ReLU(0.1f) >>
+  tf.learn.Linear(64, name = "FC_Layer_1") >>
+  tf.learn.SELU() >>
+  tf.learn.Linear(8, name = "FC_Layer_2") >>
+  tf.learn.SELU() >>
   tf.learn.Linear(1, name = "OutputLayer")
+
 
 val trainingInputLayer = tf.learn.Cast(INT64)
 val loss = tf.learn.L2Loss() >> tf.learn.Mean() >> tf.learn.ScalarSummary("Loss")
 val optimizer = tf.train.AdaGrad(0.05)
 
-val model = tf.learn.Model(input, layer, trainInput, trainingInputLayer, loss, optimizer)
+val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-println("Training the linear regression model.")
-val summariesDir = java.nio.file.Paths.get((tempdir/"helios_goes_soho_summaries").toString())
-val estimator = tf.learn.InMemoryEstimator(
-  model,
-  tf.learn.Configuration(Some(summariesDir)),
-  tf.learn.StopCriteria(maxSteps = Some(100000)),
-  Set(
-    tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(100)),
-    tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
-    tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
-  tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
-estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(5000)))
+val (model, estimator) = tf.createWith(graph = Graph()) {
+  val model = tf.learn.Model(input, layer, trainInput, trainingInputLayer, loss, optimizer)
+
+  println("Training the linear regression model.")
+
+  val estimator = tf.learn.InMemoryEstimator(
+    model,
+    tf.learn.Configuration(Some(summariesDir)),
+    tf.learn.StopCriteria(maxSteps = Some(100000)),
+    Set(
+      tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(100)),
+      tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
+      tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
+    tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
+  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(20000)))
+
+  (model, estimator)
+}
+
 
 def accuracy(images: Tensor, labels: Tensor): Float = {
   val predictions = estimator.infer(() => images)
