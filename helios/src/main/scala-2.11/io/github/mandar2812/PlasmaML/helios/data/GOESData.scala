@@ -184,7 +184,7 @@ object GOESLoader {
     goes_files_path: Path, year_month: YearMonth,
     goes_source: GOES, dirTreeCreated: Boolean = true): Stream[(DateTime, Seq[(Double, Double)])] = {
 
-    val (year, month) = (year_month.getYear.toString, year_month.getMonthOfYear.toString)
+    val (year, month) = (year_month.getYear.toString, "%02d".format(year_month.getMonthOfYear))
 
     val filePattern = getFilePattern(year_month, goes_source)
 

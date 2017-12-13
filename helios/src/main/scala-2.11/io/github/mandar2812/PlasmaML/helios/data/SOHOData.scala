@@ -154,7 +154,7 @@ object SOHOLoader {
     soho_source: SOHO, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] = {
 
 
-    val (year, month) = (year_month.getYear.toString, year_month.getMonthOfYear.toString)
+    val (year, month) = (year_month.getYear.toString, "%02d".format(year_month.getMonthOfYear))
     val filePattern = getFilePattern(year_month, soho_source)
 
     val image_paths = if(dirTreeCreated) {
