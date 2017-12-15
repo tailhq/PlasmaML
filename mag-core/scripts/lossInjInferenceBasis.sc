@@ -1,5 +1,6 @@
 {
   import breeze.stats.distributions._
+  import io.github.mandar2812.dynaml.pipes._
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
   import io.github.mandar2812.dynaml.probability.GaussianRV
@@ -41,6 +42,10 @@
     10d, deltaL, deltaT)(
     sqNormDouble, l1NormDouble)
 
+  val scaledSEKernel = ScaledKernel(seKernel, DataPipe((x: (Double, Double)) => math.sqrt(x._1*x._2)))
+
+  val fbmKernel = new FBMCovFunction(0.5) :* new FBMCovFunction(0.5)
+
   val noiseKernel = new DiracTuple2Kernel(1.5)
 
   noiseKernel.block_all_hyper_parameters
@@ -54,7 +59,7 @@
     Kp, dll_params,
     (0d, 0.2, 0d, 0.0),
     (0.01, 0.01d, 0.01, 0.01))(
-    seKernel, noiseKernel,
+    seKernel + fbmKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
     hybrid_basis
   )
@@ -106,7 +111,11 @@
 
   val scriptPath = pwd / "mag-core" / 'scripts / "visualiseCombSamplingResults.R"
 
-  %%('Rscript, scriptPath.toString, resPath.toString)
+  try {
+    %%('Rscript, scriptPath.toString, resPath.toString)
+  } catch {
+    case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
+  }
 
 
   RDExperiment.samplingReport(

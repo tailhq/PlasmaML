@@ -1,5 +1,6 @@
 {
   import breeze.stats.distributions._
+  import io.github.mandar2812.dynaml.pipes.DataPipe
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
   import io.github.mandar2812.dynaml.probability.GaussianRV
@@ -12,22 +13,22 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
+  nL = 300
+  nT = 200
+
+  measurement_noise = GaussianRV(0.0, 2.5d)
+  num_bulk_data = 50
+  num_boundary_data = 20
+
+  lambda_params = (
+    -1, 2.5, 0d, -0.2)
+
+  q_params = (0d, 1.5d, 0.05, 0.5)
+
 
   Seq(50, 100, 200, 400, 800, 1600).foreach(nC => {
 
-    measurement_noise = GaussianRV(0.0, 2.5d)
-    num_bulk_data = 50
-    num_boundary_data = 20
-
     num_dummy_data = nC
-
-    lambda_params = (
-      -1, 0.5, 0d, -0.2)
-
-    q_params = (0d, 0.5d, 0.05, 0.45)
-
-    nL = 300
-    nT = 200
 
     val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
@@ -43,6 +44,10 @@
       10d, deltaL, deltaT)(
       sqNormDouble, l1NormDouble)
 
+    val scaledSEKernel = ScaledKernel(seKernel, DataPipe((x: (Double, Double)) => math.sqrt(math.abs(x._1*x._2))))
+
+    //val fbmKernel = new FBMCovFunction(0.5) :* new FBMCovFunction(0.5)
+
     val noiseKernel = new DiracTuple2Kernel(1.5)
 
     noiseKernel.block_all_hyper_parameters
@@ -56,7 +61,7 @@
       Kp, dll_params,
       (0d, 0.2, 0d, 0.0),
       (0.01, 0.01d, 0.01, 0.01))(
-      seKernel, noiseKernel,
+      scaledSEKernel, noiseKernel,
       boundary_data ++ bulk_data, colocation_points,
       hybrid_basis
     )
@@ -108,8 +113,11 @@
 
     val scriptPath = pwd / "mag-core" / 'scripts / "visualiseCombSamplingResults.R"
 
-    %%('Rscript, scriptPath.toString, resPath.toString)
-
+    try {
+      %%('Rscript, scriptPath.toString, resPath.toString)
+    } catch {
+      case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
+    }
 
     RDExperiment.samplingReport(
       samples, hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
