@@ -81,7 +81,7 @@ val tt_partition = (p: (DateTime, (Path, (Double, Double)))) =>
 val dataSet = helios.create_helios_data_set(
   collated_data,
   tt_partition,
-  scaleDownFactor = 3)
+  scaleDownFactor = 2)
 
 val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
@@ -97,7 +97,7 @@ val trainData =
   trainImages.zip(trainLabels)
     .repeat()
     .shuffle(10000)
-    .batch(32)
+    .batch(64)
     .prefetch(10)
 
 /*
@@ -126,6 +126,10 @@ val layer = tf.learn.Cast(FLOAT32) >>
   tf.learn.Dropout(0.6f) >>
   tf.learn.Conv2D(Shape(2, 2, 32, 16), 4, 4, SamePadding, name = "Conv2D_2") >>
   tf.learn.AddBias(name = "Bias_2") >>
+  tf.learn.ReLU(0.1f) >>
+  tf.learn.Dropout(0.6f) >>
+  tf.learn.Conv2D(Shape(2, 2, 16, 8), 8, 8, SamePadding, name = "Conv2D_3") >>
+  tf.learn.AddBias(name = "Bias_3") >>
   tf.learn.ReLU(0.1f) >>
   tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_0") >>
   tf.learn.Flatten() >>
@@ -157,7 +161,7 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
       tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
       tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(1000))),
     tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
-  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(50000)))
+  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(10000)))
 
   (model, estimator)
 }
