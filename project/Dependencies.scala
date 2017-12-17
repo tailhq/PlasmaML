@@ -47,6 +47,8 @@ object Dependencies {
 
   val gpuFlag: Boolean = false
 
+  val packagedTFFlag: Boolean = true
+
   val tensorflow_classifier: String = {
     val platform_splits = platform.split("-")
     val (os, arch) = (platform_splits.head, platform_splits.last)
@@ -73,8 +75,14 @@ object Dependencies {
     .map(_.exclude("org.platanios", "tensorflow_2.11"))
     .map(_.exclude("org.platanios", "tensorflow-data_2.11"))
 
+  val tf =
+    if(packagedTFFlag) "org.platanios" % "tensorflow_2.11" % "0.1.0-SNAPSHOT" classifier tensorflow_classifier
+    else "org.platanios" % "tensorflow_2.11" % "0.1.0-SNAPSHOT"
+
+  val tf_examples = "org.platanios" % "tensorflow-data_2.11" % "0.1.0-SNAPSHOT"
+
   val tensorflowDependency = Seq(
-    "org.platanios" % "tensorflow_2.11" % "0.1.0-SNAPSHOT" classifier tensorflow_classifier,
-    "org.platanios" % "tensorflow-data_2.11" % "0.1.0-SNAPSHOT"
+    tf,
+    tf_examples
   ).map(_.exclude("org.typelevel", "spire_2.11"))
 }
