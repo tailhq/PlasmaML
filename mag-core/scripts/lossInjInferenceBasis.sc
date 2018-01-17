@@ -15,10 +15,10 @@
 
 
   measurement_noise = GaussianRV(0.0, 0.5)
-  num_bulk_data = 50
+  num_bulk_data = 20
   num_boundary_data = 20
 
-  num_dummy_data = 50
+  num_dummy_data = 20
 
   lambda_params = (
     -1, 0.5, 0d, -0.2)
@@ -59,7 +59,7 @@
     Kp, dll_params,
     (0d, 0.2, 0d, 0.0),
     (0.01, 0.01d, 0.01, 0.01))(
-    seKernel + fbmKernel, noiseKernel,
+    scaledSEKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
     hybrid_basis
   )

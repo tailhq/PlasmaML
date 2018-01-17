@@ -1,29 +1,38 @@
 {
+
   import breeze.stats.distributions._
+
+  import io.github.mandar2812.dynaml.pipes._
+  import io.github.mandar2812.dynaml.utils
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
+
   import ammonite.ops._
   import ammonite.ops.ImplicitWd._
 
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
-
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
-  num_bulk_data = 50
-  num_boundary_data = 20
+  num_bulk_data = 40
+  num_boundary_data = 40
 
-  num_dummy_data = 50
+  num_dummy_data = 20
 
   lambda_params = (
-    -1, 0.5, 0d, -0.2)
+    -1, 2d, 0d, 0.25)
 
 
   nL = 300
   nT = 200
 
-  q_params = (0d, 0.5d, 0.05, 0.45)
+  q_params = (2d, 0.5d, 0.05, 0.45)
+
+  initialPSD = (l: Double) => {
+    val c = utils.chebyshev(3, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
+    4000d + 1000*c - 1000*utils.chebyshev(5, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
+  }
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
@@ -40,6 +49,10 @@
     10d, deltaL, deltaT)(
     sqNormDouble, l1NormDouble)
 
+
+
+  val scaledSEKernel = ScaledKernel(seKernel, DataPipe((x: (Double, Double)) => math.abs(x._1)))
+
   val noiseKernel = new DiracTuple2Kernel(1.5)
 
   noiseKernel.block_all_hyper_parameters
@@ -51,7 +64,7 @@
 
   val model = new BasisFuncRadialDiffusionModel(
     Kp, dll_params, (0d, 0.2, 0d, 0.0), q_params)(
-    seKernel, noiseKernel,
+    scaledSEKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
     hybrid_basis
   )
@@ -69,14 +82,14 @@
 
   model.block(blocked_hyp:_*)
 
-  val hyp = model.effective_hyper_parameters
+  val eff_hyp = model.effective_hyper_parameters
   val hyper_prior = {
-    hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
-      hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
+    eff_hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
+      eff_hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
-        "tau_alpha" -> new Gaussian(0d, 1d),
-        "tau_beta" -> new Gamma(1d, 1d),
-        "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains)
+        "tau_alpha" -> new Gaussian(0d, 2d),
+        "tau_beta" -> new Gaussian(0d, 1d),
+        "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
   }
 
   model.regCol = regColocation
@@ -103,7 +116,7 @@
 
 
   RDExperiment.samplingReport(
-    samples, hyp.map(c => (c, quantities_loss(c))).toMap,
+    samples, eff_hyp.map(c => (c, quantities_loss(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate)
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
