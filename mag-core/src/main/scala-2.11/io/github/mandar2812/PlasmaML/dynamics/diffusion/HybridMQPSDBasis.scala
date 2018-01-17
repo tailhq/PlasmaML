@@ -66,7 +66,9 @@ class HybridMQPSDBasis(beta_t: Double)(
             beta_l*invThetaS*alpha*math.abs(d_l)/f_l +
             beta_t*invThetaT*math.abs(d_t)/f_t +
             lambda
-        }).toArray)
+        }).toArray) *:*
+        f(x)
+
     })
 
   override protected val f: ((Double, Double)) => DenseVector[Double] =

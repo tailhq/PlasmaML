@@ -3,6 +3,7 @@ package io.github.mandar2812.PlasmaML.dynamics.diffusion
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.utils.combine
 
+
 /**
   * A set of characteristics which represent
   * a basis function expansion of the plasma
@@ -22,7 +23,7 @@ trait PSDBasis extends Basis[(Double, Double)]{
   val dimensionT: Int
 
   /**
-    * Calculate the function which must be multiplied to the current
+    * Calculate the function which must be multiplied element wise to the current
     * basis in order to obtain the operator transformed basis.
     * */
   def operator_basis(

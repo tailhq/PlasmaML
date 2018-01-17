@@ -203,7 +203,7 @@ class BasisFuncRadialDiffusionModel(
     val g_basis = basis.operator_basis(dll, grad_dll, lambda)
 
     val (bMat, c) = ghost_points.map(p => {
-      val ph = basis(p) *:* g_basis(p)
+      val ph = g_basis(p)
       val y: Double = q(p)
       (ph*ph.t, ph*y)
     }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
@@ -225,13 +225,9 @@ class BasisFuncRadialDiffusionModel(
     val lambda = lossTimeScale(operator_state)
     val q = injection_process(operator_state)
 
-    val g_basis = basis.operator_basis(dll, grad_dll, lambda)
+    val psi_basis = basis.operator_basis(dll, grad_dll, lambda)
 
-    val (psi_stream, f_stream) = ghost_points.map(p => {
-      val ph = basis(p) *:* g_basis(p)
-      val y: Double = q(p)
-      (ph, y)
-    }).unzip
+    val (psi_stream, f_stream) = ghost_points.map(p => (psi_basis(p), q(p))).unzip
 
     val (psi,f) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix):_*),

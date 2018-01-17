@@ -61,7 +61,9 @@ class MQPSDBasis(
             beta*invThetaS*alpha*math.abs(d._1)/f +
             beta*invThetaT*math.abs(d._2)/f +
             lambda
-        }).toArray)
+        }).toArray) *:*
+        f(x)
+
     })
 
   override protected val f: ((Double, Double)) => DenseVector[Double] =

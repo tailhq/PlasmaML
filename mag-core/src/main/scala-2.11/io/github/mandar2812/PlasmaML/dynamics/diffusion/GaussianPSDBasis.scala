@@ -61,7 +61,8 @@ class GaussianPSDBasis(
           val gs = 0.5*invThetaS*sq(grL(1, 0)) - grL(2, 0)
 
           0.5*invThetaS*dll*gs - 0.5*invThetaS*alpha*grL(1, 0) + 0.5*invThetaT*grT(1, 0) + lambda
-        }).toArray)
+        }).toArray) *:*
+        f(x)
     })
 
 }
