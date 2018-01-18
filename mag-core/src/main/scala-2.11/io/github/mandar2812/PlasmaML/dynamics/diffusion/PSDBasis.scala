@@ -136,5 +136,5 @@ abstract class PSDRadialBasis(
   val dimensionT: Int = tSeq.length
 
   val indexEncoder: Encoder[(Int, Int), Int] = tupleListEnc > TupleIntegerEncoder(List(lSeq.length, tSeq.length))
-  
+
 }

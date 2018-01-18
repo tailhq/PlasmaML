@@ -15,10 +15,10 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
-  num_bulk_data = 40
-  num_boundary_data = 20
+  num_bulk_data = 20
+  num_boundary_data = 10
 
-  num_dummy_data = 80
+  num_dummy_data = 200
 
   lambda_params = (
     -1, 2d, 0d, 0.25)
@@ -93,7 +93,7 @@
         "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
   }
 
-  model.regCol = regColocation
+  model.regCol = 0d
   model.regObs = 1E-5
 
   //Create the MCMC sampler
