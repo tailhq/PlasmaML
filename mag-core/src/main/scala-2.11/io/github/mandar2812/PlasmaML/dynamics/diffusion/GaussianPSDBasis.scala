@@ -86,39 +86,4 @@ class GaussianPSDBasis(
       f(x)
   }
 
-  /**
-    * Calculate the function which must be multiplied to the current
-    * basis in order to obtain the operator transformed basis.
-    **/
-  /*override def operator_basis(
-    diffusionField: DataPipe[(Double, Double), Double],
-    diffusionFieldGradL: DataPipe[(Double, Double), Double],
-    lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] =
-    Basis((x: (Double, Double)) => {
-
-      val (l, t) = x
-
-      val dll = diffusionField(x)
-      val alpha = diffusionFieldGradL(x) - 2d*diffusionField(x)/x._1
-      val lambda = lossTimeScale(x)
-
-      DenseVector(
-        centers.zip(scales).map(c => {
-          val ((l_tilda, t_tilda), (theta_s, theta_t)) = c
-
-          val grT = (i: Int, j: Int) => gradSqNormDouble(i, j)(t, t_tilda)
-          val grL = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
-
-
-          val sq = (s: Double) => s*s
-
-          val (invThetaS, invThetaT) = (sq(1/theta_s), sq(1/theta_t))
-
-          val gs = 0.5*invThetaS*sq(grL(1, 0)) - grL(2, 0)
-
-          0.5*invThetaS*dll*gs - 0.5*invThetaS*alpha*grL(1, 0) + 0.5*invThetaT*grT(1, 0) - lambda
-        }).toArray) *:*
-        f(x)
-    })
-*/
 }

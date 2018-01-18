@@ -29,23 +29,6 @@ abstract class HybridPSDBasis(
 
   override val f_t: ((Double, Double)) => DenseVector[Double] = (phiL*phiT_t).run _
 
-  /**
-    * Calculate the function which must be multiplied element wise to the current
-    * basis in order to obtain the operator transformed basis.
-    **/
-  /*override def operator_basis(
-    diffusionField: DataPipe[(Double, Double), Double],
-    diffusionFieldGradL: DataPipe[(Double, Double), Double],
-    lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] =
-    Basis((x: (Double, Double)) => {
-
-      val (l, t) = x
-      val dll = diffusionField(x)
-      val alpha = diffusionFieldGradL(x) - 2d*diffusionField(x)/x._1
-      val lambda = lossTimeScale(x)
-
-      ((dll*phiL_ll(l) + alpha*phiL_l(l))*phiT(t).t).toDenseVector - (phiL(l)*phiT_t(t).t).toDenseVector - lambda*f(x)
-    })*/
 }
 
 object HybridPSDBasis {

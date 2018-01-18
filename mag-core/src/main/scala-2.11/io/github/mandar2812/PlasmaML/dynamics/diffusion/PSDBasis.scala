@@ -60,14 +60,6 @@ abstract class PSDBasis extends Basis[(Double, Double)] {
       override val f_t:  ((Double, Double)) => DenseVector[Double] =
         (x: (Double, Double)) => self.f_t(x) + other.f_t(x)
 
-      /*override def operator_basis(
-        diffusionField: DataPipe[(Double, Double), Double],
-        diffusionFieldGradL: DataPipe[(Double, Double), Double],
-        lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] = Basis((x: (Double, Double)) => {
-        self.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)(x) +
-          other.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)(x)
-      })*/
-
     }
 
   def ::(other: PSDBasis): PSDBasis =
@@ -86,18 +78,6 @@ abstract class PSDBasis extends Basis[(Double, Double)] {
       override val f_t:  ((Double, Double)) => DenseVector[Double] =
         (x: (Double, Double)) => DenseVector.vertcat(self.f_t(x), other.f_t(x))
 
-      /*override def operator_basis(
-        diffusionField: DataPipe[(Double, Double), Double],
-        diffusionFieldGradL: DataPipe[(Double, Double), Double],
-        lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] = {
-
-        val (self_psi, other_psi) = (
-          self.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale),
-          other.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)
-        )
-
-        Basis((x: (Double, Double)) => DenseVector.vertcat(self_psi(x), other_psi(x)))
-      }*/
     }
 
 }
@@ -156,7 +136,5 @@ abstract class PSDRadialBasis(
   val dimensionT: Int = tSeq.length
 
   val indexEncoder: Encoder[(Int, Int), Int] = tupleListEnc > TupleIntegerEncoder(List(lSeq.length, tSeq.length))
-
-
-
+  
 }
