@@ -18,10 +18,10 @@
   num_bulk_data = 20
   num_boundary_data = 10
 
-  num_dummy_data = 200
+  num_dummy_data = 30
 
   lambda_params = (
-    -1, 2d, 0d, 0.25)
+    -1d, 2d, 0d, 0.25)
 
 
   nL = 300

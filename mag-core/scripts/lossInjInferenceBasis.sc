@@ -30,13 +30,16 @@
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val basisSize = (79, 49)
+  val basisSize = (5, 19)
   val hybrid_basis = new HybridMQPSDBasis(0.75d)(
-    lShellLimits, basisSize._1, timeLimits, basisSize._2, (false, false)
+    lShellLimits, 14, timeLimits, 19, (false, false)
   )
 
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
+    0.75, lShellLimits, basisSize._1,
+    timeLimits, basisSize._2)
 
-  val burn = 1500
+  val burn = 2000
 
   val seKernel = new GenExpSpaceTimeKernel[Double](
     10d, deltaL, deltaT)(
@@ -59,9 +62,9 @@
     Kp, dll_params,
     (0d, 0.2, 0d, 0.0),
     (0.01, 0.01d, 0.01, 0.01))(
-    scaledSEKernel, noiseKernel,
+    seKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
-    hybrid_basis
+    chebyshev_hybrid_basis::hybrid_basis
   )
 
   val blocked_hyp = {
@@ -91,15 +94,15 @@
         hyp.contains)
   }
 
-  model.regCol = regColocation
-  model.regObs = 1E-3
+  model.regCol = 0d
+  model.regObs = 1E-5
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 1000
+  val num_post_samples = 2000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
