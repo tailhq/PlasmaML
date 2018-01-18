@@ -64,7 +64,7 @@ class HybridMQPSDBasis(beta_t: Double)(
 
           beta_l*invThetaS*dll*(sq(d_l)*(0.5*beta_l+1) - f_l)/math.pow(f_l, 2+0.5*beta_l) -
             beta_l*invThetaS*alpha*math.abs(d_l)/f_l +
-            beta_t*invThetaT*math.abs(d_t)/f_t +
+            beta_t*invThetaT*math.abs(d_t)/f_t -
             lambda
         }).toArray) *:*
         f(x)

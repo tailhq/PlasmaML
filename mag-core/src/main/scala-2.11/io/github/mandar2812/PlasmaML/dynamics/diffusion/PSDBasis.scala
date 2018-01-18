@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
+import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.utils.combine
 
@@ -16,11 +17,9 @@ import io.github.mandar2812.dynaml.utils.combine
   * */
 trait PSDBasis extends Basis[(Double, Double)]{
 
+  self =>
+
   val dimension: Int
-
-  val dimensionL: Int
-
-  val dimensionT: Int
 
   /**
     * Calculate the function which must be multiplied element wise to the current
@@ -30,6 +29,42 @@ trait PSDBasis extends Basis[(Double, Double)]{
     diffusionField: DataPipe[(Double, Double), Double],
     diffusionFieldGradL: DataPipe[(Double, Double), Double],
     lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)]
+
+  def +(other: PSDBasis): PSDBasis =
+    new PSDBasis {
+      override def operator_basis(
+        diffusionField: DataPipe[(Double, Double), Double],
+        diffusionFieldGradL: DataPipe[(Double, Double), Double],
+        lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] = Basis((x: (Double, Double)) => {
+        self.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)(x) +
+          other.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)(x)
+      })
+
+      override val dimension: Int = self.dimension
+
+      override protected val f = (x: (Double, Double)) => self(x) + other(x)
+    }
+
+  def ::(other: PSDBasis): PSDBasis =
+    new PSDBasis {
+
+      override def operator_basis(
+        diffusionField: DataPipe[(Double, Double), Double],
+        diffusionFieldGradL: DataPipe[(Double, Double), Double],
+        lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] = {
+
+        val (self_psi, other_psi) = (
+          self.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale),
+          other.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)
+        )
+
+        Basis((x: (Double, Double)) => DenseVector.vertcat(self_psi(x), other_psi(x)))
+      }
+
+      override val dimension: Int = self.dimension + other.dimension
+
+      override protected val f = (x: (Double, Double)) => DenseVector.vertcat(self(x), other(x))
+    }
 
 }
 
@@ -82,9 +117,9 @@ abstract class PSDRadialBasis(
 
   override val dimension: Int = lSeq.length*tSeq.length
 
-  override val dimensionL: Int = lSeq.length
+  val dimensionL: Int = lSeq.length
 
-  override val dimensionT: Int = tSeq.length
+  val dimensionT: Int = tSeq.length
 
   val indexEncoder: Encoder[(Int, Int), Int] = tupleListEnc > TupleIntegerEncoder(List(lSeq.length, tSeq.length))
 

@@ -193,7 +193,8 @@ class BasisFuncRadialDiffusionModel(
     setState(h)
 
     println("Constructing Radial Basis Model for PSD")
-    println("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
+    print("Dimension  = ")
+    pprint.pprintln(basis.dimension)
 
     val dll = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)
@@ -218,7 +219,8 @@ class BasisFuncRadialDiffusionModel(
     setState(h)
 
     println("Constructing Radial Basis Model for PSD")
-    println("Dimension (l*t): "+basis.dimensionL+"*"+basis.dimensionT+" = "+basis.dimension)
+    print("Dimension  = ")
+    pprint.pprintln(basis.dimension)
 
     val dll = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)

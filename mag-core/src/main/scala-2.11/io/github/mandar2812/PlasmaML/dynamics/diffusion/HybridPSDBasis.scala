@@ -92,9 +92,7 @@ object HybridPSDBasis {
     })
 
     new HybridPSDBasis(basis_space, basis_time, basis_space_l, basis_space_ll, basis_time_t) {
-      override val dimensionL: Int = nL+1
-      override val dimensionT: Int = nT+1
-      override val dimension: Int = dimensionL*dimensionT
+      override val dimension: Int = (nL+1)*(nT+1)
     }
   }
 }
