@@ -15,10 +15,10 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
-  num_bulk_data = 40
+  num_bulk_data = 160
   num_boundary_data = 40
 
-  num_dummy_data = 20
+  num_dummy_data = 50
 
   lambda_params = (
     -1, 2d, 0d, 0.25)
@@ -91,12 +91,12 @@
       eff_hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
         "tau_alpha" -> new Gaussian(0d, 2d),
-        "tau_beta" -> new Gaussian(0d, 1d),
+        "tau_beta" -> new LogNormal(0d, 2d),
         "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
   }
 
-  model.regCol = 1E-4
-  model.regObs = 1E-2
+  model.regCol = regColocation
+  model.regObs = 1E-4
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
