@@ -29,11 +29,69 @@ class InverseMQPSDBasis(beta: Double)(
 
   val field: InnerProductSpace[(Double, Double), Double] = innerProdTuple2
 
+  override val f_l: ((Double, Double)) => DenseVector[Double] = (x: (Double, Double)) => {
+    DenseVector(
+      centers.zip(scales).map(cs => {
+        val (c, (theta_s, _)) = cs
+
+        val d = field.minus(x, c)
+
+        val scaledDist = d._1/theta_s
+
+        val g_l = 1d + scaledDist*scaledDist
+
+        val invThetaS = 1/theta_s
+
+        -beta*invThetaS*math.abs(d._1)/g_l
+      }).toArray) *:*
+      f(x)
+  }
+
+  override val f_ll: ((Double, Double)) => DenseVector[Double] = (x: (Double, Double)) => {
+    DenseVector(
+      centers.zip(scales).map(cs => {
+        val (c, (theta_s, _)) = cs
+
+        val d = field.minus(x, c)
+
+        val scaledDist = d._1/theta_s
+
+        val g_l = 1d + scaledDist*scaledDist
+
+        val invThetaS = 1/theta_s
+
+        val sq = (s: Double) => s*s
+
+        beta*invThetaS*(sq(d._1)*(0.5*beta+1) - g_l)/math.pow(g_l, 2+0.5*beta)
+      }).toArray) *:*
+      f(x)
+  }
+
+  override val f_t: ((Double, Double)) => DenseVector[Double] = (x: (Double, Double)) => {
+
+    DenseVector(
+      centers.zip(scales).map(cs => {
+        val (c, (_, theta_t)) = cs
+
+        val d = field.minus(x, c)
+
+        val scaledDist = d._2/theta_t
+
+        val g_t = 1d + scaledDist*scaledDist
+
+        val invThetaT = 1/theta_t
+
+        -beta*invThetaT*math.abs(d._2)/g_t
+      }).toArray) *:*
+      f(x)
+  }
+
+
   /**
     * Calculate the function which must be multiplied to the current
     * basis in order to obtain the operator transformed basis.
     **/
-  override def operator_basis(
+  /*override def operator_basis(
     diffusionField: DataPipe[(Double, Double), Double],
     diffusionFieldGradL: DataPipe[(Double, Double), Double],
     lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] =
@@ -63,7 +121,7 @@ class InverseMQPSDBasis(beta: Double)(
             lambda
         }).toArray)
     })
-
+*/
   override protected val f: ((Double, Double)) => DenseVector[Double] =
     (x: (Double, Double)) => DenseVector(
       centers.zip(scales).map(cs => {

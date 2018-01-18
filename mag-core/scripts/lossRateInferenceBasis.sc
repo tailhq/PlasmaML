@@ -15,10 +15,10 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
-  num_bulk_data = 160
-  num_boundary_data = 40
+  num_bulk_data = 40
+  num_boundary_data = 20
 
-  num_dummy_data = 50
+  num_dummy_data = 80
 
   lambda_params = (
     -1, 2d, 0d, 0.25)
@@ -37,9 +37,9 @@
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
 
-  val basisSize = (4, 19)
+  val basisSize = (5, 9)
   val hybrid_basis = new HybridMQPSDBasis(0.75d)(
-    lShellLimits, basisSize._1, timeLimits, basisSize._2, (false, false)
+    lShellLimits, 14, timeLimits, 14, (false, false)
   )
 
   val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
@@ -69,7 +69,7 @@
     Kp, dll_params, (0d, 0.2, 0d, 0.0), q_params)(
     scaledSEKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
-    chebyshev_hybrid_basis
+    chebyshev_hybrid_basis::hybrid_basis
   )
 
   val blocked_hyp = {

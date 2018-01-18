@@ -15,11 +15,17 @@ import io.github.mandar2812.dynaml.utils.combine
   * - &lambda;(L,t) &times; f(L,t)
   *
   * */
-trait PSDBasis extends Basis[(Double, Double)]{
+abstract class PSDBasis extends Basis[(Double, Double)] {
 
   self =>
 
   val dimension: Int
+
+  val f_l: ((Double, Double)) => DenseVector[Double]
+
+  val f_ll: ((Double, Double)) => DenseVector[Double]
+
+  val f_t: ((Double, Double)) => DenseVector[Double]
 
   /**
     * Calculate the function which must be multiplied element wise to the current
@@ -28,27 +34,59 @@ trait PSDBasis extends Basis[(Double, Double)]{
   def operator_basis(
     diffusionField: DataPipe[(Double, Double), Double],
     diffusionFieldGradL: DataPipe[(Double, Double), Double],
-    lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)]
+    lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] =
+    Basis((x: (Double, Double)) => {
+
+      val dll = diffusionField(x)
+      val alpha = diffusionFieldGradL(x) - 2d*diffusionField(x)/x._1
+      val lambda = lossTimeScale(x)
+
+       f_t(x) + lambda*f(x) - (dll*f_ll(x) + alpha*f_l(x))
+    })
 
   def +(other: PSDBasis): PSDBasis =
     new PSDBasis {
-      override def operator_basis(
+
+      override val dimension: Int = self.dimension
+
+      override protected val f = (x: (Double, Double)) => self(x) + other(x)
+
+      override val f_l:  ((Double, Double)) => DenseVector[Double] =
+        (x: (Double, Double)) => self.f_l(x) + other.f_l(x)
+
+      override val f_ll: ((Double, Double)) => DenseVector[Double] =
+        (x: (Double, Double)) => self.f_ll(x) + other.f_ll(x)
+
+      override val f_t:  ((Double, Double)) => DenseVector[Double] =
+        (x: (Double, Double)) => self.f_t(x) + other.f_t(x)
+
+      /*override def operator_basis(
         diffusionField: DataPipe[(Double, Double), Double],
         diffusionFieldGradL: DataPipe[(Double, Double), Double],
         lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] = Basis((x: (Double, Double)) => {
         self.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)(x) +
           other.operator_basis(diffusionField, diffusionFieldGradL, lossTimeScale)(x)
-      })
+      })*/
 
-      override val dimension: Int = self.dimension
-
-      override protected val f = (x: (Double, Double)) => self(x) + other(x)
     }
 
   def ::(other: PSDBasis): PSDBasis =
     new PSDBasis {
 
-      override def operator_basis(
+      override val dimension: Int = self.dimension + other.dimension
+
+      override protected val f = (x: (Double, Double)) => DenseVector.vertcat(self(x), other(x))
+
+      override val f_l:  ((Double, Double)) => DenseVector[Double] =
+        (x: (Double, Double)) => DenseVector.vertcat(self.f_l(x), other.f_l(x))
+
+      override val f_ll: ((Double, Double)) => DenseVector[Double] =
+        (x: (Double, Double)) => DenseVector.vertcat(self.f_ll(x), other.f_ll(x))
+
+      override val f_t:  ((Double, Double)) => DenseVector[Double] =
+        (x: (Double, Double)) => DenseVector.vertcat(self.f_t(x), other.f_t(x))
+
+      /*override def operator_basis(
         diffusionField: DataPipe[(Double, Double), Double],
         diffusionFieldGradL: DataPipe[(Double, Double), Double],
         lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] = {
@@ -59,11 +97,7 @@ trait PSDBasis extends Basis[(Double, Double)]{
         )
 
         Basis((x: (Double, Double)) => DenseVector.vertcat(self_psi(x), other_psi(x)))
-      }
-
-      override val dimension: Int = self.dimension + other.dimension
-
-      override protected val f = (x: (Double, Double)) => DenseVector.vertcat(self(x), other(x))
+      }*/
     }
 
 }

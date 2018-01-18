@@ -22,11 +22,18 @@ abstract class HybridPSDBasis(
   override protected val f: ((Double, Double)) => DenseVector[Double] =
     (x: (Double, Double)) => (phiL(x._1)*phiT(x._2).t).toDenseVector
 
+
+  override val f_l: ((Double, Double)) => DenseVector[Double] = (phiL_l*phiT).run _
+
+  override val f_ll: ((Double, Double)) => DenseVector[Double] = (phiL_ll*phiT).run _
+
+  override val f_t: ((Double, Double)) => DenseVector[Double] = (phiL*phiT_t).run _
+
   /**
     * Calculate the function which must be multiplied element wise to the current
     * basis in order to obtain the operator transformed basis.
     **/
-  override def operator_basis(
+  /*override def operator_basis(
     diffusionField: DataPipe[(Double, Double), Double],
     diffusionFieldGradL: DataPipe[(Double, Double), Double],
     lossTimeScale: DataPipe[(Double, Double), Double]): Basis[(Double, Double)] =
@@ -38,7 +45,7 @@ abstract class HybridPSDBasis(
       val lambda = lossTimeScale(x)
 
       ((dll*phiL_ll(l) + alpha*phiL_l(l))*phiT(t).t).toDenseVector - (phiL(l)*phiT_t(t).t).toDenseVector - lambda*f(x)
-    })
+    })*/
 }
 
 object HybridPSDBasis {
@@ -66,7 +73,9 @@ object HybridPSDBasis {
 
     val basis_time = RadialBasis.invMultiquadricBasis(beta_t)(tSeq, scalesT, bias = false)
 
-    val basis_space = ChebyshevBasisGenerator(nL, 1)
+    val basis_space =
+      ChebyshevBasisGenerator(nL, 1) >
+        DataPipe[DenseVector[Double], DenseVector[Double]]((v: DenseVector[Double]) => v.slice(1, v.length))
 
     def l_adj(l_shell: Double) = (l_shell - lShellLimits._1)/(lShellLimits._2 - lShellLimits._1)
 
@@ -80,19 +89,19 @@ object HybridPSDBasis {
 
     val basis_space_l = Basis((l: Double) => {
       val l_star = 2*l_adj(l) - 1
-      DenseVector.tabulate(nL+1)(i => if(i > 0) i*U(i-1, l_star) else 0d)
+      DenseVector.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l_star) else 0d)
     })
 
     val basis_space_ll = Basis((l: Double) => {
       val l_star = 2*l_adj(l) - 1
-      DenseVector.tabulate(nL+1)(i =>
-        if(i > 1) i*(i*T(i, l_star) - l_star*U(i-1, l_star))/(l_star*l_star - 1)
+      DenseVector.tabulate(nL)(i =>
+        if(i+1 > 1) (i+1)*((i+1)*T(i+1, l_star) - l_star*U(i, l_star))/(l_star*l_star - 1)
         else 0d
       )
     })
 
     new HybridPSDBasis(basis_space, basis_time, basis_space_l, basis_space_ll, basis_time_t) {
-      override val dimension: Int = (nL+1)*(nT+1)
+      override val dimension: Int = nL*(nT+1)
     }
   }
 }
