@@ -37,11 +37,14 @@
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
 
-  val basisSize = (79, 49)
+  val basisSize = (4, 19)
   val hybrid_basis = new HybridMQPSDBasis(0.75d)(
     lShellLimits, basisSize._1, timeLimits, basisSize._2, (false, false)
   )
 
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
+    0.75, lShellLimits, basisSize._1,
+    timeLimits, basisSize._2)
 
   val burn = 1500
 
@@ -66,7 +69,7 @@
     Kp, dll_params, (0d, 0.2, 0d, 0.0), q_params)(
     scaledSEKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
-    hybrid_basis
+    chebyshev_hybrid_basis
   )
 
   val blocked_hyp = {
@@ -92,8 +95,8 @@
         "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
   }
 
-  model.regCol = regColocation
-  model.regObs = 1E-3
+  model.regCol = 1E-4
+  model.regObs = 1E-2
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
