@@ -6,30 +6,55 @@ import io.github.mandar2812.dynaml.utils.combine
 
 
 /**
-  * A set of characteristics which represent
-  * a basis function expansion of the plasma
-  * Phase Space Density in the radial diffusion
+  * <h3>Phase Space Density: Basis Expansions</h3>
+  * A basis function expansion (&phi;) of the plasma
+  * Phase Space Density (&fnof;) in the radial diffusion
   * system.
   *
-  * df/dt = L<sup>2</sup>d/dL(D<sub>LL</sub> &times; L<sup>-2</sup> &times;  df/dL)
-  * - &lambda;(L,t) &times; f(L,t)
+  * &part;&fnof;/&part;t =
+  * L<sup>2</sup>&part;/&part;L(D<sub>LL</sub> &times; L<sup>-2</sup> &times; &part;&fnof;/&part;L)
+  * - &lambda;(L,t) &times; &fnof;(L,t)
+  * + Q(L,t)
   *
   * */
 abstract class PSDBasis extends Basis[(Double, Double)] {
 
   self =>
 
+  /**
+    * Dimensionality of &phi;
+    * */
   val dimension: Int
 
+  /**
+    * Calculates &part;&phi;/&part;L
+    * */
   val f_l: ((Double, Double)) => DenseVector[Double]
 
+  /**
+    * Calculates &part;<sup>2</sup>&phi;/&part;L<sup>2</sup>
+    * */
   val f_ll: ((Double, Double)) => DenseVector[Double]
 
+  /**
+    * Calculates &part;&phi;/&part;t
+    * */
   val f_t: ((Double, Double)) => DenseVector[Double]
 
   /**
-    * Calculate the function which must be multiplied element wise to the current
-    * basis in order to obtain the operator transformed basis.
+    * Calculates the basis &psi; resulting from applying
+    * the differential operator of plasma radial diffusion,
+    * on the basis set &phi;
+    *
+    * D = (d/dt - L<sup>2</sup>d/dL(D<sub>LL</sub> &times; L<sup>-2</sup> &times;  d/dL) + &lambda;(L,t))
+    *
+    * &psi;(L,t) = D[&phi;(L,t)]
+    *
+    * @param diffusionField The diffusion field/coefficient.
+    * @param diffusionFieldGradL The first partial spatial derivative of
+    *                            the diffusion field &part;D<sub>LL</sub>/&part;L
+    * @param lossTimeScale The loss rate &lambda;(L,t)
+    *
     * */
   def operator_basis(
     diffusionField: DataPipe[(Double, Double), Double],
@@ -44,6 +69,13 @@ abstract class PSDBasis extends Basis[(Double, Double)] {
        f_t(x) + lambda*f(x) - (dll*f_ll(x) + alpha*f_l(x))
     })
 
+  /**
+    * Returns a [[PSDBasis]] that is the addition
+    * of the current basis and the one accepted as
+    * the method argument.
+    *
+    * &phi;(L,t) = &phi;<sub>1</sub>(L,t) + &phi;<sub>2</sub>(L,t)
+    * */
   def +(other: PSDBasis): PSDBasis =
     new PSDBasis {
 
@@ -62,6 +94,13 @@ abstract class PSDBasis extends Basis[(Double, Double)] {
 
     }
 
+  /**
+    * Returns a [[PSDBasis]] that is the concatenation
+    * of the current basis and the one accepted as
+    * the method argument.
+    *
+    * &phi;(L,t) = (&phi;<sub>1</sub>(L,t), &phi;<sub>2</sub>(L,t))
+    * */
   def ::(other: PSDBasis): PSDBasis =
     new PSDBasis {
 
@@ -82,7 +121,24 @@ abstract class PSDBasis extends Basis[(Double, Double)] {
 
 }
 
-
+/**
+  * <h3>Radial Basis Phase Space Density Expansions</h3>
+  *
+  * A top level class that can be extended to implement
+  * various radial basis function based PSD expansions.
+  *
+  * Nodes are placed on a regular or logarithmically
+  * spaced space-time grid.
+  *
+  * @param lShellLimits Spatial limits
+  * @param nL Number of spatial intervals
+  * @param timeLimits Temporal limits
+  * @param nT Number of temporal intervals
+  * @param logScaleFlags Set to true for generating
+  *                      logarithmically spaced grid,
+  *                      one flag each for space and
+  *                      time.
+  * */
 abstract class PSDRadialBasis(
   val lShellLimits: (Double, Double), val nL: Int,
   val timeLimits: (Double, Double), val nT: Int,

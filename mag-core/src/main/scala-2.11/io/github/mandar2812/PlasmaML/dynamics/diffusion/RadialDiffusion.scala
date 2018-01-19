@@ -10,8 +10,9 @@ import org.apache.log4j.Logger
   *
   * Implementation of a discrete radial diffusion system.
   *
-  * df/dt = L<sup>2</sup>d/dL(D<sub>LL</sub> &times; L<sup>-2</sup> &times;  df/dL)
-  * - &lambda;(L,t) &times; f(L,t)
+  * &part;&fnof;/&part;t =
+  * L<sup>2</sup>&part;/&part;L(D<sub>LL</sub> &times; L<sup>-2</sup> &times; &part;&fnof;/&part;L)
+  * - &lambda;(L,t) &times; &fnof;(L,t)
   * + Q(L,t)
   *
   * This class solves the radial diffusion dynamics by representing the forward model

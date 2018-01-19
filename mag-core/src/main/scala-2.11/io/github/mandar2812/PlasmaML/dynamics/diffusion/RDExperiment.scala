@@ -401,11 +401,11 @@ object RDExperiment {
 
     val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
 
-    val initialcond = lShellVec.map(l => Seq(l, initialPSD(l)))
+    val initial_condition = lShellVec.map(l => Seq(l, initialPSD(l)))
     val kp = timeVec.map(t => Seq(t, Kp(t)))
 
     logger.info("Writing initial PSD in "+"initial_psd.csv")
-    write(resultsPath/"initial_psd.csv", initialcond.map(_.mkString(",")).mkString("\n"))
+    write(resultsPath/"initial_psd.csv", initial_condition.map(_.mkString(",")).mkString("\n"))
 
     logger.info("Writing Kp profile in "+"kp_profile.csv")
     write(resultsPath/"kp_profile.csv", kp.map(_.mkString(",")).mkString("\n"))
@@ -464,52 +464,51 @@ object RDExperiment {
     resultsPath
   }
 
+  val readFile         = DataPipe((p: Path) => (read.lines! p).toStream)
+
+  val processLines     = StreamDataPipe((s: String) => s.split(',').map(_.toDouble))
+
+  val readObservations = readFile > processLines > StreamDataPipe((a: Array[Double]) => ((a.head, a(1)), a.last))
+
+  val readColocation   = readFile > processLines > StreamDataPipe((a: Array[Double]) => (a.head, a(1)))
+
+  def readAsMap(h: Seq[String]) =
+    readFile > dropHead > processLines > StreamDataPipe((s: Array[Double]) => h.zip(s).toMap)
+
   def loadCachedResults(resultsPath: Path) = {
 
     logger.info("Reading results of radial diffusion experiment in directory: "+resultsPath.toString())
 
-    val readFile = DataPipe((p: Path) => (read.lines! p).toStream)
+    val hyp               = (read.lines! resultsPath/"posterior_samples.csv").head.split(',').toSeq
 
-    val processLines = StreamDataPipe((s: String) => s.split(',').map(_.toDouble))
+    val readSamples       = readAsMap(hyp)
 
-    val readObservations = readFile > processLines > StreamDataPipe((a: Array[Double]) => ((a.head, a(1)), a.last))
-
-    val readColocation = readFile > processLines > StreamDataPipe((a: Array[Double]) => (a.head, a(1)))
-
-
-    val hyp = (read.lines! resultsPath/"posterior_samples.csv").head.split(',').toSeq
-
-    def readAsMap(h: Seq[String]) =
-      readFile > dropHead > processLines > StreamDataPipe((s: Array[Double]) => h.zip(s).toMap)
-
-    val readSamples = readAsMap(hyp)
-
-    val boundary_data = readObservations(resultsPath/"boundary_data.csv")
-    val bulk_data = readObservations(resultsPath/"bulk_data.csv")
-
+    val boundary_data     = readObservations(resultsPath/"boundary_data.csv")
+    val bulk_data         = readObservations(resultsPath/"bulk_data.csv")
     val colocation_points = readColocation(resultsPath/"colocation_points.csv")
 
-    val samples = readSamples(resultsPath/"posterior_samples.csv")
+    val samples           = readSamples(resultsPath/"posterior_samples.csv")
+
 
     val model_params = (read.lines! resultsPath/"model_info.csv").head.split(',').toSeq
-    val model_info = (readFile > dropHead > StreamDataPipe((s: String) => s.split(',')))(resultsPath/"model_info.csv")
+    val model_info   = (readFile > dropHead > StreamDataPipe((s: String) => s.split(',')))(resultsPath/"model_info.csv")
 
-    val m_info = model_params.zip(model_info.head).toMap
+    val m_info       = model_params.zip(model_info.head).toMap
 
-    regColocation = m_info("regCol").toDouble
-    regData = m_info("regData").toDouble
+    regColocation    = m_info("regCol").toDouble
+    regData          = m_info("regData").toDouble
 
     val basisInfo = (m_info("type"), (m_info("nL").toInt, m_info("nT").toInt))
 
-    val solution = (readFile > processLines > StreamDataPipe((v: Array[Double]) => DenseVector(v)))(
+    val solution  = (readFile > processLines > StreamDataPipe((v: Array[Double]) => DenseVector(v)))(
       resultsPath/"diffusion_solution.csv"
     )
 
-    val domainInfo = readAsMap(
+    val domainInfo  = readAsMap(
       (read.lines! resultsPath/"diffusion_domain.csv").head.split(',').toSeq)(
       resultsPath/"diffusion_domain.csv").head
 
-    val noiseInfo = readAsMap(
+    val noiseInfo   = readAsMap(
       (read.lines! resultsPath/"measurement_noise.csv").head.split(',').toSeq)(
       resultsPath/"measurement_noise.csv").head
 
@@ -517,9 +516,9 @@ object RDExperiment {
       (read.lines! resultsPath/"diffusion_params.csv").head.split(',').toSeq)(
       resultsPath/"diffusion_params.csv").head
 
-    dll_params = (groundTruth("dll_alpha"), groundTruth("dll_beta"), groundTruth("dll_gamma"), groundTruth("dll_b"))
+    dll_params    = (groundTruth("dll_alpha"), groundTruth("dll_beta"), groundTruth("dll_gamma"), groundTruth("dll_b"))
 
-    q_params = (groundTruth("Q_alpha"), groundTruth("Q_beta"), groundTruth("Q_gamma"), groundTruth("Q_b"))
+    q_params      = (groundTruth("Q_alpha"), groundTruth("Q_beta"), groundTruth("Q_gamma"), groundTruth("Q_b"))
 
     lambda_params = (groundTruth("tau_alpha"), groundTruth("tau_beta"), groundTruth("tau_gamma"), groundTruth("tau_b"))
 
@@ -527,15 +526,14 @@ object RDExperiment {
 
     nT = domainInfo("nT").toInt
 
-    lShellLimits = (domainInfo("lMin"), domainInfo("lMax"))
-    timeLimits = (domainInfo("tMin"), domainInfo("tMax"))
+    lShellLimits  = (domainInfo("lMin"), domainInfo("lMax"))
+    timeLimits    = (domainInfo("tMin"), domainInfo("tMax"))
+
     measurement_noise = GaussianRV(noiseInfo("mean"), noiseInfo("sigma"))
 
     (solution, (boundary_data, bulk_data), colocation_points, samples, basisInfo)
 
   }
-
-
 
 }
 
@@ -556,9 +554,9 @@ object RDSettings {
     "tMax" -> timeLimits._2
   )
 
-  def deltaL = (lShellLimits._2 - lShellLimits._1)/nL
+  def deltaL: Double = (lShellLimits._2 - lShellLimits._1)/nL
 
-  def deltaT = (timeLimits._2 - timeLimits._1)/nT
+  def deltaT: Double = (timeLimits._2 - timeLimits._1)/nT
 
   var dll_params: (Double, Double, Double, Double) = (
     math.log(math.exp(0d)*math.pow(10d, -9.325)),
@@ -602,7 +600,7 @@ object RDSettings {
     "Q_gamma" -> q_params._3,
     "Q_b" -> q_params._4)
 
-  var Kp = DataPipe((t: Double) => {
+  var Kp: DataPipe[Double, Double] = DataPipe((t: Double) => {
     if(t<= 0d) 2.5
     else if(t < 1.5) 2.5 + 4*t
     else if (t >= 1.5 && t< 3d) 8.5
@@ -610,32 +608,30 @@ object RDSettings {
     else 2.5
   })
 
-  def dll = (l: Double, t: Double) =>
+  def dll: (Double, Double) => Double = (l: Double, t: Double) =>
     (math.exp(dll_params._1)*math.pow(l, dll_params._2) + dll_params._3)*math.pow(10, dll_params._4*Kp(t))
 
-  def Q = (l: Double, t: Double) =>
+  def Q: (Double, Double) => Double = (l: Double, t: Double) =>
     (math.exp(q_params._1)*math.pow(l, q_params._2) + q_params._3)*math.pow(10, q_params._4*Kp(t))
 
-  def lambda = (l: Double, t: Double) =>
+  def lambda: (Double, Double) => Double = (l: Double, t: Double) =>
     (math.exp(lambda_params._1)*math.pow(l, lambda_params._2) + lambda_params._3)*math.pow(10, lambda_params._4*Kp(t))
 
-  protected def omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
+  protected def omega: Double = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 
-  var initialPSD = (l: Double) => Bessel.i1(omega*(l - lShellLimits._1))*1E2 + 100
+  var initialPSD: (Double) => Double = (l: Double) => Bessel.i1(omega*(l - lShellLimits._1))*1E2 + 100
 
   var measurement_noise = GaussianRV(0.0, 0.5)
 
-
   var num_boundary_data = 50
-  var num_bulk_data = 100
-  var num_dummy_data = 200
+  var num_bulk_data     = 100
+  var num_dummy_data    = 200
 
-  var regData = 0.01
+  var regData           = 0.01
 
-  var regColocation = 1E-8
+  var regColocation     = 1E-8
 
-  var lMax = 10
-  var tMax = 10
-
+  var lMax              = 10
+  var tMax              = 10
 
 }

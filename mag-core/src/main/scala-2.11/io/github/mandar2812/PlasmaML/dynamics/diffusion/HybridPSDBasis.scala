@@ -7,6 +7,8 @@ import io.github.mandar2812.dynaml.pipes.{Basis, DataPipe}
 import io.github.mandar2812.dynaml.utils
 
 /**
+  * <h3>Phase Space Density: Hybrid Basis Expansions</h3>
+  *
   * A general basis expansion for the Phase Space Density.
   *
   * Consists of an outer product separate basis expansions
@@ -32,8 +34,15 @@ abstract class HybridPSDBasis(
 }
 
 object HybridPSDBasis {
+
+  /**
+    * Return a [[HybridPSDBasis]] consisting
+    * of a Chebyshev basis in the spatial domain
+    * and an Inverse Multi-Quadric basis in the
+    * temporal domain.
+    * */
   def chebyshev_imq_basis(
-    beta_t: Double,
+    beta_t: Double, 
     lShellLimits: (Double, Double), nL: Int,
     timeLimits: (Double, Double), nT: Int,
     logScale: Boolean = false) = {

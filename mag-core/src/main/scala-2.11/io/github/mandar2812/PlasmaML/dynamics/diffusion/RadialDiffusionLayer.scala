@@ -8,7 +8,7 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, MetaPipe}
   *
   * Represents a Radial Diffusion forward propagation computation.
   *
-  * f(n+1) = &Beta;(n)<sup>-1</sup>.(&Alpha;(n).f(n) + &gamma;(n))
+  * &fnof;(n+1) = &Beta;(n)<sup>-1</sup>.(&Alpha;(n).&fnof;(n) + &gamma;(n))
   *
   * @author mandar2812 date 13/04/2017.
   *
