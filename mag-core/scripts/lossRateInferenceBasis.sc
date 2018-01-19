@@ -27,7 +27,7 @@
   nL = 300
   nT = 200
 
-  q_params = (2d, 0.5d, 0.05, 0.45)
+  q_params = (0d, 0.5d, 0.05, 0.45)
 
   initialPSD = (l: Double) => {
     val c = utils.chebyshev(3, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
