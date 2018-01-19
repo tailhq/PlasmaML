@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.analysis.implicits._
-import io.github.mandar2812.dynaml.analysis.{ChebyshevBasisGenerator, RadialBasis}
+import io.github.mandar2812.dynaml.analysis.{ChebyshevBasisGenerator, LegendreBasisGenerator, RadialBasis}
 import io.github.mandar2812.dynaml.pipes.{Basis, DataPipe}
 import io.github.mandar2812.dynaml.utils
 
@@ -65,26 +65,95 @@ object HybridPSDBasis {
 
     val basis_time = RadialBasis.invMultiquadricBasis(beta_t)(tSeq, scalesT, bias = false)
 
+    val l_adj = DataPipe((l_shell: Double) => (l_shell - lShellLimits._1)/(lShellLimits._2 - lShellLimits._1))
+
+    val l_domain_adjust = DataPipe((l: Double) => 2*l - 1d)
+
     val basis_space =
+      (l_adj > l_domain_adjust) %>
       ChebyshevBasisGenerator(nL, 1) >
         DataPipe[DenseVector[Double], DenseVector[Double]]((v: DenseVector[Double]) => v.slice(1, v.length))
-
-    def l_adj(l_shell: Double) = (l_shell - lShellLimits._1)/(lShellLimits._2 - lShellLimits._1)
 
     def T(n: Int, x: Double) = utils.chebyshev(n, x, kind = 1)
 
     def U(n: Int, x: Double) = utils.chebyshev(n, x, kind = 2)
 
+    val basis_time_t = Basis(
+      (t: Double) => DenseVector(tSeq.zip(scalesT).toArray.map(c => -beta_t*math.abs(t-c._1)/c._2)) *:* basis_time(t)
+    )
+
+    val basis_space_l = (l_adj > l_domain_adjust) %>
+      Basis((l: Double) => DenseVector.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d))
+
+    val basis_space_ll = (l_adj > l_domain_adjust) %>
+      Basis((l: Double) =>
+        DenseVector.tabulate(nL)(i =>
+          if(i+1 > 1) (i+1)*((i+1)*T(i+1, l) - l*U(i, l))/(l*l - 1)
+          else 0d)
+      )
+
+    new HybridPSDBasis(basis_space, basis_time, basis_space_l, basis_space_ll, basis_time_t) {
+      override val dimension: Int = nL*(nT+1)
+    }
+  }
+
+  /**
+    * Return a [[HybridPSDBasis]] consisting
+    * of a Legendre basis in the spatial domain
+    * and an Inverse Multi-Quadric basis in the
+    * temporal domain.
+    * */
+/*
+  def legendre_imq_basis(
+    beta_t: Double,
+    lShellLimits: (Double, Double), nL: Int,
+    timeLimits: (Double, Double), nT: Int,
+    logScale: Boolean = false): HybridPSDBasis = {
+
+    val (_, tSeq) = RadialDiffusion.buildStencil(
+      lShellLimits, nL,
+      timeLimits, nT,
+      (false, logScale))
+
+    val deltaT: Double =
+      if(logScale) math.log(timeLimits._2 - timeLimits._1)/nT
+      else (timeLimits._2 - timeLimits._1)/nT
+
+    val scalesT: Seq[Double] =
+      if(logScale) Seq.tabulate(tSeq.length)(i =>
+        if(i == 0) math.exp(deltaT)
+        else if(i < nL) math.exp((i+1)*deltaT) - math.exp(i*deltaT)
+        else math.exp((nL+1)*deltaT) - math.exp(nL*deltaT))
+      else Seq.fill(tSeq.length)(deltaT)
+
+    val basis_time = RadialBasis.invMultiquadricBasis(beta_t)(tSeq, scalesT, bias = false)
+
+    val l_adj = DataPipe((l_shell: Double) => (l_shell - lShellLimits._1)/(lShellLimits._2 - lShellLimits._1))
+
+    val l_domain_adjust = DataPipe((l: Double) => 2*l - 1d)
+
+
+    val basis_space =
+      (l_adj > l_domain_adjust) %>
+        LegendreBasisGenerator(nL) >
+        DataPipe[DenseVector[Double], DenseVector[Double]]((v: DenseVector[Double]) => v.slice(1, v.length))
+
+
+    def T(n: Int, x: Double) = utils.chebyshev(n, x, kind = 1)
+
+    def U(n: Int, x: Double) = utils.chebyshev(n, x, kind = 2)
+
+    def L(n: Int, x: Double) = utils.legendre(n, x)
+
     val basis_time_t = Basis((t: Double) =>
       DenseVector(tSeq.zip(scalesT).toArray.map(c => -beta_t*math.abs(t-c._1)/c._2)) *:* basis_time(t)
     )
 
-    val basis_space_l = Basis((l: Double) => {
-      val l_star = 2*l_adj(l) - 1
-      DenseVector.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l_star) else 0d)
+    val basis_space_l = (l_adj > l_domain_adjust) %> Basis((l: Double) => {
+      DenseVector.tabulate(nL)(i => (i+1)*U(i, l))
     })
 
-    val basis_space_ll = Basis((l: Double) => {
+    val basis_space_ll = (l_adj > l_domain_adjust) %> Basis((l: Double) => {
       val l_star = 2*l_adj(l) - 1
       DenseVector.tabulate(nL)(i =>
         if(i+1 > 1) (i+1)*((i+1)*T(i+1, l_star) - l_star*U(i, l_star))/(l_star*l_star - 1)
@@ -96,5 +165,7 @@ object HybridPSDBasis {
       override val dimension: Int = nL*(nT+1)
     }
   }
+*/
+
 }
 
