@@ -42,10 +42,10 @@ object HybridPSDBasis {
     * temporal domain.
     * */
   def chebyshev_imq_basis(
-    beta_t: Double, 
+    beta_t: Double,
     lShellLimits: (Double, Double), nL: Int,
     timeLimits: (Double, Double), nT: Int,
-    logScale: Boolean = false) = {
+    logScale: Boolean = false): HybridPSDBasis = {
 
     val (_, tSeq) = RadialDiffusion.buildStencil(
       lShellLimits, nL,
