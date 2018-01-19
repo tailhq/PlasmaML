@@ -85,10 +85,10 @@
       hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
         "tau_alpha" -> new Gaussian(0d, 1d),
-        "tau_beta" -> new Gamma(1d, 1d),
+        "tau_beta" -> new LogNormal(0d, 2d),
         "tau_b" -> new Gaussian(0d, 2.0),
         "Q_alpha" -> new Gaussian(0d, 2d),
-        "Q_beta" -> new Gamma(1d, 1d),
+        "Q_beta" -> new LogNormal(0d, 2d),
         "Q_gamma" -> new LogNormal(0d, 2d),
         "Q_b" -> new Gaussian(0d, 2d)).filterKeys(
         hyp.contains)
