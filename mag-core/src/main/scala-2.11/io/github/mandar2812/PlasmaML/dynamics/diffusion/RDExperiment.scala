@@ -158,8 +158,8 @@ object RDExperiment {
 
     println("Markov Chain Acceptance Rate = "+acceptanceRate)
 
-    quantities.zipWithIndex.foreach(c => {
-      val ((key, char), index) = c
+    samples.head.keys.zipWithIndex.foreach(c => {
+      val ((key, char), index) = ((c._1, quantities(c._1)), c._2)
       println("\n------------------------------")
       println("Parameter: "+char)
       println("Ground Truth:- "+gt(key))
