@@ -1,6 +1,6 @@
 {
   import breeze.stats.distributions._
-  import io.github.mandar2812.dynaml.pipes._
+  import io.github.mandar2812.dynaml.utils
   import io.github.mandar2812.dynaml.kernels._
   import io.github.mandar2812.dynaml.probability.mcmc._
   import io.github.mandar2812.dynaml.probability.GaussianRV
@@ -20,9 +20,14 @@
 
   num_dummy_data = 20
 
-  lambda_params = (-1, 3.75, 0d, -0.2)
+  lambda_params = (-1, 2.75, 0d, -0.2)
 
-  q_params = (0d, 2.5d, 0.05, 0.45)
+  q_params = (0d, 3.5d, 0.05, 0.45)
+
+  initialPSD = (l: Double) => {
+    val c = utils.chebyshev(3, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
+    4000d + 1000*c - 1000*utils.chebyshev(5, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
+  }
 
   nL = 300
   nT = 200
@@ -43,10 +48,6 @@
   val seKernel = new GenExpSpaceTimeKernel[Double](
     10d, deltaL, deltaT)(
     sqNormDouble, l1NormDouble)
-
-  val scaledSEKernel = ScaledKernel(seKernel, DataPipe((x: (Double, Double)) => math.sqrt(x._1*x._2)))
-
-  val fbmKernel = new FBMCovFunction(0.5) :* new FBMCovFunction(0.5)
 
   val noiseKernel = new DiracTuple2Kernel(1.5)
 
@@ -121,13 +122,14 @@
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
-
   RDExperiment.samplingReport(
-    samples.map(_.filterKeys(quantities_loss.contains)), hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
+    samples.map(_.filterKeys(quantities_loss.contains)),
+    hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate)
 
   RDExperiment.samplingReport(
-    samples.map(_.filterKeys(quantities_injection.contains)), hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
+    samples.map(_.filterKeys(quantities_injection.contains)),
+    hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate, "injection")
 
   RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
