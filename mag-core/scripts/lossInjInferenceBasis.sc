@@ -20,10 +20,9 @@
 
   num_dummy_data = 20
 
-  lambda_params = (
-    -1, 0.5, 0d, -0.2)
+  lambda_params = (-1, 3.75, 0d, -0.2)
 
-  q_params = (0d, 0.5d, 0.05, 0.45)
+  q_params = (0d, 2.5d, 0.05, 0.45)
 
   nL = 300
   nT = 200
@@ -57,6 +56,8 @@
     rds, dll, lambda, Q, initialPSD)(
     measurement_noise, num_boundary_data,
     num_bulk_data, num_dummy_data)
+
+  RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
   val model = new BasisFuncRadialDiffusionModel(
     Kp, dll_params,
@@ -122,18 +123,12 @@
 
 
   RDExperiment.samplingReport(
-    samples, hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
+    samples.map(_.filterKeys(quantities_loss.contains)), hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate)
 
   RDExperiment.samplingReport(
-    samples, hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
+    samples.map(_.filterKeys(quantities_injection.contains)), hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate, "injection")
-
-  RDExperiment.samplingReport(
-    samples, hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
-    gt, mcmc_sampler.sampleAcceptenceRate, "injection")
-
-  RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
   RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
 }

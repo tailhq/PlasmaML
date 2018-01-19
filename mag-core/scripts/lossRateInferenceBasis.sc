@@ -16,18 +16,16 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
   num_bulk_data = 20
-  num_boundary_data = 10
+  num_boundary_data = 20
 
-  num_dummy_data = 30
+  num_dummy_data = 20
 
-  lambda_params = (
-    -1d, 2d, 0d, 0.25)
+  lambda_params = (-1, 3.75, 0d, -0.2)
 
+  q_params = (0d, 2.5d, 0.05, 0.45)
 
   nL = 300
   nT = 200
-
-  q_params = (0d, 0.5d, 0.05, 0.45)
 
   initialPSD = (l: Double) => {
     val c = utils.chebyshev(3, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
