@@ -88,7 +88,7 @@ object RDExperiment {
     val boundary_data = lShellVec.indices
       .filter(_ => Rand.uniform.draw() <= num_boundary_points.toDouble/lShellVec.length)
       .map(lIndex => {
-        ((lShellVec(lIndex),0d), data(lIndex, 0))
+        ((lShellVec(lIndex), 0d), data(lIndex, 0))
       }).toStream
 
     val bulk_data = if(num_bulk_points == 0) {
