@@ -115,34 +115,34 @@ val input = tf.learn.Input(
 
 val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
 
-val layer = tf.learn.Cast(FLOAT32) >>
-  tf.learn.Conv2D(Shape(2, 2, 4, 64), 1, 1, SamePadding, name = "Conv2D_0") >>
+val layer = tf.learn.Cast("Input/Cast", FLOAT32) >>
+  tf.learn.Conv2D("Conv2D_0", Shape(2, 2, 4, 64), 1, 1, SamePadding) >>
   tf.learn.AddBias(name = "Bias_0") >>
-  tf.learn.ReLU(0.1f) >>
-  tf.learn.Dropout(0.6f) >>
-  tf.learn.Conv2D(Shape(2, 2, 64, 32), 2, 2, SamePadding, name = "Conv2D_1") >>
+  tf.learn.ReLU("ReLU_0", 0.1f) >>
+  tf.learn.Dropout("Dropout_0", 0.6f) >>
+  tf.learn.Conv2D("Conv2D_1", Shape(2, 2, 64, 32), 2, 2, SamePadding) >>
   tf.learn.AddBias(name = "Bias_1") >>
-  tf.learn.ReLU(0.1f) >>
-  tf.learn.Dropout(0.6f) >>
-  tf.learn.Conv2D(Shape(2, 2, 32, 16), 4, 4, SamePadding, name = "Conv2D_2") >>
+  tf.learn.ReLU("ReLU_1", 0.1f) >>
+  tf.learn.Dropout("Dropout_1", 0.6f) >>
+  tf.learn.Conv2D("Conv2D_2", Shape(2, 2, 32, 16), 4, 4, SamePadding) >>
   tf.learn.AddBias(name = "Bias_2") >>
-  tf.learn.ReLU(0.1f) >>
-  tf.learn.Dropout(0.6f) >>
-  tf.learn.Conv2D(Shape(2, 2, 16, 8), 8, 8, SamePadding, name = "Conv2D_3") >>
+  tf.learn.ReLU("ReLU_2", 0.1f) >>
+  tf.learn.Dropout("Dropout_2", 0.6f) >>
+  tf.learn.Conv2D("Conv2D_3", Shape(2, 2, 16, 8), 8, 8, SamePadding) >>
   tf.learn.AddBias(name = "Bias_3") >>
-  tf.learn.ReLU(0.1f) >>
-  tf.learn.MaxPool(Seq(1, 2, 2, 1), 1, 1, SamePadding, name = "MaxPool_0") >>
-  tf.learn.Flatten() >>
-  tf.learn.Linear(128, name = "FC_Layer_0") >>
-  tf.learn.ReLU(0.1f) >>
-  tf.learn.Linear(64, name = "FC_Layer_1") >>
-  tf.learn.ReLU(0.1f) >>
-  tf.learn.Linear(8, name = "FC_Layer_2") >>
-  tf.learn.Sigmoid() >>
-  tf.learn.Linear(1, name = "OutputLayer")
+  tf.learn.ReLU("ReLU_3", 0.1f) >>
+  tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+  tf.learn.Flatten("Flatten_3") >>
+  tf.learn.Linear("FC_Layer_4", 128) >>
+  tf.learn.ReLU("ReLU_4", 0.1f) >>
+  tf.learn.Linear("FC_Layer_5", 64) >>
+  tf.learn.ReLU("ReLU_5", 0.1f) >>
+  tf.learn.Linear("FC_Layer_6", 8) >>
+  tf.learn.Sigmoid("Sigmoid_6") >>
+  tf.learn.Linear("OutputLayer", 1)
 
-val trainingInputLayer = tf.learn.Cast(INT64)
-val loss = tf.learn.L2Loss() >> tf.learn.Mean() >> tf.learn.ScalarSummary("Loss")
+val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
+val loss = tf.learn.L2Loss("Loss/L2") >> tf.learn.Mean("Loss/Mean") >> tf.learn.ScalarSummary("Loss", "ModelLoss")
 val optimizer = tf.train.AdaGrad(0.002)
 
 val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
