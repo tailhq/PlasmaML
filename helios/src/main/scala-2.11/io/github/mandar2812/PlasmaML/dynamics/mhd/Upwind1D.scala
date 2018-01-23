@@ -14,9 +14,15 @@ import org.apache.log4j.Logger
   * to an inviscid Burgers system.
   * */
 class Upwind1D(
-  rDomain: (Double, Double), nR: Int,
-  thetaDomain: (Double, Double), nTheta: Int,
+  rDomain: (Double, Double),
+  nR: Int, nTheta: Int,
   omega_rot: Double) {
+
+  /**
+    * The Carrington longitude lies
+    * between 0 and 2*Pi radians.
+    * */
+  val thetaDomain: (Double, Double) = (0d, 2*math.Pi)
 
   protected val (deltaR, deltaTheta) = (
     (rDomain._2 - rDomain._1)/nR,
