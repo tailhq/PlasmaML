@@ -79,7 +79,7 @@ object Dependencies {
     if(packagedTFFlag) "org.platanios" % "tensorflow_2.11" % "0.1.0" classifier tensorflow_classifier
     else "org.platanios" % "tensorflow_2.11" % "0.1.0"
 
-  val tf_examples = "org.platanios" % "tensorflow-data_2.11" % "0.1.0-SNAPSHOT"
+  val tf_examples = "org.platanios" % "tensorflow-data_2.11" % "0.1.0"
 
   val tensorflowDependency = Seq(
     tf,
