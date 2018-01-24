@@ -6,6 +6,15 @@ object Dependencies {
 
   val scala = "2.11.8"
 
+  val tfscala_version = "0.1.0"
+
+  //Set to true if, building with Nvidia GPU support.
+  val gpuFlag: Boolean = false
+
+  //Set to false if using self compiled tensorflow library
+  val packagedTFFlag: Boolean = true
+
+  //Set to dev, if pulling DynaML master SNAPSHOT
   val status = "dev"
 
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
@@ -45,10 +54,6 @@ object Dependencies {
     platformName
   }
 
-  val gpuFlag: Boolean = false
-
-  val packagedTFFlag: Boolean = true
-
   val tensorflow_classifier: String = {
     val platform_splits = platform.split("-")
     val (os, arch) = (platform_splits.head, platform_splits.last)
@@ -76,10 +81,10 @@ object Dependencies {
     .map(_.exclude("org.platanios", "tensorflow-data_2.11"))
 
   val tf =
-    if(packagedTFFlag) "org.platanios" % "tensorflow_2.11" % "0.1.1-SNAPSHOT" classifier tensorflow_classifier
-    else "org.platanios" % "tensorflow_2.11" % "0.1.1-SNAPSHOT"
+    if(packagedTFFlag) "org.platanios" % "tensorflow_2.11" % tfscala_version classifier tensorflow_classifier
+    else "org.platanios" % "tensorflow_2.11" % tfscala_version
 
-  val tf_examples = "org.platanios" % "tensorflow-data_2.11" % "0.1.1-SNAPSHOT"
+  val tf_examples = "org.platanios" % "tensorflow-data_2.11" % tfscala_version
 
   val tensorflowDependency = Seq(
     tf,
