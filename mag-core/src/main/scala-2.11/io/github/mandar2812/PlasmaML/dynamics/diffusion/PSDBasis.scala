@@ -160,14 +160,14 @@ abstract class PSDRadialBasis(
     if(logScaleFlags._2) math.log(timeLimits._2 - timeLimits._1)/nT
     else (timeLimits._2 - timeLimits._1)/nT
 
-  val scalesL: Seq[Double] =
+  def scalesL: Seq[Double] =
     if(logScaleFlags._1) Seq.tabulate(lSeq.length)(i =>
       if(i == 0) math.exp(deltaL)
       else if(i < nL) math.exp((i+1)*deltaL) - math.exp(i*deltaL)
       else math.exp((nL+1)*deltaL) - math.exp(nL*deltaL)).map(_*mult)
     else Seq.fill(lSeq.length)(deltaL*mult)
 
-  val scalesT: Seq[Double] =
+  def scalesT: Seq[Double] =
     if(logScaleFlags._2) Seq.tabulate(tSeq.length)(i =>
       if(i == 0) math.exp(deltaT)
       else if(i < nL) math.exp((i+1)*deltaT) - math.exp(i*deltaT)
@@ -181,7 +181,7 @@ abstract class PSDRadialBasis(
 
   protected val centers: Seq[(Double, Double)] = combine(Seq(lSeq, tSeq)).map(s => (s.head, s.last))
 
-  protected val scales: Seq[(Double, Double)] = combine(Seq(scalesL, scalesT)).map(s => (s.head, s.last))
+  protected def scales: Seq[(Double, Double)] = combine(Seq(scalesL, scalesT)).map(s => (s.head, s.last))
 
   def _centers: Seq[(Double, Double)] = centers
 
