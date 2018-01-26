@@ -20,7 +20,8 @@ object Dependencies {
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
-    if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "master-SNAPSHOT")
+    if(status == "local") ("io.github.mandar2812.DynaML", "dynaml_2.11", "v1.5.2-beta.2")
+    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "master-SNAPSHOT")
     else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "v1.5.2-beta.2")
 
   val platform: String = {
