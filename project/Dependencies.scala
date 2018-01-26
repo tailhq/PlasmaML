@@ -15,13 +15,13 @@ object Dependencies {
   val packagedTFFlag: Boolean = true
 
   //Set to dev, if pulling DynaML master SNAPSHOT
-  val status = "dev"
+  val status = "prod"
 
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
     if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "master-SNAPSHOT")
-    else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "v1.5.1")
+    else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "v1.5.2-beta.2")
 
   val platform: String = {
     // Determine platform name using code similar to javacpp
