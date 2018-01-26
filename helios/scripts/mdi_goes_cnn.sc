@@ -70,7 +70,7 @@ val collated_data = helios.collate_data_range(
 
 val tt_partition = (p: (DateTime, (Path, (Double, Double)))) =>
   if(p._1.isAfter(halloween_start) && p._1.isBefore(halloween_end)) true
-  else scala.util.Random.nextDouble() <= 0.7
+  else scala.util.Random.nextDouble() <= 0.85
 
 /*
 * After data has been joined/collated,
@@ -152,7 +152,7 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
 
   println("Training the linear regression model.")
 
-  val estimator = tf.learn.InMemoryEstimator(
+  val estimator = tf.learn.FileBasedEstimator(
     model,
     tf.learn.Configuration(Some(summariesDir)),
     tf.learn.StopCriteria(maxSteps = Some(100000)),
@@ -161,7 +161,7 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
       tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
       tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(1000))),
     tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
-  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(10000)))
+  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(1000)))
 
   (model, estimator)
 }
@@ -176,12 +176,16 @@ def accuracy(images: Tensor, labels: Tensor): Float = {
     .asInstanceOf[Float]
 }
 
+/*
 val (trainAccuracy, testAccuracy) = (
   accuracy(dataSet.trainData, dataSet.trainLabels(::, 0)),
   accuracy(dataSet.testData, dataSet.testLabels(::, 0)))
 
 print("Train accuracy = ")
 pprint.pprintln(trainAccuracy)
+*/
+
+val testAccuracy = accuracy(dataSet.testData, dataSet.testLabels(::, 0))
 
 print("Test accuracy = ")
 pprint.pprintln(testAccuracy)
