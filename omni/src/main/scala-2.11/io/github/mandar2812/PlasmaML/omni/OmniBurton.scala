@@ -35,7 +35,7 @@ object OmniBurton {
       formatter.parseDateTime(dateLimits._2).getMillis/1000.0)
 
     //Set up a processing pipeline for the file
-    val processFile = omniFileToStream >
+    val processFile = OMNILoader.omniFileToStream(40, List()) >
       extractTimeSeries((year,day,hour) => {
         dayofYearformatter.parseDateTime(
           year.toInt.toString + "/" + day.toInt.toString +
