@@ -80,7 +80,7 @@ lazy val helios =
           """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
           """import com.quantifind.charts.Highcharts._;"""+
           """import breeze.linalg.DenseVector;"""
-    ).dependsOn(mag_core)
+    ).dependsOn(mag_core, omni)
 
 lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(commonSettings: _*)

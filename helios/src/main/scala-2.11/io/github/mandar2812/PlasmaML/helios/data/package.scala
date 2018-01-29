@@ -1,6 +1,7 @@
 package io.github.mandar2812.PlasmaML.helios
 
 import ammonite.ops.Path
+import io.github.mandar2812.PlasmaML.omni.OMNIData
 import io.github.mandar2812.dynaml.utils
 import org.joda.time.{Duration, LocalDate, Period, YearMonth}
 
@@ -44,5 +45,7 @@ package object data {
   case class GOES(
     quantity: String = GOESData.Quantities.XRAY_FLUX_5m,
     format: String = GOESData.Formats.CSV) extends Source
+
+  case class OMNI(quantity: Int = OMNIData.Quantities.V_SW) extends Source
 
 }

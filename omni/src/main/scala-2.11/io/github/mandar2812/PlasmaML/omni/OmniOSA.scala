@@ -2,10 +2,6 @@ package io.github.mandar2812.PlasmaML.omni
 
 //Scala language imports
 //scala mutable collections api
-import io.github.mandar2812.dynaml.modelpipe.GLMPipe
-import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
-import io.github.mandar2812.dynaml.models.sgp.ESGPModel
-import io.github.mandar2812.dynaml.optimization.{AbstractCSA, ProbGPCommMachine}
 
 import scala.collection.mutable.{MutableList => MList}
 
@@ -33,6 +29,12 @@ import io.github.mandar2812.dynaml.kernels.CovarianceFunction
 import io.github.mandar2812.dynaml.models.lm.GeneralizedLinearModel
 import io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GradBasedGlobalOptimizer}
 import io.github.mandar2812.dynaml.pipes.{BifurcationPipe, StreamFlatMapPipe}
+import io.github.mandar2812.dynaml.modelpipe.GLMPipe
+import io.github.mandar2812.dynaml.models.gp.AbstractGPRegressionModel
+import io.github.mandar2812.dynaml.models.sgp.ESGPModel
+import io.github.mandar2812.dynaml.optimization.{AbstractCSA, ProbGPCommMachine}
+
+import io.github.mandar2812.PlasmaML.omni.OMNIData._
 
 /**
   * A consolidation of models and work-flows for OSA prediction
@@ -85,33 +87,6 @@ object OmniOSA {
   val stormsFile2 = "geomagnetic_storms2.csv"
   //List of storms not contained in Ji et.al but contained in stormsFile2
   val stormsFile3 = "geomagnetic_storms3.csv"
-
-  /**
-    * Stores the missing value strings for
-    * each column index in the hourly resolution
-    * OMNI files.
-    * */
-  var columnFillValues = Map(
-    16 -> "999.9", 21 -> "999.9",
-    24 -> "9999.", 23 -> "999.9",
-    40 -> "99999", 22 -> "9999999.",
-    25 -> "999.9", 28 -> "99.99",
-    27 -> "9.999", 39 -> "999",
-    45 -> "99999.99", 46 -> "99999.99",
-    47 -> "99999.99", 15 -> "999.9")
-
-  /**
-    * Contains the name of the quantity stored
-    * by its column index (which starts from 0).
-    * */
-  var columnNames = Map(
-    24 -> "Solar Wind Speed",
-    16 -> "I.M.F Bz",
-    40 -> "Dst",
-    41 -> "AE",
-    38 -> "Kp",
-    39 -> "Sunspot Number",
-    28 -> "Plasma Flow Pressure")
 
   /**
     * Flag which indicates if the term
