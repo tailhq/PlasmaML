@@ -3,7 +3,9 @@ import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import ammonite.ops._
 import org.joda.time._
 import org.platanios.tensorflow.api._
+import org.platanios.tensorflow.api.core.client.SessionConfig
 import org.platanios.tensorflow.api.ops.NN.SamePadding
+import org.platanios.tensorflow.api.ops.io.data.TensorSlicesDataset
 
 /*
 * Mind your surroundings!
@@ -60,7 +62,7 @@ val round_date = (d: DateTime) => {
 }
 
 val collated_data = helios.collate_data_range(
-  new YearMonth(2001, 1), new YearMonth(2004, 12))(
+  new YearMonth(2001, 1), new YearMonth(2003, 12))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
   goes_aggregation = 2,
@@ -76,8 +78,8 @@ val test_year_start = new DateTime(test_year, 1, 1, 0, 0)
 val test_year_end   = new DateTime(test_year, 12, 31, 23, 59)
 
 val tt_partition = (p: (DateTime, (Path, (Double, Double)))) =>
-  if(p._1.isAfter(test_year_start) && p._1.isBefore(test_year_end)) true
-  else false
+  if(p._1.isAfter(test_year_start) && p._1.isBefore(test_year_end)) false
+  else true
 
 /*
 * After data has been joined/collated,
@@ -173,13 +175,16 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
   (model, estimator)
 }
 
+dataSet.trainData.close()
+dataSet.trainLabels.close()
+
 def accuracy(images: Tensor, labels: Tensor): Float = {
   val predictions = estimator.infer(() => images)
 
   predictions
     .multiply(labels_stddev).add(labels_mean)
     .subtract(labels).cast(FLOAT32)
-    .square.mean().scalar
+    .square.mean().sqrt.scalar
     .asInstanceOf[Float]
 }
 

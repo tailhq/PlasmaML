@@ -251,62 +251,6 @@ package object helios {
 
     val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, 2)(labels_test.flatten[Double])
 
-
-/*    train_set.foreach(entry => {
-      val (_, (path, data_label)) = entry
-
-      val im = Image.fromPath(path.toNIO)
-
-      val scaled_image = im.copy.scale(scaleDown)
-
-      val im_tensor = dtf.tensor_from(
-        "UINT8", 1, scaled_image.height, scaled_image.width, 4)(
-        scaled_image.argb.toSeq.flatten)
-
-      val label = dtf.tensor_from("FLOAT32", 1, 2)(Seq(data_label._1, data_label._2))
-
-      val trainImages = if(working_set.trainData == null) {
-        im_tensor
-      } else {
-        dtf.concatenate(Seq(working_set.trainData, im_tensor), axis = 0)
-      }
-
-      val trainTargets = if(working_set.trainLabels == null) {
-        label
-      } else {
-
-        dtf.concatenate(Seq(working_set.trainLabels, label), axis = 0)
-      }
-
-      working_set = working_set.copy(trainData = trainImages, trainLabels = trainTargets)
-
-    })
-
-    test_set.foreach(entry => {
-      val (_, (path, data_label)) = entry
-
-      val im = Image.fromPath(path.toNIO)
-      val im_tensor = dtf.tensor_from("UINT8", 1, 32, 32, 4)(im.copy.scale(0.0625).argb.toSeq.flatten)
-
-      val label = dtf.tensor_from("FLOAT32", 1, 2)(Seq(data_label._1, data_label._2))
-
-      val testImages = if(working_set.testData == null) {
-        im_tensor
-      } else {
-        dtf.concatenate(Seq(working_set.testData, im_tensor), axis = 0)
-      }
-
-      val testTargets = if(working_set.testLabels == null) {
-        label
-      } else {
-
-        dtf.concatenate(Seq(working_set.testLabels, label), axis = 0)
-      }
-
-      working_set = working_set.copy(testData = testImages, testLabels = testTargets)
-
-    })*/
-
     working_set.copy(
       trainData   = features_tensor_train,
       trainLabels = labels_tensor_train,
