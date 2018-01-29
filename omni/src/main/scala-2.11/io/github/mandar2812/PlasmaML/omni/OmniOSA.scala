@@ -70,9 +70,6 @@ object OmniOSA {
   //Formatter for reading strings consisting of Year/Day of Year (1-365)/Hour
   val dayofYearformatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/D/H")
 
-  //The column indices corresponding to the year, day of year and hour respectively
-  val dateColumns = List(0, 1, 2)
-
   //Initialise the logging system
   private val logger = Logger.getLogger(this.getClass)
 
@@ -220,18 +217,6 @@ object OmniOSA {
   //Set the validation data sections to empty
   var validationDataSections: Stream[DateSection] = Stream.empty[DateSection]
 
-  /**
-    * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
-    * reads an OMNI file cleans it and extracts the columns specified
-    * by [[targetColumn]] and [[exogenousInputs]].
-    * */
-  def omniFileToStream = fileToStream >
-    replaceWhiteSpaces >
-    extractTrainingFeatures(
-      dateColumns++List(targetColumn)++exogenousInputs,
-      columnFillValues) >
-    removeMissingLines
-
   val extractNarmaxFeatures = StreamDataPipe((couple: (TimeStamp, Features)) => {
     val features = couple._2
     //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
@@ -303,7 +288,9 @@ object OmniOSA {
     //The file name to read from
     val fileName = dataDir+"omni2_"+dateLimits._1.split("/").head+".csv"
     //Set up a processing pipeline for the file
-    val processFile = omniFileToStream > prepareData(dateLimits._1, dateLimits._2)
+    val processFile =
+      OMNILoader.omniFileToStream(targetColumn, exogenousInputs) >
+      prepareData(dateLimits._1, dateLimits._2)
 
     //Apply the pipeline to the file
     processFile(fileName)

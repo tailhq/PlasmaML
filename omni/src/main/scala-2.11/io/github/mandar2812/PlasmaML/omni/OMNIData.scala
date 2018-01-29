@@ -1,5 +1,8 @@
 package io.github.mandar2812.PlasmaML.omni
 
+import io.github.mandar2812.dynaml.DynaMLPipe.{
+  extractTrainingFeatures, fileToStream,
+  replaceWhiteSpaces, removeMissingLines}
 import org.apache.log4j.Logger
 
 /**
@@ -56,11 +59,31 @@ object OMNIData {
     39 -> "Sunspot Number",
     28 -> "Plasma Flow Pressure")
 
+  //The column indices corresponding to the year, day of year and hour respectively
+  val dateColumns = List(0, 1, 2)
+
   def getFilePattern(year: Int): String = "omni2_"+year+".csv"
 
 }
 
 object OMNILoader {
+
+  import io.github.mandar2812.PlasmaML.omni.OMNIData.{columnFillValues, dateColumns}
+
+  /**
+    * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
+    * reads an OMNI file cleans it and extracts the columns specified
+    * by targetColumn and exogenousInputs.
+    * */
+  def omniFileToStream(targetColumn: Int, exogenousInputs: List[Int]) =
+    fileToStream >
+    replaceWhiteSpaces >
+    extractTrainingFeatures(
+      dateColumns++List(targetColumn)++exogenousInputs,
+      columnFillValues) >
+    removeMissingLines
+
+
 
 
 }

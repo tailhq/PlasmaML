@@ -51,7 +51,7 @@ object OmniMSA {
 
   def prepareData: DataPipe[String, (Data, DataScales)] = {
 
-    val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
+    val (pF, pT) = (math.pow(2, orderFeat).toInt,math.pow(2, orderTarget).toInt)
 
     val prepareTrainingData = fileToStream >
       replaceWhiteSpaces >
