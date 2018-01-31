@@ -3,7 +3,6 @@ import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import ammonite.ops._
 import org.joda.time._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.core.client.SessionConfig
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.ops.io.data.TensorSlicesDataset
 
@@ -62,7 +61,7 @@ val round_date = (d: DateTime) => {
 }
 
 val collated_data = helios.collate_data_range(
-  new YearMonth(2001, 1), new YearMonth(2003, 12))(
+  new YearMonth(2001, 1), new YearMonth(2005, 12))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
   goes_aggregation = 2,
@@ -170,7 +169,7 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
       tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
       tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
     tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
-  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(100000)))
+  estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(0)))
 
   (model, estimator)
 }
@@ -178,17 +177,34 @@ val (model, estimator) = tf.createWith(graph = Graph()) {
 dataSet.trainData.close()
 dataSet.trainLabels.close()
 
-def accuracy(images: Tensor, labels: Tensor): Float = {
-  val predictions = estimator.infer(() => images)
+def accuracy_by_partitions(
+  n: Int, n_part: Int)(
+  labels_mean: Tensor, labels_stddev: Tensor)(
+  images: Tensor, labels: Tensor): Float = {
 
-  predictions
-    .multiply(labels_stddev).add(labels_mean)
-    .subtract(labels).cast(FLOAT32)
-    .square.mean().sqrt.scalar
-    .asInstanceOf[Float]
+  def accuracy(im: Tensor, lab: Tensor): Float = {
+    val predictions = estimator.infer(() => im)
+
+    predictions
+      .multiply(labels_stddev).add(labels_mean)
+      .subtract(lab).cast(FLOAT32)
+      .square.mean().scalar
+      .asInstanceOf[Float]
+  }
+
+  val num_elem: Int = n/n_part
+
+  math.sqrt((0 until n_part).map(i => {
+
+    val (lower_index, upper_index) = (i*num_elem, math.max((i+1)*num_elem, n))
+
+    accuracy(images(lower_index::upper_index, ::, ::, ::), labels(lower_index::upper_index))
+  }).sum/num_elem).toFloat
 }
 
-val testAccuracy = accuracy(dataSet.testData, dataSet.testLabels(::, 0))
+val acc = accuracy_by_partitions(dataSet.nTest, 4)(labels_mean, labels_stddev) _
+
+val testAccuracy = acc(dataSet.testData, dataSet.testLabels(::, 0))
 
 print("Test accuracy = ")
 pprint.pprintln(testAccuracy)

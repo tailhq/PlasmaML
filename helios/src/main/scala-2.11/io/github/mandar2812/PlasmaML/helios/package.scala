@@ -214,7 +214,7 @@ package object helios {
 
     }
 
-    val working_set = HeliosDataSet(null, null, null, null)
+    val working_set = HeliosDataSet(null, null, train_set.length, null, null, test_set.length)
 
     val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) = train_set.map(entry => {
       val (_, (path, data_label)) = entry
