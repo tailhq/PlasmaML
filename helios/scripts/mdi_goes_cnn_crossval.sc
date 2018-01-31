@@ -21,8 +21,9 @@ val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
 val tempdir = home/"tmp"
 
-def generate_data() = {
+def generate_data(year_start: Int = 2001, year_end: Int = 2005) = {
 
+  require(year_end > year_start, "Data set must encompass more than one year")
   /*
   * Create a collated data set,
   * extract GOES flux data and join it
@@ -51,8 +52,10 @@ def generate_data() = {
       minutes*num_minutes)
   }
 
+  println("Preparing data-set as a Stream ")
+  println("Start: "+year_start+" End: "+year_end)
   helios.collate_data_range(
-    new YearMonth(2001, 1), new YearMonth(2005, 12))(
+    new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
     GOES(GOESData.Quantities.XRAY_FLUX_5m),
     goes_dir,
     goes_aggregation = 2,
@@ -157,7 +160,11 @@ def run_experiment(
     tf.learn.Linear("OutputLayer", 1)
 
   val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
-  val loss = tf.learn.L2Loss("Loss/L2") >> tf.learn.Mean("Loss/Mean") >> tf.learn.ScalarSummary("Loss", "ModelLoss")
+
+  val loss = tf.learn.L2Loss("Loss/L2") >>
+    tf.learn.Mean("Loss/Mean") >>
+    tf.learn.ScalarSummary("Loss", "ModelLoss")
+
   val optimizer = tf.train.AdaGrad(0.002)
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
@@ -192,17 +199,29 @@ def run_experiment(
   pprint.pprintln(testAccuracy)
 
   dataSet.close()
-  
+
   (model, estimator, testAccuracy, tf_summary_dir)
 }
 
 
 
 @main
-def main(test_year: Int = 2003, max_iterations: Int = 100000) = {
+def main(start_year: Int = 2001, end_year: Int = 2005, max_iterations: Int = 100000) = {
 
-  val data = generate_data()
+  val data = generate_data(start_year, end_year)
 
-  run_experiment(data)(test_year, 100000)
+  val results = (start_year to end_year).map(test_year => {
+    (test_year, run_experiment(data)(test_year, max_iterations))
+  }).toMap
+
+  results.foreach(kv => {
+
+    val (year, acc) = (kv._1, kv._2._3)
+    print("Test Data Set; Year = ")
+    pprint.pprintln(year)
+
+    print("               Accuracy = ")
+    pprint.pprintln(acc)
+  })
 
 }
