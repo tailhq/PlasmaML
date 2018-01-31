@@ -4,6 +4,7 @@ import ammonite.ops.Path
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.dynaml.tensorflow.dtf
+import org.platanios.tensorflow.api._
 import org.joda.time._
 
 package object helios {
@@ -258,5 +259,33 @@ package object helios {
       testLabels  = labels_tensor_test
     )
   }
+
+  /**
+    * Calculate RMSE of a tensorflow based estimator.
+    * */
+  def calculate_rmse(
+    n: Int, n_part: Int)(
+    labels_mean: Tensor, labels_stddev: Tensor)(
+    images: Tensor, labels: Tensor)(infer: (Tensor) => Tensor): Float = {
+
+    def accuracy(im: Tensor, lab: Tensor): Float = {
+      infer(im)
+        .multiply(labels_stddev)
+        .add(labels_mean)
+        .subtract(lab).cast(FLOAT32)
+        .square.mean().scalar
+        .asInstanceOf[Float]
+    }
+
+    val num_elem: Int = n/n_part
+
+    math.sqrt((0 until n_part).map(i => {
+
+      val (lower_index, upper_index) = (i*num_elem, if(i == n_part-1) n else (i+1)*num_elem)
+
+      accuracy(images(lower_index::upper_index, ::, ::, ::), labels(lower_index::upper_index))
+    }).sum/num_elem).toFloat
+  }
+
 
 }
