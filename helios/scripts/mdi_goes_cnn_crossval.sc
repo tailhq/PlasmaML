@@ -6,24 +6,22 @@ import org.joda.time._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 
-@main
-def main(test_year: Int = 2003) = {
-  /*
+/*
 * Mind your surroundings!
 * */
-  val os_name = System.getProperty("os.name")
+val os_name = System.getProperty("os.name")
 
-  println("OS: "+os_name)
+println("OS: "+os_name)
 
-  val user_name = System.getProperty("user.name")
+val user_name = System.getProperty("user.name")
 
-  println("Running as user: "+user_name)
+println("Running as user: "+user_name)
 
-  val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
-  val tempdir = home/"tmp"
-  val tf_summary_dir = tempdir/("helios_goes_mdi_summaries_"+test_year)
+val tempdir = home/"tmp"
 
+def generate_data() = {
 
   /*
   * Create a collated data set,
@@ -60,7 +58,7 @@ def main(test_year: Int = 2003) = {
       minutes*num_minutes)
   }
 
-  val collated_data = helios.collate_data_range(
+  helios.collate_data_range(
     new YearMonth(2001, 1), new YearMonth(2005, 12))(
     GOES(GOESData.Quantities.XRAY_FLUX_5m),
     goes_dir,
@@ -70,7 +68,19 @@ def main(test_year: Int = 2003) = {
     soho_dir,
     dt_round_off = round_date)
 
+}
 
+def run_experiment(
+  collated_data: Stream[(DateTime, (Path, (Double, Double)))])(
+  test_year: Int, max_iterations: Int) = {
+
+  val tf_summary_dir = tempdir/("helios_goes_mdi_summaries_"+test_year)
+
+  val checkpoints = ls! tf_summary_dir |? (_.segments.last.contains("model.ckpt-"))
+
+  val checkpoint_max = if(checkpoints.isEmpty)  0 else (checkpoints | (_.segments.last.split("-").last.toInt)).max
+
+  val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
 
   val test_year_start = new DateTime(test_year, 1, 1, 0, 0)
 
@@ -163,13 +173,14 @@ def main(test_year: Int = 2003) = {
     val estimator = tf.learn.FileBasedEstimator(
       model,
       tf.learn.Configuration(Some(summariesDir)),
-      tf.learn.StopCriteria(maxSteps = Some(100000)),
+      tf.learn.StopCriteria(maxSteps = Some(iterations)),
       Set(
         tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
         tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
         tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
       tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
-    estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(0)))
+
+    estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(iterations)))
 
     (model, estimator)
   }
@@ -183,5 +194,16 @@ def main(test_year: Int = 2003) = {
   print("Test accuracy = ")
   pprint.pprintln(testAccuracy)
 
+  (model, estimator, testAccuracy, tf_summary_dir)
 }
 
+
+
+@main
+def main(test_year: Int = 2003, max_iterations: Int = 100000) = {
+
+  val data = generate_data()
+
+  run_experiment(data)(test_year, 100000)
+
+}
