@@ -32,13 +32,6 @@ def generate_data() = {
   val soho_dir = data_dir/'soho
   val goes_dir = data_dir/'goes
 
-  val (year, month, day) = ("2003", "10", "28")
-
-  val halloween_start = new DateTime(2003, 10, 28, 8, 0)
-
-  val halloween_end = new DateTime(2003, 10, 29, 12, 0)
-
-
   val reduce_fn = (gr: Stream[(DateTime, (Double, Double))]) => {
 
     val max_flux = gr.map(_._2).max
@@ -76,9 +69,13 @@ def run_experiment(
 
   val tf_summary_dir = tempdir/("helios_goes_mdi_summaries_"+test_year)
 
-  val checkpoints = ls! tf_summary_dir |? (_.segments.last.contains("model.ckpt-"))
+  val checkpoints =
+    if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.segments.last.contains("model.ckpt-"))
+    else Seq()
 
-  val checkpoint_max = if(checkpoints.isEmpty)  0 else (checkpoints | (_.segments.last.split("-").last.toInt)).max
+  val checkpoint_max =
+    if(checkpoints.isEmpty) 0
+    else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
 
   val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
 
@@ -194,6 +191,8 @@ def run_experiment(
   print("Test accuracy = ")
   pprint.pprintln(testAccuracy)
 
+  dataSet.close()
+  
   (model, estimator, testAccuracy, tf_summary_dir)
 }
 
