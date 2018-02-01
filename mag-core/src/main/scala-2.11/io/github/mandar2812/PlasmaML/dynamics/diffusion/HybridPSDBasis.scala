@@ -91,15 +91,29 @@ object HybridPSDBasis {
       )
     }
 
-    val basis_space_l = (l_adj > l_domain_adjust) %>
-      Basis((l: Double) => DenseVector.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d))
+    val basis_space_l = if(biasFlag) {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) => DenseVector(Array(0d) ++ Array.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d)))
+    } else {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) => DenseVector.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d))
+    }
 
-    val basis_space_ll = (l_adj > l_domain_adjust) %>
-      Basis((l: Double) =>
-        DenseVector.tabulate(nL)(i =>
-          if(i+1 > 1) (i+1)*((i+1)*T(i+1, l) - l*U(i, l))/(l*l - 1)
-          else 0d)
-      )
+    val basis_space_ll = if(biasFlag) {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) =>
+          DenseVector(Array(0d) ++ Array.tabulate(nL)(i =>
+            if(i+1 > 1) (i+1)*((i+1)*T(i+1, l) - l*U(i, l))/(l*l - 1)
+            else 0d))
+        )
+    } else {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) =>
+          DenseVector.tabulate(nL)(i =>
+            if(i+1 > 1) (i+1)*((i+1)*T(i+1, l) - l*U(i, l))/(l*l - 1)
+            else 0d)
+        )
+    }
 
     new HybridPSDBasis(basis_space, basis_time, basis_space_l, basis_space_ll, basis_time_t) {
       override val dimension: Int = nL*(nT+1)

@@ -219,7 +219,7 @@ class BasisFuncRadialDiffusionModel(
       aMat*regObs + psiMat*regCol
     }
 
-    ss\(b + c)
+    ss\(b*regObs + c*regCol)
   }
 
 
