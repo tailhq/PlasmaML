@@ -81,9 +81,15 @@ object HybridPSDBasis {
 
     def U(n: Int, x: Double) = utils.chebyshev(n, x, kind = 2)
 
-    val basis_time_t = Basis(
-      (t: Double) => DenseVector(tSeq.zip(scalesT).toArray.map(c => -beta_t*math.abs(t-c._1)/c._2)) *:* basis_time(t)
-    )
+    val basis_time_t = if (biasFlag) {
+      Basis((t: Double) =>
+        DenseVector(Array(0d) ++ tSeq.zip(scalesT).toArray.map(c => -beta_t*math.abs(t-c._1)/c._2)) *:* basis_time(t)
+      )
+    } else {
+      Basis((t: Double) =>
+        DenseVector(tSeq.zip(scalesT).toArray.map(c => -beta_t*math.abs(t-c._1)/c._2)) *:* basis_time(t)
+      )
+    }
 
     val basis_space_l = (l_adj > l_domain_adjust) %>
       Basis((l: Double) => DenseVector.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d))
