@@ -82,6 +82,8 @@ class BasisFuncRadialDiffusionModel(
     (ph*ph.t, ph*y)
   }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
 
+  private val I = DenseMatrix.eye[Double](aMat.rows)
+
   def _operator_hyper_parameters: List[String] = operator_hyper_parameters
 
   protected val operator_hyper_parameters: List[String] = {
@@ -210,13 +212,19 @@ class BasisFuncRadialDiffusionModel(
     }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
 
     lazy val ss = if(bMat.rows == aMat.rows) {
-      aMat*regObs + bMat*regCol
+      aMat*regObs + bMat*regCol + I*reg
     } else {
       val psiMat = DenseMatrix.vertcat(
         DenseMatrix.zeros[Double](1, aMat.cols),
         DenseMatrix.horzcat(DenseMatrix.zeros[Double](bMat.rows, 1),bMat)
       )
-      aMat*regObs + psiMat*regCol
+
+      val iMat = DenseMatrix.vertcat(
+        DenseMatrix.zeros[Double](1, aMat.cols),
+        DenseMatrix.horzcat(DenseMatrix.zeros[Double](bMat.rows, 1), I)
+      )
+
+      aMat*regObs + psiMat*regCol + iMat*reg
     }
 
     ss\(b*regObs + c*regCol)
