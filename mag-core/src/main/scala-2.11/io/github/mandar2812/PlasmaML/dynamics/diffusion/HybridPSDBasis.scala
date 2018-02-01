@@ -45,7 +45,8 @@ object HybridPSDBasis {
     beta_t: Double,
     lShellLimits: (Double, Double), nL: Int,
     timeLimits: (Double, Double), nT: Int,
-    logScale: Boolean = false): HybridPSDBasis = {
+    logScale: Boolean = false,
+    biasFlag: Boolean = false): HybridPSDBasis = {
 
     val (_, tSeq) = RadialDiffusion.buildStencil(
       lShellLimits, nL,
@@ -63,7 +64,7 @@ object HybridPSDBasis {
         else math.exp((nL+1)*deltaT) - math.exp(nL*deltaT))
       else Seq.fill(tSeq.length)(deltaT)
 
-    val basis_time = RadialBasis.invMultiquadricBasis(beta_t)(tSeq, scalesT, bias = false)
+    val basis_time = RadialBasis.invMultiquadricBasis(beta_t)(tSeq, scalesT, bias = biasFlag)
 
     val l_adj = DataPipe((l_shell: Double) => (l_shell - lShellLimits._1)/(lShellLimits._2 - lShellLimits._1))
 
@@ -71,8 +72,10 @@ object HybridPSDBasis {
 
     val basis_space =
       (l_adj > l_domain_adjust) %>
-      ChebyshevBasisGenerator(nL, 1) >
-        DataPipe[DenseVector[Double], DenseVector[Double]]((v: DenseVector[Double]) => v.slice(1, v.length))
+        ChebyshevBasisGenerator(nL, 1) >
+        DataPipe[DenseVector[Double], DenseVector[Double]](
+          (v: DenseVector[Double]) => if(biasFlag) v else v.slice(1, v.length)
+        )
 
     def T(n: Int, x: Double) = utils.chebyshev(n, x, kind = 1)
 

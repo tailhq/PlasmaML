@@ -45,7 +45,7 @@ class BasisFuncRadialDiffusionModel(
   val noise_psd: DiracTuple2Kernel,
   val psd_data: Stream[((Double, Double), Double)],
   val ghost_points: Stream[(Double, Double)],
-  val basis: PSDBasis) extends GloballyOptimizable {
+  val basis: PSDBasis, dualFlag: Boolean = true) extends GloballyOptimizable {
 
   protected val logger: Logger = Logger.getLogger(this.getClass)
 
@@ -209,7 +209,15 @@ class BasisFuncRadialDiffusionModel(
       (ph*ph.t, ph*y)
     }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
 
-    lazy val ss = aMat + bMat*reg
+    lazy val ss = if(bMat.rows == aMat.rows) {
+      aMat*regObs + bMat*regCol
+    } else {
+      val psiMat = DenseMatrix.vertcat(
+        DenseMatrix.zeros[Double](1, aMat.cols),
+        DenseMatrix.horzcat(DenseMatrix.zeros[Double](bMat.rows, 1),bMat)
+      )
+      aMat*regObs + psiMat*regCol
+    }
 
     ss\(b + c)
   }
@@ -275,15 +283,21 @@ class BasisFuncRadialDiffusionModel(
     h: Map[String, Double],
     options: Map[String, String] = Map()): Double = try {
 
-    val (params, psi) = getGalerkinParams(h)
+    val mean = if(dualFlag) {
+      val (params, psi) = getGalerkinParams(h)
 
-    val dMat = DenseMatrix.vertcat(
-      DenseVector.ones[Double](num_observations).toDenseMatrix,
-      phi*phi.t,
-      psi*phi.t
-    )
+      val dMat = DenseMatrix.vertcat(
+        DenseVector.ones[Double](num_observations).toDenseMatrix,
+        phi*phi.t,
+        psi*phi.t
+      )
 
-    val mean = dMat.t*params
+      dMat.t*params
+    } else {
+      val params = getBasisParams(h)
+
+      phi * params
+    }
 
     val modelVariance = norm(targets - mean)/targets.length
     print("variance = ")
