@@ -200,7 +200,7 @@ def run_experiment(
 
   dataSet.close()
 
-  (model, estimator, testAccuracy, tf_summary_dir)
+  (model, estimator, testAccuracy, tf_summary_dir, labels_mean, labels_stddev)
 }
 
 

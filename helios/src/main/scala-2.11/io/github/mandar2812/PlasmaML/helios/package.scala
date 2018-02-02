@@ -1,12 +1,22 @@
 package io.github.mandar2812.PlasmaML
 
-import ammonite.ops.Path
+import ammonite.ops.{Path, exists, home, ls, root}
 import com.sksamuel.scrimage.Image
+import io.github.mandar2812.PlasmaML.helios.core._
 import io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.dynaml.tensorflow.dtf
 import org.platanios.tensorflow.api._
 import org.joda.time._
 
+/**
+  * <h3>Helios</h3>
+  *
+  * The top level package for the helios module.
+  *
+  * Contains methods for carrying out ML experiments
+  * on data sets associated with helios.
+  *
+  * */
 package object helios {
 
   /**
@@ -179,7 +189,11 @@ package object helios {
       start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
       end_year_month.toLocalDate(31).toDateTimeAtStartOfDay)
 
+    print("Time period considered (in months): ")
+
     val num_months = (12*period.getYears) + period.getMonths
+
+    pprint.pprintln(num_months)
 
     (0 to num_months).map(start_year_month.plusMonths).flatMap(prepare_data).toStream
   }
@@ -286,6 +300,219 @@ package object helios {
       accuracy(images(lower_index::upper_index, ::, ::, ::), labels(lower_index::upper_index))
     }).sum/num_elem).toFloat
   }
+
+  /**
+    * Generate a starting data set for GOES prediction tasks.
+    * This method makes the assumption that the data is stored
+    * in a directory ~/data_repo/helios in a standard directory tree
+    * generated after executing the [[data.SOHOLoader.bulk_download()]] method.
+    *
+    * @param image_source The [[SOHO]] data source to extract from
+    * @param year_start The starting time of the data
+    * @param year_end The end time of the data.
+    * */
+  def generate_data_goes(
+    year_start: Int = 2001, year_end: Int = 2005,
+    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512)): Stream[(DateTime, (Path, (Double, Double)))] = {
+
+    /*
+     * Mind your surroundings!
+     * */
+    val os_name = System.getProperty("os.name")
+
+    println("OS: "+os_name)
+
+    val user_name = System.getProperty("user.name")
+
+    println("Running as user: "+user_name)
+
+    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+
+    require(year_end > year_start, "Data set must encompass more than one year")
+
+    /*
+    * Create a collated data set,
+    * extract GOES flux data and join it
+    * with eit195 (green filter) images.
+    * */
+
+    print("Looking for data in directory ")
+    val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
+    pprint.pprintln(data_dir)
+
+    val soho_dir = data_dir/'soho
+    val goes_dir = data_dir/'goes
+
+    val reduce_fn = (gr: Stream[(DateTime, (Double, Double))]) => {
+
+      val max_flux = gr.map(_._2).max
+
+      (gr.head._1, (math.log10(max_flux._1), math.log10(max_flux._2)))
+    }
+
+    val round_date = (d: DateTime) => {
+
+      val num_minutes = 10
+
+      val minutes: Int = d.getMinuteOfHour/num_minutes
+
+      new DateTime(
+        d.getYear, d.getMonthOfYear,
+        d.getDayOfMonth, d.getHourOfDay,
+        minutes*num_minutes)
+    }
+
+    println("Preparing data-set as a Stream ")
+    println("Start: "+year_start+" End: "+year_end)
+
+
+    helios.collate_data_range(
+      new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
+      GOES(GOESData.Quantities.XRAY_FLUX_5m),
+      goes_dir,
+      goes_aggregation = 2,
+      goes_reduce_func = reduce_fn,
+      image_source,
+      soho_dir,
+      dt_round_off = round_date)
+
+  }
+
+
+  /**
+    * Train the [[Arch.cnn_goes_v1]] architecture on a
+    * processed data set.
+    *
+    * @param collated_data Data set of temporally joined
+    *                      image paths and GOES X-Ray fluxes.
+    *                      This is generally the output after
+    *                      executing [[collate_data_range()]]
+    *                      with the relevant parameters.
+    *
+    * @param tt_partition A function which splits the data set
+    *                     into train and test sections, based on
+    *                     any Boolean function. If the function
+    *                     returns true then the instance falls into
+    *                     the training set else the test set
+    *
+    * @param tempdir A working directory where the results will be
+    *                archived, defaults to user_home_dir/tmp. The model
+    *                checkpoints and other results will be stored inside
+    *                another directory created in tempdir.
+    *
+    * @param results_id The suffix added the results/checkpoints directory name.
+    *
+    * @param max_iterations The maximum number of iterations that the [[Arch.cnn_goes_v1]]
+    *                       network must be trained for.
+    *
+    * */
+  def run_experiment_goes(
+    collated_data: Stream[(DateTime, (Path, (Double, Double)))],
+    tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean)(
+    results_id: String, max_iterations: Int, tempdir: Path = home/"tmp") = {
+
+    val tf_summary_dir = tempdir/("helios_goes_mdi_summaries_"+results_id)
+
+    val checkpoints =
+      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.segments.last.contains("model.ckpt-"))
+      else Seq()
+
+    val checkpoint_max =
+      if(checkpoints.isEmpty) 0
+      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
+
+    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
+
+
+    /*
+    * After data has been joined/collated,
+    * start loading it into tensors
+    *
+    * */
+
+    val dataSet = helios.create_helios_data_set(
+      collated_data,
+      tt_partition,
+      scaleDownFactor = 2)
+
+    val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
+
+    val train_labels = dataSet.trainLabels(::, 0)
+
+    val labels_mean = train_labels.mean()
+
+    val labels_stddev = train_labels.subtract(labels_mean).square.mean().sqrt
+
+    val trainLabels = tf.data.TensorSlicesDataset(train_labels.subtract(labels_mean).divide(labels_stddev))
+
+    val trainData =
+      trainImages.zip(trainLabels)
+        .repeat()
+        .shuffle(10000)
+        .batch(64)
+        .prefetch(10)
+
+    /*
+    * Start building tensorflow network/graph
+    * */
+    println("Building the regression model.")
+    val input = tf.learn.Input(
+      UINT8,
+      Shape(
+        -1,
+        dataSet.trainData.shape(1),
+        dataSet.trainData.shape(2),
+        dataSet.trainData.shape(3))
+    )
+
+    val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
+
+    val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
+
+    val loss = tf.learn.L2Loss("Loss/L2") >>
+      tf.learn.Mean("Loss/Mean") >>
+      tf.learn.ScalarSummary("Loss", "ModelLoss")
+
+    val optimizer = tf.train.AdaGrad(0.002)
+
+    val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+
+    //Now create the model
+    val (model, estimator) = tf.createWith(graph = Graph()) {
+      val model = tf.learn.Model(input, Arch.cnn_goes_v1, trainInput, trainingInputLayer, loss, optimizer)
+
+      println("Training the linear regression model.")
+
+      val estimator = tf.learn.FileBasedEstimator(
+        model,
+        tf.learn.Configuration(Some(summariesDir)),
+        tf.learn.StopCriteria(maxSteps = Some(iterations)),
+        Set(
+          tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+          tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
+          tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
+        tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
+
+      estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(iterations)))
+
+      (model, estimator)
+    }
+
+
+    val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
+
+    val testAccuracy = accuracy(
+      dataSet.testData, dataSet.testLabels(::, 0))(
+      (im: Tensor) => estimator.infer(() => im))
+
+    print("Test accuracy = ")
+    pprint.pprintln(testAccuracy)
+
+    dataSet.close()
+
+    (model, estimator, testAccuracy, tf_summary_dir, labels_mean, labels_stddev)
+  }
+
 
 
 }
