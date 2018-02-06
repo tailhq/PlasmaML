@@ -4,6 +4,6 @@ limit=2006
 mdiscript="./helios/scripts/goes_extreme_events.sc"
 
 while [ "$yeartest" -lt "$limit" ]; do
-./target/universal/stage/bin/plasmaml $(mdiscript) $(yeartest)
+./target/universal/stage/bin/plasmaml $mdiscript $yeartest
 let yeartest+=1
 done
