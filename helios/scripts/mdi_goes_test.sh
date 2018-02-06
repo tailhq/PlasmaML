@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-year=2001
+yeartest=2001
+limit=2006
 
-while [ $(year) -lt 2006 ]; do
-./target/universal/stage/bin/plasmaml $(year)
-let year+=1
+while [ "$yeartest" -lt "$limit" ]; do
+./target/universal/stage/bin/plasmaml $"yeartest"
+let yeartest+=1
 done
