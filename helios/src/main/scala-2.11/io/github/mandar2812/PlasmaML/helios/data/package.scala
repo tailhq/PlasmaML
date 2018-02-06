@@ -5,6 +5,13 @@ import io.github.mandar2812.PlasmaML.omni.OMNIData
 import io.github.mandar2812.dynaml.utils
 import org.joda.time.{Duration, LocalDate, Period, YearMonth}
 
+/**
+  * <h3>Helios Data Facility</h3>
+  *
+  * Package enabling downloading and storage of heliospheric image data.
+  *
+  * @author mandar2812
+  * */
 package object data {
 
   /**

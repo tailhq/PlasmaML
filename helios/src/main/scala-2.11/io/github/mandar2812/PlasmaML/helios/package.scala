@@ -16,6 +16,7 @@ import org.joda.time._
   * Contains methods for carrying out ML experiments
   * on data sets associated with helios.
   *
+  * @author mandar2812
   * */
 package object helios {
 
