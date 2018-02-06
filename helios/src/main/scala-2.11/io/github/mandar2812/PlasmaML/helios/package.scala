@@ -1,9 +1,11 @@
 package io.github.mandar2812.PlasmaML
 
 import ammonite.ops.{Path, exists, home, ls, root}
+import breeze.linalg.DenseVector
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.PlasmaML.helios.core._
 import io.github.mandar2812.PlasmaML.helios.data._
+import io.github.mandar2812.dynaml.probability.MultinomialRV
 import io.github.mandar2812.dynaml.tensorflow.dtf
 import org.platanios.tensorflow.api._
 import org.joda.time._
@@ -214,12 +216,14 @@ package object helios {
   def create_helios_data_set(
     collated_data: Stream[(DateTime, (Path, (Double, Double)))],
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
-    scaleDownFactor: Int = 4): HeliosDataSet = {
+    scaleDownFactor: Int = 4, resample: Boolean = false): HeliosDataSet = {
 
     val scaleDown = 1/math.pow(2, scaleDownFactor)
 
     val (train_set, test_set) = collated_data.partition(tt_partition)
 
+    //Calculate the height, width and number of channels
+    //in the images
     val (scaled_height, scaled_width, num_channels) = {
 
       val im = Image.fromPath(train_set.head._2._1.toNIO)
@@ -230,21 +234,42 @@ package object helios {
 
     }
 
-    val working_set = HeliosDataSet(null, null, train_set.length, null, null, test_set.length)
+    val working_set = HeliosDataSet(
+      null, null, train_set.length,
+      null, null, test_set.length)
 
-    val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) = train_set.map(entry => {
-      val (_, (path, data_label)) = entry
+    /*
+    * If the `resample` flag is set to true,
+    * balance the occurence of high and low
+    * flux events through softmax based sampling.
+    *
+    *
+    * P(f) = exp(f_i)/sum(exp(f_i))
+    * */
+    val processed_train_set = if(resample) {
+      //Resample training set ot
+      //emphasize extreme events.
+      val un_prob = train_set.map(_._2._2._1).map(math.exp)
+      val normalizer = un_prob.sum
+      val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
 
-      val im = Image.fromPath(path.toNIO)
+      selector.iid(train_set.length).draw.map(train_set(_))
+    } else train_set
 
-      val scaled_image = im.copy.scale(scaleDown)
+    val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) =
+      processed_train_set.map(entry => {
+        val (_, (path, data_label)) = entry
 
-      (scaled_image.argb.flatten.map(_.toByte), Seq(data_label._1, data_label._2))
+        val im = Image.fromPath(path.toNIO)
 
-    }).unzip
+        val scaled_image = im.copy.scale(scaleDown)
+
+        (scaled_image.argb.flatten.map(_.toByte), Seq(data_label._1, data_label._2))
+
+      }).unzip
 
     val features_tensor_train = dtf.tensor_from_buffer(
-      "UINT8", train_set.length, scaled_height, scaled_width, num_channels)(
+      "UINT8", processed_train_set.length, scaled_height, scaled_width, num_channels)(
       features_train.toArray.flatten[Byte])
 
     val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, 2)(labels_train.flatten[Double])
@@ -396,6 +421,10 @@ package object helios {
     *                     returns true then the instance falls into
     *                     the training set else the test set
     *
+    * @param resample If set to true, the training data is resampled
+    *                 to balance the occurrence of high flux and low
+    *                 flux events.
+    *
     * @param tempdir A working directory where the results will be
     *                archived, defaults to user_home_dir/tmp. The model
     *                checkpoints and other results will be stored inside
@@ -409,10 +438,12 @@ package object helios {
     * */
   def run_experiment_goes(
     collated_data: Stream[(DateTime, (Path, (Double, Double)))],
-    tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean)(
-    results_id: String, max_iterations: Int, tempdir: Path = home/"tmp") = {
+    tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
+    resample: Boolean = false)(
+    results_id: String, max_iterations: Int,
+    tempdir: Path = home/"tmp") = {
 
-    val tf_summary_dir = tempdir/("helios_goes_mdi_summaries_"+results_id)
+    val tf_summary_dir = tempdir/("helios_goes_"+results_id)
 
     val checkpoints =
       if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.segments.last.contains("model.ckpt-"))
@@ -434,7 +465,8 @@ package object helios {
     val dataSet = helios.create_helios_data_set(
       collated_data,
       tt_partition,
-      scaleDownFactor = 2)
+      scaleDownFactor = 2,
+      resample)
 
     val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
