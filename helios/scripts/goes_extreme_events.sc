@@ -36,7 +36,7 @@ def main(test_year: Int = 2003, resFile: String = "mdi_ext_resample_results.csv"
 
   val accuracy = res._3
 
-  if(exists(tmpdir/resFile)) write(tmpdir/resFile, "testyear,accuracy\n")
+  if(!exists(tmpdir/resFile)) write(tmpdir/resFile, "testyear,accuracy\n")
 
   write.append(tmpdir/resFile, s"$test_year,$accuracy\n")
 
