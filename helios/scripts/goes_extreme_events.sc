@@ -1,5 +1,5 @@
-import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.PlasmaML.helios
+import ammonite.main.Router.main
 import ammonite.ops._
 import org.joda.time._
 
@@ -28,7 +28,7 @@ def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
 }
 
 @main 
-def main(test_year: Int) = {
+def main(test_year: Int = 2003) = {
 
   val resFile = "mdi_ext_resample_results.csv"
   val res = run_extreme_experiment(test_year)
