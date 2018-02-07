@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-yeartest=2001
-limit=2006
+yeartest=$1
+limit=$2
 mdiscript="./helios/scripts/goes_extreme_events.sc"
 
 while [ "$yeartest" -lt "$limit" ]; do
