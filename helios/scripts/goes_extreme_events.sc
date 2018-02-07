@@ -7,8 +7,6 @@ def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
   //Data with MDI images
   val data           = helios.generate_data_goes()
 
-  val test_year      = 2001
-
   val flux_threshold = -6.5d
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
