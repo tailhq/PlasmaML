@@ -5,8 +5,14 @@ import org.joda.time._
 
 def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
   //Data with MDI images
+
+  print("Running experiment with test split from year: ")
+  pprint.pprintln(test_year)
+
   val data           = helios.generate_data_goes()
 
+  println("Starting data set created.")
+  println("Proceeding to load images & labels into Tensors ...")
   val flux_threshold = -6.5d
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
@@ -20,7 +26,7 @@ def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
 
   helios.run_experiment_goes(
     data, tt_partition, true)(
-    "mdi_ext_resample"+test_year,
+    "mdi_ext_resample_"+test_year,
     120000, tmpdir)
 
 }

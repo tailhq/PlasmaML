@@ -5,7 +5,7 @@ import breeze.linalg.DenseVector
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.PlasmaML.helios.core._
 import io.github.mandar2812.PlasmaML.helios.data._
-import io.github.mandar2812.dynaml.probability.MultinomialRV
+import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.tensorflow.dtf
 import org.platanios.tensorflow.api._
 import org.joda.time._
@@ -202,6 +202,21 @@ package object helios {
   }
 
   /**
+    * Resample data according to a provided
+    * bounded discrete random variable
+    * */
+  def resample(
+    data: Stream[(DateTime, (Path, (Double, Double)))],
+    selector: DiscreteDistrRV[Int]): Stream[(DateTime, (Path, (Double, Double)))] = {
+
+    //Resample training set ot
+    //emphasize extreme events.
+    println("\nResampling data instances\n")
+
+    selector.iid(data.length).draw.map(data(_))
+  }
+
+  /**
     * Create a processed tensor data set as a [[HeliosDataSet]] instance.
     *
     * @param collated_data A Stream of date times, image paths and fluxes.
@@ -220,6 +235,11 @@ package object helios {
 
     val scaleDown = 1/math.pow(2, scaleDownFactor)
 
+    print("Scaling down images by a factor of ")
+    pprint.pprintln(math.pow(2, scaleDownFactor))
+    println()
+
+    println("Separating data into train and test.")
     val (train_set, test_set) = collated_data.partition(tt_partition)
 
     //Calculate the height, width and number of channels
@@ -241,19 +261,18 @@ package object helios {
     /*
     * If the `resample` flag is set to true,
     * balance the occurence of high and low
-    * flux events through softmax based sampling.
+    * flux events through re-sampling.
     *
-    *
-    * P(f) = exp(f_i)/sum(exp(f_i))
     * */
     val processed_train_set = if(resample) {
       //Resample training set ot
       //emphasize extreme events.
+
       val un_prob = train_set.map(_._2._2._1).map(math.exp)
       val normalizer = un_prob.sum
       val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
 
-      selector.iid(train_set.length).draw.map(train_set(_))
+      helios.resample(train_set, selector)
     } else train_set
 
     val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) =
@@ -292,6 +311,7 @@ package object helios {
 
     val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, 2)(labels_test.flatten[Double])
 
+    println("Helios data set created")
     working_set.copy(
       trainData   = features_tensor_train,
       trainLabels = labels_tensor_train,
