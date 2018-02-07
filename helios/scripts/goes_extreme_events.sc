@@ -1,6 +1,6 @@
 import _root_.io.github.mandar2812.PlasmaML.helios
-import ammonite.main.Router.main
 import ammonite.ops._
+import io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
 
 def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
