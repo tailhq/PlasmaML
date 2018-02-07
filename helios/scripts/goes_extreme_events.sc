@@ -28,8 +28,9 @@ def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
 }
 
 @main 
-def main(test_year: Int = 2003, resFile: String = "mdi_ext_resample_results.csv") = {
+def main(test_year: Int) = {
 
+  val resFile = "mdi_ext_resample_results.csv"
   val res = run_extreme_experiment(test_year)
   val tmpdir = home/"tmp"
   //Write the cross validation score in a results file
