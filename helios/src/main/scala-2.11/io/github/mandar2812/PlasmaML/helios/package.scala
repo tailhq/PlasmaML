@@ -446,7 +446,7 @@ package object helios {
     val tf_summary_dir = tempdir/("helios_goes_"+results_id)
 
     val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.segments.last.contains("model.ckpt-"))
+      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
       else Seq()
 
     val checkpoint_max =
