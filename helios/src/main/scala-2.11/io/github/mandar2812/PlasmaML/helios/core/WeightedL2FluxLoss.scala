@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
+import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers._
 import org.platanios.tensorflow.api.ops
@@ -15,6 +16,8 @@ class WeightedL2FluxLoss(
   override val layerType: String = "WeightedL2FluxLoss"
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output =
-    ops.NN.l2Loss((input._1 - input._2)*input._2.sigmoid.square, name = name)
+    if (input._2.dataType == FLOAT32)
+      ops.NN.l2Loss((input._1 - input._2)*input._2.sigmoid.sqrt, name = name)
+    else ops.NN.l2Loss((input._1 - input._2)*input._2.cast(FLOAT32).sigmoid.sqrt, name = name)
 }
 
