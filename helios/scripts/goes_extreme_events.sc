@@ -29,7 +29,7 @@ def main(
     if(p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._1 >= flux_threshold) false
     else true
 
-  val summary_dir = if(re) "mdi_ext_resample_"+test_year else "mdi_ext_"+test_year
+  val summary_dir = if(re) "mdi_wtloss_ext_resample_"+test_year else "mdi_wtloss_ext_"+test_year
 
   val res = helios.run_experiment_goes(
     data, tt_partition, re)(
