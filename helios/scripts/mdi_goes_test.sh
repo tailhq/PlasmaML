@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-yeartest=$1
-limit=$2
-mdiscript="./helios/scripts/goes_extreme_events.sc"
+yeartest=$2
+limit=$3
+mdiscript=$1
 
 while [ "$yeartest" -lt "$limit" ]; do
 ./target/universal/stage/bin/plasmaml $mdiscript $yeartest

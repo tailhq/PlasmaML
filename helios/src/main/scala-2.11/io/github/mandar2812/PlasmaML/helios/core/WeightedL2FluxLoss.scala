@@ -8,13 +8,13 @@ import org.platanios.tensorflow.api.ops.Output
 /**
   * <h3>Weighted L2 Loss Function</h3>
   * */
-class WeightedL2Loss(
+class WeightedL2FluxLoss(
   override val name: String)
-  extends Loss[(Output, (Output, Output))](name) {
+  extends Loss[(Output, Output)](name) {
 
-  override val layerType: String = "WeightedL2Loss"
+  override val layerType: String = "WeightedL2FluxLoss"
 
-  override protected def _forward(input: (Output, (Output, Output)), mode: Mode): Output =
-    ops.NN.l2Loss((input._1 - input._2._1)*input._2._2.sqrt, name = name)
+  override protected def _forward(input: (Output, Output), mode: Mode): Output =
+    ops.NN.l2Loss((input._1 - input._2)*input._2.sigmoid.square, name = name)
 }
 

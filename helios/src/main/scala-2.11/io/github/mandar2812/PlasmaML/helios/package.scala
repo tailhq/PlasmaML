@@ -9,6 +9,7 @@ import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.tensorflow.dtf
 import org.platanios.tensorflow.api._
 import org.joda.time._
+import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 
 /**
   * <h3>Helios</h3>
@@ -426,7 +427,7 @@ package object helios {
 
 
   /**
-    * Train the [[Arch.cnn_goes_v1]] architecture on a
+    * Train a Neural architecture on a
     * processed data set.
     *
     * @param collated_data Data set of temporally joined
@@ -452,8 +453,10 @@ package object helios {
     *
     * @param results_id The suffix added the results/checkpoints directory name.
     *
-    * @param max_iterations The maximum number of iterations that the [[Arch.cnn_goes_v1]]
+    * @param max_iterations The maximum number of iterations that the
     *                       network must be trained for.
+    *
+    * @param arch The neural architecture to train, defaults to [[Arch.cnn_goes_v1]]
     *
     * */
   def run_experiment_goes(
@@ -461,7 +464,9 @@ package object helios {
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
     resample: Boolean = false)(
     results_id: String, max_iterations: Int,
-    tempdir: Path = home/"tmp") = {
+    tempdir: Path = home/"tmp",
+    arch: Layer[Output, Output] = Arch.cnn_goes_v1,
+    lossFunc: Loss[(Output, Output)] = tf.learn.L2Loss("Loss/L2")) = {
 
     val tf_summary_dir = tempdir/("helios_goes_"+results_id)
 
@@ -496,7 +501,11 @@ package object helios {
 
     val labels_stddev = train_labels.subtract(labels_mean).square.mean().sqrt
 
-    val trainLabels = tf.data.TensorSlicesDataset(train_labels.subtract(labels_mean).divide(labels_stddev))
+    val norm_train_labels = train_labels.subtract(labels_mean).divide(labels_stddev)
+
+    val trainLabels = tf.data.TensorSlicesDataset(norm_train_labels)
+
+    //val trainWeights = tf.data.TensorSlicesDataset(norm_train_labels.exp)
 
     val trainData =
       trainImages.zip(trainLabels)
@@ -522,7 +531,7 @@ package object helios {
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
-    val loss = tf.learn.L2Loss("Loss/L2") >>
+    val loss = lossFunc >>
       tf.learn.Mean("Loss/Mean") >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
 
@@ -532,7 +541,9 @@ package object helios {
 
     //Now create the model
     val (model, estimator) = tf.createWith(graph = Graph()) {
-      val model = tf.learn.Model(input, Arch.cnn_goes_v1, trainInput, trainingInputLayer, loss, optimizer)
+      val model = tf.learn.Model(
+        input, arch, trainInput, trainingInputLayer,
+        loss, optimizer)
 
       println("Training the linear regression model.")
 
