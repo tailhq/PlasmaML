@@ -7,7 +7,7 @@ import org.joda.time._
 @main
 def main(
   test_year: Int = 2003,
-  re: Boolean = false,
+  re: Boolean = true,
   tmpdir: Path = home/"tmp",
   resFile: String = "mdi_ext_wtloss_results.csv") = {
 
