@@ -3,7 +3,10 @@ import ammonite.ops._
 import io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
 
-def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
+def run_extreme_experiment(
+  test_year: Int = 2003,
+  tmpdir: Path = home/"tmp",
+  resample: Boolean = true) = {
   //Data with MDI images
 
   print("Running experiment with test split from year: ")
@@ -23,18 +26,22 @@ def run_extreme_experiment(test_year: Int = 2003, tmpdir: Path = home/"tmp") = {
     if(p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._1 >= flux_threshold) false
     else true
 
+  val summary_dir = if(resample) "mdi_ext_resample_"+test_year else "mdi_ext_"+test_year
 
   helios.run_experiment_goes(
-    data, tt_partition, true)(
-    "mdi_ext_resample_"+test_year,
+    data, tt_partition, resample)(
+    summary_dir,
     120000, tmpdir)
 
 }
 
 @main 
-def main(test_year: Int = 2003, resFile: String = "mdi_ext_resample_results.csv") = {
+def main(
+  test_year: Int = 2003,
+  re: Boolean = true,
+  resFile: String = "mdi_ext_resample_results.csv") = {
 
-  val res = run_extreme_experiment(test_year)
+  val res = run_extreme_experiment(test_year, resample = re)
   val tmpdir = home/"tmp"
   //Write the cross validation score in a results file
 
