@@ -96,11 +96,11 @@ package object helios {
       goes_source, dirTreeCreated)
       .map(p => {
 
-        val data_low_freq = p._2.map(_._1).filterNot(_.isNaN)
-        val data_high_freq = p._2.map(_._2).filterNot(_.isNaN)
+        val data_low_wavelength = p._2.map(_._1).filterNot(_.isNaN)
+        val data_high_wavelength = p._2.map(_._2).filterNot(_.isNaN)
 
-        val avg_low_freq = data_low_freq.sum/data_low_freq.length
-        val avg_high_freq = data_high_freq.sum/data_high_freq.length
+        val avg_low_freq = data_low_wavelength.sum/data_low_wavelength.length
+        val avg_high_freq = data_high_wavelength.sum/data_high_wavelength.length
 
         (p._1, (avg_low_freq, avg_high_freq))
     })
@@ -446,6 +446,10 @@ package object helios {
     *                 to balance the occurrence of high flux and low
     *                 flux events.
     *
+    * @param longWavelength If set to true, predict long wavelength
+    *                       GOES X-Ray flux, else short wavelength,
+    *                       defaults to short wavelength.
+    *
     * @param tempdir A working directory where the results will be
     *                archived, defaults to user_home_dir/tmp. The model
     *                checkpoints and other results will be stored inside
@@ -462,13 +466,15 @@ package object helios {
   def run_experiment_goes(
     collated_data: Stream[(DateTime, (Path, (Double, Double)))],
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
-    resample: Boolean = false)(
+    resample: Boolean = false, longWavelength: Boolean = false)(
     results_id: String, max_iterations: Int,
     tempdir: Path = home/"tmp",
     arch: Layer[Output, Output] = Arch.cnn_goes_v1,
     lossFunc: Loss[(Output, Output)] = tf.learn.L2Loss("Loss/L2")) = {
 
-    val tf_summary_dir = tempdir/("helios_goes_"+results_id)
+    val resDirName = if(longWavelength) "helios_goes_long_"+results_id else "helios_goes_"+results_id
+
+    val tf_summary_dir = tempdir/resDirName
 
     val checkpoints =
       if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
@@ -495,7 +501,9 @@ package object helios {
 
     val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
-    val train_labels = dataSet.trainLabels(::, 0)
+    val targetIndex = if(longWavelength) 1 else 0
+
+    val train_labels = dataSet.trainLabels(::, targetIndex)
 
     val labels_mean = train_labels.mean()
 
@@ -566,7 +574,7 @@ package object helios {
     val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
 
     val testAccuracy = accuracy(
-      dataSet.testData, dataSet.testLabels(::, 0))(
+      dataSet.testData, dataSet.testLabels(::, targetIndex))(
       (im: Tensor) => estimator.infer(() => im))
 
     print("Test accuracy = ")
