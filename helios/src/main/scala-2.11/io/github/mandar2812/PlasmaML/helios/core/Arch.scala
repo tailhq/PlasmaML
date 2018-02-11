@@ -21,14 +21,14 @@ object Arch {
     relu_param: Float = 0.1f, dropout: Boolean = true,
     keep_prob: Float = 0.6f)(i: Int) =
     if(dropout) {
-      tf.learn.Conv2D("Conv2D_"+i, shape, 1, 1, SamePadding) >>
+      tf.learn.Conv2D("Conv2D_"+i, shape, stride._1, stride._2, SamePadding) >>
         tf.learn.AddBias(name = "Bias_"+i) >>
-        tf.learn.ReLU("ReLU_"+i, 0.1f) >>
-        tf.learn.Dropout("Dropout_"+i, 0.6f)
+        tf.learn.ReLU("ReLU_"+i, relu_param) >>
+        tf.learn.Dropout("Dropout_"+i, keep_prob)
     } else {
-      tf.learn.Conv2D("Conv2D_"+i, shape, 1, 1, SamePadding) >>
+      tf.learn.Conv2D("Conv2D_"+i, shape, stride._1, stride._2, SamePadding) >>
         tf.learn.AddBias(name = "Bias_"+i) >>
-        tf.learn.ReLU("ReLU_"+i, 0.1f)
+        tf.learn.ReLU("ReLU_"+i, relu_param)
     }
 
   /**
