@@ -46,7 +46,7 @@ def main(
 
   val accuracy = res._3
 
-  if(!exists(tmpdir/results)) write(tmpdir/resFile, "testyear,accuracy\n")
+  if(!exists(tmpdir/results)) write(tmpdir/results, "testyear,accuracy\n")
 
   write.append(tmpdir/results, s"$test_year,$accuracy\n")
 
