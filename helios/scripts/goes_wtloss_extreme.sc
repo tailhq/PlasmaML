@@ -9,7 +9,7 @@ def main(
   test_year: Int = 2003,
   longWL: Boolean = false,
   re: Boolean = true,
-  tmpdir: Path = root/System.getProperty("user.name")/"tmp",
+  tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
   resFile: String = "mdi_ext_wtloss_results.csv") = {
 
   //Data with MDI images
