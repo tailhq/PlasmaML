@@ -29,9 +29,19 @@ def main(
 
   val test_end       = new DateTime(test_year, 12, 31, 23, 59)
 
-  val tt_partition   = (p: (DateTime, (Path, (Double, Double)))) =>
-    if(p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._1 >= flux_threshold) false
-    else true
+  val tt_partition   = if(longWL) {
+
+    (p: (DateTime, (Path, (Double, Double)))) =>
+      if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._2 >= flux_threshold) false
+      else true
+
+  } else {
+
+      (p: (DateTime, (Path, (Double, Double)))) =>
+        if(p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._1 >= flux_threshold) false
+        else true
+
+  }
 
   val summary_dir = if(re) "mdi_wtloss_ext_resample_"+test_year else "mdi_wtloss_ext_"+test_year
 
