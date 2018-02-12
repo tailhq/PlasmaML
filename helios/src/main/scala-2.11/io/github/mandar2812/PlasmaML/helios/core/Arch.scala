@@ -34,7 +34,7 @@ object Arch {
   /**
     * CNN architecture for GOES XRay flux
     * */
-  val cnn_goes_v1 = {
+  private[PlasmaML] val cnn_goes_v1 = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       conv2d_unit(Shape(2, 2, 4, 64), (1, 1))(0) >>
       conv2d_unit(Shape(2, 2, 64, 32), (2, 2))(1) >>
@@ -51,7 +51,7 @@ object Arch {
       tf.learn.Linear("OutputLayer", 1)
   }
 
-  val cnn_goes_v1_1 = {
+  private[PlasmaML] val cnn_goes_v1_1 = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       conv2d_unit(Shape(2, 2, 4, 64), (1, 1))(0) >>
       conv2d_unit(Shape(2, 2, 64, 32), (2, 2))(1) >>

@@ -1,6 +1,5 @@
 import _root_.io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
-import io.github.mandar2812.PlasmaML.helios.core.WeightedL2FluxLoss
 import io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
 
@@ -49,7 +48,7 @@ def main(
     data, tt_partition, resample = re,
     longWavelength = longWL)(
     summary_dir, 120000, tmpdir,
-    lossFunc = new WeightedL2FluxLoss("Loss/WeightedL2FluxLoss"))
+    lossFunc = helios.learn.weightedL2FluxLoss("Loss/WeightedL2FluxLoss"))
 
 
   //Write the cross validation score in a results file

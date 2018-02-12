@@ -23,6 +23,17 @@ import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
   * */
 package object helios {
 
+
+  object learn {
+
+    val cnn_goes_v1: Layer[Output, Output]                 = Arch.cnn_goes_v1
+
+    val cnn_goes_v1_1: Layer[Output, Output]               = Arch.cnn_goes_v1_1
+
+    val weightedL2FluxLoss: (String) => WeightedL2FluxLoss = (name: String) => new WeightedL2FluxLoss(name)
+
+  }
+
   /**
     * Download solar images from a specified source.
     *
@@ -469,7 +480,7 @@ package object helios {
     resample: Boolean = false, longWavelength: Boolean = false)(
     results_id: String, max_iterations: Int,
     tempdir: Path = home/"tmp",
-    arch: Layer[Output, Output] = Arch.cnn_goes_v1,
+    arch: Layer[Output, Output] = learn.cnn_goes_v1,
     lossFunc: Loss[(Output, Output)] = tf.learn.L2Loss("Loss/L2")) = {
 
     val resDirName = if(longWavelength) "helios_goes_long_"+results_id else "helios_goes_"+results_id
