@@ -18,9 +18,9 @@
   num_bulk_data = 20
   num_boundary_data = 20
 
-  num_dummy_data = 20
+  num_dummy_data = 40
 
-  lambda_params = (-1, 3.75, 0d, -0.2)
+  lambda_params = (-1, 3.15, 0d, -0.2)
 
   q_params = (0d, 2.5d, 0.05, 0.45)
 
@@ -35,22 +35,23 @@
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
 
-  val basisSize = (5, 19)
-  val hybrid_basis = new HybridMQPSDBasis(0.75d)(
+  val basisSize = (9, 9)
+
+  val hybrid_basis = new InverseMQPSDBasis(1d)(
     lShellLimits, 14, timeLimits, 19, (false, false)
   )
 
+  hybrid_basis.mult = 0.5
+
   val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
     0.75, lShellLimits, basisSize._1,
-    timeLimits, basisSize._2)
+    timeLimits, basisSize._2, biasFlag = true)
 
   val burn = 1500
 
   val seKernel = new GenExpSpaceTimeKernel[Double](
-    10d, deltaL, deltaT)(
+    1d, deltaL, deltaT)(
     sqNormDouble, l1NormDouble)
-
-  val scaledSEKernel = ScaledKernel(seKernel, DataPipe((x: (Double, Double)) => math.abs(x._1)))
 
   val noiseKernel = new DiracTuple2Kernel(1.5)
 
@@ -65,7 +66,7 @@
     Kp, dll_params, (0d, 0.2, 0d, 0.2), q_params)(
     seKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
-    chebyshev_hybrid_basis::hybrid_basis
+    chebyshev_hybrid_basis::hybrid_basis, dualFlag = false
   )
 
   val blocked_hyp = {
@@ -91,8 +92,9 @@
         "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
   }
 
-  model.regCol = 0d
-  model.regObs = 1E-5
+  model.regCol = 0.5
+  model.regObs = 1d
+  model.reg = 0d
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
