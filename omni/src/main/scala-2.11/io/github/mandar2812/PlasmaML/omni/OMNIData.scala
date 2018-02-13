@@ -1,9 +1,11 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import io.github.mandar2812.dynaml.DynaMLPipe.{
-  extractTrainingFeatures, fileToStream,
-  replaceWhiteSpaces, removeMissingLines}
+import breeze.linalg.DenseVector
+import io.github.mandar2812.dynaml.DynaMLPipe.{extractTrainingFeatures, fileToStream, removeMissingLines, replaceWhiteSpaces}
+import io.github.mandar2812.dynaml.pipes.DataPipe
 import org.apache.log4j.Logger
+import org.joda.time.DateTime
+import org.joda.time.format.DateTimeFormat
 
 /**
   *
@@ -70,6 +72,8 @@ object OMNILoader {
 
   import io.github.mandar2812.PlasmaML.omni.OMNIData.{columnFillValues, dateColumns}
 
+  val dt_format = DateTimeFormat.forPattern("yyyy/D/H")
+
   /**
     * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
     * reads an OMNI file cleans it and extracts the columns specified
@@ -84,6 +88,22 @@ object OMNILoader {
     removeMissingLines
 
 
+  val processWithDateTime = DataPipe((lines: Stream[String]) => lines.map{line =>
+    val splits = line.split(",")
+
+    val dt_string = splits.takeRight(3).mkString("/")
+    val data = splits.last.toDouble
+    val timestamp = DateTime.parse(dt_string, dt_format)
+    (timestamp, data)
+  })
 
 
+  val forward_time_window = (deltaT: Int, timelag: Int) =>
+    DataPipe((lines: Stream[(DateTime, Double)]) =>
+      lines.toList.sliding(deltaT+timelag+1).map((history) => {
+
+        val features: Seq[Double] = history.slice(deltaT, deltaT+timelag).map(_._2)
+
+        (history.head._1, features)
+      }).toStream)
 }
