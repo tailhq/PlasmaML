@@ -68,4 +68,21 @@ object Arch {
   }
 
 
+  private[PlasmaML] val cnn_sw_v1 = {
+    tf.learn.Cast("Input/Cast", FLOAT32) >>
+      conv2d_unit(Shape(2, 2, 4, 64), (1, 1))(0) >>
+      conv2d_unit(Shape(2, 2, 64, 32), (2, 2))(1) >>
+      conv2d_unit(Shape(2, 2, 32, 16), (4, 4))(2) >>
+      conv2d_unit(Shape(2, 2, 16, 8), (8, 8), dropout = false)(3) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.Flatten("Flatten_3") >>
+      tf.learn.Linear("FC_Layer_4", 128) >>
+      tf.learn.ReLU("ReLU_4", 0.1f) >>
+      tf.learn.Linear("FC_Layer_5", 64) >>
+      tf.learn.ReLU("ReLU_5", 0.1f) >>
+      tf.learn.Linear("FC_Layer_6", 8) >>
+      tf.learn.Sigmoid("Sigmoid_6") >>
+      tf.learn.Linear("OutputLayer", 2)
+  }
+
 }
