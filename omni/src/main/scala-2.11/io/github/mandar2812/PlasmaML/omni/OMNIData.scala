@@ -1,7 +1,6 @@
 package io.github.mandar2812.PlasmaML.omni
 
-import breeze.linalg.DenseVector
-import io.github.mandar2812.dynaml.DynaMLPipe.{extractTrainingFeatures, fileToStream, removeMissingLines, replaceWhiteSpaces}
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import org.apache.log4j.Logger
 import org.joda.time.DateTime
