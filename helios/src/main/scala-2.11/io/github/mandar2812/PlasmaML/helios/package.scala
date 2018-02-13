@@ -30,7 +30,19 @@ package object helios {
 
     val cnn_goes_v1_1: Layer[Output, Output]               = Arch.cnn_goes_v1_1
 
-    val weightedL2FluxLoss: (String) => WeightedL2FluxLoss = (name: String) => new WeightedL2FluxLoss(name)
+    val cnn_sw_v1: Layer[Output, Output]                   = Arch.cnn_sw_v1
+
+    /*
+    * Loss Functions
+    * */
+    val weightedL2FluxLoss: (String) => WeightedL2FluxLoss =
+      (name: String) => new WeightedL2FluxLoss(name)
+
+    val rBFWeightedSWLoss: (String, Int) => RBFWeightedSWLoss =
+      (name: String, horizon: Int) => new RBFWeightedSWLoss(name, horizon)
+
+    val dynamicRBFSWLoss: (String, Int) => DynamicRBFSWLoss =
+      (name: String, horizon: Int) => new DynamicRBFSWLoss(name, horizon)
 
   }
 

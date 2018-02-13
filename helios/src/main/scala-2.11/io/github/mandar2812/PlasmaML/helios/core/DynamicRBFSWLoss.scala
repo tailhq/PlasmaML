@@ -7,6 +7,7 @@ import org.platanios.tensorflow.api.ops.Output
 
 /**
   * <h3>RBF-Kernel Weighted Solar Wind Loss (KSW Loss)</h3>
+  * <h4>avec dynamic time scale prediction</h4>
   *
   * A weighted loss function which enables fuzzy learning of
   * the solar wind propagation from heliospheric
@@ -14,11 +15,9 @@ import org.platanios.tensorflow.api.ops.Output
   *
   * @author mandar2812
   * */
-class RBFWeightedSWLoss(
+class DynamicRBFSWLoss(
   override val name: String,
-  val size_causal_window: Int,
-  val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer))
-  extends Loss[(Output, Output)](name) {
+  val size_causal_window: Int) extends Loss[(Output, Output)](name) {
 
   override val layerType: String = "KernelWeightedSWLoss"
 
@@ -31,7 +30,11 @@ class RBFWeightedSWLoss(
 
     val times = input._1(::, 1).sigmoid.multiply(scaling)
 
+    val timescales = input._1(::, 2).square
+
     val size_batch = input._1.shape(0)
+
+    val repeated_timescales = tf.stack(Seq.fill(size_causal_window)(timescales), axis = -1)
 
     val repeated_times = tf.stack(Seq.fill(size_causal_window)(times), axis = -1)
 
@@ -41,9 +44,13 @@ class RBFWeightedSWLoss(
 
     val repeated_preds = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
 
-    val weighted_loss_tensor = (repeated_preds - input._2).multiply(
-      (repeated_index_times - repeated_times).square.multiply(-0.5).divide(time_scale.value).exp
-    ).sum(axes = 1)
+    val convolution_kernel =
+      (repeated_index_times - repeated_times)
+        .square.multiply(-0.5)
+        .divide(repeated_timescales)
+        .exp
+
+    val weighted_loss_tensor = (repeated_preds - input._2).multiply(convolution_kernel).sum(axes = 1)
 
     ops.NN.l2Loss(weighted_loss_tensor, name = name)
   }
