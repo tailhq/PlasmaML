@@ -42,7 +42,7 @@ class RBFWeightedSWLoss(
     val repeated_preds = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
 
     val weighted_loss_tensor = (repeated_preds - input._2).multiply(
-      (repeated_index_times - repeated_times).square.multiply(-0.5).divide(time_scale).exp
+      (repeated_index_times - repeated_times).square.multiply(-0.5).divide(time_scale.value).exp
     ).sum(axes = 1)
 
     ops.NN.l2Loss(weighted_loss_tensor, name = name)

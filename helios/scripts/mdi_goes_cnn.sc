@@ -57,7 +57,7 @@ val round_date = (d: DateTime) => {
     minutes*num_minutes)
 }
 
-val collated_data = helios.collate_data_range(
+val collated_data = helios.collate_goes_data_range(
   new YearMonth(2001, 1), new YearMonth(2005, 12))(
   GOES(GOESData.Quantities.XRAY_FLUX_5m),
   goes_dir,
@@ -78,7 +78,7 @@ val tt_partition = (p: (DateTime, (Path, (Double, Double)))) =>
 *
 * */
 
-val dataSet = helios.create_helios_data_set(
+val dataSet = helios.create_helios_goes_data_set(
   collated_data,
   tt_partition,
   scaleDownFactor = 2)

@@ -133,7 +133,7 @@ package object helios {
     *                     for the image data, enabling it to be joined to the GOES data
     *                     based on date time stamps.
     * */
-  def collate_data(
+  def collate_goes_data(
     year_month: YearMonth)(
     goes_source: GOES,
     goes_data_path: Path,
@@ -166,27 +166,21 @@ package object helios {
   }
 
   /**
-    * Calls [[collate_data()]] over a time period and returns the collected data.
+    * Calls [[collate_goes_data()]] over a time period and returns the collected data.
     *
     * @param start_year_month Starting Year-Month
-    *
     * @param end_year_month Ending Year-Month
-    *
     * @param goes_data_path GOES data path.
-    *
     * @param images_path path containing images.
-    *
     * @param goes_aggregation The number of goes entries to group for
     *                         calculating running statistics.
-    *
     * @param goes_reduce_func A function which computes some aggregation of a group
     *                         of GOES data entries.
-    *
     * @param dt_round_off A function which appropriately rounds off date time instances
     *                     for the image data, enabling it to be joined to the GOES data
     *                     based on date time stamps.
     * */
-  def collate_data_range(
+  def collate_goes_data_range(
     start_year_month: YearMonth, end_year_month: YearMonth)(
     goes_source: GOES,
     goes_data_path: Path,
@@ -196,7 +190,7 @@ package object helios {
     dt_round_off: (DateTime) => DateTime,
     dirTreeCreated: Boolean = true) = {
 
-    val prepare_data = (ym: YearMonth) => collate_data(ym)(
+    val prepare_data = (ym: YearMonth) => collate_goes_data(ym)(
       goes_source, goes_data_path, goes_aggregation, goes_reduce_func,
       image_source, images_path, dt_round_off)
 
@@ -217,9 +211,9 @@ package object helios {
     * Resample data according to a provided
     * bounded discrete random variable
     * */
-  def resample(
-    data: Stream[(DateTime, (Path, (Double, Double)))],
-    selector: DiscreteDistrRV[Int]): Stream[(DateTime, (Path, (Double, Double)))] = {
+  def resample[T](
+    data: Stream[(DateTime, (Path, T))],
+    selector: DiscreteDistrRV[Int]): Stream[(DateTime, (Path, T))] = {
 
     //Resample training set ot
     //emphasize extreme events.
@@ -241,6 +235,110 @@ package object helios {
     *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
+    collated_data: Stream[(DateTime, (Path, Seq[Double]))],
+    tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
+    scaleDownFactor: Int = 4, resample: Boolean = false): HeliosDataSet = {
+
+    val scaleDown = 1/math.pow(2, scaleDownFactor)
+
+    print("Scaling down images by a factor of ")
+    pprint.pprintln(math.pow(2, scaleDownFactor))
+    println()
+
+    println("Separating data into train and test.")
+    val (train_set, test_set) = collated_data.partition(tt_partition)
+
+    //Calculate the height, width and number of channels
+    //in the images
+    val (scaled_height, scaled_width, num_channels) = {
+
+      val im = Image.fromPath(train_set.head._2._1.toNIO)
+
+      val scaled_image = im.copy.scale(scaleDown)
+
+      (scaled_image.height, scaled_image.width, scaled_image.argb(0, 0).length)
+
+    }
+
+    val working_set = HeliosDataSet(
+      null, null, train_set.length,
+      null, null, test_set.length)
+
+    /*
+    * If the `resample` flag is set to true,
+    * balance the occurence of high and low
+    * flux events through re-sampling.
+    *
+    * */
+    val processed_train_set = if(resample) {
+      //Resample training set ot
+      //emphasize extreme events.
+
+      val un_prob = train_set.map(_._2._2.sum).map(math.exp)
+      val normalizer = un_prob.sum
+      val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
+
+      helios.resample(train_set, selector)
+    } else train_set
+
+    val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) =
+      processed_train_set.map(entry => {
+        val (_, (path, data_label)) = entry
+
+        val im = Image.fromPath(path.toNIO)
+
+        val scaled_image = im.copy.scale(scaleDown)
+
+        (scaled_image.argb.flatten.map(_.toByte), data_label)
+
+      }).unzip
+
+    val features_tensor_train = dtf.tensor_from_buffer(
+      "UINT8", processed_train_set.length, scaled_height, scaled_width, num_channels)(
+      features_train.toArray.flatten[Byte])
+
+    val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, 2)(labels_train.flatten[Double])
+
+
+    val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
+      val (_, (path, data_label)) = entry
+
+      val im = Image.fromPath(path.toNIO)
+
+      val scaled_image = im.copy.scale(scaleDown)
+
+      (scaled_image.argb.flatten.map(_.toByte), data_label)
+
+    }).unzip
+
+    val features_tensor_test = dtf.tensor_from_buffer(
+      "UINT8", test_set.length, scaled_height, scaled_width, num_channels)(
+      features_test.toArray.flatten[Byte])
+
+    val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, 2)(labels_test.flatten[Double])
+
+    println("Helios data set created")
+    working_set.copy(
+      trainData   = features_tensor_train,
+      trainLabels = labels_tensor_train,
+      testData    = features_tensor_test,
+      testLabels  = labels_tensor_test
+    )
+  }
+
+  /**
+    * Create a processed tensor data set as a [[HeliosDataSet]] instance.
+    *
+    * @param collated_data A Stream of date times, image paths and fluxes.
+    *
+    * @param tt_partition A function which takes each data element and
+    *                     determines if it goes into the train or test split.
+    *
+    * @param scaleDownFactor The exponent of 2 which determines how much the
+    *                        image will be scaled down. i.e. scaleDownFactor = 4
+    *                        corresponds to a 16 fold decrease in image size.
+    * */
+  def create_helios_goes_data_set(
     collated_data: Stream[(DateTime, (Path, (Double, Double)))],
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
     scaleDownFactor: Int = 4, resample: Boolean = false): HeliosDataSet = {
@@ -424,7 +522,7 @@ package object helios {
     println("Start: "+year_start+" End: "+year_end)
 
 
-    helios.collate_data_range(
+    helios.collate_goes_data_range(
       new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
       GOES(GOESData.Quantities.XRAY_FLUX_5m),
       goes_dir,
@@ -444,33 +542,26 @@ package object helios {
     * @param collated_data Data set of temporally joined
     *                      image paths and GOES X-Ray fluxes.
     *                      This is generally the output after
-    *                      executing [[collate_data_range()]]
+    *                      executing [[collate_goes_data_range()]]
     *                      with the relevant parameters.
-    *
     * @param tt_partition A function which splits the data set
     *                     into train and test sections, based on
     *                     any Boolean function. If the function
     *                     returns true then the instance falls into
     *                     the training set else the test set
-    *
     * @param resample If set to true, the training data is resampled
     *                 to balance the occurrence of high flux and low
     *                 flux events.
-    *
     * @param longWavelength If set to true, predict long wavelength
     *                       GOES X-Ray flux, else short wavelength,
     *                       defaults to short wavelength.
-    *
     * @param tempdir A working directory where the results will be
     *                archived, defaults to user_home_dir/tmp. The model
     *                checkpoints and other results will be stored inside
     *                another directory created in tempdir.
-    *
     * @param results_id The suffix added the results/checkpoints directory name.
-    *
     * @param max_iterations The maximum number of iterations that the
     *                       network must be trained for.
-    *
     * @param arch The neural architecture to train, defaults to [[Arch.cnn_goes_v1]]
     *
     * */
@@ -504,7 +595,7 @@ package object helios {
     *
     * */
 
-    val dataSet = helios.create_helios_data_set(
+    val dataSet = helios.create_helios_goes_data_set(
       collated_data,
       tt_partition,
       scaleDownFactor = 2,
