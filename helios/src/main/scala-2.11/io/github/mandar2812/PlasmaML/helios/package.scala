@@ -319,6 +319,8 @@ package object helios {
 
     val scaleDown = 1/math.pow(2, scaleDownFactor)
 
+    val num_outputs = collated_data.head._2._2.length
+
     print("Scaling down images by a factor of ")
     pprint.pprintln(math.pow(2, scaleDownFactor))
     println()
@@ -352,7 +354,7 @@ package object helios {
       //Resample training set ot
       //emphasize extreme events.
 
-      val un_prob = train_set.map(_._2._2.sum).map(math.exp)
+      val un_prob = train_set.map(p => p._2._2.sum/num_outputs).map(math.exp)
       val normalizer = un_prob.sum
       val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
 
@@ -375,7 +377,7 @@ package object helios {
       "UINT8", processed_train_set.length, scaled_height, scaled_width, num_channels)(
       features_train.toArray.flatten[Byte])
 
-    val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, 2)(labels_train.flatten[Double])
+    val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, num_outputs)(labels_train.flatten[Double])
 
 
     val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
@@ -393,7 +395,7 @@ package object helios {
       "UINT8", test_set.length, scaled_height, scaled_width, num_channels)(
       features_test.toArray.flatten[Byte])
 
-    val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, 2)(labels_test.flatten[Double])
+    val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, num_outputs)(labels_test.flatten[Double])
 
     println("Helios data set created")
     working_set.copy(
