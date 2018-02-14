@@ -3,8 +3,8 @@ package io.github.mandar2812.PlasmaML.omni
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes.DataPipe
 import org.apache.log4j.Logger
-import org.joda.time.DateTime
-import org.joda.time.format.DateTimeFormat
+import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 /**
   *
@@ -71,7 +71,10 @@ object OMNILoader {
 
   import io.github.mandar2812.PlasmaML.omni.OMNIData.{columnFillValues, dateColumns}
 
-  val dt_format = DateTimeFormat.forPattern("yyyy/D/H")
+  //Set time zone to UTC.
+  DateTimeZone.setDefault(DateTimeZone.UTC)
+  
+  val dt_format: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/D/H")
 
   /**
     * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
@@ -90,7 +93,7 @@ object OMNILoader {
   val processWithDateTime = DataPipe((lines: Stream[String]) => lines.map{line =>
     val splits = line.split(",")
 
-    val dt_string = splits.takeRight(3).mkString("/")
+    val dt_string = splits.take(3).mkString("/")
     val data = splits.last.toDouble
     val timestamp = DateTime.parse(dt_string, dt_format)
     (timestamp, data)
