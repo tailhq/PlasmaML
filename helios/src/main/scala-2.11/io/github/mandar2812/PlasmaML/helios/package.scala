@@ -1,14 +1,19 @@
 package io.github.mandar2812.PlasmaML
 
-import ammonite.ops.{Path, exists, home, ls, root}
+import ammonite.ops.{Path, exists, home, ls, root, pwd}
 import breeze.linalg.DenseVector
+import org.joda.time._
 import com.sksamuel.scrimage.Image
-import io.github.mandar2812.PlasmaML.helios.core._
-import io.github.mandar2812.PlasmaML.helios.data._
+
+import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.tensorflow.dtf
+
+import _root_.io.github.mandar2812.PlasmaML.omni.{OMNILoader, OMNIData}
+import _root_.io.github.mandar2812.PlasmaML.helios.core._
+import _root_.io.github.mandar2812.PlasmaML.helios.data._
+
 import org.platanios.tensorflow.api._
-import org.joda.time._
 import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 
 /**
@@ -217,6 +222,65 @@ package object helios {
     pprint.pprintln(num_months)
 
     (0 to num_months).map(start_year_month.plusMonths).flatMap(prepare_data).toStream
+  }
+
+  /**
+    *
+    *
+    * */
+  def collate_omni_data_range(
+    start_year_month: YearMonth,
+    end_year_month: YearMonth)(
+    omni_source: OMNI, omni_data_path: Path, deltaT: (Int, Int),
+    image_source: SOHO, images_path: Path,
+    image_dir_tree: Boolean = true) = {
+
+    val (start_instant, end_instant) = (
+      start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
+      end_year_month.toLocalDate(31).toDateTimeAtStartOfDay
+    )
+
+    val period = new Period(start_instant, end_instant)
+
+
+    print("Time period considered (in months): ")
+
+    val num_months = (12*period.getYears) + period.getMonths
+
+    pprint.pprintln(num_months)
+
+
+    //Extract OMNI data as stream
+
+    //First create the transformation pipe
+
+    val omni_processing =
+      OMNILoader.omniDataToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+        StreamDataPipe[(DateTime, Seq[Double])]((p: (DateTime, Seq[Double])) => p._1.isAfter(start_instant))
+
+    val years = (start_year_month.getYear to end_year_month.getYear).toStream
+
+    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/omni2_"+i+".csv"))
+
+    //Extract paths to images, along with a time-stamp
+
+    val image_dt_roundoff: (DateTime) => DateTime = (d: DateTime) => {
+      new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay)
+    }
+
+    val image_processing =
+      StreamFlatMapPipe(
+        (year_month: YearMonth) => load_images(images_path, year_month, image_source, image_dir_tree)) >
+      StreamDataPipe((p: (DateTime, Path)) => (image_dt_roundoff(p._1), p._2))
+
+    val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
+
+    omni_data.map(o => {
+      val image_option = images.get(o._1)
+      (o._1, image_option, o._2)
+    }).filter(_._2.isDefined)
+      .map(d => (d._1, (d._2.get, d._3)))
+
   }
 
   /**
@@ -481,7 +545,8 @@ package object helios {
     * */
   def generate_data_goes(
     year_start: Int = 2001, year_end: Int = 2005,
-    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512)): Stream[(DateTime, (Path, (Double, Double)))] = {
+    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512))
+  : Stream[(DateTime, (Path, (Double, Double)))] = {
 
     /*
      * Mind your surroundings!
@@ -544,6 +609,52 @@ package object helios {
       soho_dir,
       dt_round_off = round_date)
 
+  }
+
+  /**
+    * Generate a starting data set for OMNI/L1 prediction tasks.
+    * This method makes the assumption that the data is stored
+    * in a directory ~/data_repo/helios in a standard directory tree
+    * generated after executing the [[data.SOHOLoader.bulk_download()]] method.
+    *
+    * @param image_source The [[SOHO]] data source to extract from
+    * @param year_start The starting time of the data
+    * @param year_end The end time of the data.
+    * */
+  def generate_data_omni(
+    year_start: Int = 2001, year_end: Int = 2005,
+    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512),
+    omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW))
+  : Stream[(DateTime, (Path, Seq[Double]))] = {
+
+    /*
+     * Mind your surroundings!
+     * */
+    val os_name = System.getProperty("os.name")
+
+    println("OS: "+os_name)
+
+    val user_name = System.getProperty("user.name")
+
+    println("Running as user: "+user_name)
+
+    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+
+    require(year_end > year_start, "Data set must encompass more than one year")
+
+    print("Looking for data in directory ")
+    val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
+    pprint.pprintln(data_dir)
+
+    val soho_dir = data_dir/'soho
+
+    println("Preparing data-set as a Stream ")
+    println("Start: "+year_start+" End: "+year_end)
+
+
+    helios.collate_omni_data_range(
+      new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
+      omni_source, pwd/"data", (12, 72), image_source, soho_dir)
   }
 
 

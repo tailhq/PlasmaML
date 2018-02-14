@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.omni
 
 import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.pipes.DataPipe
+import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamFlatMapPipe}
 import org.apache.log4j.Logger
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
@@ -73,7 +73,7 @@ object OMNILoader {
 
   //Set time zone to UTC.
   DateTimeZone.setDefault(DateTimeZone.UTC)
-  
+
   val dt_format: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/D/H")
 
   /**
@@ -108,4 +108,9 @@ object OMNILoader {
 
         (history.head._1, features)
       }).toStream)
+
+  def omniDataToSlidingTS(deltaT: Int, timelag: Int)(targetColumn: Int = OMNIData.Quantities.V_SW) =
+    StreamFlatMapPipe(omniFileToStream(targetColumn, List())) >
+      processWithDateTime >
+      forward_time_window(deltaT, timelag)
 }
