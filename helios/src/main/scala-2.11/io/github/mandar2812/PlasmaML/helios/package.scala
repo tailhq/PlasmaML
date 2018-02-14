@@ -354,7 +354,15 @@ package object helios {
       //Resample training set ot
       //emphasize extreme events.
 
-      val un_prob = train_set.map(p => p._2._2.sum/num_outputs).map(math.exp)
+      val un_prob = train_set.map(p => {
+
+        val avg = utils.mean(p._2._2)
+
+        val variance = utils.mean(p._2._2.map(x => math.pow(x - avg, 2d))) * p._2._2.length/(p._2._2.length - 1d)
+
+        variance
+      }).map(math.exp)
+
       val normalizer = un_prob.sum
       val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
 
