@@ -267,7 +267,7 @@ package object helios {
     //Extract paths to images, along with a time-stamp
 
     val image_dt_roundoff: (DateTime) => DateTime = (d: DateTime) => {
-      new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay)
+      new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay, 0, 0)
     }
 
     val image_processing =
