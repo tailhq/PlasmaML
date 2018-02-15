@@ -43,7 +43,11 @@ class RBFWeightedSWLoss(
 
     val convolution_kernel = (repeated_index_times - repeated_times).square.multiply(-0.5).divide(time_scale.value).exp
 
-    val weighted_loss_tensor = (repeated_preds - input._2).multiply(convolution_kernel).sum(axes = 1)
+    val weighted_loss_tensor =
+      (repeated_preds - input._2)
+        .multiply(convolution_kernel)
+        .sum(axes = 1)
+        .divide(convolution_kernel.sum(axes = 1, keepDims = true))
 
     ops.NN.l2Loss(weighted_loss_tensor, name = name)
   }

@@ -223,7 +223,10 @@ package object helios {
   }
 
   /**
-    *
+    * Create a joint data set between heliospheric
+    * images and L1 time series.
+    * @param start_year_month Starting Year-Month
+    * @param end_year_month Ending Year-Month
     *
     * */
   def collate_omni_data_range(
@@ -831,14 +834,16 @@ package object helios {
   }
 
 
+  /**
+    * Train and test a CNN based solar wind prediction architecture.
+    * */
   def run_experiment_omni(
     collated_data: Stream[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
-    resample: Boolean = false, longWavelength: Boolean = false)(
+    resample: Boolean = false)(
     results_id: String, max_iterations: Int,
     tempdir: Path = home/"tmp",
-    arch: Layer[Output, Output] = learn.cnn_sw_v1,
-    lossFunc: Loss[(Output, Output)] = tf.learn.L2Loss("Loss/L2")) = {
+    arch: Layer[Output, Output] = learn.cnn_sw_v1) = {
 
     val resDirName = "helios_omni_"+results_id
 
@@ -868,8 +873,6 @@ package object helios {
       resample)
 
     val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
-
-    val targetIndex = if(longWavelength) 1 else 0
 
     val train_labels = dataSet.trainLabels
 
@@ -905,6 +908,8 @@ package object helios {
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
+    val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", collated_data.head._2._2.length)
+
     val loss = lossFunc >>
       tf.learn.Mean("Loss/Mean") >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
@@ -937,18 +942,28 @@ package object helios {
     }
 
 
-    val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
+    /*val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
 
     val testAccuracy = accuracy(
       dataSet.testData, dataSet.testLabels(::, targetIndex))(
       (im: Tensor) => estimator.infer(() => im))
 
     print("Test accuracy = ")
-    pprint.pprintln(testAccuracy)
+    pprint.pprintln(testAccuracy)*/
+
+
+    val predictions = estimator.infer(() => dataSet.testData)
+      .multiply(labels_stddev(0, 0))
+      .add(labels_mean(0, 0))
+
+    val metrics = new HeliosOmniTSMetrics(
+      predictions, dataSet.testLabels,
+      dataSet.testLabels.shape(1),
+      lossFunc.time_scale)
 
     dataSet.close()
 
-    (model, estimator, testAccuracy, tf_summary_dir, labels_mean, labels_stddev)
+    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev)
   }
 
 
