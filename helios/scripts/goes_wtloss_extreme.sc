@@ -2,6 +2,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
 import io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
+import org.platanios.tensorflow.api._
 
 @main
 def main(
@@ -53,7 +54,7 @@ def main(
 
   //Write the cross validation score in a results file
 
-  val accuracy = res._3
+  val accuracy = res._3.results(0, 0).sum()
 
   if(!exists(tmpdir/results)) write(tmpdir/results, "testyear,accuracy\n")
 

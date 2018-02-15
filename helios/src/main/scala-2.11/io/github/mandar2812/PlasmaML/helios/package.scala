@@ -1,18 +1,16 @@
 package io.github.mandar2812.PlasmaML
 
-import ammonite.ops.{Path, exists, home, ls, root, pwd}
+import ammonite.ops.{Path, exists, home, ls, pwd, root}
 import breeze.linalg.DenseVector
 import org.joda.time._
 import com.sksamuel.scrimage.Image
-
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
+import io.github.mandar2812.dynaml.evaluation.RegressionMetricsTF
 import io.github.mandar2812.dynaml.tensorflow.dtf
-
-import _root_.io.github.mandar2812.PlasmaML.omni.{OMNILoader, OMNIData}
+import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
-
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 
@@ -808,6 +806,137 @@ package object helios {
     }
 
 
+    //Create  MetricsTF instance
+    //First calculate and re-normalize the test predictions
+
+    val predictions = estimator.infer(() => dataSet.testData)
+      .multiply(labels_stddev)
+      .add(labels_mean)
+
+    val metrics = new RegressionMetricsTF(predictions, dataSet.testLabels(::, targetIndex))
+
+    /*val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
+
+    val testAccuracy = accuracy(
+      dataSet.testData, dataSet.testLabels(::, targetIndex))(
+      (im: Tensor) => estimator.infer(() => im))
+
+    print("Test accuracy = ")
+    pprint.pprintln(testAccuracy)*/
+
+
+    dataSet.close()
+
+    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev)
+  }
+
+
+  def run_experiment_omni(
+    collated_data: Stream[(DateTime, (Path, Seq[Double]))],
+    tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
+    resample: Boolean = false, longWavelength: Boolean = false)(
+    results_id: String, max_iterations: Int,
+    tempdir: Path = home/"tmp",
+    arch: Layer[Output, Output] = learn.cnn_sw_v1,
+    lossFunc: Loss[(Output, Output)] = tf.learn.L2Loss("Loss/L2")) = {
+
+    val resDirName = "helios_omni_"+results_id
+
+    val tf_summary_dir = tempdir/resDirName
+
+    val checkpoints =
+      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
+      else Seq()
+
+    val checkpoint_max =
+      if(checkpoints.isEmpty) 0
+      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
+
+    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
+
+
+    /*
+    * After data has been joined/collated,
+    * start loading it into tensors
+    *
+    * */
+
+    val dataSet = helios.create_helios_data_set(
+      collated_data,
+      tt_partition,
+      scaleDownFactor = 2,
+      resample)
+
+    val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
+
+    val targetIndex = if(longWavelength) 1 else 0
+
+    val train_labels = dataSet.trainLabels
+
+    val labels_mean = dataSet.trainLabels.mean(axes = Tensor(0), keepDims = true)
+
+    val labels_stddev = dataSet.trainLabels.subtract(labels_mean).square.mean(axes = Tensor(0), keepDims = true).sqrt
+
+    val norm_train_labels = train_labels.subtract(labels_mean).divide(labels_stddev)
+
+    val trainLabels = tf.data.TensorSlicesDataset(norm_train_labels)
+
+    val trainData =
+      trainImages.zip(trainLabels)
+        .repeat()
+        .shuffle(10000)
+        .batch(64)
+        .prefetch(10)
+
+    /*
+    * Start building tensorflow network/graph
+    * */
+    println("Building the regression model.")
+    val input = tf.learn.Input(
+      UINT8,
+      Shape(
+        -1,
+        dataSet.trainData.shape(1),
+        dataSet.trainData.shape(2),
+        dataSet.trainData.shape(3))
+    )
+
+    val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
+
+    val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
+
+    val loss = lossFunc >>
+      tf.learn.Mean("Loss/Mean") >>
+      tf.learn.ScalarSummary("Loss", "ModelLoss")
+
+    val optimizer = tf.train.AdaGrad(0.002)
+
+    val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+
+    //Now create the model
+    val (model, estimator) = tf.createWith(graph = Graph()) {
+      val model = tf.learn.Model(
+        input, arch, trainInput, trainingInputLayer,
+        loss, optimizer)
+
+      println("Training the linear regression model.")
+
+      val estimator = tf.learn.FileBasedEstimator(
+        model,
+        tf.learn.Configuration(Some(summariesDir)),
+        tf.learn.StopCriteria(maxSteps = Some(iterations)),
+        Set(
+          tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+          tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
+          tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
+        tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
+
+      estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(iterations)))
+
+      (model, estimator)
+    }
+
+
     val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
 
     val testAccuracy = accuracy(
@@ -821,7 +950,6 @@ package object helios {
 
     (model, estimator, testAccuracy, tf_summary_dir, labels_mean, labels_stddev)
   }
-
 
 
 }
