@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
+import _root_.io.github.mandar2812.dynaml.tensorflow._
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.Loss
 import org.platanios.tensorflow.api._
@@ -40,9 +41,7 @@ class RBFWeightedSWLoss(
     val size_batch = input._1.shape(0)
 
     val repeated_times = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
-
-    val index_times = Tensor((0 until size_causal_window).map(_.toDouble)).reshape(Shape(size_causal_window))
-
+    
     val repeated_index_times = tf.stack(Seq.fill(size_batch)(index_times), axis = 0)
 
     val repeated_preds = tf.stack(Seq.fill(size_causal_window)(predictions), axis = -1)
