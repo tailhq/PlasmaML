@@ -42,11 +42,11 @@ class RBFWeightedSWLoss(
 
     val repeated_times = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
     
-    val repeated_index_times = tf.stack(Seq.fill(size_batch)(index_times), axis = 0)
+    //val repeated_index_times = tf.stack(Seq.fill(size_batch)(index_times), axis = 0)
 
     val repeated_preds = tf.stack(Seq.fill(size_causal_window)(predictions), axis = -1)
 
-    val convolution_kernel = (repeated_index_times - repeated_times)
+    val convolution_kernel = (repeated_times - index_times)
       .square
       .multiply(-0.5)
       .divide(time_scale.add(1E-4))
