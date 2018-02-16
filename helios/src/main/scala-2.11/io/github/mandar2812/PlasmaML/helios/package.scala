@@ -878,9 +878,9 @@ package object helios {
 
     val train_labels = dataSet.trainLabels
 
-    val labels_mean = dataSet.trainLabels.mean(axes = Tensor(0), keepDims = true)
+    val labels_mean = dataSet.trainLabels.mean(axes = Tensor(0))
 
-    val labels_stddev = dataSet.trainLabels.subtract(labels_mean).square.mean(axes = Tensor(0), keepDims = true).sqrt
+    val labels_stddev = dataSet.trainLabels.subtract(labels_mean).square.mean(axes = Tensor(0)).sqrt
 
     val norm_train_labels = train_labels.subtract(labels_mean).divide(labels_stddev)
 
@@ -943,17 +943,6 @@ package object helios {
       (model, estimator)
     }
 
-
-    /*val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
-
-    val testAccuracy = accuracy(
-      dataSet.testData, dataSet.testLabels(::, targetIndex))(
-      (im: Tensor) => estimator.infer(() => im))
-
-    print("Test accuracy = ")
-    pprint.pprintln(testAccuracy)*/
-
-
     val predictions = estimator.infer(() => dataSet.testData)
       .multiply(labels_stddev(0, 0))
       .add(labels_mean(0, 0))
@@ -961,7 +950,7 @@ package object helios {
     val metrics = new HeliosOmniTSMetrics(
       predictions, dataSet.testLabels,
       dataSet.testLabels.shape(1),
-      lossFunc.time_scale)
+      lossFunc.time_scale.evaluate().entriesIterator.toSeq.head.asInstanceOf[Double])
 
     dataSet.close()
 
