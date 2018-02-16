@@ -34,7 +34,7 @@ class RBFWeightedSWLoss(
     //Obtain section corresponding to velocity predictions
     val predictions = input._1(::, 0)
 
-    val targets = input._2
+    val targets = input._2.evaluate()
 
     val timelags = input._1(::, 1).sigmoid.multiply(scaling)
 
@@ -49,7 +49,7 @@ class RBFWeightedSWLoss(
     val convolution_kernel = (repeated_index_times - repeated_times)
       .square
       .multiply(-0.5)
-      .divide(time_scale.add(1E-4))
+      .divide(time_scale.add(1E-4).evaluate())
       .exp
 
     val weighted_loss_tensor =
