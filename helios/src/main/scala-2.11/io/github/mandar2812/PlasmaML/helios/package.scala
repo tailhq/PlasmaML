@@ -838,6 +838,7 @@ package object helios {
   /**
     * Train and test a CNN based solar wind prediction architecture.
     * */
+  //TODO: Check normalizing code
   def run_experiment_omni(
     collated_data: Stream[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,

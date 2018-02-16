@@ -14,6 +14,7 @@ import org.platanios.tensorflow.api.ops.Output
   *
   * @author mandar2812
   * */
+//TODO: Check implementation
 class RBFWeightedSWLoss(
   override val name: String,
   val size_causal_window: Int,
