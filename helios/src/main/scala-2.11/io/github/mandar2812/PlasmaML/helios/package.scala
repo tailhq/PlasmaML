@@ -815,7 +815,7 @@ package object helios {
     val predictions = estimator.infer(() => dataSet.testData)
       .multiply(labels_stddev)
       .add(labels_mean)
-      .reshape(Shape(dataSet.nTest, 1))
+      .reshape(Shape(dataSet.nTest))
 
     val metrics = new RegressionMetricsTF(predictions, dataSet.testLabels(::, targetIndex))
 
