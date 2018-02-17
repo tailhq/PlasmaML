@@ -54,11 +54,13 @@ def main(
 
   //Write the cross validation score in a results file
 
-  val accuracy = res._3.results(0, 0).sum()
+  val accuracy = res._3.results(0).sum()
 
   if(!exists(tmpdir/results)) write(tmpdir/results, "testyear,accuracy\n")
 
   write.append(tmpdir/results, s"$test_year,$accuracy\n")
 
   pprint.pprintln(res)
+
+  res
 }
