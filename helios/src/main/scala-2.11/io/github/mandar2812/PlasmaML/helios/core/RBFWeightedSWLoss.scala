@@ -1,6 +1,5 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
-import _root_.io.github.mandar2812.dynaml.tensorflow._
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.Loss
 import org.platanios.tensorflow.api._
@@ -18,14 +17,15 @@ import org.platanios.tensorflow.api.ops.Output
 //TODO: Check implementation
 class RBFWeightedSWLoss(
   override val name: String,
-  val size_causal_window: Int)
+  val size_causal_window: Int,
+  val time_scale: Double = 3d)
   extends Loss[(Output, Output)](name) {
 
   override val layerType: String = "KernelWeightedSWLoss"
 
   private[this] val scaling = Tensor(size_causal_window.toDouble)
 
-  val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
+  //val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
@@ -50,7 +50,7 @@ class RBFWeightedSWLoss(
     val convolution_kernel = (repeated_times - index_times)
       .square
       .multiply(-0.5)
-      .divide(time_scale.add(1E-4))
+      .divide(math.pow(time_scale, 2d))
       .exp
 
     val weighted_loss_tensor =
