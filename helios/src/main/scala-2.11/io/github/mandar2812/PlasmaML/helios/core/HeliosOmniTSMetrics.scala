@@ -39,6 +39,7 @@ class HeliosOmniTSMetrics(
 
     val weighted_loss_tensor =
       (repeated_preds - targets)
+        .square
         .multiply(convolution_kernel)
         .sum(axes = 1)
         .divide(convolution_kernel.sum(axes = 1))
