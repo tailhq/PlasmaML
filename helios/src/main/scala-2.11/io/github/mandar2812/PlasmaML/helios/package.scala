@@ -946,9 +946,9 @@ package object helios {
       dataSet.testLabels.shape(1),
       lossFunc.time_scale)
 
-    dataSet.close()
+    //dataSet.close()
 
-    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev)
+    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev, collated_data)
   }
 
 
