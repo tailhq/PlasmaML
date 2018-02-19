@@ -9,7 +9,7 @@ def main(
   test_year: Int = 2003,
   re: Boolean = true,
   tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String = "mdi_ext_wtloss_results.csv") = {
+  resFile: String = "mdi_rbfloss_results.csv") = {
 
   //Data with MDI images
 
@@ -34,6 +34,6 @@ def main(
 
   helios.run_experiment_omni(
     data, tt_partition, resample = re)(
-    summary_dir, 120000, tmpdir)
+    summary_dir, 150000, tmpdir)
 
 }
