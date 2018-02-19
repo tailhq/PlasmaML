@@ -819,16 +819,6 @@ package object helios {
 
     val metrics = new RegressionMetricsTF(predictions, dataSet.testLabels(::, targetIndex))
 
-    /*val accuracy = helios.calculate_rmse(dataSet.nTest, 4)(labels_mean, labels_stddev) _
-
-    val testAccuracy = accuracy(
-      dataSet.testData, dataSet.testLabels(::, targetIndex))(
-      (im: Tensor) => estimator.infer(() => im))
-
-    print("Test accuracy = ")
-    pprint.pprintln(testAccuracy)*/
-
-
     dataSet.close()
 
     (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev)
