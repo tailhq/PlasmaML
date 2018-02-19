@@ -35,6 +35,8 @@ package object helios {
 
     val cnn_sw_v1: Layer[Output, Output]                   = Arch.cnn_sw_v1
 
+    val cnn_xray_class_v1: Layer[Output, Output]           = Arch.cnn_xray_class_v1
+
     /*
     * Loss Functions
     * */
@@ -232,9 +234,9 @@ package object helios {
   def collate_omni_data_range(
     start_year_month: YearMonth,
     end_year_month: YearMonth)(
-    omni_source: OMNI, omni_data_path: Path, deltaT: (Int, Int),
-    image_source: SOHO, images_path: Path,
-    image_dir_tree: Boolean = true) = {
+    omni_source: OMNI, omni_data_path: Path,
+    deltaT: (Int, Int), image_source: SOHO,
+    images_path: Path, image_dir_tree: Boolean = true) = {
 
     val (start_instant, end_instant) = (
       start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
@@ -896,11 +898,13 @@ package object helios {
         dataSet.trainData.shape(3))
     )
 
-    val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
+    val num_outputs = collated_data.head._2._2.length
+
+    val trainInput = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
-    val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", collated_data.head._2._2.length)
+    val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", num_outputs)
 
     val loss = lossFunc >>
       tf.learn.Mean("Loss/Mean") >>
@@ -940,7 +944,7 @@ package object helios {
     val metrics = new HeliosOmniTSMetrics(
       predictions, dataSet.testLabels,
       dataSet.testLabels.shape(1),
-      lossFunc.time_scale.evaluate().entriesIterator.toSeq.head.asInstanceOf[Double])
+      lossFunc.time_scale)
 
     dataSet.close()
 

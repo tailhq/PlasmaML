@@ -48,6 +48,20 @@ object Arch {
       tf.learn.Linear("OutputLayer", 1)
   }
 
+  private[PlasmaML] val cnn_xray_class_v1 = {
+    tf.learn.Cast("Input/Cast", FLOAT32) >>
+      dtflearn.conv2d_pyramid(2, 4)(7, 3)(0.1f, true, 0.6f) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(4) >>
+      tf.learn.MaxPool("MaxPool_6", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.Flatten("Flatten_6") >>
+      dtflearn.feedforward(128)(7) >>
+      tf.learn.SELU("SELU_7") >>
+      dtflearn.feedforward(64)(8) >>
+      tf.learn.SELU("SELU_8") >>
+      dtflearn.feedforward(32)(9) >>
+      tf.learn.SELU("SELU_9") >>
+      dtflearn.feedforward(4)(10)
+  }
 
   private[PlasmaML] val cnn_sw_v1 = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
