@@ -789,7 +789,7 @@ package object helios {
 
     //Now create the model
     val (model, estimator) = tf.createWith(graph = Graph()) {
-      val model = tf.learn.Model.supervised(
+      val model = tf.learn.Model(
         input, arch, trainInput, trainingInputLayer,
         loss, optimizer)
 
@@ -916,7 +916,7 @@ package object helios {
 
     //Now create the model
     val (model, estimator) = tf.createWith(graph = Graph()) {
-      val model = tf.learn.Model.supervised(
+      val model = tf.learn.Model(
         input, arch, trainInput, trainingInputLayer,
         loss, optimizer)
 
