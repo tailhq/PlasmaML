@@ -938,8 +938,8 @@ package object helios {
     }
 
     val predictions = estimator.infer(() => dataSet.testData)
-      .multiply(labels_stddev(0, 0))
-      .add(labels_mean(0, 0))
+      .multiply(labels_stddev(0))
+      .add(labels_mean(0))
 
     val metrics = new HeliosOmniTSMetrics(
       predictions, dataSet.testLabels,
