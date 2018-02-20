@@ -7,10 +7,9 @@ import _root_.io.github.mandar2812.dynaml.tensorflow._
 /**
   *
   * */
-//TODO:: Check implementation
 class HeliosOmniTSMetrics(
   predictions: Tensor, targets: Tensor,
-  size_causal_window: Int, time_scale: Double) extends
+  size_causal_window: Int, time_scale: Tensor) extends
   MetricsTF(Seq("weighted_avg_err"), predictions, targets) {
 
   private[this] val scaling = Tensor(size_causal_window.toDouble)
@@ -19,7 +18,7 @@ class HeliosOmniTSMetrics(
 
     val y = predictions(::, 0)
 
-    val timelags = predictions(::, 1).sigmoid.multiply(scaling).cast(INT32)
+    val timelags = predictions(::, 1).sigmoid.multiply(scaling)
 
     val size_batch = predictions.shape(0)
 
@@ -31,10 +30,12 @@ class HeliosOmniTSMetrics(
 
     val repeated_preds = dtf.stack(Seq.fill(size_causal_window)(y), axis = -1)
 
+    val repeated_time_scales = dtf.stack(Seq.fill(size_causal_window)(time_scale), axis = -1)
+
     val convolution_kernel = (repeated_index_times - repeated_times)
       .square
       .multiply(-0.5)
-      .divide(time_scale)
+      .divide(repeated_time_scales)
       .exp
 
     val weighted_loss_tensor =
@@ -46,5 +47,13 @@ class HeliosOmniTSMetrics(
         .mean()
 
     weighted_loss_tensor
+  }
+
+  override def print(): Unit = {
+    println("\nModel Performance: "+name)
+    println("============================")
+    println()
+    println(names.head+": "+results.scalar)
+    print()
   }
 }

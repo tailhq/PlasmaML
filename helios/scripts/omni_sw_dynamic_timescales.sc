@@ -8,7 +8,7 @@ def main(
   test_year: Int = 2003,
   re: Boolean = true,
   tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String = "mdi_rbfloss_results.csv") = {
+  resFile: String = "mdi_rbfloss_dynamic_results.csv") = {
 
   //Data with MDI images
 
@@ -26,12 +26,12 @@ def main(
   val test_end       = new DateTime(test_year, 12, 31, 23, 59)
 
   val tt_partition   = (p: (DateTime, (Path, Seq[Double]))) =>
-  if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max >= sw_threshold) false
-  else true
+    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max >= sw_threshold) false
+    else true
 
-  val summary_dir = if(re) "mdi_resample_"+test_year else "mdi_"+test_year
+  val summary_dir = if(re) "mdi_dynamic_resample_"+test_year else "mdi_dynamic_"+test_year
 
-  helios.run_experiment_omni(
+  helios.run_experiment_omni_dynamic_time_scales(
     data, tt_partition, resample = re)(
     summary_dir, 150000, tmpdir)
 

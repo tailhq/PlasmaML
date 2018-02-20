@@ -46,7 +46,8 @@ class DynamicRBFSWLoss(
 
     val convolution_kernel =
       (repeated_index_times - repeated_times)
-        .square.multiply(-0.5)
+        .square
+        .multiply(-0.5)
         .divide(repeated_timescales)
         .exp
 

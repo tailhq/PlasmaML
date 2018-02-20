@@ -29,13 +29,19 @@ package object helios {
 
   object learn {
 
-    val cnn_goes_v1: Layer[Output, Output]                 = Arch.cnn_goes_v1
+    /*
+    * NN Architectures
+    *
+    * */
+    val cnn_goes_v1: Layer[Output, Output]                    = Arch.cnn_goes_v1
 
-    val cnn_goes_v1_1: Layer[Output, Output]               = Arch.cnn_goes_v1_1
+    val cnn_goes_v1_1: Layer[Output, Output]                  = Arch.cnn_goes_v1_1
 
-    val cnn_sw_v1: Layer[Output, Output]                   = Arch.cnn_sw_v1
+    val cnn_sw_v1: Layer[Output, Output]                      = Arch.cnn_sw_v1
 
-    val cnn_xray_class_v1: Layer[Output, Output]           = Arch.cnn_xray_class_v1
+    val cnn_sw_dynamic_timescales_v1: Layer[Output, Output]   = Arch.cnn_sw_dynamic_timescales_v1
+
+    val cnn_xray_class_v1: Layer[Output, Output]              = Arch.cnn_xray_class_v1
 
     /*
     * Loss Functions
@@ -354,24 +360,26 @@ package object helios {
     *
     * */
     val processed_train_set = if(resample) {
-      //Resample training set ot
-      //emphasize extreme events.
 
+      /*
+      * Resample training set with
+      * emphasis on larger ratios
+      * between max and min of a sliding
+      * time window.
+      * */
       val un_prob = train_set.map(p => {
 
-        val avg = utils.mean(p._2._2)
-
-        val variance = utils.mean(p._2._2.map(x => math.pow(x - avg, 2d))) * p._2._2.length/(p._2._2.length - 1d)
-
-        variance
-      }).map(math.exp)
+          math.abs(p._2._2.max - p._2._2.min)/math.abs(p._2._2.min)
+        }).map(math.exp)
 
       val normalizer = un_prob.sum
+
       val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
 
       helios.resample(train_set, selector)
     } else train_set
 
+    //Construct training features and labels
     val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) =
       processed_train_set.map(entry => {
         val (_, (path, data_label)) = entry
@@ -390,7 +398,7 @@ package object helios {
 
     val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, num_outputs)(labels_train.flatten[Double])
 
-
+    //Construct test features and labels
     val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
       val (_, (path, data_label)) = entry
 
@@ -701,6 +709,8 @@ package object helios {
     * @param max_iterations The maximum number of iterations that the
     *                       network must be trained for.
     * @param arch The neural architecture to train, defaults to [[Arch.cnn_goes_v1]]
+    * @param lossFunc The loss function which will be used to guide the training
+    *                 of the architecture, defaults to [[tf.learn.L2Loss]]
     *
     * */
   def run_experiment_goes(
@@ -829,8 +839,31 @@ package object helios {
 
   /**
     * Train and test a CNN based solar wind prediction architecture.
+    *
+    * @param collated_data Data set of temporally joined
+    *                      image paths and GOES X-Ray fluxes.
+    *                      This is generally the output after
+    *                      executing [[collate_goes_data_range()]]
+    *                      with the relevant parameters.
+    * @param tt_partition A function which splits the data set
+    *                     into train and test sections, based on
+    *                     any Boolean function. If the function
+    *                     returns true then the instance falls into
+    *                     the training set else the test set
+    * @param resample If set to true, the training data is resampled
+    *                 to balance the occurrence of high flux and low
+    *                 flux events.
+    *
+    * @param tempdir A working directory where the results will be
+    *                archived, defaults to user_home_dir/tmp. The model
+    *                checkpoints and other results will be stored inside
+    *                another directory created in tempdir.
+    * @param results_id The suffix added the results/checkpoints directory name.
+    * @param max_iterations The maximum number of iterations that the
+    *                       network must be trained for.
+    * @param arch The neural architecture to train, defaults to [[Arch.cnn_sw_v1]]
+    *
     * */
-  //TODO: Check normalizing code
   def run_experiment_omni(
     collated_data: Stream[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
@@ -938,15 +971,143 @@ package object helios {
     }
 
     val predictions = estimator.infer(() => dataSet.testData)
+
+    val pred_targets = predictions(::, 0)
       .multiply(labels_stddev(0))
       .add(labels_mean(0))
 
-    val metrics = new HeliosOmniTSMetrics(
-      predictions, dataSet.testLabels,
-      dataSet.testLabels.shape(1),
-      lossFunc.time_scale)
+    val pred_time_lags = predictions(::, 1)
 
-    //dataSet.close()
+    val metrics = new HeliosOmniTSMetrics(
+      dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1), dataSet.testLabels,
+      dataSet.testLabels.shape(1),
+      dtf.tensor_f32(dataSet.nTest)(Seq.fill(dataSet.nTest)(lossFunc.time_scale):_*)
+    )
+
+    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev, collated_data)
+  }
+
+  def run_experiment_omni_dynamic_time_scales(
+    collated_data: Stream[(DateTime, (Path, Seq[Double]))],
+    tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
+    resample: Boolean = false)(
+    results_id: String, max_iterations: Int,
+    tempdir: Path = home/"tmp",
+    arch: Layer[Output, Output] = learn.cnn_sw_dynamic_timescales_v1) = {
+
+    val resDirName = "helios_omni_"+results_id
+
+    val tf_summary_dir = tempdir/resDirName
+
+    val checkpoints =
+      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
+      else Seq()
+
+    val checkpoint_max =
+      if(checkpoints.isEmpty) 0
+      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
+
+    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
+
+
+    /*
+    * After data has been joined/collated,
+    * start loading it into tensors
+    *
+    * */
+
+    val dataSet = helios.create_helios_data_set(
+      collated_data,
+      tt_partition,
+      scaleDownFactor = 2,
+      resample)
+
+    val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
+
+    val train_labels = dataSet.trainLabels
+
+    val labels_mean = dataSet.trainLabels.mean(axes = Tensor(0))
+
+    val labels_stddev = dataSet.trainLabels.subtract(labels_mean).square.mean(axes = Tensor(0)).sqrt
+
+    val norm_train_labels = train_labels.subtract(labels_mean).divide(labels_stddev)
+
+    val trainLabels = tf.data.TensorSlicesDataset(norm_train_labels)
+
+    val trainData =
+      trainImages.zip(trainLabels)
+        .repeat()
+        .shuffle(10000)
+        .batch(64)
+        .prefetch(10)
+
+    /*
+    * Start building tensorflow network/graph
+    * */
+    println("Building the regression model.")
+    val input = tf.learn.Input(
+      UINT8,
+      Shape(
+        -1,
+        dataSet.trainData.shape(1),
+        dataSet.trainData.shape(2),
+        dataSet.trainData.shape(3))
+    )
+
+    val num_outputs = collated_data.head._2._2.length
+
+    val trainInput = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
+
+    val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
+
+    val lossFunc = new DynamicRBFSWLoss("Loss/DynamicRBFWeightedL2", num_outputs)
+
+    val loss = lossFunc >>
+      tf.learn.Mean("Loss/Mean") >>
+      tf.learn.ScalarSummary("Loss", "ModelLoss")
+
+    val optimizer = tf.train.AdaGrad(0.002)
+
+    val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+
+    //Now create the model
+    val (model, estimator) = tf.createWith(graph = Graph()) {
+      val model = tf.learn.Model(
+        input, arch, trainInput, trainingInputLayer,
+        loss, optimizer)
+
+      println("Training the linear regression model.")
+
+      val estimator = tf.learn.FileBasedEstimator(
+        model,
+        tf.learn.Configuration(Some(summariesDir)),
+        tf.learn.StopCriteria(maxSteps = Some(iterations)),
+        Set(
+          tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+          tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
+          tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
+        tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
+
+      estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(iterations)))
+
+      (model, estimator)
+    }
+
+    val predictions = estimator.infer(() => dataSet.testData)
+
+    val pred_targets = predictions(::, 0)
+      .multiply(labels_stddev(0))
+      .add(labels_mean(0))
+
+    val pred_time_lags = predictions(::, 1)
+
+    val pred_time_scales = predictions(::, 2)
+
+    val metrics = new HeliosOmniTSMetrics(
+      dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1), dataSet.testLabels,
+      dataSet.testLabels.shape(1),
+      pred_time_scales
+    )
 
     (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev, collated_data)
   }

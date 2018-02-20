@@ -7,6 +7,6 @@ package io.github.mandar2812.PlasmaML
   * */
 package object utils {
 
-  def mean(seq: Seq[Double]) = seq.sum/seq.length
+  def mean(seq: Seq[Double]): Double = seq.sum/seq.length
 
 }
