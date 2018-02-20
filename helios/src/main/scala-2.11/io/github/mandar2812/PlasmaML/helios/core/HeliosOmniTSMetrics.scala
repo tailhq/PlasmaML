@@ -53,7 +53,7 @@ class HeliosOmniTSMetrics(
     println("\nModel Performance: "+name)
     println("============================")
     println()
-    println(names.head+": "+results.scalar)
+    println(names.head+": "+results.scalar.asInstanceOf[Double])
     print()
   }
 }
