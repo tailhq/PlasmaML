@@ -46,6 +46,21 @@ object GOESData {
     ("""g\w+_""" +source.quantity+"""_"""+year+month+"""\d{2}?_"""+year+month+"""\d{2}?\."""+source.format).r
   }
 
+  /**
+    * Get the flare class from the log flux for 1-8 Angstrom X Rays.
+    *
+    * 0 - B
+    * 1 - C
+    * 2 - M
+    * 3 - X
+    *
+    * */
+  def getFlareClass(flux_1_8_ang: Double): Int =
+    if(flux_1_8_ang < -6d) 0
+    else if(flux_1_8_ang >= -6d && flux_1_8_ang < -5d) 1
+    else if(flux_1_8_ang >= -5d && flux_1_8_ang <= -4d) 2
+    else 3
+
 }
 
 object GOESLoader {

@@ -6,7 +6,7 @@ import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
-import io.github.mandar2812.dynaml.evaluation.RegressionMetricsTF
+import io.github.mandar2812.dynaml.evaluation.{RegressionMetricsTF, ClassificationMetricsTF}
 import io.github.mandar2812.dynaml.tensorflow.dtf
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
@@ -829,11 +829,19 @@ package object helios {
       .add(labels_mean)
       .reshape(Shape(dataSet.nTest))
 
-    val metrics = new RegressionMetricsTF(predictions, dataSet.testLabels(::, targetIndex))
+    val targets = dataSet.testLabels(::, targetIndex)
+    val metrics = new RegressionMetricsTF(predictions, targets)
 
-    dataSet.close()
+    val (predictions_seq, targets_seq) = (
+      predictions.entriesIterator.map(_.asInstanceOf[Double]).map(GOESData.getFlareClass).toSeq,
+      targets.entriesIterator.map(_.asInstanceOf[Double]).map(GOESData.getFlareClass).toSeq)
 
-    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev)
+    val preds_one_hot = dtf.tensor_i32(dataSet.nTest)(predictions_seq:_*).oneHot(depth = 4)
+    val targets_one_hot = dtf.tensor_i32(dataSet.nTest)(targets_seq:_*).oneHot(depth = 4)
+
+    val metrics_class = new ClassificationMetricsTF(4, preds_one_hot, targets_one_hot)
+
+    (model, estimator, metrics, metrics_class, tf_summary_dir, labels_mean, labels_stddev, collated_data)
   }
 
 
