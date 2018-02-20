@@ -833,8 +833,8 @@ package object helios {
     val metrics = new RegressionMetricsTF(predictions, targets)
 
     val (predictions_seq, targets_seq) = (
-      predictions.entriesIterator.map(_.asInstanceOf[Double]).map(GOESData.getFlareClass).toSeq,
-      targets.entriesIterator.map(_.asInstanceOf[Double]).map(GOESData.getFlareClass).toSeq)
+      predictions.entriesIterator.map(_.asInstanceOf[Float]).map(GOESData.getFlareClass).toSeq,
+      targets.entriesIterator.map(_.asInstanceOf[Float]).map(GOESData.getFlareClass).toSeq)
 
     val preds_one_hot = dtf.tensor_i32(dataSet.nTest)(predictions_seq:_*).oneHot(depth = 4)
     val targets_one_hot = dtf.tensor_i32(dataSet.nTest)(targets_seq:_*).oneHot(depth = 4)
