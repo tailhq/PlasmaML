@@ -55,11 +55,11 @@ object Arch {
       tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_5") >>
       dtflearn.feedforward(128)(6) >>
-      tf.learn.ReLU("RELU_6", 0.1f) >>
+      dtflearn.Tanh("Tanh_6") >>
       dtflearn.feedforward(64)(7) >>
-      tf.learn.ReLU("RELU_7", 0.1f) >>
+      dtflearn.Tanh("Tanh_7") >>
       dtflearn.feedforward(32)(8) >>
-      tf.learn.ReLU("RELU_6", 0.1f) >>
+      dtflearn.Tanh("Tanh_6") >>
       tf.learn.Linear("OutputLayer", 1)
   }
 
