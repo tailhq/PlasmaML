@@ -50,16 +50,16 @@ object Arch {
 
   private[PlasmaML] val cnn_goes_v1_2 = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_pyramid(2, 4)(7, 3)(0.1f, dropout = true, 0.6f) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
-      tf.learn.MaxPool("MaxPool_6", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
-      tf.learn.Flatten("Flatten_6") >>
-      dtflearn.feedforward(128)(7) >>
-      tf.learn.SELU("SELU_7") >>
-      dtflearn.feedforward(64)(8) >>
-      tf.learn.SELU("SELU_8") >>
-      dtflearn.feedforward(32)(9) >>
-      tf.learn.Sigmoid("Sigmoid_9") >>
+      dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.6f) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
+      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.Flatten("Flatten_5") >>
+      dtflearn.feedforward(128)(6) >>
+      tf.learn.ReLU("RELU_6", 0.1f) >>
+      dtflearn.feedforward(64)(7) >>
+      tf.learn.ReLU("RELU_7", 0.1f) >>
+      dtflearn.feedforward(32)(8) >>
+      tf.learn.ReLU("RELU_6", 0.1f) >>
       tf.learn.Linear("OutputLayer", 1)
   }
 

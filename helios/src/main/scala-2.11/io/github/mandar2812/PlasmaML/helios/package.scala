@@ -603,14 +603,14 @@ package object helios {
 
     val reduce_fn = (gr: Stream[(DateTime, (Double, Double))]) => {
 
-      val max_flux = gr.map(_._2).max
+      val (max_flux_short, max_flux_long) = (gr.map(_._2._1).max, gr.map(_._2._2).max)
 
-      (gr.head._1, (math.log10(max_flux._1), math.log10(max_flux._2)))
+      (gr.head._1, (math.log10(max_flux_short), math.log10(max_flux_long)))
     }
 
     val round_date = (d: DateTime) => {
 
-      val num_minutes = 10
+      val num_minutes = 5
 
       val minutes: Int = d.getMinuteOfHour/num_minutes
 
@@ -628,7 +628,7 @@ package object helios {
       new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
       GOES(GOESData.Quantities.XRAY_FLUX_5m),
       goes_dir,
-      goes_aggregation = 2,
+      goes_aggregation = 1,
       goes_reduce_func = reduce_fn,
       image_source,
       soho_dir,
