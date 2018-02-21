@@ -10,7 +10,8 @@ def main(
   longWL: Boolean = false,
   re: Boolean = true,
   tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String = "mdi_ext_wtloss_results.csv") = {
+  resFile: String = "mdi_ext_wtloss_results.csv",
+  maxIt: Int = 200000) = {
 
   //Data with MDI images
 
@@ -48,7 +49,7 @@ def main(
   val res = helios.run_experiment_goes(
     data, tt_partition, resample = re,
     longWavelength = longWL)(
-    summary_dir, 200000, tmpdir,
+    summary_dir, maxIt, tmpdir,
     arch = helios.learn.cnn_goes_v1_2,
     lossFunc = helios.learn.weightedL2FluxLoss("Loss/WeightedL2FluxLoss"))
 
