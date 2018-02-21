@@ -37,6 +37,8 @@ package object helios {
 
     val cnn_goes_v1_1: Layer[Output, Output]                  = Arch.cnn_goes_v1_1
 
+    val cnn_goes_v1_2: Layer[Output, Output]                  = Arch.cnn_goes_v1_2
+
     val cnn_sw_v1: Layer[Output, Output]                      = Arch.cnn_sw_v1
 
     val cnn_sw_dynamic_timescales_v1: Layer[Output, Output]   = Arch.cnn_sw_dynamic_timescales_v1

@@ -49,7 +49,7 @@ def main(
     data, tt_partition, resample = re,
     longWavelength = longWL)(
     summary_dir, 200000, tmpdir,
-    arch = helios.learn.cnn_goes_v1_1,
+    arch = helios.learn.cnn_goes_v1_2,
     lossFunc = helios.learn.weightedL2FluxLoss("Loss/WeightedL2FluxLoss"))
 
 
