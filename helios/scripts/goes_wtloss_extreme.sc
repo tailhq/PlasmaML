@@ -3,6 +3,8 @@ import ammonite.ops._
 import io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
 import org.platanios.tensorflow.api._
+import _root_.io.github.mandar2812.dynaml.tensorflow.dtflearn
+import org.platanios.tensorflow.api.ops.NN.SamePadding
 
 @main
 def main(
@@ -46,11 +48,27 @@ def main(
 
   val summary_dir = if(re) "mdi_wtloss_ext_resample_"+test_year else "mdi_wtloss_ext_"+test_year
 
+  val architecture = {
+    tf.learn.Cast("Input/Cast", FLOAT32) >>
+      dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.6f) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
+      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.Flatten("Flatten_5") >>
+      dtflearn.feedforward(128)(6) >>
+      dtflearn.Tanh("Tanh_6") >>
+      dtflearn.feedforward(64)(7) >>
+      dtflearn.Tanh("Tanh_7") >>
+      dtflearn.feedforward(32)(8) >>
+      dtflearn.Tanh("Tanh_6") >>
+      tf.learn.Linear("OutputLayer", 1)
+  }
+
   val res = helios.run_experiment_goes(
     data, tt_partition, resample = re,
     longWavelength = longWL)(
     summary_dir, maxIt, tmpdir,
-    arch = helios.learn.cnn_goes_v1_2,
+    arch = architecture,
     lossFunc = helios.learn.weightedL2FluxLoss("Loss/WeightedL2FluxLoss"))
 
 
