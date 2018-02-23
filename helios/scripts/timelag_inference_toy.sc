@@ -10,7 +10,7 @@ import org.platanios.tensorflow.api._
 
 
 @main
-def main(d: Int = 3, n: Int = 5, noise: Double = 0.5) = {
+def main(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double = 0.1) = {
 
   val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
     () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
@@ -23,7 +23,7 @@ def main(d: Int = 3, n: Int = 5, noise: Double = 0.5) = {
   val x0 = normalised_gaussian_vec(d)
 
   val random_gaussian_mat = DataPipe(
-    (n: Int) => DenseMatrix.rand(n, n, Gaussian(0d, noise))
+    (n: Int) => DenseMatrix.rand(n, n, Gaussian(0d, noiserot))
   )
 
   val rand_rot_mat =
