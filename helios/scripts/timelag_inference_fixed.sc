@@ -171,7 +171,7 @@ def main(
 
   val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
 
-  val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", num_outputs, 1d)
+  val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL1", num_outputs, 1d)
 
   val loss = lossFunc >>
     tf.learn.Mean("Loss/Mean") >>
@@ -193,10 +193,10 @@ def main(
       tf.learn.Configuration(Some(summariesDir)),
       tf.learn.StopCriteria(maxSteps = Some(iterations)),
       Set(
-        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(500)),
-        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(500)),
-        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(500))),
-      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 500))
+        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(100)),
+        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
+        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
+      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
 
     estimator.train(() => training_data, tf.learn.StopCriteria(maxSteps = Some(iterations)))
 
@@ -246,6 +246,9 @@ def main(
   pprint.pprintln(mae_lag)
 
   val reg_metrics = new RegressionMetricsTF(pred_targets, tf_dataset.testLabels(::, fixed_lag.toInt))
+
+  histogram(pred_time_lags.sigmoid.multiply(num_outputs-1).entriesIterator.map(_.asInstanceOf[Double]).toSeq)
+  title("Predicted Time Lags")
 
   (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics)
 }
