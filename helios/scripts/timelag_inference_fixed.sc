@@ -171,7 +171,7 @@ def main(
 
   val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
 
-  val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", num_outputs, 2d)
+  val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", num_outputs, 1d)
 
   val loss = lossFunc >>
     tf.learn.Mean("Loss/Mean") >>
