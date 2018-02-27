@@ -12,7 +12,7 @@ class HeliosOmniTSMetrics(
   size_causal_window: Int, time_scale: Tensor) extends
   MetricsTF(Seq("weighted_avg_err"), predictions, targets) {
 
-  private[this] val scaling = Tensor(size_causal_window.toDouble)
+  private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
 
   override protected def run(): Tensor = {
 
@@ -33,8 +33,8 @@ class HeliosOmniTSMetrics(
     val repeated_time_scales = dtf.stack(Seq.fill(size_causal_window)(time_scale), axis = -1)
 
     val convolution_kernel = (repeated_index_times - repeated_times)
-      .square
-      .multiply(-0.5)
+      .abs
+      .multiply(-1d)
       .divide(repeated_time_scales)
       .exp
 
@@ -54,6 +54,6 @@ class HeliosOmniTSMetrics(
     println("============================")
     println()
     println(names.head+": "+results.scalar.asInstanceOf[Double])
-    print()
+    println()
   }
 }

@@ -21,7 +21,7 @@ class DynamicRBFSWLoss(
 
   override val layerType: String = "KernelWeightedSWLoss"
 
-  private[this] val scaling = Tensor(size_causal_window.toDouble)
+  private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
@@ -46,8 +46,8 @@ class DynamicRBFSWLoss(
 
     val convolution_kernel =
       (repeated_index_times - repeated_times)
-        .square
-        .multiply(-0.5)
+        .abs
+        .multiply(-1d)
         .divide(repeated_timescales)
         .exp
 

@@ -22,7 +22,7 @@ class RBFWeightedSWLoss(
 
   override val layerType: String = "KernelWeightedSWLoss"
 
-  private[this] val scaling = Tensor(size_causal_window.toDouble)
+  private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
 
   //val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
 
@@ -43,9 +43,9 @@ class RBFWeightedSWLoss(
 
 
     val convolution_kernel = (repeated_times - index_times)
-      .square
-      .multiply(-0.5)
-      .divide(math.pow(time_scale, 2d))
+      .abs
+      .multiply(-1.0)
+      .divide(time_scale)
       .exp
 
     val weighted_loss_tensor =
