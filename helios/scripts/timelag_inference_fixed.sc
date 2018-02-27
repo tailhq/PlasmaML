@@ -115,13 +115,12 @@ def generate_data(
 def main(
   d: Int = 3, n: Int = 100,
   noise: Double = 0.5, noiserot: Double = 0.1,
-  iterations: Int = 100000,
+  iterations: Int = 100000, fixed_lag: Double = 2d,
+  sliding_window: Int = 5,
   outputPipe: DataPipe[Tensor, Double] = output_function,
   architecture: Layer[Output, Output] = arch) = {
 
-  val fixed_lag = 2d
-
-  val sliding_window = 5
+  require(sliding_window > fixed_lag, "Forward sliding window must be greater than chosen causal time lag")
 
   val train_fraction = 0.6
 
@@ -247,7 +246,7 @@ def main(
 
   val reg_metrics = new RegressionMetricsTF(pred_targets, tf_dataset.testLabels(::, fixed_lag.toInt))
 
-  histogram(pred_time_lags.sigmoid.multiply(num_outputs-1).entriesIterator.map(_.asInstanceOf[Double]).toSeq)
+  histogram(pred_time_lags.sigmoid.multiply(num_outputs-1).entriesIterator.map(_.asInstanceOf[Float]).toSeq)
   title("Predicted Time Lags")
 
   (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics)
