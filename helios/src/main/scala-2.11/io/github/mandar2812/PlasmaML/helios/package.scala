@@ -795,7 +795,7 @@ package object helios {
       tf.learn.Mean("Loss/Mean") >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-    val optimizer = tf.train.AdaDelta(0.0005)
+    val optimizer = tf.train.AdaGrad(0.002)
 
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
