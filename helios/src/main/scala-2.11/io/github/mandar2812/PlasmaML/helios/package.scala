@@ -947,7 +947,7 @@ package object helios {
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
-    val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", num_outputs)
+    val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", num_outputs, 1d)
 
     val loss = lossFunc >>
       tf.learn.Mean("Loss/Mean") >>
