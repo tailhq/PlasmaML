@@ -3,7 +3,8 @@ import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
-import breeze.linalg.{DenseMatrix, qr}
+import _root_.io.github.mandar2812.dynaml.analysis._
+import breeze.linalg.{DenseMatrix, DenseVector, qr}
 import breeze.stats.distributions.Gaussian
 import com.quantifind.charts.Highcharts._
 import org.platanios.tensorflow.api._
@@ -83,10 +84,10 @@ def main(d: Int = 3, n: Int = 100, noise: Double = 0.5, noiserot: Double = 0.1) 
 
   val effect_times = data.map(_._2._1)
 
-  histogram(effects.map(_._2))
+  histogram(effects.map(_._2), numBins = 100)
   title("Distribution of output signal  ")
 
-  histogram(effect_times.zip(causes.map(_._1)).map(c => c._1 - c._2), numBins = 50)
+  histogram(effect_times.zip(causes.map(_._1)).map(c => c._1 - c._2), numBins = 10)
   title("Distribution of time lags")
 
   spline(effect_times)
@@ -97,4 +98,34 @@ def main(d: Int = 3, n: Int = 100, noise: Double = 0.5, noiserot: Double = 0.1) 
   yAxis("Time of Effect, "+0x03C6.toChar+"(t)")
   legend(Seq("t_ = "+0x03C6.toChar+"(t)", "t_ = t"))
   unhold()
+
+  val outputs = effects.groupBy(_._1).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
+
+
+  val linear_segments = outputs.sliding(2).toList.map(s =>
+    DataPipe((t: Double) => {
+
+      val (tmin, tmax) = (s.head._1.toDouble, s.last._1.toDouble)
+      val (v0, v1) = (s.head._2, s.last._2)
+      val slope: Double = (v1 - v0)/(tmax - tmin)
+
+      if(t >= tmin && t < tmax) v0 + slope*(t - tmin)
+      else 0d
+    })
+  )
+
+  pprint.pprintln(outputs)
+
+  val interpolated_output = causes.map(_._1).map(t => (t, linear_segments.map(_.run(t.toDouble)).sum))
+
+  pprint.pprintln(interpolated_output)
+
+  line(outputs)
+  hold()
+  line(energies)
+  line(interpolated_output)
+  legend(Seq("Output Data with Lag", "Output Data without Lag", "Self Interpolated Output"))
+  unhold()
+
+  (causes, effects, outputs, linear_segments)
 }
