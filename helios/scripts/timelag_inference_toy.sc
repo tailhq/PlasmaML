@@ -17,7 +17,7 @@ import org.platanios.tensorflow.api.learn.layers.Layer
 //Prediction architecture
 val arch = {
   tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.feedforward(15)(0) >>
+    dtflearn.feedforward(20)(0) >>
     dtflearn.Tanh("Tanh_0") >>
     dtflearn.feedforward(2)(1)
 }
@@ -286,6 +286,21 @@ def main(
 
   histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Float]), numBins = 100)
   title("Histogram of Time Lag prediction errors")
+  unhold()
+
+  val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
+    val time_index = c._1._1
+    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Float]
+    val pred = pred_targets(c._2).scalar.asInstanceOf[Float]
+    (time_index + pred_lag, pred)
+  }).sortBy(_._1)
+
+
+  line(outputs.slice(num_training, n))
+  hold()
+  line(test_signal_predicted)
+  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
+  title("Test Set Predictions")
   unhold()
 
   (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics, reg_time_lag)
