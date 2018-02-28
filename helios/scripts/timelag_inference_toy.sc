@@ -264,6 +264,8 @@ def main(
 
   val err_time_lag_test = pred_time_lags_test.subtract(test_time_lags)
 
+  val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
+
   val mae_lag = err_time_lag_test
     .abs.mean()
     .scalar
@@ -286,6 +288,6 @@ def main(
   title("Histogram of Time Lag prediction errors")
   unhold()
 
-  (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics)
-  
+  (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics, reg_time_lag)
+
 }
