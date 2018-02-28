@@ -33,6 +33,6 @@ def main(
 
   helios.run_experiment_omni(
     data, tt_partition, resample = re)(
-    summary_dir, 150000, tmpdir)
+    summary_dir, 200000, tmpdir)
 
 }

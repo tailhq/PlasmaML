@@ -218,7 +218,7 @@ def main(
     tf.learn.Mean("Loss/Mean") >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-  val optimizer = tf.train.AdaDelta(0.005)
+  val optimizer = tf.train.AdaDelta(0.01)
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
