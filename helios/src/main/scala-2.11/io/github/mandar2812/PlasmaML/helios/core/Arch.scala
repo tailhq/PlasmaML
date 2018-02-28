@@ -88,11 +88,11 @@ object Arch {
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
       tf.learn.Linear("FC_Layer_4", 128) >>
-      tf.learn.ReLU("ReLU_4", 0.1f) >>
+      tf.learn.SELU("SELU_4") >>
       tf.learn.Linear("FC_Layer_5", 64) >>
-      tf.learn.ReLU("ReLU_5", 0.1f) >>
+      tf.learn.SELU("SELU_5") >>
       tf.learn.Linear("FC_Layer_6", 8) >>
-      tf.learn.Sigmoid("Sigmoid_6") >>
+      tf.learn.SELU("SELU_6") >>
       tf.learn.Linear("OutputLayer", 2)
   }
 
