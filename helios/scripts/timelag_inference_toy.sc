@@ -4,13 +4,12 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import breeze.linalg.{DenseMatrix, qr}
-import breeze.stats.distributions.{Gamma, Gaussian, LogNormal, Uniform}
+import breeze.stats.distributions.Gaussian
 import com.quantifind.charts.Highcharts._
 import org.platanios.tensorflow.api._
 
 
-@main
-def main(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double = 0.1) = {
+def generate_data(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double = 0.1) = {
 
   val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
     () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
@@ -52,27 +51,30 @@ def main(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double = 0.1) = 
 
   val calculate_outputs =
     velocity_pipe >
-    BifurcationPipe(
-      DataPipe((v: Float) => 10/(v+ 1E-6)),
-      id[Float]) >
-    DataPipe(DataPipe((d: Double) => d.toInt), id[Float])
+      BifurcationPipe(
+        DataPipe((v: Float) => 10/(v+ 1E-6)),
+        id[Float]) >
+      DataPipe(DataPipe((d: Double) => d.toInt), id[Float])
 
 
-  val generate_data = StreamDataPipe(
+  val generate_data_pipe = StreamDataPipe(
     DataPipe(id[Int], BifurcationPipe(id[Tensor], calculate_outputs))  >
-    DataPipe((pattern: (Int, (Tensor, (Int, Float)))) =>
-      ((pattern._1, pattern._2._1), (pattern._1+pattern._2._2._1, pattern._2._2._2)))
+      DataPipe((pattern: (Int, (Tensor, (Int, Float)))) =>
+        ((pattern._1, pattern._2._1.reshape(Shape(d))), (pattern._1+pattern._2._2._1, pattern._2._2._2)))
   )
 
   val times = (0 until n).toStream
 
-  val data = generate_data(times.zip(x))
+  generate_data_pipe(times.zip(x))
+
+}
+
+@main
+def main(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double = 0.1) = {
+
+  val data = generate_data(d, n, noise, noiserot)
 
   val energies = data.map(_._2._2)
-
-  x.foreach(v => println(v.summarize()+"\n"))
-
-  x.foreach(v => print(v.transpose().matmul(v).scalar+"  "))
 
   spline(energies)
   title("Energy Time Series")

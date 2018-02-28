@@ -14,7 +14,6 @@ import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
-import org.joda.time.format.DateTimeFormatter
 
 
 //Prediction architecture
