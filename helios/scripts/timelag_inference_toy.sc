@@ -70,9 +70,11 @@ def generate_data(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double 
 }
 
 @main
-def main(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double = 0.1) = {
+def main(d: Int = 3, n: Int = 100, noise: Double = 0.5, noiserot: Double = 0.1) = {
 
   val data = generate_data(d, n, noise, noiserot)
+
+  val (causes, effects) = data.unzip
 
   val energies = data.map(_._2._2)
 
@@ -80,6 +82,12 @@ def main(d: Int = 3, n: Int = 5, noise: Double = 0.5, noiserot: Double = 0.1) = 
   title("Energy Time Series")
 
   val effect_times = data.map(_._2._1)
+
+  histogram(effects.map(_._2))
+  title("Distribution of output signal  ")
+
+  histogram(effect_times.zip(causes.map(_._1)).map(c => c._1 - c._2), numBins = 50)
+  title("Distribution of time lags")
 
   spline(effect_times)
   hold()

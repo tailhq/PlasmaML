@@ -20,7 +20,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.data._
 val arch = {
   tf.learn.Cast("Input/Cast", FLOAT32) >>
     dtflearn.feedforward(15)(0) >>
-    dtflearn.Tanh("SELU_0") >>
+    dtflearn.Tanh("Tanh_0") >>
     dtflearn.feedforward(2)(1)
 }
 
