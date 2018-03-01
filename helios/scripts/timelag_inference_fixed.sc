@@ -19,7 +19,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.data._
 //Prediction architecture
 val arch = {
   tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.feedforward(15)(0) >>
+    dtflearn.feedforward(20)(0) >>
     dtflearn.Tanh("Tanh_0") >>
     dtflearn.feedforward(2)(1)
 }
