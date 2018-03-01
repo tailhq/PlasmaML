@@ -14,6 +14,13 @@ import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import org.platanios.tensorflow.api.learn.layers.Layer
 
+//Output computation
+val alpha = 100f
+val compute_output = DataPipe((v: Tensor) => v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha)
+//Time Lag Computation
+val distance = alpha*8
+val compute_time_lag = DataPipe((v: Float) => distance/(v + 1E-6))
+
 //Prediction architecture
 val arch = {
   tf.learn.Cast("Input/Cast", FLOAT32) >>
@@ -22,6 +29,8 @@ val arch = {
     dtflearn.feedforward(2)(1)
 }
 
+//Subroutine to generate synthetic
+//input-lagged output time series.
 def generate_data(
   d: Int = 3, n: Int = 5,
   sliding_window: Int,
@@ -62,14 +71,14 @@ def generate_data(
 
   val x: Seq[Tensor] = Stream(x0) ++ x_tail
 
-  val velocity_pipe = DataPipe((v: Tensor) => v.square.sum().sqrt.scalar.asInstanceOf[Float])
+  val velocity_pipe = compute_output
 
   def id[T] = Pipe.identityPipe[T]
 
   val calculate_outputs =
     velocity_pipe >
       BifurcationPipe(
-        DataPipe((v: Float) => 10/(v+ 1E-6)),
+        compute_time_lag,
         id[Float]) >
       DataPipe(DataPipe((d: Double) => d.toInt), id[Float])
 
@@ -135,7 +144,7 @@ def main(
   val energies = data.map(_._2._2)
 
   spline(energies)
-  title("Energy Time Series")
+  title("Output Time Series")
 
   val effect_times = data.map(_._2._1)
 
@@ -176,7 +185,7 @@ def main(
   val num_test = collated_data.length - num_training
 
 
-  val (training_time_lags, test_time_lags): (Tensor, Tensor) = (
+  val (_, test_time_lags): (Tensor, Tensor) = (
     labels_timelags(0 :: num_training),
     labels_timelags(num_training :: ))
 
@@ -274,19 +283,18 @@ def main(
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
 
-  val actual_targets = (0 until num_test).toSeq.map(n => {
+  val actual_targets = (0 until num_test).map(n => {
     val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Float].toInt
     tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Float]
   })
 
   val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-  histogram(unscaled_pred_time_lags_test.sigmoid.multiply(num_outputs-1).entriesIterator.map(_.asInstanceOf[Float]).toSeq)
+  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Float]).toSeq)
   title("Predicted Time Lags")
 
   histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Float]), numBins = 100)
   title("Histogram of Time Lag prediction errors")
-  unhold()
 
   val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
     val time_index = c._1._1
@@ -303,6 +311,9 @@ def main(
   title("Test Set Predictions")
   unhold()
 
-  (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics, reg_time_lag)
+  (
+    collated_data, tf_dataset, model, estimator,
+    tf_summary_dir, metrics, reg_metrics, reg_time_lag
+  )
 
 }

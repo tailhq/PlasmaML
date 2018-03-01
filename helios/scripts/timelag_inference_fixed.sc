@@ -25,8 +25,9 @@ val arch = {
 }
 
 //Output Function
+val alpha = 100f
 val output_function =
-  DataPipe((v: Tensor) => v.square.sum().sqrt.scalar.asInstanceOf[Float]) >
+  DataPipe((v: Tensor) => v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha) >
     DataPipe((x: Float) => x.toDouble)
 
 
@@ -114,12 +115,14 @@ def generate_data(
 def main(
   d: Int = 3, n: Int = 100,
   noise: Double = 0.5, noiserot: Double = 0.1,
-  iterations: Int = 100000, fixed_lag: Double = 2d,
+  iterations: Int = 100000, fixed_lag: Float = 2f,
   sliding_window: Int = 5,
   outputPipe: DataPipe[Tensor, Double] = output_function,
   architecture: Layer[Output, Output] = arch) = {
 
-  require(sliding_window > fixed_lag, "Forward sliding window must be greater than chosen causal time lag")
+  require(
+    sliding_window > fixed_lag,
+    "Forward sliding window must be greater than chosen causal time lag")
 
   val train_fraction = 0.6
 
@@ -224,29 +227,53 @@ def main(
     .multiply(labels_stddev(0))
     .add(labels_mean(0))
 
-  val pred_time_lags = predictions(::, 1)
+  val unscaled_pred_time_lags_test = predictions(::, 1)
 
   val metrics = new HeliosOmniTSMetrics(
-    dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1), tf_dataset.testLabels,
+    dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
     tf_dataset.testLabels.shape(1),
     dtf.tensor_f32(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(lossFunc.time_scale):_*)
   )
 
-  val mae_lag = pred_time_lags
+  val pred_time_lags_test = unscaled_pred_time_lags_test
     .sigmoid
     .multiply(num_outputs-1)
-    .subtract(fixed_lag)
+
+  val err_time_lag_test = pred_time_lags_test.subtract(fixed_lag)
+
+  val mae_lag = err_time_lag_test
     .abs.mean()
     .scalar
-    .asInstanceOf[Double]
+    .asInstanceOf[Float]
 
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
 
   val reg_metrics = new RegressionMetricsTF(pred_targets, tf_dataset.testLabels(::, fixed_lag.toInt))
 
-  histogram(pred_time_lags.sigmoid.multiply(num_outputs-1).entriesIterator.map(_.asInstanceOf[Float]).toSeq)
+  val reg_time_lag = new RegressionMetricsTF(
+    pred_time_lags_test,
+    Seq.fill[Float](tf_dataset.nTest)(fixed_lag.toFloat))
+
+  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Float]).toSeq)
   title("Predicted Time Lags")
 
-  (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics)
+  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Float]), numBins = 100)
+  title("Histogram of Time Lag prediction errors")
+
+  val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
+    val time_index = c._1._1
+    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Float]
+    val pred = pred_targets(c._2).scalar.asInstanceOf[Float]
+    (time_index + pred_lag, pred)
+  }).sortBy(_._1)
+
+  line(data.map(_._2).slice(num_training, n))
+  hold()
+  line(test_signal_predicted)
+  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
+  title("Test Set Predictions")
+  unhold()
+
+  (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics, reg_time_lag)
 }
