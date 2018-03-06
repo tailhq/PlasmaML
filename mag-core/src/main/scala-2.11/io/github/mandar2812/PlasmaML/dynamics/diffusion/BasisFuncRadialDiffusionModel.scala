@@ -328,7 +328,7 @@ class BasisFuncRadialDiffusionModel(
       num_observations).getKernelMatrix
 
 
-    AbstractGPRegressionModel.logLikelihood(targets - mean, k_uu + noise_mat_psd)
+    AbstractGPRegressionModel.logLikelihood(targets - mean, noise_mat_psd + phi*phi.t)
   } catch {
     case _: breeze.linalg.MatrixSingularException => Double.NaN
     case _: breeze.linalg.NotConvergedException => Double.PositiveInfinity

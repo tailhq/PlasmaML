@@ -1,7 +1,10 @@
 import _root_.io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
 import io.github.mandar2812.dynaml.repl.Router.main
+import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import org.joda.time._
+import org.platanios.tensorflow.api.{FLOAT32, Shape, tf}
+import org.platanios.tensorflow.api.ops.NN.SamePadding
 
 @main
 def main(
@@ -31,8 +34,24 @@ def main(
 
   val summary_dir = if(re) "mdi_resample_"+test_year else "mdi_"+test_year
 
+  val architecture = {
+    tf.learn.Cast("Input/Cast", FLOAT32) >>
+      dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.6f) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
+      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.Flatten("Flatten_5") >>
+      dtflearn.feedforward(128)(6) >>
+      dtflearn.Tanh("Tanh_6") >>
+      dtflearn.feedforward(64)(7) >>
+      dtflearn.Tanh("Tanh_7") >>
+      dtflearn.feedforward(32)(8) >>
+      dtflearn.Tanh("Tanh_6") >>
+      tf.learn.Linear("OutputLayer", 1)
+  }
+
   helios.run_experiment_omni(
     data, tt_partition, resample = re)(
-    summary_dir, 200000, tmpdir)
+    summary_dir, 200000, tmpdir, arch = architecture)
 
 }

@@ -1,24 +1,25 @@
-{
+import breeze.stats.distributions._
+import io.github.mandar2812.dynaml.pipes._
+import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.kernels._
+import io.github.mandar2812.dynaml.probability.mcmc._
+import ammonite.ops._
+import ammonite.ops.ImplicitWd._
+import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
+import io.github.mandar2812.dynaml.repl.Router.main
 
-  import breeze.stats.distributions._
+@main
+def main(
+  nData: Int = 20, nBoundary:Int = 20,
+  nColData: Int = 40) = {
 
-  import io.github.mandar2812.dynaml.pipes._
-  import io.github.mandar2812.dynaml.utils
-  import io.github.mandar2812.dynaml.kernels._
-  import io.github.mandar2812.dynaml.probability.mcmc._
+  num_bulk_data = nData
+  num_boundary_data = nBoundary
 
-  import ammonite.ops._
-  import ammonite.ops.ImplicitWd._
-
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-  import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
-
-  num_bulk_data = 20
-  num_boundary_data = 20
-
-  num_dummy_data = 40
+  num_dummy_data = nColData
 
   lambda_params = (-1, 3.15, 0d, -0.2)
 
@@ -92,7 +93,7 @@
         "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
   }
 
-  model.regCol = 0.5
+  model.regCol = 0.05
   model.regObs = 1d
   model.reg = 0d
 
@@ -123,4 +124,6 @@
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
   RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
+
+  (samples, model, solution, resPath)
 }
