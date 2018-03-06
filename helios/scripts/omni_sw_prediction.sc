@@ -47,7 +47,7 @@ def main(
       dtflearn.Tanh("Tanh_7") >>
       dtflearn.feedforward(32)(8) >>
       dtflearn.Tanh("Tanh_6") >>
-      tf.learn.Linear("OutputLayer", 1)
+      tf.learn.Linear("OutputLayer", 2)
   }
 
   helios.run_experiment_omni(
