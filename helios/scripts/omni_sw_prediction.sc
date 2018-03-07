@@ -48,7 +48,7 @@ def main(
       dtflearn.feedforward(32)(7) >>
       tf.learn.SELU("SELU_7") >>
       dtflearn.feedforward(16)(8) >>
-      dtflearn.Tanh("Tanh_8")
+      dtflearn.Tanh("Tanh_8") >>
       tf.learn.Linear("OutputLayer", 2)
   }
 
