@@ -43,12 +43,12 @@ def main(
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
       tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_5") >>
-      dtflearn.feedforward(128)(6) >>
-      dtflearn.Tanh("Tanh_6") >>
-      dtflearn.feedforward(64)(7) >>
-      dtflearn.Tanh("Tanh_7") >>
-      dtflearn.feedforward(32)(8) >>
-      dtflearn.Tanh("Tanh_6") >>
+      dtflearn.feedforward(64)(6) >>
+      tf.learn.SELU("SELU_6") >>
+      dtflearn.feedforward(32)(7) >>
+      tf.learn.SELU("SELU_7") >>
+      dtflearn.feedforward(16)(8) >>
+      dtflearn.Tanh("Tanh_8")
       tf.learn.Linear("OutputLayer", 2)
   }
 

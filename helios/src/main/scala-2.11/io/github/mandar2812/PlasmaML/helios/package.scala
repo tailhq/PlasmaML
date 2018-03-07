@@ -989,9 +989,12 @@ package object helios {
     val pred_time_lags = predictions(::, 1)
 
     val metrics = new HeliosOmniTSMetrics(
-      dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1), dataSet.testLabels,
-      dataSet.testLabels.shape(1),
-      dtf.tensor_f32(dataSet.nTest)(Seq.fill(dataSet.nTest)(lossFunc.time_scale):_*)
+      dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1),
+      dataSet.testLabels, dataSet.testLabels.shape(1),
+      dtf.tensor_f32(
+        dataSet.nTest)(
+        Seq.fill(dataSet.nTest)(lossFunc.time_scale):_*
+      )
     )
 
     (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev, collated_data)
