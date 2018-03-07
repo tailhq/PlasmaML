@@ -267,7 +267,7 @@ package object helios {
     //First create the transformation pipe
 
     val omni_processing =
-      OMNILoader.omniDataToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
         StreamDataPipe[(DateTime, Seq[Double])](
           (p: (DateTime, Seq[Double])) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
