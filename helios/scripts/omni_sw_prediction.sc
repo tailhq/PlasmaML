@@ -11,7 +11,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 def main(
   test_year: Int = 2003,
   re: Boolean = true,
-  opt: Optimizer = tf.train.AdaDelta(0.005),
+  opt: Optimizer = tf.train.AdaDelta(0.01),
   maxIt: Int = 200000,
   tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
   resFile: String = "mdi_rbfloss_results.csv") = {
