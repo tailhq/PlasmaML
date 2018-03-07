@@ -6,13 +6,14 @@ import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
-import io.github.mandar2812.dynaml.evaluation.{RegressionMetricsTF, ClassificationMetricsTF}
+import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
 import io.github.mandar2812.dynaml.tensorflow.dtf
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
+import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 /**
   * <h3>Helios</h3>
@@ -880,7 +881,8 @@ package object helios {
     resample: Boolean = false)(
     results_id: String, max_iterations: Int,
     tempdir: Path = home/"tmp",
-    arch: Layer[Output, Output] = learn.cnn_sw_v1) = {
+    arch: Layer[Output, Output] = learn.cnn_sw_v1,
+    optimizer: Optimizer = tf.train.AdaDelta(0.002)) = {
 
     val resDirName = "helios_omni_"+results_id
 
@@ -952,8 +954,6 @@ package object helios {
     val loss = lossFunc >>
       tf.learn.Mean("Loss/Mean") >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
-
-    val optimizer = tf.train.AdaDelta(0.002)
 
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
