@@ -29,7 +29,7 @@ case class FiniteHorizonCTRNN(
     val weights = tf.variable("Weights", input.dataType, Shape(units, units), weightsInitializer)
     val bias = tf.variable("Bias", input.dataType, Shape(units), biasInitializer)
     val timeconstant = tf.variable("TimeConstant", input.dataType, Shape(units), timeConstantInitializer)
-    val gain = tf.variable("TimeConstant", input.dataType, Shape(units, units), timeConstantInitializer)
+    val gain = tf.variable("Gain", input.dataType, Shape(units, units), timeConstantInitializer)
 
     tf.stack(
       (1 to horizon).scanLeft(input)((x, _) => {
