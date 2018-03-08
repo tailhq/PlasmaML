@@ -2,6 +2,7 @@ import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.PlasmaML.dynamics.nn.FiniteHorizonCTRNN
 import org.joda.time._
 import ammonite.ops._
+import io.github.mandar2812.PlasmaML.utils.MVTimeSeriesLoss
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import io.github.mandar2812.dynaml.pipes._
@@ -55,10 +56,9 @@ def main(
 
   val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
 
-  val lossFunc = tf.learn.L2Loss("Loss/L2")
+  val lossFunc = MVTimeSeriesLoss("Loss/MVTS")
 
   val loss = lossFunc >>
-    tf.learn.Mean("Loss/Mean") >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
@@ -96,5 +96,7 @@ def main(
   ((model, estimator), (sc_features, sc_labels), scaler)
 }
 
-def apply(yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z), horizon: Int = 24, iterations: Int = 50000) =
+def apply(
+  yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
+  horizon: Int = 24, iterations: Int = 50000) =
   main(yearrange, quantities, horizon, iterations)
