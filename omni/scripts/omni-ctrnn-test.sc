@@ -96,5 +96,5 @@ def main(
   ((model, estimator), (sc_features, sc_labels), scaler)
 }
 
-def apply(yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z), horizon: Int = 24) =
-  main(yearrange, quantities, horizon)
+def apply(yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z), horizon: Int = 24, iterations = 50000) =
+  main(yearrange, quantities, horizon, iterations)
