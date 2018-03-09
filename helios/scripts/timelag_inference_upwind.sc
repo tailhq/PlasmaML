@@ -12,6 +12,7 @@ import ammonite.ops.home
 import org.joda.time.DateTime
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
+import _root_.io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api.learn.layers.Layer
 
 
@@ -21,6 +22,7 @@ val compute_output = DataPipe((v: Tensor) => v.square.sum().sqrt.scalar.asInstan
 //Time Lag Computation
 val distance = alpha*8
 val compute_time_lag = DataPipe((v: Float) => distance/(v + 1E-6))
+
 
 //Prediction architecture
 val arch = {
@@ -37,6 +39,12 @@ def generate_data(
   sliding_window: Int,
   noise: Double = 0.5,
   noiserot: Double = 0.1) = {
+
+  val nR = 100
+  val nTheta = d
+
+  val upwind_solver = new Upwind1D((0.0, distance.toDouble), 100, d, 1d)
+
 
   val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
     () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
@@ -72,16 +80,11 @@ def generate_data(
 
   val x: Seq[Tensor] = Stream(x0) ++ x_tail
 
-  val velocity_pipe = compute_output
-
   def id[T] = Pipe.identityPipe[T]
 
-  val calculate_outputs =
-    velocity_pipe >
-      BifurcationPipe(
-        compute_time_lag,
-        id[Float]) >
-      DataPipe(DataPipe((d: Double) => d.toInt), id[Float])
+  val calculate_outputs = DataPipe((v0: Tensor) => upwind_solver.solve(v0)) >
+    Upwind1D.windWithLag(nR, nTheta, upwind_solver.deltaR, upwind_solver.deltaTheta) >
+    DataPipe(DataPipe((d: Double) => d.toInt), DataPipe((v: Double) => v.toFloat))
 
 
   val generate_data_pipe = StreamDataPipe(

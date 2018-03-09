@@ -27,7 +27,7 @@ class Upwind1D(
     * */
   val thetaDomain: (Double, Double) = (0d, 2*math.Pi)
 
-  protected val (deltaR, deltaTheta) = (
+  val (deltaR, deltaTheta) = (
     (rDomain._2 - rDomain._1)/nR,
     (thetaDomain._2 - thetaDomain._1)/nTheta
   )
@@ -67,18 +67,21 @@ object Upwind1D {
     //v + (dR/dT)*omega*invV*:*(forwardDiffMat*v)
   })
 
-  def windWithLag(nR: Int, nTheta: Int, deltaR: Double, deltaTheta: Double): DataPipe[Stream[Tensor], (Double, Double)]  = DataPipe((result: Stream[Tensor]) => {
-    val sliding_avg =
-      DenseMatrix.tabulate(nR, nR + 1)(
-        (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0)
+  def windWithLag(
+    nR: Int, nTheta: Int,
+    deltaR: Double, deltaTheta: Double): DataPipe[Stream[Tensor], (Double, Double)] =
+    DataPipe((result: Stream[Tensor]) => {
+      val sliding_avg =
+        DenseMatrix.tabulate(nR, nR + 1)(
+          (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0)
 
-    val velocities = DenseVector(result.map(_(0).scalar.asInstanceOf[Double]):_*)
+      val velocities = DenseVector(result.map(_(0).scalar.asInstanceOf[Double]):_*)
 
-    val deltat = sum((sliding_avg*velocities).map(deltaR/_))
+      val deltat = sum((sliding_avg*velocities).map(deltaR/_))
 
-    val v = velocities(-1)
-    (v, deltat)
-  })
+      val v = velocities(-1)
+      (deltat, v)
+    })
 
   def buildStencil(
     rDomain: (Double, Double), nR: Int,

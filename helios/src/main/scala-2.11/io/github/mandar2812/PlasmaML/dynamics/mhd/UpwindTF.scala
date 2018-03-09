@@ -24,14 +24,16 @@ case class UpwindTF(
     (thetaDomain._2 - thetaDomain._1)/nTheta
   )
 
-  val dv_dtheta = tf.constant(
-    dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
-      (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*),
-    FLOAT32, Shape(nTheta, nTheta), "DeltaV")
 
   override protected def _forward(input: Output, mode: Mode): Output = {
 
-    val omega_rot      = tf.variable("OmegaRot", input.dataType, Shape(), omegaInit)
+    val dv_dtheta = tf.constant(
+      dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
+        (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*),
+      FLOAT32, Shape(nTheta, nTheta), "DeltaV")
+
+
+    val omega_rot = tf.variable("OmegaRot", input.dataType, Shape(), omegaInit)
 
     tf.stack(
       (1 to nR).scanLeft(input)((x, _) => {
@@ -59,17 +61,18 @@ case class UpwindPropogate(
     (thetaDomain._2 - thetaDomain._1)/nTheta
   )
 
-  val sliding_avg = tf.constant(
-    dtf.tensor_f32(nR, nR + 1)(
-      DenseMatrix.tabulate(nR, nR + 1)(
-        (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0).t.toArray:_*),
-      FLOAT32, Shape(nR, nR+1), "VAvgOp")
-
   override protected def _forward(input: Output, mode: Mode): Output = {
 
-    val velocities = input(::, 0, ::).reshape(Shape(nR, 1))
+    val velocities  = input(::, 0, ::).reshape(Shape(nR, 1))
 
-    val deltat = sliding_avg.matmul(velocities).pow(-1d).multiply(deltaR).sum()
+    val sliding_avg = tf.constant(
+      dtf.tensor_f32(nR, nR + 1)(
+        DenseMatrix.tabulate(nR, nR + 1)(
+          (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0).t.toArray:_*),
+      FLOAT32, Shape(nR, nR+1), "VAvgOp")
+
+
+    val deltat      = sliding_avg.matmul(velocities).pow(-1d).multiply(deltaR).sum()
 
     val v = input(::, 0, -1).reshape(Shape())
 
