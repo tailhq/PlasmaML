@@ -1,20 +1,23 @@
 import org.joda.time._
 import ammonite.ops._
 import io.github.mandar2812.dynaml.pipes._
-import io.github.mandar2812.dynaml.tensorflow._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
-import io.github.mandar2812.PlasmaML.dynamics.nn.FiniteHorizonCTRNN
-import io.github.mandar2812.PlasmaML.utils.{GenRegressionMetricsTF, MVTimeSeriesLoss}
+import io.github.mandar2812.dynaml.tensorflow._
+import io.github.mandar2812.dynaml.tensorflow.utils._
+import io.github.mandar2812.dynaml.tensorflow.layers._
+import io.github.mandar2812.dynaml.tensorflow.learn._
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader, OmniOSA}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.platanios.tensorflow.api._
+import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
 def main(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
   horizon: Int = 24, iterations: Int = 50000,
+  optimizer: Optimizer = tf.train.AdaDelta(0.005),
   stormsFile: String = OmniOSA.stormsFileJi) = {
 
   DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -76,12 +79,10 @@ def main(
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-  val optimizer = tf.train.AdaDelta(0.005)
-
   val trainData = tf.data.TensorSlicesDataset(sc_features).zip(tf.data.TensorSlicesDataset(sc_labels))
     .repeat()
     .shuffle(10000)
-    .batch(256)
+    .batch(512)
     .prefetch(10)
 
   val (model, estimator) = tf.createWith(graph = Graph()) {
@@ -165,5 +166,7 @@ def main(
 
 def apply(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
-  horizon: Int = 24, iterations: Int = 50000) =
-  main(yearrange, quantities, horizon, iterations)
+  horizon: Int = 24, iterations: Int = 50000,
+  optimizer: Optimizer = tf.train.AdaDelta(0.005),
+  stormsFile: String = OmniOSA.stormsFileJi) =
+  main(yearrange, quantities, horizon, iterations, optimizer, stormsFile)
