@@ -1,9 +1,9 @@
 package io.github.mandar2812.PlasmaML.dynamics.mhd
 
-import breeze.linalg.{DenseMatrix, DenseVector}
+import breeze.linalg.{DenseMatrix, DenseVector, sum}
 import io.github.mandar2812.dynaml.tensorflow._
 import io.github.mandar2812.dynaml.models.neuralnets.{Activation, LazyNeuralStack, NeuralLayer, VectorLinear}
-import io.github.mandar2812.dynaml.pipes.MetaPipe
+import io.github.mandar2812.dynaml.pipes._
 import org.apache.log4j.Logger
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.tensors.Tensor
@@ -47,7 +47,7 @@ class Upwind1D(
 
   val computationalStack = LazyNeuralStack(_ => upwindForwardLayer, nR)
 
-  def solve(v0: Tensor): Tensor = computationalStack forwardPropagate v0
+  def solve(v0: Tensor): Stream[Tensor] = computationalStack forwardPropagate v0
 
 }
 
@@ -65,6 +65,19 @@ object Upwind1D {
 
     v.add(forwardDiffMat.matmul(v).multiply(invV).multiply((dR/dT)*omega))
     //v + (dR/dT)*omega*invV*:*(forwardDiffMat*v)
+  })
+
+  def windWithLag(nR: Int, nTheta: Int, deltaR: Double, deltaTheta: Double): DataPipe[Stream[Tensor], (Double, Double)]  = DataPipe((result: Stream[Tensor]) => {
+    val sliding_avg =
+      DenseMatrix.tabulate(nR, nR + 1)(
+        (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0)
+
+    val velocities = DenseVector(result.map(_(0).scalar.asInstanceOf[Double]):_*)
+
+    val deltat = sum((sliding_avg*velocities).map(deltaR/_))
+
+    val v = velocities(-1)
+    (v, deltat)
   })
 
   def buildStencil(

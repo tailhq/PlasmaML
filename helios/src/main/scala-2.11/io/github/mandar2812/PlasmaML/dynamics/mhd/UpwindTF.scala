@@ -59,10 +59,11 @@ case class UpwindPropogate(
     (thetaDomain._2 - thetaDomain._1)/nTheta
   )
 
-  val sliding_avg = dtf.tensor_f32(nR, nR + 1)(
-    DenseMatrix.tabulate(nR, nR + 1)(
-      (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0).t.toArray:_*
-  ).toOutput
+  val sliding_avg = tf.constant(
+    dtf.tensor_f32(nR, nR + 1)(
+      DenseMatrix.tabulate(nR, nR + 1)(
+        (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0).t.toArray:_*),
+      FLOAT32, Shape(nR, nR+1), "VAvgOp")
 
   override protected def _forward(input: Output, mode: Mode): Output = {
 
