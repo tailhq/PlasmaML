@@ -2,6 +2,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
+import io.github.mandar2812.dynaml.tensorflow.layers.FiniteHorizonCTRNN
 import org.joda.time._
 import org.platanios.tensorflow.api.{FLOAT32, Shape, tf}
 import org.platanios.tensorflow.api.ops.NN.SamePadding
@@ -45,10 +46,11 @@ def main(
       tf.learn.Flatten("Flatten_5") >>
       dtflearn.feedforward(64)(6) >>
       tf.learn.SELU("SELU_6") >>
-      dtflearn.feedforward(32)(7) >>
+      dtflearn.feedforward(16)(7) >>
       tf.learn.SELU("SELU_7") >>
-      dtflearn.feedforward(16)(8) >>
-      dtflearn.Tanh("Tanh_8") >>
+      dtflearn.feedforward(4)(8) >>
+      FiniteHorizonCTRNN("fhctrnn_9", 4, 4, 1d) >>
+      tf.learn.Flatten("Flatten_9") >>
       tf.learn.Linear("OutputLayer", 2)
   }
 
