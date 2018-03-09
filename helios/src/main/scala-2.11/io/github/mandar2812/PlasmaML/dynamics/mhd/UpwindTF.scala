@@ -24,10 +24,10 @@ case class UpwindTF(
     (thetaDomain._2 - thetaDomain._1)/nTheta
   )
 
-  val dv_dtheta = dtf.tensor_f32(nTheta, nTheta)(
-    DenseMatrix.tabulate(nTheta, nTheta)(
-      (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*
-  ).toOutput
+  val dv_dtheta = tf.constant(
+    dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
+      (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*),
+    FLOAT32, Shape(nTheta, nTheta), "DeltaV")
 
   override protected def _forward(input: Output, mode: Mode): Output = {
 
@@ -72,6 +72,6 @@ case class UpwindPropogate(
 
     val v = input(::, 0, -1).reshape(Shape())
 
-    tf.stack(Seq(v, deltat), axis = -1)
+    tf.stack(Seq(v, deltat), axis = -1).reshape(Shape(2))
   }
 }
