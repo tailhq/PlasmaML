@@ -48,8 +48,8 @@ def main(
       tf.learn.SELU("SELU_6") >>
       dtflearn.feedforward(16)(7) >>
       tf.learn.SELU("SELU_7") >>
-      dtflearn.feedforward(2)(8) >>
-      FiniteHorizonCTRNN("fhctrnn_9", 2, 4, 1d) >>
+      dtflearn.feedforward(4)(8) >>
+      FiniteHorizonCTRNN("fhctrnn_9", 4, 4, 0.25d) >>
       tf.learn.Flatten("Flatten_9") >>
       tf.learn.Linear("OutputLayer", 2)
   }

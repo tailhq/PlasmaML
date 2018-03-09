@@ -1,9 +1,12 @@
 package io.github.mandar2812.PlasmaML.dynamics.mhd
 
 import breeze.linalg.{DenseMatrix, DenseVector}
-import io.github.mandar2812.dynaml.models.neuralnets.{LazyNeuralStack, NeuralLayer, VectorLinear}
+import io.github.mandar2812.dynaml.tensorflow._
+import io.github.mandar2812.dynaml.models.neuralnets.{Activation, LazyNeuralStack, NeuralLayer, VectorLinear}
 import io.github.mandar2812.dynaml.pipes.MetaPipe
 import org.apache.log4j.Logger
+import org.platanios.tensorflow.api._
+import org.platanios.tensorflow.api.tensors.Tensor
 
 /**
   * Implementation of the Upwind 1-dimensional
@@ -31,14 +34,20 @@ class Upwind1D(
 
   val stencil: (Seq[Double], Seq[Double]) = Upwind1D.buildStencil(rDomain, nR, thetaDomain, nTheta)
 
-  protected val upwindForwardLayer: NeuralLayer[(Double, Double, Double), DenseVector[Double], DenseVector[Double]] =
-    NeuralLayer(
-      Upwind1D.forwardProp(nTheta), VectorLinear)(
-      (omega_rot, deltaR, deltaTheta))
+  protected val upwindForwardLayer: NeuralLayer[(Double, Double, Double), Tensor, Tensor] =
+    NeuralLayer[(Double, Double, Double), Tensor, Tensor](
+      Upwind1D.forwardProp(nTheta),
+      Activation(
+        (x: Tensor) => x,
+        (x: Tensor) => dtf.fill(FLOAT32, x.shape.entriesIterator.map(_.asInstanceOf[Int]).toSeq:_*)(1d)
+      )
+    )(
+      (omega_rot, deltaR, deltaTheta)
+    )
 
   val computationalStack = LazyNeuralStack(_ => upwindForwardLayer, nR)
 
-  def solve(v0: DenseVector[Double]): Stream[DenseVector[Double]] = computationalStack forwardPropagate v0
+  def solve(v0: Tensor): Tensor = computationalStack forwardPropagate v0
 
 }
 
@@ -46,14 +55,16 @@ object Upwind1D {
 
   private val logger = Logger.getLogger(this.getClass)
 
-  def forwardProp(nTheta: Int) = MetaPipe((params: (Double, Double, Double)) => (v: DenseVector[Double]) => {
+  def forwardProp(nTheta: Int) = MetaPipe((params: (Double, Double, Double)) => (v: Tensor) => {
     val (omega, dR, dT) = params
-    val invV = v.map(1/_)
+    val invV = v.pow(-1d)
 
-    val forwardDiffMat = DenseMatrix.tabulate(nTheta, nTheta)((i, j) =>
-      if(i == j) -1d else if(j == (i+1)%nTheta) 1d else 0d)
+    val forwardDiffMat = dtf.tensor_f32(nTheta, nTheta)(
+      DenseMatrix.tabulate(nTheta, nTheta)((i, j) => if(i == j) -1d else if(j == (i+1)%nTheta) 1d else 0d).t.toArray:_*
+    )
 
-    v + (dR/dT)*omega*invV*:*(forwardDiffMat*v)
+    v.add(forwardDiffMat.matmul(v).multiply(invV).multiply((dR/dT)*omega))
+    //v + (dR/dT)*omega*invV*:*(forwardDiffMat*v)
   })
 
   def buildStencil(
