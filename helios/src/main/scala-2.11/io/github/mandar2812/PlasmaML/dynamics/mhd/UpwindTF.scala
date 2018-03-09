@@ -60,7 +60,7 @@ case class UpwindPropogate(
   )
 
   val sliding_avg = dtf.tensor_f32(nR, nR + 1)(
-    DenseMatrix.tabulate(nR - 1, nR)(
+    DenseMatrix.tabulate(nR, nR + 1)(
       (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0).t.toArray:_*
   ).toOutput
 
