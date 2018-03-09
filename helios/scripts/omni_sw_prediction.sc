@@ -1,5 +1,6 @@
 import _root_.io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
+import io.github.mandar2812.PlasmaML.dynamics.mhd.{UpwindPropogate, UpwindTF}
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.tensorflow.layers.FiniteHorizonCTRNN
@@ -47,11 +48,13 @@ def main(
       dtflearn.feedforward(64)(6) >>
       tf.learn.SELU("SELU_6") >>
       dtflearn.feedforward(16)(7) >>
-      tf.learn.SELU("SELU_7") >>
-      dtflearn.feedforward(4)(8) >>
+      tf.learn.Sigmoid("Sigmoid_7") >>
+      UpwindTF("Upwind", (1.0, 215.0), 100, 16) >>
+      UpwindPropogate("Upwind_Propogate", (1.0, 215.0), 100, 16)
+      /*dtflearn.feedforward(4)(8) >>
       FiniteHorizonCTRNN("fhctrnn_9", 4, 4, 0.25d) >>
       tf.learn.Flatten("Flatten_9") >>
-      tf.learn.Linear("OutputLayer", 2)
+      tf.learn.Linear("OutputLayer", 2)*/
   }
 
   helios.run_experiment_omni(

@@ -71,7 +71,7 @@ case class UpwindPropogate(
     val deltat = sliding_avg.matmul(velocities).pow(-1d).multiply(deltaR).sum()
 
     val v = input(::, 0, -1).reshape(Shape())
-    
+
     tf.stack(Seq(v, deltat), axis = -1)
   }
 }
