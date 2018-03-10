@@ -399,7 +399,7 @@ package object helios {
       "UINT8", processed_train_set.length, scaled_height, scaled_width, num_channels)(
       features_train.toArray.flatten[Byte])
 
-    val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, num_outputs)(labels_train.flatten[Double])
+    val labels_tensor_train = dtf.tensor_from("FLOAT64", train_set.length, num_outputs)(labels_train.flatten[Double])
 
     //Construct test features and labels
     val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
@@ -417,7 +417,7 @@ package object helios {
       "UINT8", test_set.length, scaled_height, scaled_width, num_channels)(
       features_test.toArray.flatten[Byte])
 
-    val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, num_outputs)(labels_test.flatten[Double])
+    val labels_tensor_test = dtf.tensor_from("FLOAT64", test_set.length, num_outputs)(labels_test.flatten[Double])
 
     println("Helios data set created")
     working_set.copy(
@@ -503,7 +503,7 @@ package object helios {
       "UINT8", processed_train_set.length, scaled_height, scaled_width, num_channels)(
       features_train.toArray.flatten[Byte])
 
-    val labels_tensor_train = dtf.tensor_from("FLOAT32", train_set.length, 2)(labels_train.flatten[Double])
+    val labels_tensor_train = dtf.tensor_from("FLOAT64", train_set.length, 2)(labels_train.flatten[Double])
 
 
     val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
@@ -521,7 +521,7 @@ package object helios {
       "UINT8", test_set.length, scaled_height, scaled_width, num_channels)(
       features_test.toArray.flatten[Byte])
 
-    val labels_tensor_test = dtf.tensor_from("FLOAT32", test_set.length, 2)(labels_test.flatten[Double])
+    val labels_tensor_test = dtf.tensor_from("FLOAT64", test_set.length, 2)(labels_test.flatten[Double])
 
     println("Helios data set created")
     working_set.copy(
@@ -544,7 +544,7 @@ package object helios {
       infer(im)
         .multiply(labels_stddev)
         .add(labels_mean)
-        .subtract(lab).cast(FLOAT32)
+        .subtract(lab).cast(FLOAT64)
         .square.mean().scalar
         .asInstanceOf[Float]
     }
@@ -788,7 +788,7 @@ package object helios {
         dataSet.trainData.shape(3))
     )
 
-    val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
+    val trainInput = tf.learn.Input(FLOAT64, Shape(-1))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
@@ -945,7 +945,7 @@ package object helios {
 
     val num_outputs = collated_data.head._2._2.length
 
-    val trainInput = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
+    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
@@ -1069,7 +1069,7 @@ package object helios {
 
     val num_outputs = collated_data.head._2._2.length
 
-    val trainInput = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
+    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 

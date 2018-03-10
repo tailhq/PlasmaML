@@ -5,7 +5,7 @@ import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.tensorflow.layers.FiniteHorizonCTRNN
 import org.joda.time._
-import org.platanios.tensorflow.api.{FLOAT32, Shape, tf}
+import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
@@ -40,7 +40,7 @@ def main(
   val summary_dir = if(re) "mdi_resample_"+test_year else "mdi_"+test_year
 
   val architecture = {
-    tf.learn.Cast("Input/Cast", FLOAT32) >>
+    tf.learn.Cast("Input/Cast", FLOAT64) >>
       dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.4f) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
       tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
@@ -49,13 +49,10 @@ def main(
       tf.learn.SELU("SELU_6") >>
       dtflearn.feedforward(16)(7) >>
       tf.learn.Sigmoid("Sigmoid_7") >>
-      UpwindTF("Upwind", (1.0, 215.0), 100, 16) >>
+      dtflearn.feedforward(4)(8) >>
+      FiniteHorizonCTRNN("fhctrnn_9", 4, 5, 0.2d) >>
       tf.learn.Flatten("Flatten_9") >>
       tf.learn.Linear("OutputLayer", 2)
-      /*dtflearn.feedforward(4)(8) >>
-      FiniteHorizonCTRNN("fhctrnn_9", 4, 4, 0.25d) >>
-      tf.learn.Flatten("Flatten_9") >>
-      tf.learn.Linear("OutputLayer", 2)*/
   }
 
   helios.run_experiment_omni(
