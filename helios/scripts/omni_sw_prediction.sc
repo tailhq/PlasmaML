@@ -13,6 +13,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 def main(
   test_year: Int = 2003,
   re: Boolean = true,
+  time_horizon: (Int, Int) = (18, 56),
   opt: Optimizer = tf.train.AdaDelta(0.01),
   maxIt: Int = 200000,
   tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
@@ -23,7 +24,7 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni()
+  val data           = helios.generate_data_omni(deltaT = time_horizon)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
