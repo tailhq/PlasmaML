@@ -40,7 +40,7 @@ def main(
   val summary_dir = if(re) "mdi_resample_"+test_year else "mdi_"+test_year
 
   val architecture = {
-    tf.learn.Cast("Input/Cast", FLOAT64) >>
+    tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.4f) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
       tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
