@@ -1,4 +1,5 @@
 import _root_.io.github.mandar2812.dynaml.tensorflow._
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.FiniteHorizonCTRNN
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
@@ -13,6 +14,7 @@ import org.joda.time.DateTime
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import org.platanios.tensorflow.api.learn.layers.Layer
+import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 //Output computation
 val alpha = 100f
@@ -31,13 +33,6 @@ val compute_time_lag = DataPipe((va: (Float, Float)) => {
   (dt, vf)
 })
 
-//Prediction architecture
-val arch = {
-  tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.feedforward(20)(0) >>
-    dtflearn.Tanh("Tanh_0") >>
-    dtflearn.feedforward(2)(1)
-}
 
 //Subroutine to generate synthetic
 //input-lagged output time series.
@@ -141,7 +136,18 @@ def main(
   noise: Double = 0.5,
   noiserot: Double = 0.1,
   iterations: Int = 150000,
-  architecture: Layer[Output, Output] = arch) = {
+  optimizer: Optimizer = tf.train.AdaDelta(0.01)) = {
+
+
+  //Prediction architecture
+  val architecture = {
+    tf.learn.Cast("Input/Cast", FLOAT32) >>
+      FiniteHorizonCTRNN("fhctrnn_0", d, 10, 0.2d) >>
+      tf.learn.Flatten("Flatten_0") >>
+      dtflearn.feedforward(20)(1)
+      dtflearn.Tanh("Tanh_1") >>
+      dtflearn.feedforward(2)(1)
+  }
 
   val train_fraction = 0.7
 
@@ -235,7 +241,6 @@ def main(
     tf.learn.Mean("Loss/Mean") >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-  val optimizer = tf.train.AdaDelta(0.01)
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
@@ -286,28 +291,28 @@ def main(
   val mae_lag = err_time_lag_test
     .abs.mean()
     .scalar
-    .asInstanceOf[Float]
+    .asInstanceOf[Double]
 
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
 
   val actual_targets = (0 until num_test).map(n => {
-    val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Float].toInt
+    val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
     tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Float]
   })
 
   val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Float]).toSeq)
+  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Double]).toSeq)
   title("Predicted Time Lags")
 
-  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Float]), numBins = 100)
+  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Double]), numBins = 100)
   title("Histogram of Time Lag prediction errors")
 
   val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
     val time_index = c._1._1
-    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Float]
-    val pred = pred_targets(c._2).scalar.asInstanceOf[Float]
+    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Double]
+    val pred = pred_targets(c._2).scalar.asInstanceOf[Double]
     (time_index + pred_lag, pred)
   }).sortBy(_._1)
 
