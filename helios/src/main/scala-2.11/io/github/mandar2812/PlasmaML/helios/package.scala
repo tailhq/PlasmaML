@@ -650,7 +650,8 @@ package object helios {
   def generate_data_omni(
     year_start: Int = 2001, year_end: Int = 2005,
     image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512),
-    omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW))
+    omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
+    deltaT: (Int, Int) = (18, 56))
   : Stream[(DateTime, (Path, Seq[Double]))] = {
 
     /*
@@ -680,7 +681,7 @@ package object helios {
 
     helios.collate_omni_data_range(
       new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
-      omni_source, pwd/"data", (12, 72), image_source, soho_dir)
+      omni_source, pwd/"data", deltaT, image_source, soho_dir)
   }
 
 

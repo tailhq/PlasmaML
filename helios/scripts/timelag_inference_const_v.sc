@@ -16,10 +16,20 @@ import org.platanios.tensorflow.api.learn.layers.Layer
 
 //Output computation
 val alpha = 100f
-val compute_output = DataPipe((v: Tensor) => v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha)
+val compute_output = DataPipe(
+  (v: Tensor) => (
+    v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha,
+    v.abs.sum().scalar.asInstanceOf[Float])
+)
+
 //Time Lag Computation
-val distance = alpha*8
-val compute_time_lag = DataPipe((v: Float) => distance/(v + 1E-6))
+val distance = alpha*20
+val compute_time_lag = DataPipe((va: (Float, Float)) => {
+  val (v, a) = va
+  val dt = (-v + math.sqrt(v*v + 2*a*distance).toFloat)/(2*a)
+  val vf = math.sqrt(v*v + 2f*a+distance).toFloat
+  (dt, vf)
+})
 
 //Prediction architecture
 val arch = {
@@ -77,10 +87,8 @@ def generate_data(
 
   val calculate_outputs =
     velocity_pipe >
-      BifurcationPipe(
-        compute_time_lag,
-        id[Float]) >
-      DataPipe(DataPipe((d: Double) => d.toInt), id[Float])
+      compute_time_lag >
+      DataPipe(DataPipe((d: Float) => d.toInt), id[Float])
 
 
   val generate_data_pipe = StreamDataPipe(
