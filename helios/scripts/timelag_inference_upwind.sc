@@ -17,37 +17,26 @@ import org.platanios.tensorflow.api.learn.layers.Layer
 
 
 //Output computation
-val alpha = 100f
-val compute_output = DataPipe((v: Tensor) => v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha)
+val alpha = 10f
+val compute_output = DataPipe((v: Tensor) => v.abs.multiply(alpha))
 //Time Lag Computation
-val distance = alpha*8
+val distance = alpha*100
 val compute_time_lag = DataPipe((v: Float) => distance/(v + 1E-6))
 
-
-//Prediction architecture
-val arch = {
-  tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.feedforward(20)(0) >>
-    dtflearn.Tanh("Tanh_0") >>
-    dtflearn.feedforward(2)(1)
-}
-
+val nR = 50
 //Subroutine to generate synthetic
 //input-lagged output time series.
 def generate_data(
   d: Int = 3, n: Int = 5,
   sliding_window: Int,
-  noise: Double = 0.5,
-  noiserot: Double = 0.1) = {
+  noise: Double = 0.01,
+  noiserot: Double = 0.01) = {
 
-  val nR = 100
+
   val nTheta = d
 
-  val upwind_solver = new Upwind1D((0.0, distance.toDouble), 100, d, 1d)
-
-
   val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
-    () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
+    () => dtf.tensor_f64(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
   ))
 
   val normalise = DataPipe((t: RandomVariable[Tensor]) => t.draw.l2Normalize(0))
@@ -63,10 +52,18 @@ def generate_data(
   val rand_rot_mat =
     random_gaussian_mat >
       DataPipe((m: DenseMatrix[Double]) => qr(m).q) >
-      DataPipe((m: DenseMatrix[Double]) => dtf.tensor_f32(m.rows, m.rows)(m.toArray:_*).transpose())
+      DataPipe((m: DenseMatrix[Double]) => dtf.tensor_f64(m.rows, m.rows)(m.toArray:_*).transpose())
 
 
   val rotation = rand_rot_mat(d)
+
+  val omega_rot = 0.001
+  //rotation.subtract(dtf.tensor_f64(d)((0 until d).map(_ => 1d):_*).diag).abs.mean().scalar.asInstanceOf[Double]
+
+  print("Calculated speed of rotation, Omega = ")
+  pprint.pprintln(omega_rot)
+
+  val upwind_solver = new Upwind1D((0.0, distance.toDouble), nR, d, omega_rot)
 
   val get_rotation_operator = MetaPipe((rotation_mat: Tensor) => (x: Tensor) => rotation_mat.matmul(x))
 
@@ -82,10 +79,11 @@ def generate_data(
 
   def id[T] = Pipe.identityPipe[T]
 
-  val calculate_outputs = DataPipe((v0: Tensor) => upwind_solver.solve(v0)) >
+  val calculate_outputs =
+    compute_output >
+    DataPipe((v0: Tensor) => upwind_solver.solve(v0)) >
     Upwind1D.windWithLag(nR, nTheta, upwind_solver.deltaR, upwind_solver.deltaTheta) >
-    DataPipe(DataPipe((d: Double) => d.toInt), DataPipe((v: Double) => v.toFloat))
-
+    DataPipe(DataPipe((d: Double) => d.toInt), id[Float])
 
   val generate_data_pipe = StreamDataPipe(
     DataPipe(id[Int], BifurcationPipe(id[Tensor], calculate_outputs))  >
@@ -132,12 +130,21 @@ def generate_data(
 
 @main
 def main(
-          d: Int = 3, n: Int = 100,
-          sliding_window: Int = 15,
-          noise: Double = 0.5,
-          noiserot: Double = 0.1,
-          iterations: Int = 150000,
-          architecture: Layer[Output, Output] = arch) = {
+  d: Int = 8, n: Int = 100,
+  sliding_window: Int = 15,
+  noise: Double = 0.05,
+  noiserot: Double = 0.01,
+  iterations: Int = 150000) = {
+
+  val nTheta = d
+
+  val architecture = {
+    tf.learn.Cast("Input/Cast", FLOAT64) >>
+      UpwindTF("Upwind", (0.0, distance.toDouble), nR, nTheta) >>
+      tf.learn.Flatten("Flatten_1") >>
+      dtflearn.feedforward(2)(1)
+      //UpwindPropogate("Upwind_Propogate", (0.0, distance), nR, nTheta)
+  }
 
   val train_fraction = 0.7
 
@@ -152,11 +159,12 @@ def main(
 
   val effect_times = data.map(_._2._1)
 
-  histogram(effects.map(_._2), numBins = 100)
+  /*histogram(effects.map(_._2), numBins = 100)
   title("Distribution of output signal  ")
-
-  histogram(effect_times.zip(causes.map(_._1)).map(c => c._1 - c._2), numBins = 10)
+*/
+  histogram(effect_times.zip(causes.map(_._1)).map(c => c._1 - c._2), numBins = 50)
   title("Distribution of time lags")
+
 
   spline(effect_times)
   hold()
@@ -176,14 +184,15 @@ def main(
   unhold()
 
 
+
   //Transform the generated data into a tensorflow compatible object
   val features = dtf.stack(collated_data.map(_._2._1), axis = 0)
 
-  val labels = dtf.tensor_f32(
+  val labels = dtf.tensor_f64(
     collated_data.length, sliding_window)(
     collated_data.flatMap(_._2._2):_*)
 
-  val labels_timelags = dtf.tensor_f32(collated_data.length)(collated_data.map(d => d._2._3.toDouble):_*)
+  val labels_timelags = dtf.tensor_f64(collated_data.length)(collated_data.map(d => d._2._3.toDouble):_*)
 
   val num_training = (collated_data.length*train_fraction).toInt
   val num_test = collated_data.length - num_training
@@ -195,6 +204,7 @@ def main(
 
 
   //Create a helios data set.
+
   val tf_dataset = HeliosDataSet(
     features(0 :: num_training, ---), labels(0 :: num_training), num_training,
     features(num_training ::, ---), labels(num_training ::), num_test)
@@ -217,19 +227,17 @@ def main(
 
   val tf_summary_dir = home/'tmp/summary_dir_index
 
-  val input = tf.learn.Input(FLOAT32, Shape(-1, tf_dataset.trainData.shape(1)))
+  val input = tf.learn.Input(FLOAT64, Shape(-1, tf_dataset.trainData.shape(1)))
 
   val num_outputs = sliding_window
 
-  val trainInput = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
+  val trainInput = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
 
-  val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
+  val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
   val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL1", num_outputs, 1d)
 
-  val loss = lossFunc >>
-    tf.learn.Mean("Loss/Mean") >>
-    tf.learn.ScalarSummary("Loss", "ModelLoss")
+  val loss = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val optimizer = tf.train.AdaDelta(0.01)
 
@@ -247,10 +255,10 @@ def main(
       tf.learn.Configuration(Some(summariesDir)),
       tf.learn.StopCriteria(maxSteps = Some(iterations)),
       Set(
-        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(100)),
-        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
-        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
-      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
+        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(1000)),
+        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
+      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 1000))
 
     estimator.train(() => training_data, tf.learn.StopCriteria(maxSteps = Some(iterations)))
 
@@ -268,7 +276,7 @@ def main(
   val metrics = new HeliosOmniTSMetrics(
     dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
     tf_dataset.testLabels.shape(1),
-    dtf.tensor_f32(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(lossFunc.time_scale):_*)
+    dtf.tensor_f64(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(lossFunc.time_scale):_*)
   )
 
   val pred_time_lags_test = unscaled_pred_time_lags_test
@@ -282,28 +290,28 @@ def main(
   val mae_lag = err_time_lag_test
     .abs.mean()
     .scalar
-    .asInstanceOf[Float]
+    .asInstanceOf[Double]
 
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
 
   val actual_targets = (0 until num_test).map(n => {
-    val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Float].toInt
-    tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Float]
+    val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+    tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Double]
   })
 
   val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Float]).toSeq)
+  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Double]).toSeq)
   title("Predicted Time Lags")
 
-  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Float]), numBins = 100)
+  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Double]), numBins = 100)
   title("Histogram of Time Lag prediction errors")
 
   val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
     val time_index = c._1._1
-    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Float]
-    val pred = pred_targets(c._2).scalar.asInstanceOf[Float]
+    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Double]
+    val pred = pred_targets(c._2).scalar.asInstanceOf[Double]
     (time_index + pred_lag, pred)
   }).sortBy(_._1)
 
@@ -319,5 +327,6 @@ def main(
     collated_data, tf_dataset, model, estimator,
     tf_summary_dir, metrics, reg_metrics, reg_time_lag
   )
+
 
 }

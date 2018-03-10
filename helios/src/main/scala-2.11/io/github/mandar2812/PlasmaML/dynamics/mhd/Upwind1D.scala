@@ -59,7 +59,7 @@ object Upwind1D {
     val (omega, dR, dT) = params
     val invV = v.pow(-1d)
 
-    val forwardDiffMat = dtf.tensor_f32(nTheta, nTheta)(
+    val forwardDiffMat = dtf.tensor_f64(nTheta, nTheta)(
       DenseMatrix.tabulate(nTheta, nTheta)((i, j) => if(i == j) -1d else if(j == (i+1)%nTheta) 1d else 0d).t.toArray:_*
     )
 
@@ -69,18 +69,18 @@ object Upwind1D {
 
   def windWithLag(
     nR: Int, nTheta: Int,
-    deltaR: Double, deltaTheta: Double): DataPipe[Stream[Tensor], (Double, Double)] =
+    deltaR: Double, deltaTheta: Double): DataPipe[Stream[Tensor], (Double, Float)] =
     DataPipe((result: Stream[Tensor]) => {
       val sliding_avg =
         DenseMatrix.tabulate(nR, nR + 1)(
-          (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0)
+          (i, j) => if(i == j) 0.5d else if(j == (i+1)) 0.5d else 0.0d)
 
       val velocities = DenseVector(result.map(_(0).scalar.asInstanceOf[Double]):_*)
 
       val deltat = sum((sliding_avg*velocities).map(deltaR/_))
 
       val v = velocities(-1)
-      (deltat, v)
+      (deltat, v.toFloat)
     })
 
   def buildStencil(

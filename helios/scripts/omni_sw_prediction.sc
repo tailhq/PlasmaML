@@ -50,7 +50,8 @@ def main(
       dtflearn.feedforward(16)(7) >>
       tf.learn.Sigmoid("Sigmoid_7") >>
       UpwindTF("Upwind", (1.0, 215.0), 100, 16) >>
-      UpwindPropogate("Upwind_Propogate", (1.0, 215.0), 100, 16)
+      tf.learn.Flatten("Flatten_9") >>
+      tf.learn.Linear("OutputLayer", 2)
       /*dtflearn.feedforward(4)(8) >>
       FiniteHorizonCTRNN("fhctrnn_9", 4, 4, 0.25d) >>
       tf.learn.Flatten("Flatten_9") >>
