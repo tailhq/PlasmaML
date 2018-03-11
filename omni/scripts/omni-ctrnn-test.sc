@@ -88,7 +88,7 @@ def main(
   val trainData = tf.data.TensorSlicesDataset(sc_features).zip(tf.data.TensorSlicesDataset(sc_labels))
     .repeat()
     .shuffle(10000)
-    .batch(512)
+    .batch(1024)
     .prefetch(10)
 
   val (model, estimator) = tf.createWith(graph = Graph()) {
@@ -179,4 +179,7 @@ def apply(
   iterations: Int = 50000,
   optimizer: Optimizer = tf.train.AdaDelta(0.005),
   stormsFile: String = OmniOSA.stormsFileJi) =
-  main(yearrange, quantities, horizon, history, num_hidden_units, iterations, optimizer, stormsFile)
+  main(
+    yearrange, quantities, horizon, history,
+    num_hidden_units, iterations, optimizer, stormsFile
+  )
