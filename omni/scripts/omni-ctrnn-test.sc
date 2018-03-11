@@ -9,6 +9,7 @@ import io.github.mandar2812.dynaml.tensorflow.layers._
 import io.github.mandar2812.dynaml.tensorflow.learn._
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader, OmniOSA}
+import io.github.mandar2812.PlasmaML.dynamics.nn._
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -16,35 +17,35 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 @main
 def main(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
-  horizon: Int = 24, iterations: Int = 50000,
-  optimizer: Optimizer = tf.train.AdaDelta(0.005),
+  horizon: Int = 24, history: Int = 6, num_hidden_units: Int = 6,
+  iterations: Int = 50000, optimizer: Optimizer = tf.train.AdaDelta(0.005),
   stormsFile: String = OmniOSA.stormsFileJi) = {
 
   DateTimeZone.setDefault(DateTimeZone.UTC)
 
   val target_quantity = OMNIData.columnNames(quantities.head)
 
-  val tf_summary_dir = home/'tmp/("omni_ctrnn_"+target_quantity+"_horizon-"+horizon)
+  val tf_summary_dir = home/'tmp/("omni_ctrnn_"+target_quantity+"_history-"+history+"_horizon-"+horizon)
 
   /*
   * Set up the data processing pipeline
   * */
 
-  val process_omni_files = OMNILoader.omniDataToSlidingTS(0, horizon+1)(quantities.head, quantities.tail)
+  val process_omni_files = OMNILoader.omniDataToSlidingTS(0, history+horizon+1)(quantities.head, quantities.tail)
 
   val extract_features_and_targets = StreamDataPipe((d: (DateTime, Seq[Seq[Double]])) => {
 
-    (d._1, d._2.map(s => (s.head, s.tail)).unzip)
+    (d._1, d._2.map(s => (s.take(history), s.takeRight(horizon))).unzip)
   })
 
 
-  val strip_date_stamps = StreamDataPipe((p: (DateTime, (Seq[Double], Seq[Seq[Double]]))) => p._2)
+  val strip_date_stamps = StreamDataPipe((p: (DateTime, (Seq[Seq[Double]], Seq[Seq[Double]]))) => p._2)
 
-  val load_into_tensors = DataPipe((fl: Seq[(Seq[Double], Seq[Seq[Double]])]) => {
+  val load_into_tensors = DataPipe((fl: Seq[(Seq[Seq[Double]], Seq[Seq[Double]])]) => {
     val (features, labels) = fl.unzip
     val n_data = features.length
     (
-      dtf.tensor_f32(n_data, quantities.length)(features.flatten:_*),
+      dtf.tensor_f32(n_data, quantities.length, history)(features.flatMap(_.flatten):_*),
       dtf.tensor_f32(n_data, quantities.length, horizon)(labels.flatMap(_.flatten):_*)
     )
   })
@@ -64,9 +65,14 @@ def main(
   * Set up the model architecture and learning procedure
   * */
 
-  val architecture = FiniteHorizonCTRNN("fhctrnn_0", quantities.length, horizon, 1d)
+  val architecture = tf.learn.Flatten("Flatten_0") >>
+    dtflearn.feedforward(num_hidden_units)(0) >>
+    dtflearn.Tanh("Tanh_0") >>
+    FiniteHorizonCTRNN("fhctrnn_1", num_hidden_units, horizon, 1d) >>
+    FiniteHorizonLinear("fhproj_2", num_hidden_units, quantities.length, horizon) >>
+    dtflearn.Tanh("Output")
 
-  val input = tf.learn.Input(FLOAT64, Shape(-1, quantities.length))
+  val input = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, history))
 
   val trainOutput = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, horizon))
 
@@ -141,10 +147,13 @@ def main(
     identityPipe[Stream[(DateTime, DateTime)]])
 
   val filterDataByEvents = DataPipe2(
-    (data: Stream[(DateTime, (Seq[Double], Seq[Seq[Double]]))], events: Stream[(DateTime, DateTime)]) => {
-      data.filter(p => {
-        events.map(e => p._1.isAfter(e._1) && p._1.isBefore(e._2.minusHours(horizon))).reduce(_ || _)
-      })
+    (data: Stream[(DateTime, (Seq[Seq[Double]], Seq[Seq[Double]]))], events: Stream[(DateTime, DateTime)]) => {
+      data.filter(p =>
+        events.map(e =>
+          p._1.isAfter(e._1.minusHours(history)) &&
+          p._1.isBefore(e._2.minusHours(horizon))
+        ).reduce(_ || _)
+      )
     })
 
   val test_data_pipe = readStormsFile >
@@ -166,7 +175,8 @@ def main(
 
 def apply(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
-  horizon: Int = 24, iterations: Int = 50000,
+  horizon: Int = 24, history: Int = 6,  num_hidden_units: Int = 6,
+  iterations: Int = 50000,
   optimizer: Optimizer = tf.train.AdaDelta(0.005),
   stormsFile: String = OmniOSA.stormsFileJi) =
-  main(yearrange, quantities, horizon, iterations, optimizer, stormsFile)
+  main(yearrange, quantities, horizon, history, num_hidden_units, iterations, optimizer, stormsFile)
