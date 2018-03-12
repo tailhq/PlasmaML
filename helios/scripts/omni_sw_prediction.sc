@@ -47,9 +47,9 @@ def main(
       tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_5") >>
       dtflearn.feedforward(64)(6) >>
-      tf.learn.SELU("SELU_6") >>
+      dtflearn.Tanh("Tanh_6") >>
       dtflearn.feedforward(16)(7) >>
-      tf.learn.SELU("SELU_7") >>
+      dtflearn.Tanh("Tanh_7") >>
       dtflearn.feedforward(4)(8) >>
       FiniteHorizonCTRNN("fhctrnn_9", 4, 5, 0.2d) >>
       tf.learn.Flatten("Flatten_9") >>
