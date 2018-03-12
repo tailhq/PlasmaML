@@ -12,7 +12,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 @main
 def main(
   test_year: Int = 2003,
-  re: Boolean = true,
+  re: Boolean = true, sc_down: Int = 2,
   time_horizon: (Int, Int) = (18, 56),
   opt: Optimizer = tf.train.AdaDelta(0.01),
   maxIt: Int = 200000,
@@ -49,7 +49,7 @@ def main(
       dtflearn.feedforward(64)(6) >>
       tf.learn.SELU("SELU_6") >>
       dtflearn.feedforward(16)(7) >>
-      tf.learn.Sigmoid("Sigmoid_7") >>
+      tf.learn.SELU("SELU_7") >>
       dtflearn.feedforward(4)(8) >>
       FiniteHorizonCTRNN("fhctrnn_9", 4, 5, 0.2d) >>
       tf.learn.Flatten("Flatten_9") >>
@@ -57,7 +57,7 @@ def main(
   }
 
   helios.run_experiment_omni(
-    data, tt_partition, resample = re)(
+    data, tt_partition, resample = re, scaleDown = sc_down)(
     summary_dir, maxIt, tmpdir, arch = architecture)
 
 }

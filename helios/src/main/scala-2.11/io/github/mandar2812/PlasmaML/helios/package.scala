@@ -879,7 +879,7 @@ package object helios {
   def run_experiment_omni(
     collated_data: Stream[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
-    resample: Boolean = false)(
+    resample: Boolean = false, scaleDown: Int = 2)(
     results_id: String, max_iterations: Int,
     tempdir: Path = home/"tmp",
     arch: Layer[Output, Output] = learn.cnn_sw_v1,
@@ -909,7 +909,7 @@ package object helios {
     val dataSet = helios.create_helios_data_set(
       collated_data,
       tt_partition,
-      scaleDownFactor = 2,
+      scaleDownFactor = scaleDown,
       resample)
 
     val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
