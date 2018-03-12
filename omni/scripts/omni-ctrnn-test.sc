@@ -9,7 +9,6 @@ import io.github.mandar2812.dynaml.tensorflow.layers._
 import io.github.mandar2812.dynaml.tensorflow.learn._
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader, OmniOSA}
-import io.github.mandar2812.PlasmaML.dynamics.nn._
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer

@@ -15,7 +15,7 @@ object Dependencies {
   val packagedTFFlag: Boolean = true
 
   //Set to dev, if pulling DynaML master SNAPSHOT
-  val status = "prod"
+  val status = "dev"
 
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
