@@ -69,8 +69,7 @@ def main(
     dtflearn.feedforward(num_hidden_units)(0) >>
     dtflearn.Tanh("Tanh_0") >>
     FiniteHorizonCTRNN("fhctrnn_1", num_hidden_units, horizon, 1d) >>
-    FiniteHorizonLinear("fhproj_2", num_hidden_units, quantities.length, horizon) >>
-    dtflearn.Tanh("Output")
+    FiniteHorizonLinear("fhproj_2", num_hidden_units, quantities.length, horizon)
 
   val input = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, history))
 
