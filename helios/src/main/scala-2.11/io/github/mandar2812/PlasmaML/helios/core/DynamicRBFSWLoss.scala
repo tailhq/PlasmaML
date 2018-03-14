@@ -15,11 +15,12 @@ import org.platanios.tensorflow.api.ops.Output
   *
   * @author mandar2812
   * */
-class DynamicRBFSWLoss(
+case class DynamicRBFSWLoss(
   override val name: String,
-  val size_causal_window: Int) extends Loss[(Output, Output)](name) {
+  size_causal_window: Int) extends
+  Loss[(Output, Output)](name) {
 
-  override val layerType: String = "KernelWeightedSWLoss"
+  override val layerType: String = s"DynamicRBFSW[$size_causal_window]"
 
   private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
 
@@ -30,9 +31,7 @@ class DynamicRBFSWLoss(
 
     val times = input._1(::, 1).sigmoid.multiply(scaling)
 
-    val timescales = input._1(::, 2).square
-
-    val size_batch = input._1.shape(0)
+    val timescales = input._1(::, 2).exp
 
     val repeated_timescales = tf.stack(Seq.fill(size_causal_window)(timescales), axis = -1)
 
@@ -40,12 +39,10 @@ class DynamicRBFSWLoss(
 
     val index_times = Tensor((0 until size_causal_window).map(_.toDouble)).reshape(Shape(1, size_causal_window))
 
-    val repeated_index_times = tf.stack(Seq.fill(size_batch)(index_times), axis = 0)
-
     val repeated_preds = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
 
     val convolution_kernel =
-      (repeated_index_times - repeated_times)
+      (repeated_times - index_times)
         .abs
         .multiply(-1d)
         .divide(repeated_timescales)

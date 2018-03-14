@@ -950,10 +950,9 @@ package object helios {
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
-    val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL2", num_outputs, 1d)
+    val lossFunc = GenRBFSWLoss("Loss/RBFWeightedL2", num_outputs)
 
     val loss = lossFunc >>
-      tf.learn.Mean("Loss/Mean") >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
 
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
@@ -994,7 +993,7 @@ package object helios {
       dataSet.testLabels, dataSet.testLabels.shape(1),
       dtf.tensor_f32(
         dataSet.nTest)(
-        Seq.fill(dataSet.nTest)(lossFunc.time_scale):_*
+        Seq.fill(dataSet.nTest)(tf.variable("Loss/RBFWeightedL2/time_scale").evaluate().scalar.asInstanceOf[Float].toDouble):_*
       )
     )
 

@@ -1,27 +1,32 @@
+import breeze.linalg.{DenseMatrix, DenseVector, qr}
+import breeze.stats.distributions.Gaussian
+import com.quantifind.charts.Highcharts._
+import ammonite.ops.home
+import org.joda.time.DateTime
+
 import _root_.io.github.mandar2812.dynaml.tensorflow._
-import _root_.io.github.mandar2812.dynaml.tensorflow.layers.FiniteHorizonCTRNN
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers._
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
-import breeze.linalg.{DenseMatrix, DenseVector, qr}
-import breeze.stats.distributions.Gaussian
-import com.quantifind.charts.Highcharts._
-import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
-import ammonite.ops.home
-import org.joda.time.DateTime
+
 import org.platanios.tensorflow.api._
-import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import org.platanios.tensorflow.api.learn.layers.Layer
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
+import org.platanios.tensorflow.api.ops.variables.ReuseExistingOnly
+
+import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
+import _root_.io.github.mandar2812.PlasmaML.helios.core._
+
 
 //Output computation
 val alpha = 100f
 val compute_output = DataPipe(
   (v: Tensor) => (
     v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha,
-    v.abs.sum().scalar.asInstanceOf[Float])
+    v.abs.mean().scalar.asInstanceOf[Float])
 )
 
 //Time Lag Computation
@@ -136,18 +141,10 @@ def main(
   noise: Double = 0.5,
   noiserot: Double = 0.1,
   iterations: Int = 150000,
-  optimizer: Optimizer = tf.train.AdaDelta(0.01)) = {
+  optimizer: Optimizer = tf.train.AdaDelta(0.01),
+  sum_dir: String = "") = {
 
 
-  //Prediction architecture
-  val architecture = {
-    tf.learn.Cast("Input/Cast", FLOAT32) >>
-      FiniteHorizonCTRNN("fhctrnn_0", d, 10, 0.2d) >>
-      tf.learn.Flatten("Flatten_0") >>
-      dtflearn.feedforward(20)(1)
-      dtflearn.Tanh("Tanh_1") >>
-      dtflearn.feedforward(2)(1)
-  }
 
   val train_fraction = 0.7
 
@@ -162,10 +159,7 @@ def main(
 
   val effect_times = data.map(_._2._1)
 
-  histogram(effects.map(_._2), numBins = 100)
-  title("Distribution of output signal  ")
-
-  histogram(effect_times.zip(causes.map(_._1)).map(c => c._1 - c._2), numBins = 10)
+  histogram(effect_times.zip(causes.map(_._1)).map(c => c._1 - c._2))
   title("Distribution of time lags")
 
   spline(effect_times)
@@ -218,31 +212,45 @@ def main(
   val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
     .zip(tf.data.TensorSlicesDataset(norm_train_labels)).repeat()
     .shuffle(100)
-    .batch(256)
+    .batch(512)
     .prefetch(10)
 
   val dt = DateTime.now()
 
-  val summary_dir_index = "helios_toy_problem_variable_"+dt.toString("YYYY-MM-dd-hh-mm")
+  val summary_dir_index  = "timelag_const_a_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-  val tf_summary_dir = home/'tmp/summary_dir_index
+  val tf_summary_dir     = home/'tmp/summary_dir_index
 
-  val input = tf.learn.Input(FLOAT32, Shape(-1, tf_dataset.trainData.shape(1)))
 
-  val num_outputs = sliding_window
+  val input              = tf.learn.Input(FLOAT32, Shape(-1, tf_dataset.trainData.shape(1)))
 
-  val trainInput = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
+  val num_outputs        = sliding_window
+
+  val trainInput         = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
 
   val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
 
-  val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL1", num_outputs, 1d)
+  //Prediction architecture
+  val architecture = {
+      DynamicTimeStepCTRNN("fhctrnn_1", d, 10) >>
+        FiniteHorizonLinear("fhlinear_1", d, 4, 10) >>
+        tf.learn.Flatten("Flatten_1") >>
+        dtflearn.Tanh("Tanh_1") >>
+        dtflearn.feedforward(4)(2) >>
+        DynamicTimeStepCTRNN("fhctrnn_2", 4, 5) >>
+        FiniteHorizonLinear("fhlinear_2", 4, 2, 5) >>
+        tf.learn.Flatten("Flatten_3") >>
+        dtflearn.Tanh("Tanh_3") >>
+        dtflearn.feedforward(3)(3)
+  }
 
-  val loss = lossFunc >>
-    tf.learn.Mean("Loss/Mean") >>
-    tf.learn.ScalarSummary("Loss", "ModelLoss")
+  val lossFunc = DynamicRBFSWLoss("Loss/RBFWeightedL1", num_outputs)
 
+  val loss     = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-  val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+  val summariesDir =
+    if (sum_dir == "") java.nio.file.Paths.get(tf_summary_dir.toString())
+    else java.nio.file.Paths.get(sum_dir)
 
   val (model, estimator) = tf.createWith(graph = Graph()) {
     val model = tf.learn.Model(
@@ -256,10 +264,10 @@ def main(
       tf.learn.Configuration(Some(summariesDir)),
       tf.learn.StopCriteria(maxSteps = Some(iterations)),
       Set(
-        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(100)),
-        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
-        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
-      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
+        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
+        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
+      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
 
     estimator.train(() => training_data, tf.learn.StopCriteria(maxSteps = Some(iterations)))
 
@@ -273,12 +281,6 @@ def main(
     .add(labels_mean(0))
 
   val unscaled_pred_time_lags_test = predictions(::, 1)
-
-  val metrics = new HeliosOmniTSMetrics(
-    dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
-    tf_dataset.testLabels.shape(1),
-    dtf.tensor_f32(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(lossFunc.time_scale):_*)
-  )
 
   val pred_time_lags_test = unscaled_pred_time_lags_test
     .sigmoid
@@ -324,9 +326,24 @@ def main(
   title("Test Set Predictions")
   unhold()
 
+  /*
+  val predicted_time_scales = Seq.fill(tf_dataset.nTest)(
+    tf.variable("Loss/RBFWeightedL1/time_scale", FLOAT32, Shape(), reuse = ReuseExistingOnly)
+      .evaluate().scalar
+      .asInstanceOf[Float]
+      .toDouble
+  )
+
+  val metrics = new HeliosOmniTSMetrics(
+    dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
+    tf_dataset.testLabels.shape(1),
+    dtf.tensor_f32(tf_dataset.nTest)(predicted_time_scales:_*)
+  )*/
+
+
   (
     collated_data, tf_dataset, model, estimator,
-    tf_summary_dir, metrics, reg_metrics, reg_time_lag
+    tf_summary_dir, reg_metrics, reg_time_lag
   )
 
 }

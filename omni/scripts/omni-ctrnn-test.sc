@@ -9,6 +9,7 @@ import io.github.mandar2812.dynaml.tensorflow.layers._
 import io.github.mandar2812.dynaml.tensorflow.learn._
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader, OmniOSA}
+import io.github.mandar2812.PlasmaML.dynamics.nn._
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -24,7 +25,7 @@ def main(
 
   val target_quantity = OMNIData.columnNames(quantities.head)
 
-  val tf_summary_dir = home/'tmp/("omni_ctrnn_"+target_quantity+"_history-"+history+"_horizon-"+horizon)
+  val tf_summary_dir = home/'tmp/("omni_ctrnn_"+target_quantity+"_h-"+history+"_t-"+horizon+"_n-"+num_hidden_units)
 
   /*
   * Set up the data processing pipeline
@@ -67,7 +68,7 @@ def main(
   val architecture = tf.learn.Flatten("Flatten_0") >>
     dtflearn.feedforward(num_hidden_units)(0) >>
     dtflearn.Tanh("Tanh_0") >>
-    FiniteHorizonCTRNN("fhctrnn_1", num_hidden_units, horizon, 1d) >>
+    DynamicTimeStepCTRNN("fhctrnn_1", num_hidden_units, horizon) >>
     FiniteHorizonLinear("fhproj_2", num_hidden_units, quantities.length, horizon)
 
   val input = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, history))
