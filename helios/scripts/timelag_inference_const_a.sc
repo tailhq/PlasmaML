@@ -232,19 +232,12 @@ def main(
 
   //Prediction architecture
   val architecture = {
-      DynamicTimeStepCTRNN("fhctrnn_1", d, 10) >>
-        FiniteHorizonLinear("fhlinear_1", d, 4, 10) >>
-        tf.learn.Flatten("Flatten_1") >>
-        dtflearn.Tanh("Tanh_1") >>
-        dtflearn.feedforward(4)(2) >>
-        DynamicTimeStepCTRNN("fhctrnn_2", 4, 5) >>
-        FiniteHorizonLinear("fhlinear_2", 4, 2, 5) >>
-        tf.learn.Flatten("Flatten_3") >>
-        dtflearn.Tanh("Tanh_3") >>
-        dtflearn.feedforward(3)(3)
+    dtflearn.feedforward(20)(1) >>
+      dtflearn.Tanh("Tanh_2") >>
+      dtflearn.feedforward(2)(2)
   }
 
-  val lossFunc = DynamicRBFSWLoss("Loss/RBFWeightedL1", num_outputs)
+  val lossFunc = GenRBFSWLoss("Loss/RBFWeightedL1", num_outputs)
 
   val loss     = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
 
@@ -293,28 +286,28 @@ def main(
   val mae_lag = err_time_lag_test
     .abs.mean()
     .scalar
-    .asInstanceOf[Double]
+    .asInstanceOf[Float]
 
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
 
   val actual_targets = (0 until num_test).map(n => {
-    val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+    val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Float].toInt
     tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Float]
   })
 
   val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Double]).toSeq)
+  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Float]).toSeq)
   title("Predicted Time Lags")
 
-  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Double]), numBins = 100)
+  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Float]), numBins = 100)
   title("Histogram of Time Lag prediction errors")
 
   val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
     val time_index = c._1._1
-    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Double]
-    val pred = pred_targets(c._2).scalar.asInstanceOf[Double]
+    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Float]
+    val pred = pred_targets(c._2).scalar.asInstanceOf[Float]
     (time_index + pred_lag, pred)
   }).sortBy(_._1)
 
