@@ -3,30 +3,30 @@ import breeze.stats.distributions.Gaussian
 import com.quantifind.charts.Highcharts._
 import ammonite.ops.home
 import org.joda.time.DateTime
-
 import _root_.io.github.mandar2812.dynaml.tensorflow._
+import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.tensorflow.layers._
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
-
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.layers.Layer
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.ops.variables.ReuseExistingOnly
-
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 
-
+def id[T] = Pipe.identityPipe[T]
 //Output computation
 val alpha = 100f
 val compute_output = DataPipe(
-  (v: Tensor) => (
-    v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha,
-    v.abs.mean().scalar.asInstanceOf[Float])
+  (v: Tensor) =>
+    (
+      v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha,
+      alpha*0.1f
+    )
 )
 
 //Time Lag Computation
@@ -34,7 +34,7 @@ val distance = alpha*20
 val compute_time_lag = DataPipe((va: (Float, Float)) => {
   val (v, a) = va
   val dt = (-v + math.sqrt(v*v + 2*a*distance).toFloat)/(2*a)
-  val vf = math.sqrt(v*v + 2f*a+distance).toFloat
+  val vf = math.sqrt(v*v + 2f*a*distance).toFloat
   (dt, vf)
 })
 
@@ -81,12 +81,8 @@ def generate_data(
 
   val x: Seq[Tensor] = Stream(x0) ++ x_tail
 
-  val velocity_pipe = compute_output
-
-  def id[T] = Pipe.identityPipe[T]
-
   val calculate_outputs =
-    velocity_pipe >
+    compute_output >
       compute_time_lag >
       DataPipe(DataPipe((d: Float) => d.toInt), id[Float])
 
@@ -144,8 +140,6 @@ def main(
   optimizer: Optimizer = tf.train.AdaDelta(0.01),
   sum_dir: String = "") = {
 
-
-
   val train_fraction = 0.7
 
   val (data, collated_data) = generate_data(d, n, sliding_window, noise, noiserot)
@@ -179,135 +173,164 @@ def main(
   legend(Seq("Output Data with Lag", "Output Data without Lag"))
   unhold()
 
-
-  //Transform the generated data into a tensorflow compatible object
-  val features = dtf.stack(collated_data.map(_._2._1), axis = 0)
-
-  val labels = dtf.tensor_f32(
-    collated_data.length, sliding_window)(
-    collated_data.flatMap(_._2._2):_*)
-
-  val labels_timelags = dtf.tensor_f32(collated_data.length)(collated_data.map(d => d._2._3.toDouble):_*)
-
   val num_training = (collated_data.length*train_fraction).toInt
   val num_test = collated_data.length - num_training
 
+  //Transform the generated data into a tensorflow compatible object
+  val load_data_into_tensors = DataPipe((data: Stream[(Int, (Tensor, Stream[Double], Int))]) => {
+    val features = dtf.stack(data.map(_._2._1), axis = 0)
 
-  val (_, test_time_lags): (Tensor, Tensor) = (
-    labels_timelags(0 :: num_training),
-    labels_timelags(num_training :: ))
+    val labels = dtf.tensor_f32(
+      data.length, sliding_window)(
+      data.flatMap(_._2._2):_*)
 
+    val labels_timelags = dtf.tensor_f32(data.length)(data.map(d => d._2._3.toDouble):_*)
 
-  //Create a helios data set.
-  val tf_dataset = HeliosDataSet(
-    features(0 :: num_training, ---), labels(0 :: num_training), num_training,
-    features(num_training ::, ---), labels(num_training ::), num_test)
-
-  val labels_mean = tf_dataset.trainLabels.mean(axes = Tensor(0))
-
-  val labels_stddev = tf_dataset.trainLabels.subtract(labels_mean).square.mean(axes = Tensor(0)).sqrt
-
-  val norm_train_labels = tf_dataset.trainLabels.subtract(labels_mean).divide(labels_stddev)
-
-  val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
-    .zip(tf.data.TensorSlicesDataset(norm_train_labels)).repeat()
-    .shuffle(100)
-    .batch(512)
-    .prefetch(10)
-
-  val dt = DateTime.now()
-
-  val summary_dir_index  = "timelag_const_a_"+dt.toString("YYYY-MM-dd-HH-mm")
-
-  val tf_summary_dir     = home/'tmp/summary_dir_index
+    val (_, test_time_lags): (Tensor, Tensor) = (
+      labels_timelags(0 :: num_training),
+      labels_timelags(num_training :: ))
 
 
-  val input              = tf.learn.Input(FLOAT32, Shape(-1, tf_dataset.trainData.shape(1)))
+    //Create a helios data set.
+    val tf_dataset = HeliosDataSet(
+      features(0 :: num_training, ---), labels(0 :: num_training), num_training,
+      features(num_training ::, ---), labels(num_training ::), num_test)
 
-  val num_outputs        = sliding_window
+    (tf_dataset, test_time_lags)
+  })
+  //Scale training features/labels, apply scaling to test features
+  val scale_data = DataPipe(
+    DataPipe((dataset: HeliosDataSet) => {
 
-  val trainInput         = tf.learn.Input(FLOAT32, Shape(-1, num_outputs))
+      val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization(dataset.trainData, dataset.trainLabels)
 
-  val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
+      (
+        dataset.copy(
+          trainData = norm_tr_data._1, trainLabels = norm_tr_data._2,
+          testData = scalers._1(dataset.testData)),
+        scalers
+      )
+    }),
+    id[Tensor])
 
-  //Prediction architecture
-  val architecture = {
-    dtflearn.feedforward(20)(1) >>
-      dtflearn.Tanh("Tanh_2") >>
-      dtflearn.feedforward(2)(2)
-  }
+  val model_train_eval = DataPipe(
+    (dataTuple: ((HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)), Tensor)) => {
 
-  val lossFunc = GenRBFSWLoss("Loss/RBFWeightedL1", num_outputs)
+      val ((tf_dataset, scalers), test_time_lags) = dataTuple
 
-  val loss     = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
+      val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
+        .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
+        .shuffle(100)
+        .batch(512)
+        .prefetch(10)
 
-  val summariesDir =
-    if (sum_dir == "") java.nio.file.Paths.get(tf_summary_dir.toString())
-    else java.nio.file.Paths.get(sum_dir)
+      val dt = DateTime.now()
 
-  val (model, estimator) = tf.createWith(graph = Graph()) {
-    val model = tf.learn.Model(
-      input, architecture, trainInput, trainingInputLayer,
-      loss, optimizer)
+      val summary_dir_index  = "timelag_const_a_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-    println("Training the regression model.")
+      val tf_summary_dir     = home/'tmp/summary_dir_index
 
-    val estimator = tf.learn.FileBasedEstimator(
-      model,
-      tf.learn.Configuration(Some(summariesDir)),
-      tf.learn.StopCriteria(maxSteps = Some(iterations)),
-      Set(
-        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
-        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
-        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
-      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
 
-    estimator.train(() => training_data, tf.learn.StopCriteria(maxSteps = Some(iterations)))
+      val input              = tf.learn.Input(FLOAT64, Shape(-1, tf_dataset.trainData.shape(1)))
 
-    (model, estimator)
-  }
+      val num_outputs        = sliding_window
 
-  val predictions = estimator.infer(() => tf_dataset.testData)
+      val trainInput         = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
 
-  val pred_targets = predictions(::, 0)
-    .multiply(labels_stddev(0))
-    .add(labels_mean(0))
+      val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
 
-  val unscaled_pred_time_lags_test = predictions(::, 1)
+      //Prediction architecture
+      val architecture = {
+        dtflearn.feedforward(15)(1) >>
+          dtflearn.Tanh("Tanh_2") >>
+          dtflearn.feedforward(5)(2) >>
+          dtflearn.Tanh("Tanh_3")
+          dtflearn.feedforward(2)(3)
+      }
 
-  val pred_time_lags_test = unscaled_pred_time_lags_test
-    .sigmoid
-    .multiply(num_outputs-1)
+      val lossFunc = GenRBFSWLoss("Loss/RBFWeightedL1", num_outputs)
 
-  val err_time_lag_test = pred_time_lags_test.subtract(test_time_lags)
+      val loss     = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-  val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
+      val summariesDir =
+        if (sum_dir == "") java.nio.file.Paths.get(tf_summary_dir.toString())
+        else java.nio.file.Paths.get(sum_dir)
+
+      val (model, estimator) = tf.createWith(graph = Graph()) {
+        val model = tf.learn.Model(
+          input, architecture, trainInput, trainingInputLayer,
+          loss, optimizer)
+
+        println("Training the regression model.")
+
+        val estimator = tf.learn.FileBasedEstimator(
+          model,
+          tf.learn.Configuration(Some(summariesDir)),
+          tf.learn.StopCriteria(maxSteps = Some(iterations)),
+          Set(
+            tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+            tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
+            tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
+          tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
+
+        estimator.train(() => training_data, tf.learn.StopCriteria(maxSteps = Some(iterations)))
+
+        (model, estimator)
+      }
+
+      val predictions = estimator.infer(() => tf_dataset.testData)
+
+      val pred_targets = scalers._2(0).i(predictions(::, 0))
+
+      val unscaled_pred_time_lags_test = predictions(::, 1)
+
+      val pred_time_lags_test = unscaled_pred_time_lags_test
+        .sigmoid
+        .multiply(num_outputs-1)
+
+
+      val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
+
+      val actual_targets = (0 until num_test).map(n => {
+        val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+        tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Float]
+      })
+
+      val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir)
+    })
+
+  //The processing pipeline
+  val process_data = load_data_into_tensors > scale_data > model_train_eval
+
+  val ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir) =
+    process_data(collated_data)
+
+  val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
 
   val mae_lag = err_time_lag_test
     .abs.mean()
     .scalar
-    .asInstanceOf[Float]
+    .asInstanceOf[Double]
+
+  val pred_time_lags_test = reg_time_lag.preds
+
+  val pred_targets = reg_metrics.preds
 
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
 
-  val actual_targets = (0 until num_test).map(n => {
-    val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Float].toInt
-    tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Float]
-  })
-
-  val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
-
-  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Float]).toSeq)
+  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Double]).toSeq)
   title("Predicted Time Lags")
 
-  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Float]), numBins = 100)
+  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Double]), numBins = 100)
   title("Histogram of Time Lag prediction errors")
 
   val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
     val time_index = c._1._1
-    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Float]
-    val pred = pred_targets(c._2).scalar.asInstanceOf[Float]
+    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Double]
+    val pred = pred_targets(c._2).scalar.asInstanceOf[Double]
     (time_index + pred_lag, pred)
   }).sortBy(_._1)
 
@@ -332,7 +355,6 @@ def main(
     tf_dataset.testLabels.shape(1),
     dtf.tensor_f32(tf_dataset.nTest)(predicted_time_scales:_*)
   )*/
-
 
   (
     collated_data, tf_dataset, model, estimator,
