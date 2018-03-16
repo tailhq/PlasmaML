@@ -17,6 +17,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.ops.variables.ReuseExistingOnly
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
+import _root_.io.github.mandar2812.PlasmaML.utils._
 
 def id[T] = Pipe.identityPipe[T]
 //Output computation
@@ -138,7 +139,8 @@ def main(
   noiserot: Double = 0.1,
   iterations: Int = 150000,
   optimizer: Optimizer = tf.train.AdaDelta(0.01),
-  sum_dir: String = "") = {
+  sum_dir: String = "",
+  reg: Double = 0.01) = {
 
   val train_fraction = 0.7
 
@@ -221,7 +223,7 @@ def main(
       val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
         .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
         .shuffle(100)
-        .batch(512)
+        .batch(128)
         .prefetch(10)
 
       val dt = DateTime.now()
@@ -241,16 +243,25 @@ def main(
 
       //Prediction architecture
       val architecture = {
-        dtflearn.feedforward(15)(1) >>
-          dtflearn.Tanh("Tanh_2") >>
-          dtflearn.feedforward(5)(2) >>
-          dtflearn.Tanh("Tanh_3")
-          dtflearn.feedforward(2)(3)
+        dtflearn.feedforward(5)(1) >>
+          dtflearn.Tanh("Tanh_1") >>
+          dtflearn.feedforward(1)(2) >>
+          (IdentityLayer[Output]("Id_3") + dtflearn.feedforward(1)(3)) >>
+          Stack("Output", axis = 1)
       }
 
-      val lossFunc = GenRBFSWLoss("Loss/RBFWeightedL1", num_outputs)
+      val layer_parameter_names = Seq("Linear_1/Weights", "Linear_2/Weights", "Id_3/Linear_3/Weights")
 
-      val loss     = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
+      /*
+      (IdentityLayer[Output]("Id_2") + dtflearn.feedforward(1)(2)) >>
+        Stack("Output", axis = 1)
+      */
+
+      val lossFunc = RBFWeightedSWLoss("Loss/RBFWeightedL1", num_outputs, 1d)
+
+      val loss     = lossFunc >>
+        L2Regularization(layer_parameter_names, Seq("FLOAT64", "FLOAT64"), reg) >>
+        tf.learn.ScalarSummary("Loss", "ModelLoss")
 
       val summariesDir =
         if (sum_dir == "") java.nio.file.Paths.get(tf_summary_dir.toString())
@@ -298,13 +309,19 @@ def main(
 
       val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir)
+      val metrics = new HeliosOmniTSMetrics(
+        dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
+        tf_dataset.testLabels.shape(1),
+        dtf.tensor_f32(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(1d):_*)
+      )
+
+      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, metrics, tf_summary_dir)
     })
 
   //The processing pipeline
   val process_data = load_data_into_tensors > scale_data > model_train_eval
 
-  val ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir) =
+  val ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, hs_metrics, tf_summary_dir) =
     process_data(collated_data)
 
   val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
@@ -348,17 +365,12 @@ def main(
       .evaluate().scalar
       .asInstanceOf[Float]
       .toDouble
-  )
-
-  val metrics = new HeliosOmniTSMetrics(
-    dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
-    tf_dataset.testLabels.shape(1),
-    dtf.tensor_f32(tf_dataset.nTest)(predicted_time_scales:_*)
   )*/
 
   (
     collated_data, tf_dataset, model, estimator,
-    tf_summary_dir, reg_metrics, reg_time_lag
+    tf_summary_dir, reg_metrics, reg_time_lag, hs_metrics,
+    scalers
   )
 
 }

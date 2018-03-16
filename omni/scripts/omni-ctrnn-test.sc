@@ -9,6 +9,7 @@ import io.github.mandar2812.dynaml.tensorflow.layers._
 import io.github.mandar2812.dynaml.tensorflow.learn._
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader, OmniOSA}
+import _root_.io.github.mandar2812.PlasmaML.utils._
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -44,8 +45,8 @@ def main(
     val (features, labels) = fl.unzip
     val n_data = features.length
     (
-      dtf.tensor_f32(n_data, quantities.length, history)(features.flatMap(_.flatten):_*),
-      dtf.tensor_f32(n_data, quantities.length, horizon)(labels.flatMap(_.flatten):_*)
+      dtf.tensor_f64(n_data, quantities.length, history)(features.flatMap(_.flatten):_*),
+      dtf.tensor_f64(n_data, quantities.length, horizon)(labels.flatMap(_.flatten):_*)
     )
   })
 
@@ -70,6 +71,8 @@ def main(
     DynamicTimeStepCTRNN("fhctrnn_1", num_hidden_units, horizon) >>
     FiniteHorizonLinear("fhproj_2", num_hidden_units, quantities.length, horizon)
 
+  val layer_params = Seq("Linear_0/Weights", "fhctrnn_1/Weights", "fhctrnn_1/Gain", "fhproj_2/Weights")
+
   val input = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, history))
 
   val trainOutput = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, horizon))
@@ -79,6 +82,7 @@ def main(
   val lossFunc = MVTimeSeriesLoss("Loss/MVTS")
 
   val loss = lossFunc >>
+    L2Regularization(layer_params, layer_params.map(_ => "FLOAT64"), 0.001) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())

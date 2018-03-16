@@ -33,8 +33,8 @@ class HeliosOmniTSMetrics(
     val repeated_time_scales = dtf.stack(Seq.fill(size_causal_window)(time_scale), axis = -1)
 
     val convolution_kernel = (repeated_index_times - repeated_times)
-      .abs
-      .multiply(-1d)
+      .square
+      .multiply(-0.5)
       .divide(repeated_time_scales)
       .exp
 

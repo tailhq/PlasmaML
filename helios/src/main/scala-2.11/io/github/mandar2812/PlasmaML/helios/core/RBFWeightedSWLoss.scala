@@ -24,8 +24,6 @@ case class RBFWeightedSWLoss(
 
   private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
 
-  //val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
-
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
     //Obtain section corresponding to velocity predictions
@@ -33,7 +31,7 @@ case class RBFWeightedSWLoss(
 
     val targets = input._2
 
-    val timelags = input._1(::, 1).sigmoid.multiply(scaling)
+    val timelags = input._1(::, 1).sigmoid.multiply(scaling).floor
 
     val repeated_times = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
     
@@ -42,14 +40,13 @@ case class RBFWeightedSWLoss(
     val index_times: Output = Tensor((0 until size_causal_window).map(_.toDouble)).reshape(Shape(size_causal_window))
 
 
-    val convolution_kernel = (repeated_times - index_times)
-      .abs
-      .multiply(-1.0)
+    val convolution_kernel = repeated_times.subtract(index_times)
+      .square
+      .multiply(-0.5)
       .divide(time_scale)
       .exp
 
-    val weighted_loss_tensor =
-      (repeated_preds - targets)
+    val weighted_loss_tensor = repeated_preds.subtract(targets)
         .square
         .multiply(convolution_kernel)
         .sum(axes = 1)
