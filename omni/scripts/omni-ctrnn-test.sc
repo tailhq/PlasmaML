@@ -19,6 +19,7 @@ def main(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
   horizon: Int = 24, history: Int = 6, num_hidden_units: Int = 6,
   iterations: Int = 50000, optimizer: Optimizer = tf.train.AdaDelta(0.005),
+  reg: Double = 0.001,
   stormsFile: String = OmniOSA.stormsFileJi) = {
 
   DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -71,7 +72,11 @@ def main(
     DynamicTimeStepCTRNN("fhctrnn_1", num_hidden_units, horizon) >>
     FiniteHorizonLinear("fhproj_2", num_hidden_units, quantities.length, horizon)
 
-  val layer_params = Seq("Linear_0/Weights", "fhctrnn_1/Weights", "fhctrnn_1/Gain", "fhproj_2/Weights")
+  val layer_params = Seq(
+    "Linear_0/Weights",
+    "fhctrnn_1/fhctrnn_1/Weights",
+    "fhctrnn_1/fhctrnn_1/Gain",
+    "fhctrnn_1/fhctrnn_1/Weights")
 
   val input = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, history))
 
@@ -82,7 +87,7 @@ def main(
   val lossFunc = MVTimeSeriesLoss("Loss/MVTS")
 
   val loss = lossFunc >>
-    L2Regularization(layer_params, layer_params.map(_ => "FLOAT64"), 0.001) >>
+    L2Regularization(layer_params, layer_params.map(_ => "FLOAT64"), reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
@@ -179,9 +184,10 @@ def apply(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
   horizon: Int = 24, history: Int = 6,  num_hidden_units: Int = 6,
   iterations: Int = 50000,
-  optimizer: Optimizer = tf.train.AdaDelta(0.005),
+  optimizer: Optimizer = tf.train.AdaDelta(0.005), reg: Double = 0.001,
   stormsFile: String = OmniOSA.stormsFileJi) =
   main(
     yearrange, quantities, horizon, history,
-    num_hidden_units, iterations, optimizer, stormsFile
+    num_hidden_units, iterations, optimizer, reg,
+    stormsFile
   )

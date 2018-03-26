@@ -10,11 +10,11 @@ case class WeightedTimeSeriesLoss(
   size_causal_window: Int) extends
   Loss[(Output, Output)](name) {
 
-  override val layerType: String = s"WtTSLoss[horizon:$size_causal_window]"
+  override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    val log_temperature: tf.Variable = tf.variable(s"$name/time_scale", FLOAT32, Shape(), tf.OnesInitializer)
+    val log_temperature: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
 
     val preds = input._1(::, 0::size_causal_window)
     val unorm_prob = input._1(::, size_causal_window::).divide(log_temperature.exp).exp
