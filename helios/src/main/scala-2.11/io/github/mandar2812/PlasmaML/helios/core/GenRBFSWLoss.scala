@@ -25,7 +25,9 @@ case class GenRBFSWLoss(
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    val time_scale: tf.Variable = tf.variable(s"$name/time_scale", FLOAT32, Shape(), tf.OnesInitializer)
+    val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
+
+    val logp: tf.Variable = tf.variable("logp", FLOAT32, Shape(), tf.RandomUniformInitializer(0.0, 1.0))
 
     //Obtain section corresponding to velocity predictions
     val predictions = input._1(::, 0)
@@ -40,10 +42,12 @@ case class GenRBFSWLoss(
 
     val index_times: Output = Tensor((0 until size_causal_window).map(_.toDouble)).reshape(Shape(size_causal_window))
 
+    val p = logp.exp
 
     val convolution_kernel = (repeated_times - index_times)
       .abs
-      .multiply(-1.0)
+      .pow(p)
+      .divide(p.multiply(-1.0))
       .divide(time_scale.square)
       .exp
 

@@ -14,15 +14,19 @@ import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
+import _root_.io.github.mandar2812.PlasmaML.utils._
+import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 
 //Prediction architecture
 val arch = {
   tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.feedforward(20)(0) >>
-    dtflearn.Tanh("Tanh_0") >>
+    dtflearn.feedforward(15)(0) >>
+    tf.learn.Sigmoid("Sigmoid_0") >>
     dtflearn.feedforward(2)(1)
 }
+
+val layer_parameter_names = Seq("Linear_0/Weights", "Linear_1/Weights")
 
 //Output Function
 val alpha = 100f
@@ -113,18 +117,20 @@ def generate_data(
 
 @main
 def main(
-  d: Int = 3, n: Int = 100,
-  noise: Double = 0.5, noiserot: Double = 0.1,
+  d: Int = 3, n: Int = 1000,
+  noise: Double = 0.05, noiserot: Double = 0.01,
   iterations: Int = 100000, fixed_lag: Float = 2f,
   sliding_window: Int = 5,
   outputPipe: DataPipe[Tensor, Double] = output_function,
-  architecture: Layer[Output, Output] = arch) = {
+  architecture: Layer[Output, Output] = arch,
+  optimizer: Optimizer = tf.train.AdaDelta(0.001),
+  reg: Double = 0.001) = {
 
   require(
     sliding_window > fixed_lag,
     "Forward sliding window must be greater than chosen causal time lag")
 
-  val train_fraction = 0.6
+  val train_fraction = 0.7
 
   //Generate synthetic time series data
   val (data, collated_data) = generate_data(
@@ -155,12 +161,12 @@ def main(
   val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
     .zip(tf.data.TensorSlicesDataset(norm_train_labels)).repeat()
     .shuffle(100)
-    .batch(256)
+    .batch(512)
     .prefetch(10)
 
   val dt = DateTime.now()
 
-  val summary_dir_index = "helios_toy_problem_fixed_"+dt.toString("YYYY-MM-dd-hh-mm")
+  val summary_dir_index = "helios_toy_problem_fixed_"+dt.toString("YYYY-MM-dd-HH-mm")
 
   val tf_summary_dir = home/'tmp/summary_dir_index
 
@@ -172,13 +178,12 @@ def main(
 
   val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
 
-  val lossFunc = new RBFWeightedSWLoss("Loss/RBFWeightedL1", num_outputs, 1d)
+  val lossFunc = RBFWeightedSWLoss("Loss/RBFWeightedL1", num_outputs, 1d, 1d)
 
   val loss = lossFunc >>
-    tf.learn.Mean("Loss/Mean") >>
+    L2Regularization(layer_parameter_names, Seq("FLOAT32", "FLOAT32"), reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-  val optimizer = tf.train.AdaDelta(0.005)
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
@@ -194,10 +199,10 @@ def main(
       tf.learn.Configuration(Some(summariesDir)),
       tf.learn.StopCriteria(maxSteps = Some(iterations)),
       Set(
-        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(100)),
-        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(100)),
-        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(100))),
-      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 100))
+        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
+        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
+      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
 
     estimator.train(() => training_data, tf.learn.StopCriteria(maxSteps = Some(iterations)))
 
@@ -229,11 +234,11 @@ def main(
 
   val unscaled_pred_time_lags_test = predictions(::, 1)
 
-  val metrics = new HeliosOmniTSMetrics(
+  /*val metrics = new HeliosOmniTSMetrics(
     dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
     tf_dataset.testLabels.shape(1),
     dtf.tensor_f32(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(lossFunc.time_scale):_*)
-  )
+  )*/
 
   val pred_time_lags_test = unscaled_pred_time_lags_test
     .sigmoid
@@ -275,5 +280,5 @@ def main(
   title("Test Set Predictions")
   unhold()
 
-  (collated_data, tf_dataset, model, estimator, tf_summary_dir, metrics, reg_metrics, reg_time_lag)
+  (collated_data, tf_dataset, model, estimator, tf_summary_dir, /*metrics,*/ reg_metrics, reg_time_lag)
 }

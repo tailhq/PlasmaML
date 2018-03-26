@@ -1,17 +1,20 @@
-import breeze.linalg.{DenseMatrix, qr}
+import breeze.linalg.{DenseMatrix, DenseVector, qr}
 import breeze.stats.distributions.Gaussian
 import com.quantifind.charts.Highcharts._
 import ammonite.ops.home
 import org.joda.time.DateTime
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers._
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
 import org.platanios.tensorflow.api._
+import org.platanios.tensorflow.api.learn.layers.Layer
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
+import org.platanios.tensorflow.api.ops.variables.ReuseExistingOnly
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.utils._
@@ -38,27 +41,14 @@ val compute_time_lag = DataPipe((va: (Float, Float)) => {
   (dt, vf)
 })
 
-def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
-  val mean = data.sum/data.length
-  val variance = data.map(_ - mean).map(math.pow(_, 2d)).sum/(data.length - 1d)
-
-
-  (0 to n).map(lag => {
-    val sliding_ts = data.sliding(lag+1).toSeq
-    val len = sliding_ts.length - 1d
-
-    sliding_ts.map(xs => (xs.head - mean) * (xs.last - mean)).sum/(len*variance)
-  }).toStream
-}
-
 
 //Subroutine to generate synthetic
 //input-lagged output time series.
 def generate_data(
-  d: Int = 3, n: Int = 5,
-  sliding_window: Int,
-  noise: Double = 0.5,
-  noiserot: Double = 0.1) = {
+                   d: Int = 3, n: Int = 5,
+                   sliding_window: Int,
+                   noise: Double = 0.5,
+                   noiserot: Double = 0.1) = {
 
   val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
     () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
@@ -145,14 +135,14 @@ def generate_data(
 
 @main
 def main(
-  d: Int = 3, n: Int = 100,
-  sliding_window: Int = 15,
-  noise: Double = 0.5,
-  noiserot: Double = 0.1,
-  iterations: Int = 150000,
-  optimizer: Optimizer = tf.train.AdaDelta(0.01),
-  sum_dir: String = "",
-  reg: Double = 0.01) = {
+          d: Int = 3, n: Int = 100,
+          sliding_window: Int = 15,
+          noise: Double = 0.5,
+          noiserot: Double = 0.1,
+          iterations: Int = 150000,
+          optimizer: Optimizer = tf.train.AdaDelta(0.01),
+          sum_dir: String = "",
+          reg: Double = 0.01) = {
 
   val train_fraction = 0.7
 
@@ -212,7 +202,6 @@ def main(
 
     (tf_dataset, test_time_lags)
   })
-
   //Scale training features/labels, apply scaling to test features
   val scale_data = DataPipe(
     DataPipe((dataset: HeliosDataSet) => {
@@ -236,7 +225,7 @@ def main(
       val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
         .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
         .shuffle(100)
-        .batch(512)
+        .batch(128)
         .prefetch(10)
 
       val dt = DateTime.now()
@@ -256,22 +245,17 @@ def main(
 
       //Prediction architecture
       val architecture = {
-        dtflearn.feedforward(15)(1) >>
-          tf.learn.ReLU("Act_1", 0.01f) >>
-          dtflearn.feedforward(10)(2) >>
-          tf.learn.ReLU("Act_2", 0.01f) >>
-          dtflearn.feedforward(2)(3)
+        dtflearn.feedforward(25)(1) >>
+          dtflearn.Tanh("Tanh_1") >>
+          dtflearn.feedforward(2*num_outputs)(2)
+        /*dtflearn.feedforward(1)(2) >>
+        (IdentityLayer[Output]("Id_3") + dtflearn.feedforward(1)(3)) >>
+        Stack("Output", axis = 1)*/
       }
 
-      val layer_parameter_names = Seq("Linear_1/Weights", "Linear_2/Weights", "Linear_3/Weights")
+      val layer_parameter_names = Seq("Linear_1/Weights", "Linear_2/Weights")
 
-      val lossFunc = RBFWeightedSWLoss(
-        "Loss/RBFWeightedL1", num_outputs,
-        kernel_time_scale = 1d,
-        kernel_norm_exponent = 1d,
-        corr_cutoff = 0.0, prior_scaling = 2.5,
-        prior_weight = 1.0,
-        batch = 512)
+      val lossFunc = WeightedTimeSeriesLoss("Loss/WeightedTS", num_outputs)
 
       val loss     = lossFunc >>
         L2Regularization(layer_parameter_names, Seq("FLOAT64", "FLOAT64"), reg) >>
@@ -347,32 +331,21 @@ def main(
 
   val pred_time_lags_test = reg_time_lag.preds
 
-  val pred_targets_test = reg_metrics.preds
+  val pred_targets = reg_metrics.preds
 
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
 
-  try {
-    histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Double]).toSeq)
-    title("Predicted Time Lags")
-  } catch {
-    case _: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
-    case _ => println("Can't plot histogram due to exception")
-  }
+  histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Double]).toSeq)
+  title("Predicted Time Lags")
 
-  try {
-
-    histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Double]))
-    title("Histogram of Time Lag prediction errors")
-  } catch {
-    case e: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
-    case _ => println("Can't plot histogram due to exception")
-  }
+  histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Double]), numBins = 100)
+  title("Histogram of Time Lag prediction errors")
 
   val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
     val time_index = c._1._1
     val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Double]
-    val pred = pred_targets_test(c._2).scalar.asInstanceOf[Double]
+    val pred = pred_targets(c._2).scalar.asInstanceOf[Double]
 
 
     (time_index + pred_lag, pred)
@@ -386,36 +359,9 @@ def main(
   title("Test Set Predictions")
   unhold()
 
-
-  //Perform same visualisation for training set
-  val training_preds = estimator.infer(() => tf_dataset.trainData)
-
-  val pred_time_lags_train = training_preds(::, 1).sigmoid.multiply(sliding_window - 1)
-
-  val pred_targets_train = scalers._2(0).i(training_preds(::, 0))
-
-  val train_signal_predicted = collated_data.slice(0, num_training).zipWithIndex.map(c => {
-    val time_index = c._1._1
-    val pred_lag = pred_time_lags_train(c._2).scalar.asInstanceOf[Double]
-    val pred = pred_targets_train(c._2).scalar.asInstanceOf[Double]
-
-    (time_index + pred_lag, pred)
-  }).sortBy(_._1)
-
-  line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3, c._2._2(c._2._3))))
-  hold()
-  line(train_signal_predicted)
-  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
-  title("Training Set Predictions")
-  unhold()
-
-  line(autocorrelation(20)(data.map(_._2._2.toDouble)))
-  title("Auto-covariance of time series")
-
   (
-    (data, collated_data, tf_dataset),
-    (model, estimator, tf_summary_dir),
-    (reg_metrics, reg_time_lag, hs_metrics),
+    collated_data, tf_dataset, model, estimator,
+    tf_summary_dir, reg_metrics, reg_time_lag, hs_metrics,
     scalers
   )
 

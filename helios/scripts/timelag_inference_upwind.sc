@@ -4,7 +4,7 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
-import breeze.linalg.{DenseMatrix, DenseVector, qr}
+import breeze.linalg.{DenseMatrix, qr}
 import breeze.stats.distributions.Gaussian
 import com.quantifind.charts.Highcharts._
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
@@ -13,8 +13,6 @@ import org.joda.time.DateTime
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.dynamics.mhd._
-import org.platanios.tensorflow.api.learn.layers.Layer
-
 
 //Output computation
 val alpha = 10f
@@ -142,8 +140,8 @@ def main(
     tf.learn.Cast("Input/Cast", FLOAT64) >>
       UpwindTF("Upwind", (0.0, distance.toDouble), nR, nTheta) >>
       tf.learn.Flatten("Flatten_1") >>
-      dtflearn.feedforward(2)(1)
-      //UpwindPropogate("Upwind_Propogate", (0.0, distance), nR, nTheta)
+      //dtflearn.feedforward(2)(1)
+      UpwindPropogate("Upwind_Propogate", (0.0, distance), nR, nTheta)
   }
 
   val train_fraction = 0.7
@@ -276,7 +274,7 @@ def main(
   val metrics = new HeliosOmniTSMetrics(
     dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
     tf_dataset.testLabels.shape(1),
-    dtf.tensor_f64(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(lossFunc.time_scale):_*)
+    dtf.tensor_f64(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(lossFunc.kernel_time_scale):_*)
   )
 
   val pred_time_lags_test = unscaled_pred_time_lags_test

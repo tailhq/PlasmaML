@@ -9,7 +9,8 @@ import _root_.io.github.mandar2812.dynaml.tensorflow._
   * */
 class HeliosOmniTSMetrics(
   predictions: Tensor, targets: Tensor,
-  size_causal_window: Int, time_scale: Tensor) extends
+  size_causal_window: Int, time_scale: Tensor,
+  p: Double = 2.0) extends
   MetricsTF(Seq("weighted_avg_err"), predictions, targets) {
 
   private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
@@ -33,8 +34,9 @@ class HeliosOmniTSMetrics(
     val repeated_time_scales = dtf.stack(Seq.fill(size_causal_window)(time_scale), axis = -1)
 
     val convolution_kernel = (repeated_index_times - repeated_times)
-      .square
-      .multiply(-0.5)
+      .abs
+      .pow(p)
+      .multiply(-1.0/p)
       .divide(repeated_time_scales)
       .exp
 

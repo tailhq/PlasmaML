@@ -48,7 +48,8 @@ case class UpwindTF(
 case class UpwindPropogate(
   override val name: String, rDomain: (Double, Double),
   nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer()) extends Layer[Output, Output](name) {
-  override val layerType: String = "UpwindPropogate"
+
+  override val layerType: String = s"UpwindPropogate[r:$rDomain, nR:$nR, nTheta:$nTheta]"
 
   /**
     * The Carrington longitude lies
