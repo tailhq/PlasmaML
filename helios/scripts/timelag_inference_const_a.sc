@@ -5,6 +5,7 @@ import ammonite.ops.home
 import org.joda.time.DateTime
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers._
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
@@ -22,7 +23,7 @@ val alpha = 100f
 val compute_output = DataPipe(
   (v: Tensor) =>
     (
-      v.square.sum().sqrt.scalar.asInstanceOf[Float]*alpha,
+      v.square.sum().scalar.asInstanceOf[Float]*alpha,
       alpha*0.1f
     )
 )
@@ -88,16 +89,19 @@ def generate_data(
 
   val translation_op = DataPipe2((tr: Tensor, x: Tensor) => tr.add(x))
 
-  val translation_vecs = random_gaussian_vec(d).iid(n-1).draw
+  val translation_vecs = random_gaussian_vec(d).iid(n+500-1).draw
 
   val x_tail = translation_vecs.scanLeft(x0)((x, sc) => translation_op(sc, rotation_op(x)))
 
-  val x: Seq[Tensor] = Stream(x0) ++ x_tail
+  val x: Seq[Tensor] = (Stream(x0) ++ x_tail).takeRight(n)
 
   val calculate_outputs =
     compute_output >
       compute_time_lag >
-      DataPipe(DataPipe((d: Float) => d.toInt), id[Float])
+      DataPipe(
+        DataPipe((d: Float) => d.toInt),
+        DataPipe((v: Float) => v + (scala.util.Random.nextGaussian()*noise).toFloat)
+      )
 
 
   val generate_data_pipe = StreamDataPipe(
@@ -145,14 +149,20 @@ def generate_data(
 
 @main
 def main(
-  d: Int = 3, n: Int = 100,
-  sliding_window: Int = 15,
-  noise: Double = 0.5,
-  noiserot: Double = 0.1,
-  iterations: Int = 150000,
+  d: Int               = 3,
+  n: Int               = 100,
+  sliding_window: Int  = 15,
+  noise: Double        = 0.5,
+  noiserot: Double     = 0.1,
+  iterations: Int      = 150000,
   optimizer: Optimizer = tf.train.AdaDelta(0.01),
-  sum_dir: String = "",
-  reg: Double = 0.01) = {
+  sum_dir: String      = "",
+  reg: Double          = 0.01,
+  p: Double            = 1.0,
+  time_scale: Double   = 1.0,
+  corr_sc: Double      = 2.5,
+  c_cutoff: Double     = 0.0,
+  prior_wt: Double     = 1d) = {
 
   val train_fraction = 0.7
 
@@ -256,25 +266,36 @@ def main(
 
       //Prediction architecture
       val architecture = {
-        dtflearn.feedforward(15)(1) >>
+        dtflearn.feedforward(20)(1) >>
           tf.learn.ReLU("Act_1", 0.01f) >>
-          dtflearn.feedforward(10)(2) >>
+          dtflearn.feedforward(15)(2) >>
           tf.learn.ReLU("Act_2", 0.01f) >>
           dtflearn.feedforward(2)(3)
       }
 
-      val layer_parameter_names = Seq("Linear_1/Weights", "Linear_2/Weights", "Linear_3/Weights")
+      val layer_parameter_names = Seq(
+        "Linear_1/Weights", "Linear_2/Weights",
+        "Linear_3/Weights", "Linear_3/Weights")
+
+      val layer_shapes = Seq(
+        Shape(d, 20),
+        Shape(20, 15),
+        Shape(15, 2)
+      )
+
+      val layer_datatypes = Seq("FLOAT64", "FLOAT64", "FLOAT64")
 
       val lossFunc = RBFWeightedSWLoss(
         "Loss/RBFWeightedL1", num_outputs,
-        kernel_time_scale = 1d,
-        kernel_norm_exponent = 1d,
-        corr_cutoff = 0.0, prior_scaling = 2.5,
-        prior_weight = 1.0,
+        kernel_time_scale = time_scale,
+        kernel_norm_exponent = p,
+        corr_cutoff = c_cutoff,
+        prior_scaling = corr_sc,
+        prior_weight = prior_wt,
         batch = 512)
 
       val loss     = lossFunc >>
-        L2Regularization(layer_parameter_names, Seq("FLOAT64", "FLOAT64"), reg) >>
+        L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
         tf.learn.ScalarSummary("Loss", "ModelLoss")
 
       val summariesDir =
@@ -293,7 +314,9 @@ def main(
           tf.learn.Configuration(Some(summariesDir)),
           tf.learn.StopCriteria(maxSteps = Some(iterations)),
           Set(
-            tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
+            tf.learn.StepRateLogger(
+              log = false, summaryDir = summariesDir,
+              trigger = tf.learn.StepHookTrigger(5000)),
             tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
             tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
           tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))

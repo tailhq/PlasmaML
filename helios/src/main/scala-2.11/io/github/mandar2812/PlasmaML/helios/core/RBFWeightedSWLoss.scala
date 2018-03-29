@@ -33,7 +33,8 @@ case class RBFWeightedSWLoss(
   corr_cutoff:          Double = -0.75,
   prior_weight:         Double = 1.0,
   prior_scaling:        Double = 1.0,
-  batch:                Int    = -1)
+  batch:                Int    = -1,
+  scale_lags: Boolean = true)
   extends Loss[(Output, Output)](name) {
 
   override val layerType: String = s"RBFSW[horizon:$size_causal_window, timescale:$kernel_time_scale]"
@@ -45,7 +46,9 @@ case class RBFWeightedSWLoss(
     val predictions   = input._1(::, 0)
     val unscaled_lags = input._1(::, 1)
     val targets       = input._2
-    val timelags      = unscaled_lags.sigmoid.multiply(scaling).floor
+    val timelags      =
+      if (scale_lags) unscaled_lags.sigmoid.multiply(scaling).floor
+      else unscaled_lags
 
     //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
     val batchSize =
@@ -55,7 +58,7 @@ case class RBFWeightedSWLoss(
     //Sort the predicted targets and time lags, obtaining
     //the ranks of each element.
     val rank_preds = predictions.topK(batchSize)._2.cast(FLOAT32)
-    val rank_unsc_lags = unscaled_lags.topK(batchSize)._2.cast(FLOAT32)
+    val rank_unsc_lags = timelags.topK(batchSize)._2.cast(FLOAT32)
 
     //Standardize (mean center) the ranked tensors
     val (ranked_preds_mean, ranked_unscaled_lags_mean) = (rank_preds.mean(), rank_unsc_lags.mean())
@@ -73,7 +76,11 @@ case class RBFWeightedSWLoss(
 
     val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(predictions), axis = -1)
 
-    val index_times: Output = Tensor((0 until size_causal_window).map(_.toDouble)).reshape(Shape(size_causal_window))
+    val index_times: Output = Tensor(
+      (0 until size_causal_window).map(_.toDouble)
+    ).reshape(
+      Shape(size_causal_window)
+    )
 
     //Calculate the convolution kernel of the loss function.
     val convolution_kernel = repeated_times.subtract(index_times)
@@ -84,16 +91,16 @@ case class RBFWeightedSWLoss(
       .exp
 
     //Convolve the kernel with the loss tensor, yielding the weighted loss tensor
-    val weighted_loss_tensor = repeated_preds.subtract(targets)
-        .square
-        .multiply(convolution_kernel)
-        .sum(axes = 1)
-        .divide(convolution_kernel.sum(axes = 1))
-        .mean()
+    val weighted_loss_tensor = repeated_preds
+      .subtract(targets)
+      .square
+      .multiply(convolution_kernel)
+      .sum(axes = 1)
+      .divide(convolution_kernel.sum(axes = 1))
+      .mean()
 
     /*
-    * Compute the prior term, which is a softplus
-    * function applied on an affine transformation
+    * Compute the prior term, which is an affine transformation
     * of the empirical Spearman Correlation between
     * the predicted targets and unscaled time lags.
     * */
@@ -102,9 +109,9 @@ case class RBFWeightedSWLoss(
         .mean()
         .subtract(corr_cutoff)
         .multiply(prior_scaling)
-        .softplus
-        .multiply(prior_weight)
 
-    weighted_loss_tensor.add(prior)
+    val offset: Double = (1.0 - math.abs(corr_cutoff))*prior_scaling
+
+    weighted_loss_tensor.add(prior).add(offset)
   }
 }
