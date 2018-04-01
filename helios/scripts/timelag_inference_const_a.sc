@@ -204,11 +204,11 @@ def main(
   val load_data_into_tensors = DataPipe((data: Stream[(Int, (Tensor, Stream[Double], Int))]) => {
     val features = dtf.stack(data.map(_._2._1), axis = 0)
 
-    val labels = dtf.tensor_f32(
+    val labels = dtf.tensor_f64(
       data.length, sliding_window)(
       data.flatMap(_._2._2):_*)
 
-    val labels_timelags = dtf.tensor_f32(data.length)(data.map(d => d._2._3.toDouble):_*)
+    val labels_timelags = dtf.tensor_f64(data.length)(data.map(d => d._2._3.toDouble):_*)
 
     val (_, test_time_lags): (Tensor, Tensor) = (
       labels_timelags(0 :: num_training),
@@ -243,10 +243,12 @@ def main(
 
       val ((tf_dataset, scalers), test_time_lags) = dataTuple
 
+      val miniBatch = 128
+
       val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
         .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
         .shuffle(100)
-        .batch(512)
+        .batch(miniBatch)
         .prefetch(10)
 
       val dt = DateTime.now()
@@ -262,20 +264,21 @@ def main(
 
       val trainInput         = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
 
-      val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
+      val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
       //Prediction architecture
       val architecture = {
         dtflearn.feedforward(20)(1) >>
-          tf.learn.ReLU("Act_1", 0.01f) >>
+          tf.learn.Sigmoid("Act_1") >>
           dtflearn.feedforward(15)(2) >>
-          tf.learn.ReLU("Act_2", 0.01f) >>
+          tf.learn.Sigmoid("Act_2") >>
           dtflearn.feedforward(2)(3)
       }
 
       val layer_parameter_names = Seq(
-        "Linear_1/Weights", "Linear_2/Weights",
-        "Linear_3/Weights", "Linear_3/Weights")
+        "Linear_1/Weights",
+        "Linear_2/Weights",
+        "Linear_3/Weights")
 
       val layer_shapes = Seq(
         Shape(d, 20),
@@ -292,7 +295,7 @@ def main(
         corr_cutoff = c_cutoff,
         prior_scaling = corr_sc,
         prior_weight = prior_wt,
-        batch = 512)
+        batch = miniBatch)
 
       val loss     = lossFunc >>
         L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
@@ -330,18 +333,25 @@ def main(
 
       val pred_targets = scalers._2(0).i(predictions(::, 0))
 
+      val alpha = Tensor(0.5)
+      val nu = Tensor(1.0)
+      val q = Tensor(1.0)
+
       val unscaled_pred_time_lags_test = predictions(::, 1)
 
       val pred_time_lags_test = unscaled_pred_time_lags_test
-        .sigmoid
-        .multiply(num_outputs-1)
-
+        .multiply(alpha.add(1E-6).square.multiply(-1.0))
+        .exp
+        .multiply(q.square)
+        .add(1.0)
+        .pow(nu.square.pow(-1.0).multiply(-1.0))
+        .multiply(num_outputs - 1.0)
 
       val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
 
       val actual_targets = (0 until num_test).map(n => {
         val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
-        tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Float]
+        tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Double]
       })
 
       val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
@@ -358,8 +368,12 @@ def main(
   //The processing pipeline
   val process_data = load_data_into_tensors > scale_data > model_train_eval
 
-  val ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, hs_metrics, tf_summary_dir) =
-    process_data(collated_data)
+  val (
+    (tf_dataset, scalers),
+    (model, estimator),
+    reg_metrics, reg_time_lag,
+    hs_metrics,
+    tf_summary_dir) = process_data(collated_data)
 
   val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
 

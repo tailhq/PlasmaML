@@ -46,9 +46,31 @@ case class RBFWeightedSWLoss(
     val predictions   = input._1(::, 0)
     val unscaled_lags = input._1(::, 1)
     val targets       = input._2
-    val timelags      =
-      if (scale_lags) unscaled_lags.sigmoid.multiply(scaling).floor
-      else unscaled_lags
+
+
+    //Perform scaling of time lags using the generalized logistic curve.
+    //First define some parameters.
+
+    //val alpha: tf.Variable = tf.variable("alpha", FLOAT32, Shape(), tf.RandomUniformInitializer())
+    //val nu:    tf.Variable = tf.variable("nu",    FLOAT32, Shape(), tf.OnesInitializer)
+    //val q:     tf.Variable = tf.variable("Q",     FLOAT32, Shape(), tf.OnesInitializer) 
+
+    val alpha = Tensor(0.5)
+    val nu = Tensor(1.0)
+    val q = Tensor(1.0)
+
+    val timelags           = if (scale_lags) {
+      unscaled_lags
+        .multiply(alpha.add(1E-6).square.multiply(-1.0))
+        .exp
+        .multiply(q.square)
+        .add(1.0)
+        .pow(nu.square.pow(-1.0).multiply(-1.0))
+        .multiply(scaling)
+        .floor
+    } else {
+      unscaled_lags.floor
+    }
 
     //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
     val batchSize =
@@ -90,6 +112,13 @@ case class RBFWeightedSWLoss(
       .divide(kernel_time_scale)
       .exp
 
+    val convolution_kernel_temporal = repeated_preds.subtract(targets)
+      .abs
+      .pow(2.0)
+      .multiply(-1/2.0)
+      .divide(1.0)
+      .exp
+
     //Convolve the kernel with the loss tensor, yielding the weighted loss tensor
     val weighted_loss_tensor = repeated_preds
       .subtract(targets)
@@ -97,6 +126,14 @@ case class RBFWeightedSWLoss(
       .multiply(convolution_kernel)
       .sum(axes = 1)
       .divide(convolution_kernel.sum(axes = 1))
+      .mean()
+
+    val weighted_temporal_loss_tensor = repeated_times
+      .subtract(index_times)
+      .square
+      .multiply(convolution_kernel_temporal)
+      .sum(axes = 1)
+      .divide(convolution_kernel_temporal.sum(axes = 1))
       .mean()
 
     /*
@@ -112,6 +149,6 @@ case class RBFWeightedSWLoss(
 
     val offset: Double = (1.0 - math.abs(corr_cutoff))*prior_scaling
 
-    weighted_loss_tensor.add(prior).add(offset)
+    weighted_loss_tensor.add(weighted_temporal_loss_tensor).add(prior).add(offset)
   }
 }

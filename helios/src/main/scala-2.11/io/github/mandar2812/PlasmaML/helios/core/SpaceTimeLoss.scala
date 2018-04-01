@@ -3,11 +3,16 @@ package io.github.mandar2812.PlasmaML.helios.core
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.Loss
 import org.platanios.tensorflow.api.ops.Output
-import org.platanios.tensorflow.api.{::, Shape, Tensor, tf}
+import org.platanios.tensorflow.api.{::, FLOAT32, Shape, Tensor, tf}
 
 case class SpaceTimeLoss(
   override val name: String,
-  size_causal_window: Int) extends
+  size_causal_window:   Int,
+  corr_cutoff:          Double  = -0.75,
+  prior_weight:         Double  = 1.0,
+  prior_scaling:        Double  = 1.0,
+  batch:                Int     = -1,
+  scale_lags:           Boolean = true) extends
   Loss[(Output, Output)](name) {
 
   override val layerType: String = s"SpaceTimeLoss[horizon:$size_causal_window]"
@@ -16,12 +21,39 @@ case class SpaceTimeLoss(
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    //Obtain section corresponding to velocity predictions
-    val predictions = input._1(::, 0)
+    val predictions   = input._1(::, 0)
+    val unscaled_lags = input._1(::, 1)
+    val targets       = input._2
 
-    val targets = input._2
+    //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
+    val batchSize =
+      if(batch == -1) predictions.size.toInt/predictions.shape.toTensor().prod().scalar.asInstanceOf[Int]
+      else batch
 
-    val timelags = input._1(::, 1).sigmoid.multiply(scaling)
+
+    //Perform scaling of time lags using the generalized logistic curve.
+    //First define some parameters.
+
+    //val alpha: tf.Variable = tf.variable("alpha", FLOAT32, Shape(), tf.RandomUniformInitializer())
+    //val nu:    tf.Variable = tf.variable("nu",    FLOAT32, Shape(), tf.OnesInitializer)
+    //val q:     tf.Variable = tf.variable("Q",     FLOAT32, Shape(), tf.OnesInitializer)
+
+    val alpha = Tensor(0.5)
+    val nu = Tensor(1.0)
+    val q = Tensor(1.0)
+
+    val timelags           = if (scale_lags) {
+      unscaled_lags
+        .multiply(alpha.add(1E-6).square.multiply(-1.0))
+        .exp
+        .multiply(q.square)
+        .add(1.0)
+        .pow(nu.square.pow(-1.0).multiply(-1.0))
+        .multiply(scaling)
+        .floor
+    } else {
+      unscaled_lags.floor
+    }
 
     val repeated_times = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
 
@@ -35,6 +67,35 @@ case class SpaceTimeLoss(
 
     val space_loss = repeated_preds.subtract(targets).square.multiply(0.5)
 
-    space_loss.add(time_loss).sum(axes = 1).mean()
+    //Sort the predicted targets and time lags, obtaining
+    //the ranks of each element.
+    val rank_preds = predictions.topK(batchSize)._2.cast(FLOAT32)
+    val rank_unsc_lags = timelags.topK(batchSize)._2.cast(FLOAT32)
+
+    //Standardize (mean center) the ranked tensors
+    val (ranked_preds_mean, ranked_unscaled_lags_mean) = (rank_preds.mean(), rank_unsc_lags.mean())
+
+    val (ranked_preds_std, ranked_unscaled_lags_std)   = (
+      rank_preds.subtract(ranked_preds_mean).square.mean().sqrt,
+      rank_unsc_lags.subtract(ranked_unscaled_lags_mean).square.mean().sqrt)
+
+    val (norm_ranked_targets, norm_ranked_unsc_lags)   = (
+      rank_preds.subtract(ranked_preds_mean).divide(ranked_preds_std),
+      rank_unsc_lags.subtract(ranked_unscaled_lags_mean).divide(ranked_unscaled_lags_std))
+
+    /*
+    * Compute the prior term, which is an affine transformation
+    * of the empirical Spearman Correlation between
+    * the predicted targets and unscaled time lags.
+    * */
+    val prior =
+      norm_ranked_targets.multiply(norm_ranked_unsc_lags)
+        .mean()
+        .subtract(corr_cutoff)
+        .multiply(prior_scaling)
+
+    val offset: Double = (1.0 - math.abs(corr_cutoff))*prior_scaling
+
+    space_loss.add(time_loss).sum(axes = 1).mean().add(prior).add(offset)
   }
 }
