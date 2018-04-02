@@ -162,7 +162,8 @@ def main(
   time_scale: Double   = 1.0,
   corr_sc: Double      = 2.5,
   c_cutoff: Double     = 0.0,
-  prior_wt: Double     = 1d) = {
+  prior_wt: Double     = 1d,
+  mo_flag: Boolean = false) = {
 
   val train_fraction = 0.7
 
@@ -266,13 +267,15 @@ def main(
 
       val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
+      val num_pred_dims = if(mo_flag) sliding_window + 1 else 2
+
       //Prediction architecture
       val architecture = {
         dtflearn.feedforward(20)(1) >>
           tf.learn.Sigmoid("Act_1") >>
           dtflearn.feedforward(15)(2) >>
           tf.learn.Sigmoid("Act_2") >>
-          dtflearn.feedforward(2)(3)
+          dtflearn.feedforward(num_pred_dims)(3)
       }
 
       val layer_parameter_names = Seq(
@@ -283,19 +286,23 @@ def main(
       val layer_shapes = Seq(
         Shape(d, 20),
         Shape(20, 15),
-        Shape(15, 2)
+        Shape(15, num_pred_dims)
       )
 
       val layer_datatypes = Seq("FLOAT64", "FLOAT64", "FLOAT64")
 
-      val lossFunc = RBFWeightedSWLoss(
-        "Loss/RBFWeightedL1", num_outputs,
-        kernel_time_scale = time_scale,
-        kernel_norm_exponent = p,
-        corr_cutoff = c_cutoff,
-        prior_scaling = corr_sc,
-        prior_weight = prior_wt,
-        batch = miniBatch)
+      val lossFunc = if (mo_flag) {
+        MOGrangerLoss("Loss/MOGranger", num_outputs)
+      } else {
+        RBFWeightedSWLoss(
+          "Loss/RBFWeightedL1", num_outputs,
+          kernel_time_scale = time_scale,
+          kernel_norm_exponent = p,
+          corr_cutoff = c_cutoff,
+          prior_scaling = corr_sc,
+          prior_weight = prior_wt,
+          batch = miniBatch)
+      }
 
       val loss     = lossFunc >>
         L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
@@ -331,13 +338,11 @@ def main(
 
       val predictions = estimator.infer(() => tf_dataset.testData)
 
-      val pred_targets = scalers._2(0).i(predictions(::, 0))
-
       val alpha = Tensor(0.5)
-      val nu = Tensor(1.0)
-      val q = Tensor(1.0)
+      val nu    = Tensor(1.0)
+      val q     = Tensor(1.0)
 
-      val unscaled_pred_time_lags_test = predictions(::, 1)
+      val unscaled_pred_time_lags_test = predictions(::, -1)
 
       val pred_time_lags_test = unscaled_pred_time_lags_test
         .multiply(alpha.add(1E-6).square.multiply(-1.0))
@@ -349,6 +354,23 @@ def main(
 
       val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
 
+      val pred_targets: Tensor = if (mo_flag) {
+        val all_preds = scalers._2.i(predictions(::, 0 :: -1))
+
+        val repeated_times      = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
+        val index_times = Tensor(
+          (0 until num_outputs).map(_.toDouble)
+        ).reshape(
+          Shape(num_outputs)
+        )
+
+        val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+
+        all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+      } else {
+        scalers._2(0).i(predictions(::, 0))
+      }
+
       val actual_targets = (0 until num_test).map(n => {
         val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
         tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Double]
@@ -356,13 +378,13 @@ def main(
 
       val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-      val metrics = new HeliosOmniTSMetrics(
+      /*val metrics = new HeliosOmniTSMetrics(
         dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
         tf_dataset.testLabels.shape(1),
         dtf.tensor_f32(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(1d):_*)
-      )
+      )*/
 
-      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, metrics, tf_summary_dir)
+      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag,/* metrics,*/ tf_summary_dir)
     })
 
   //The processing pipeline
@@ -372,7 +394,7 @@ def main(
     (tf_dataset, scalers),
     (model, estimator),
     reg_metrics, reg_time_lag,
-    hs_metrics,
+    /*hs_metrics,*/
     tf_summary_dir) = process_data(collated_data)
 
   val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
@@ -427,7 +449,17 @@ def main(
   //Perform same visualisation for training set
   val training_preds = estimator.infer(() => tf_dataset.trainData)
 
-  val pred_time_lags_train = training_preds(::, 1).sigmoid.multiply(sliding_window - 1)
+  val alpha = Tensor(0.5)
+  val nu    = Tensor(1.0)
+  val q     = Tensor(1.0)
+
+  val pred_time_lags_train = training_preds(::, 1)
+    .multiply(alpha.add(1E-6).square.multiply(-1.0))
+    .exp
+    .multiply(q.square)
+    .add(1.0)
+    .pow(nu.square.pow(-1.0).multiply(-1.0))
+    .multiply(sliding_window - 1.0)
 
   val pred_targets_train = scalers._2(0).i(training_preds(::, 0))
 
@@ -452,7 +484,7 @@ def main(
   (
     (data, collated_data, tf_dataset),
     (model, estimator, tf_summary_dir),
-    (reg_metrics, reg_time_lag, hs_metrics),
+    (reg_metrics, reg_time_lag/*, hs_metrics*/),
     scalers
   )
 

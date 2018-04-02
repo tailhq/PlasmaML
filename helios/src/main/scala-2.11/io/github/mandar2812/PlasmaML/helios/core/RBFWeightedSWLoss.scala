@@ -112,16 +112,17 @@ case class RBFWeightedSWLoss(
       .divide(kernel_time_scale)
       .exp
 
-    val convolution_kernel_temporal = repeated_preds.subtract(targets)
-      .abs
-      .pow(2.0)
+    val target_err = repeated_preds.subtract(targets)
+
+    val convolution_kernel_temporal = target_err
+      .l2Normalize(axes = 1)
+      .square
       .multiply(-1/2.0)
       .divide(1.0)
       .exp
 
     //Convolve the kernel with the loss tensor, yielding the weighted loss tensor
-    val weighted_loss_tensor = repeated_preds
-      .subtract(targets)
+    val weighted_loss_tensor = target_err
       .square
       .multiply(convolution_kernel)
       .sum(axes = 1)
