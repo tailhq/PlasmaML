@@ -28,25 +28,18 @@ def main(
 
   //Output computation
   val alpha = 100f
-  val compute_output = DataPipe(
-    (v: Tensor) =>
-      (
-        v.square.sum().scalar.asInstanceOf[Float]*alpha,
-        alpha*0.1f
-      )
-  )
+
 
   //Time Lag Computation
-  // 1/2*a*t^2 + u*t - s = 0
-  // t = (-u + sqrt(u*u + 2as))/a
-  val distance = alpha*20
+  // distance/velocity
+  val distance = alpha*10
+  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
+    (v: Tensor) => {
 
-  val compute_time_lag = DataPipe((va: (Float, Float)) => {
-    val (v, a) = va
-    val dt = (-v + math.sqrt(v*v + 2*a*distance).toFloat)/a
-    val vf = math.sqrt(v*v + 2f*a*distance).toFloat
-    (dt, vf + scala.util.Random.nextGaussian().toFloat*noise.toFloat)
-  })
+      val out = v.square.sum().scalar.asInstanceOf[Float]*alpha
+
+      (distance/out, out + scala.util.Random.nextGaussian().toFloat*noise.toFloat)
+    })
 
   val num_outputs        = sliding_window
 
@@ -87,7 +80,7 @@ def main(
 
   timelagutils.run_exp(
     d, n, sliding_window, noise, noiserot,
-    compute_output > compute_time_lag,
+    compute_output,
     iterations, optimizer, 512, sum_dir,
     mo_flag, architecture, loss)
 }
