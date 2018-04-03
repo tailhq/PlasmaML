@@ -249,8 +249,8 @@ def run_exp(
       val dt = DateTime.now()
 
       val summary_dir_index  =
-        if(mo_flag) "timelag_inference_mo_"+dt.toString("YYYY-MM-dd-HH-mm")
-        else "timelag_inference_"+dt.toString("YYYY-MM-dd-HH-mm")
+        if(mo_flag) sum_dir_prefix+"_timelag_inference_mo_"+dt.toString("YYYY-MM-dd-HH-mm")
+        else sum_dir_prefix+"_timelag_inference_"+dt.toString("YYYY-MM-dd-HH-mm")
 
       val tf_summary_dir     = home/'tmp/summary_dir_index
 
@@ -263,9 +263,7 @@ def run_exp(
 
       val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
-      val summariesDir =
-        if (sum_dir_prefix == "") java.nio.file.Paths.get(tf_summary_dir.toString())
-        else java.nio.file.Paths.get(sum_dir_prefix+"_"+tf_summary_dir.toString())
+      val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
       val (model, estimator) = tf.createWith(graph = Graph()) {
         val model = tf.learn.Model(
