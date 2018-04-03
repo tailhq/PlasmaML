@@ -10,21 +10,21 @@ import $file.timelagutils
 
 @main
 def main(
-  d: Int               = 3,
-  n: Int               = 100,
-  sliding_window: Int  = 15,
-  noise: Double        = 0.5,
-  noiserot: Double     = 0.1,
-  iterations: Int      = 150000,
-  optimizer: Optimizer = tf.train.AdaDelta(0.01),
-  sum_dir: String      = "",
-  reg: Double          = 0.01,
-  p: Double            = 1.0,
-  time_scale: Double   = 1.0,
-  corr_sc: Double      = 2.5,
-  c_cutoff: Double     = 0.0,
-  prior_wt: Double     = 1d,
-  mo_flag: Boolean = false) = {
+  d: Int                 = 3,
+  n: Int                 = 100,
+  sliding_window: Int    = 15,
+  noise: Double          = 0.5,
+  noiserot: Double       = 0.1,
+  iterations: Int        = 150000,
+  optimizer: Optimizer   = tf.train.AdaDelta(0.01),
+  sum_dir_prefix: String = "",
+  reg: Double            = 0.01,
+  p: Double              = 1.0,
+  time_scale: Double     = 1.0,
+  corr_sc: Double        = 2.5,
+  c_cutoff: Double       = 0.0,
+  prior_wt: Double       = 1d,
+  mo_flag: Boolean       = false) = {
 
   //Output computation
   val alpha = 100f
@@ -81,6 +81,6 @@ def main(
   timelagutils.run_exp(
     d, n, sliding_window, noise, noiserot,
     compute_output,
-    iterations, optimizer, 512, sum_dir,
+    iterations, optimizer, 512, sum_dir_prefix,
     mo_flag, architecture, loss)
 }

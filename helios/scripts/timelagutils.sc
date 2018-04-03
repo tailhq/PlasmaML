@@ -265,7 +265,7 @@ def run_exp(
 
       val summariesDir =
         if (sum_dir_prefix == "") java.nio.file.Paths.get(tf_summary_dir.toString())
-        else java.nio.file.Paths.get(sum_dir_prefix)
+        else java.nio.file.Paths.get(sum_dir_prefix+"_"+tf_summary_dir.toString())
 
       val (model, estimator) = tf.createWith(graph = Graph()) {
         val model = tf.learn.Model(
