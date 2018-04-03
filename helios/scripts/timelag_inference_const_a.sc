@@ -401,19 +401,9 @@ def run_exp(
     case _ => println("Can't plot histogram due to exception")
   }
 
-  val test_signal_predicted = collated_data.slice(num_training, n).zipWithIndex.map(c => {
-    val time_index = c._1._1
-    val pred_lag = pred_time_lags_test(c._2).scalar.asInstanceOf[Double]
-    val pred = pred_targets_test(c._2).scalar.asInstanceOf[Double]
-
-
-    (time_index + pred_lag, pred)
-  }).sortBy(_._1)
-
-
-  line(collated_data.slice(num_training, n).map(c => (c._1+c._2._3, c._2._2(c._2._3))))
+  line(toDoubleSeq(reg_metrics.targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
   hold()
-  line(test_signal_predicted)
+  line(toDoubleSeq(reg_metrics.preds).zipWithIndex.map(c => (c._2, c._1)).toSeq)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Test Set Predictions")
   unhold()
@@ -457,7 +447,7 @@ def run_exp(
   (
     (data, collated_data, tf_dataset),
     (model, estimator, tf_summary_dir),
-    (reg_metrics, reg_time_lag/*, hs_metrics*/),
+    (reg_metrics, reg_time_lag),
     scalers
   )
 
