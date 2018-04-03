@@ -17,7 +17,7 @@ def main(
   noiserot: Double       = 0.1,
   iterations: Int        = 150000,
   optimizer: Optimizer   = tf.train.AdaDelta(0.01),
-  sum_dir_prefix: String = "",
+  sum_dir_prefix: String = "const_v",
   reg: Double            = 0.01,
   p: Double              = 1.0,
   time_scale: Double     = 1.0,
