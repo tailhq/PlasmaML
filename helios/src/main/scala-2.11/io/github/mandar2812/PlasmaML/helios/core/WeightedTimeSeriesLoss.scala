@@ -29,6 +29,8 @@ case class WeightedTimeSeriesLoss(
 case class MOGrangerLoss(
   override val name: String,
   size_causal_window: Int,
+  error_exponent: Double = 2.0,
+  weight_error: Double,
   scale_lags: Boolean = true) extends
   Loss[(Output, Output)](name) {
 
@@ -73,11 +75,11 @@ case class MOGrangerLoss(
     val error_tensor = predictions.subtract(targets)
 
     val convolution_kernel_temporal = error_tensor
+      .abs.pow(error_exponent)
       .l2Normalize(axes = 1)
       .square
+      .subtract(1.0)
       .multiply(-1/2.0)
-      .divide(1.0)
-      .exp
 
     val weighted_temporal_loss_tensor = repeated_times
       .subtract(index_times)
@@ -87,6 +89,6 @@ case class MOGrangerLoss(
       .divide(convolution_kernel_temporal.sum(axes = 1))
       .mean()
 
-    error_tensor.square.sum(axes = 1).multiply(0.5).mean().add(weighted_temporal_loss_tensor)
+    error_tensor.square.sum(axes = 1).multiply(0.5*weight_error).mean().add(weighted_temporal_loss_tensor)
   }
 }

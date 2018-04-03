@@ -16,6 +16,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.utils._
+import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 
 def id[T] = Pipe.identityPipe[T]
 //Output computation
@@ -50,6 +51,28 @@ def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
 
     sliding_ts.map(xs => (xs.head - mean) * (xs.last - mean)).sum/(len*variance)
   }).toStream
+}
+
+//A subroutines for neural net construction
+def build_feedforward_stack(get_act: (Int) => Activation, dataType: DataType)(layer_sizes: Seq[Int]) = {
+
+  def stack_ff_layers_rec(
+    ls: Seq[Int],
+    layer_acc: Layer[Output, Output],
+    layer_index: Int): Layer[Output, Output] = ls match {
+
+    case Seq() => layer_acc
+
+    case Seq(num_output_units) => layer_acc >> dtflearn.feedforward(num_output_units)(layer_index)
+
+    case _ => stack_ff_layers_rec(
+      ls.tail,
+      layer_acc >> dtflearn.feedforward(ls.head)(layer_index) >> get_act(layer_index),
+      layer_index + 1)
+  }
+
+  stack_ff_layers_rec(layer_sizes, tf.learn.Cast("Input/Cast", dataType), 1)
+
 }
 
 
@@ -147,8 +170,8 @@ def generate_data(
   (data, joined_data)
 }
 
-@main
-def main(
+//Runs an experiment given some architecture, loss and training parameters.
+def run_exp(
   d: Int               = 3,
   n: Int               = 100,
   sliding_window: Int  = 15,
@@ -156,14 +179,11 @@ def main(
   noiserot: Double     = 0.1,
   iterations: Int      = 150000,
   optimizer: Optimizer = tf.train.AdaDelta(0.01),
+  miniBatch: Int       = 512,
   sum_dir: String      = "",
-  reg: Double          = 0.01,
-  p: Double            = 1.0,
-  time_scale: Double   = 1.0,
-  corr_sc: Double      = 2.5,
-  c_cutoff: Double     = 0.0,
-  prior_wt: Double     = 1d,
-  mo_flag: Boolean = false) = {
+  mo_flag: Boolean = false,
+  architecture: Layer[Output, Output],
+  loss: Layer[(Output, Output), Output]) = {
 
   val train_fraction = 0.7
 
@@ -244,7 +264,7 @@ def main(
 
       val ((tf_dataset, scalers), test_time_lags) = dataTuple
 
-      val miniBatch = 128
+      val miniBatch = 512
 
       val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
         .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
@@ -266,47 +286,6 @@ def main(
       val trainInput         = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
 
       val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
-
-      val num_pred_dims = if(mo_flag) sliding_window + 1 else 2
-
-      //Prediction architecture
-      val architecture = {
-        dtflearn.feedforward(20)(1) >>
-          tf.learn.Sigmoid("Act_1") >>
-          dtflearn.feedforward(15)(2) >>
-          tf.learn.Sigmoid("Act_2") >>
-          dtflearn.feedforward(num_pred_dims)(3)
-      }
-
-      val layer_parameter_names = Seq(
-        "Linear_1/Weights",
-        "Linear_2/Weights",
-        "Linear_3/Weights")
-
-      val layer_shapes = Seq(
-        Shape(d, 20),
-        Shape(20, 15),
-        Shape(15, num_pred_dims)
-      )
-
-      val layer_datatypes = Seq("FLOAT64", "FLOAT64", "FLOAT64")
-
-      val lossFunc = if (mo_flag) {
-        MOGrangerLoss("Loss/MOGranger", num_outputs)
-      } else {
-        RBFWeightedSWLoss(
-          "Loss/RBFWeightedL1", num_outputs,
-          kernel_time_scale = time_scale,
-          kernel_norm_exponent = p,
-          corr_cutoff = c_cutoff,
-          prior_scaling = corr_sc,
-          prior_weight = prior_wt,
-          batch = miniBatch)
-      }
-
-      val loss     = lossFunc >>
-        L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
-        tf.learn.ScalarSummary("Loss", "ModelLoss")
 
       val summariesDir =
         if (sum_dir == "") java.nio.file.Paths.get(tf_summary_dir.toString())
@@ -378,13 +357,7 @@ def main(
 
       val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-      /*val metrics = new HeliosOmniTSMetrics(
-        dtf.stack(Seq(pred_targets, unscaled_pred_time_lags_test), axis = 1), tf_dataset.testLabels,
-        tf_dataset.testLabels.shape(1),
-        dtf.tensor_f32(tf_dataset.nTest)(Seq.fill(tf_dataset.nTest)(1d):_*)
-      )*/
-
-      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag,/* metrics,*/ tf_summary_dir)
+      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir)
     })
 
   //The processing pipeline
@@ -488,4 +461,66 @@ def main(
     scalers
   )
 
+}
+
+
+@main
+def main(
+  d: Int               = 3,
+  n: Int               = 100,
+  sliding_window: Int  = 15,
+  noise: Double        = 0.5,
+  noiserot: Double     = 0.1,
+  iterations: Int      = 150000,
+  optimizer: Optimizer = tf.train.AdaDelta(0.01),
+  sum_dir: String      = "",
+  reg: Double          = 0.01,
+  p: Double            = 1.0,
+  time_scale: Double   = 1.0,
+  corr_sc: Double      = 2.5,
+  c_cutoff: Double     = 0.0,
+  prior_wt: Double     = 1d,
+  mo_flag: Boolean = false) = {
+
+  val num_outputs        = sliding_window
+
+  val num_pred_dims = if(mo_flag) sliding_window + 1 else 2
+
+  val net_layer_sizes = Seq(d, 20, 15, num_pred_dims)
+
+  val layer_shapes = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
+
+  val layer_parameter_names = (1 to net_layer_sizes.tail.length).map(s => "Linear_"+s+"/Weights")
+
+  val layer_datatypes = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
+
+  //Prediction architecture
+  val architecture = build_feedforward_stack(
+    (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
+    net_layer_sizes.tail)
+
+  val lossFunc = if (mo_flag) {
+    MOGrangerLoss(
+      "Loss/MOGranger", num_outputs,
+      error_exponent = p,
+      weight_error = prior_wt)
+  } else {
+    RBFWeightedSWLoss(
+      "Loss/RBFWeightedL1", num_outputs,
+      kernel_time_scale = time_scale,
+      kernel_norm_exponent = p,
+      corr_cutoff = c_cutoff,
+      prior_scaling = corr_sc,
+      prior_weight = prior_wt,
+      batch = 512)
+  }
+
+  val loss     = lossFunc >>
+    L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
+    tf.learn.ScalarSummary("Loss", "ModelLoss")
+
+  run_exp(
+    d, n, sliding_window, noise, noiserot,
+    iterations, optimizer, 512, sum_dir,
+    mo_flag, architecture, loss)
 }
