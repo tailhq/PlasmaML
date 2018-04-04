@@ -70,7 +70,6 @@ def main(
       kernel_norm_exponent = p,
       corr_cutoff = c_cutoff,
       prior_scaling = corr_sc,
-      prior_weight = prior_wt,
       batch = 512)
   }
 
@@ -78,9 +77,13 @@ def main(
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
+  val dataset: timelagutils.TLDATA = timelagutils.generate_data(
+    d, n, sliding_window,
+    noise, noiserot,
+    compute_output)
+
   timelagutils.run_exp(
-    d, n, sliding_window, noise, noiserot,
-    compute_output,
-    iterations, optimizer, 512, sum_dir_prefix,
+    dataset, iterations, optimizer,
+    512, sum_dir_prefix,
     mo_flag, architecture, loss)
 }

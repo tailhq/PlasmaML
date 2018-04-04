@@ -21,7 +21,6 @@ import org.platanios.tensorflow.api.ops.Output
   * @param corr_cutoff The cut-off applied to the Spearman correlation between
   *                    the predicted targets and time lags, defaults to -0.75.
   * @param prior_scaling A scaling parameter multiplier applied in the prior term, defaults to 1.
-  * @param prior_weight The weight of the prior term in the loss-function, defaults to 1.
   * @param batch The batch size for each training epoch.
   * @author mandar2812
   * */
@@ -31,7 +30,6 @@ case class RBFWeightedSWLoss(
   kernel_time_scale:    Double = 3d,
   kernel_norm_exponent: Double = 2,
   corr_cutoff:          Double = -0.75,
-  prior_weight:         Double = 1.0,
   prior_scaling:        Double = 1.0,
   batch:                Int    = -1,
   scale_lags: Boolean = true)

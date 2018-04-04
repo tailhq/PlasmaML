@@ -23,6 +23,8 @@ import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 
 
 
+type TLDATA = (Stream[((Int, Tensor), (Int, Float))], Stream[(Int, (Tensor, Stream[Double], Int))])
+
 def id[T] = Pipe.identityPipe[T]
 
 def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
@@ -130,33 +132,6 @@ def generate_data(
     .filter(_._2._2.isDefined)
     .map(p => (p._1, (p._2._1, p._2._2.get, p._2._3)))
 
-  (data, joined_data)
-}
-
-//Runs an experiment given some architecture, loss and training parameters.
-def run_exp(
-  d: Int                      = 3,
-  n: Int                      = 100,
-  sliding_window: Int         = 15,
-  noise: Double               = 0.5,
-  noiserot: Double            = 0.1,
-  compute_output_and_lag: DataPipe[Tensor, (Float, Float)],
-  iterations: Int             = 150000,
-  optimizer: Optimizer        = tf.train.AdaDelta(0.01),
-  miniBatch: Int              = 512,
-  sum_dir_prefix: String      = "",
-  mo_flag: Boolean            = false,
-  architecture: Layer[Output, Output],
-  loss: Layer[(Output, Output), Output]) = {
-
-  val train_fraction = 0.7
-
-  val (data, collated_data) = generate_data(
-    d, n, sliding_window,
-    noise, noiserot,
-    compute_output_and_lag)
-
-  val (causes, effects) = data.unzip
 
   val energies = data.map(_._2._2)
 
@@ -184,13 +159,42 @@ def run_exp(
   legend(Seq("t_ = "+0x03C6.toChar+"(t)", "t_ = t"))
   unhold()
 
-  val outputs = effects.groupBy(_._1).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
-
   line(outputs)
   hold()
   line(energies)
   legend(Seq("Output Data with Lag", "Output Data without Lag"))
   unhold()
+
+  spline(autocorrelation(2*sliding_window)(data.map(_._2._2.toDouble)))
+  title("Auto-covariance of time series")
+
+  (data, joined_data)
+}
+
+//Runs an experiment given some architecture, loss and training parameters.
+def run_exp(
+  dataset: TLDATA,
+  iterations: Int             = 150000,
+  optimizer: Optimizer        = tf.train.AdaDelta(0.01),
+  miniBatch: Int              = 512,
+  sum_dir_prefix: String      = "",
+  mo_flag: Boolean            = false,
+  architecture: Layer[Output, Output],
+  loss: Layer[(Output, Output), Output]) = {
+
+  val train_fraction = 0.7
+
+  val (data, collated_data): TLDATA = dataset
+
+  val sliding_window = collated_data.head._2._2.length
+
+  val (causes, effects) = data.unzip
+
+  val energies = data.map(_._2._2)
+
+  val effect_times = data.map(_._2._1)
+
+  val outputs = effects.groupBy(_._1).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
 
   val num_training = (collated_data.length*train_fraction).toInt
   val num_test = collated_data.length - num_training
@@ -414,9 +418,6 @@ def run_exp(
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Training Set Predictions")
   unhold()
-
-  line(autocorrelation(20)(data.map(_._2._2.toDouble)))
-  title("Auto-covariance of time series")
 
   (
     (data, collated_data, tf_dataset),
