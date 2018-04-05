@@ -24,9 +24,10 @@ case class WeightedTimeSeriesLoss(
 
     val kl_divergence = prior_prob_time_lags.divide(prob).log.multiply(prior_prob_time_lags).sum(axes = 1).mean()
 
+    val entropy = prob.log.multiply(prob.multiply(-1.0)).sum(axes = 1).mean()
     //val prob = unorm_prob.divide(tf.stack(Seq.fill(size_causal_window)(unorm_prob.sum(axes = 1)), axis = -1))
 
-    preds.subtract(input._2).square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(kl_divergence)
+    preds.subtract(input._2).square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(kl_divergence).add(entropy)
   }
 }
 

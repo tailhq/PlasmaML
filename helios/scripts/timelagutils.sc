@@ -308,7 +308,7 @@ def run_exp(
 
       val pred_time_lags_test = if(prob_timelags) {
         //predictions(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
-        predictions(::, sliding_window::).topK(1)._2
+        predictions(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
       } else {
         predictions(::, -1)
           .multiply(alpha.add(1E-6).square.multiply(-1.0))
@@ -401,13 +401,24 @@ def run_exp(
   val nu    = Tensor(1.0)
   val q     = Tensor(1.0)
 
-  val pred_time_lags_train = training_preds(::, 1)
-    .multiply(alpha.add(1E-6).square.multiply(-1.0))
-    .exp
-    .multiply(q.square)
-    .add(1.0)
-    .pow(nu.square.pow(-1.0).multiply(-1.0))
-    .multiply(sliding_window - 1.0)
+  val index_times = Tensor(
+    (0 until sliding_window).map(_.toDouble)
+  ).reshape(
+    Shape(sliding_window)
+  )
+
+  val pred_time_lags_train = if(prob_timelags) {
+    //training_preds(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
+    training_preds(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
+  } else {
+    training_preds(::, -1)
+      .multiply(alpha.add(1E-6).square.multiply(-1.0))
+      .exp
+      .multiply(q.square)
+      .add(1.0)
+      .pow(nu.square.pow(-1.0).multiply(-1.0))
+      .multiply(sliding_window - 1.0)
+  }
 
   val pred_targets_train = scalers._2(0).i(training_preds(::, 0))
 
