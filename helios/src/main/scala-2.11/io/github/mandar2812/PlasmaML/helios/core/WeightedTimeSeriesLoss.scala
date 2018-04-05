@@ -14,14 +14,19 @@ case class WeightedTimeSeriesLoss(
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    val log_temperature: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
+    //val log_temperature: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
 
-    val preds = input._1(::, 0::size_causal_window)
-    val unorm_prob = input._1(::, size_causal_window::).divide(log_temperature.exp).exp
+    val preds   = input._1(::, 0::size_causal_window)
+    val prob    = input._1(::, size_causal_window::)/*.divide(log_temperature.exp)*/.softmax()
+    val targets = input._2
 
-    val prob = unorm_prob.divide(tf.stack(Seq.fill(size_causal_window)(unorm_prob.sum(axes = 1)), axis = -1))
+    val prior_prob_time_lags = preds.subtract(targets).square.softmax()
 
-    preds.subtract(input._2).square.multiply(prob).sum(axes = 1).mean()
+    val kl_divergence = prior_prob_time_lags.divide(prob).log.multiply(prior_prob_time_lags).sum(axes = 1).mean()
+
+    //val prob = unorm_prob.divide(tf.stack(Seq.fill(size_causal_window)(unorm_prob.sum(axes = 1)), axis = -1))
+
+    preds.subtract(input._2).square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(kl_divergence)
   }
 }
 
@@ -40,7 +45,7 @@ case class MOGrangerLoss(
 
   override protected def _forward(input: (Output, Output), mode: Mode) = {
 
-    val alpha = Tensor(0.5)
+    val alpha = Tensor(1.0)
     val nu = Tensor(1.0)
     val q = Tensor(1.0)
 
@@ -59,9 +64,8 @@ case class MOGrangerLoss(
         .add(1.0)
         .pow(nu.square.pow(-1.0).multiply(-1.0))
         .multiply(scaling)
-        .floor
     } else {
-      unscaled_lags.floor
+      unscaled_lags
     }
 
     val repeated_times      = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)

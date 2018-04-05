@@ -24,7 +24,8 @@ def main(
   corr_sc: Double        = 2.5,
   c_cutoff: Double       = 0.0,
   prior_wt: Double       = 1d,
-  mo_flag: Boolean       = false) = {
+  mo_flag: Boolean       = false,
+  prob_timelags: Boolean = false) = {
 
   //Output computation
   val alpha = 100f
@@ -43,7 +44,10 @@ def main(
 
   val num_outputs        = sliding_window
 
-  val num_pred_dims = if(mo_flag) sliding_window + 1 else 2
+  val num_pred_dims =
+    if(!mo_flag) 2
+    else if(mo_flag && !prob_timelags) sliding_window + 1
+    else 2*sliding_window
 
   val net_layer_sizes = Seq(d, 20, 15, num_pred_dims)
 
@@ -58,12 +62,8 @@ def main(
     (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
-  val lossFunc = if (mo_flag) {
-    MOGrangerLoss(
-      "Loss/MOGranger", num_outputs,
-      error_exponent = p,
-      weight_error = prior_wt)
-  } else {
+  val lossFunc = if (!mo_flag){
+
     RBFWeightedSWLoss(
       "Loss/RBFWeightedL1", num_outputs,
       kernel_time_scale = time_scale,
@@ -71,6 +71,14 @@ def main(
       corr_cutoff = c_cutoff,
       prior_scaling = corr_sc,
       batch = 512)
+
+  } else if(mo_flag && !prob_timelags){
+    MOGrangerLoss(
+      "Loss/MOGranger", num_outputs,
+      error_exponent = p,
+      weight_error = prior_wt)
+  } else {
+    WeightedTimeSeriesLoss("Loss/ProbWeightedTS", num_outputs)
   }
 
   val loss     = lossFunc >>
@@ -85,5 +93,6 @@ def main(
   timelagutils.run_exp(
     dataset, iterations, optimizer,
     512, sum_dir_prefix,
-    mo_flag, architecture, loss)
+    mo_flag, prob_timelags,
+    architecture, loss)
 }

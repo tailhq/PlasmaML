@@ -179,6 +179,7 @@ def run_exp(
   miniBatch: Int              = 512,
   sum_dir_prefix: String      = "",
   mo_flag: Boolean            = false,
+  prob_timelags: Boolean      = false,
   architecture: Layer[Output, Output],
   loss: Layer[(Output, Output), Output]) = {
 
@@ -188,13 +189,13 @@ def run_exp(
 
   val sliding_window = collated_data.head._2._2.length
 
-  val (causes, effects) = data.unzip
+  //val (causes, effects) = data.unzip
 
-  val energies = data.map(_._2._2)
+  //val energies = data.map(_._2._2)
 
-  val effect_times = data.map(_._2._1)
+  //val effect_times = data.map(_._2._1)
 
-  val outputs = effects.groupBy(_._1).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
+  //val outputs = effects.groupBy(_._1).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
 
   val num_training = (collated_data.length*train_fraction).toInt
   val num_test = collated_data.length - num_training
@@ -295,31 +296,37 @@ def run_exp(
 
       val predictions = estimator.infer(() => tf_dataset.testData)
 
-      val alpha = Tensor(0.5)
+      val alpha = Tensor(1.0)
       val nu    = Tensor(1.0)
       val q     = Tensor(1.0)
 
-      val unscaled_pred_time_lags_test = predictions(::, -1)
+      val index_times = Tensor(
+        (0 until num_outputs).map(_.toDouble)
+      ).reshape(
+        Shape(num_outputs)
+      )
 
-      val pred_time_lags_test = unscaled_pred_time_lags_test
-        .multiply(alpha.add(1E-6).square.multiply(-1.0))
-        .exp
-        .multiply(q.square)
-        .add(1.0)
-        .pow(nu.square.pow(-1.0).multiply(-1.0))
-        .multiply(num_outputs - 1.0)
+      val pred_time_lags_test = if(prob_timelags) {
+        //predictions(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
+        predictions(::, sliding_window::).topK(1)._2
+      } else {
+        predictions(::, -1)
+          .multiply(alpha.add(1E-6).square.multiply(-1.0))
+          .exp
+          .multiply(q.square)
+          .add(1.0)
+          .pow(nu.square.pow(-1.0).multiply(-1.0))
+          .multiply(num_outputs - 1.0)
+      }
 
       val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
 
       val pred_targets: Tensor = if (mo_flag) {
-        val all_preds = scalers._2.i(predictions(::, 0 :: -1))
+        val all_preds =
+          if (prob_timelags) scalers._2.i(predictions(::, 0 :: num_outputs))
+          else scalers._2.i(predictions(::, 0 :: -1))
 
         val repeated_times      = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
-        val index_times = Tensor(
-          (0 until num_outputs).map(_.toDouble)
-        ).reshape(
-          Shape(num_outputs)
-        )
 
         val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
 
@@ -417,6 +424,24 @@ def run_exp(
   line(train_signal_predicted)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Training Set Predictions")
+  unhold()
+
+
+  val err     = reg_metrics.preds.subtract(reg_metrics.targets)
+  val err_lag = reg_time_lag.preds.subtract(reg_time_lag.targets)
+
+  scatter(toDoubleSeq(err).zip(toDoubleSeq(err_lag)).toSeq)
+  xAxis("Error in Velocity")
+  yAxis("Error in Time Lag")
+
+  scatter(toDoubleSeq(reg_metrics.preds).zip(toDoubleSeq(reg_time_lag.preds)).toSeq)
+  xAxis("Velocity")
+  yAxis("Time Lag")
+
+  hold()
+
+  scatter(toDoubleSeq(reg_metrics.targets).zip(toDoubleSeq(reg_time_lag.targets)).toSeq)
+  legend(Seq("Predictions", "Actual Data"))
   unhold()
 
   (

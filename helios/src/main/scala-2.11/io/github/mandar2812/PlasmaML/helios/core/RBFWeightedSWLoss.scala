@@ -53,7 +53,7 @@ case class RBFWeightedSWLoss(
     //val nu:    tf.Variable = tf.variable("nu",    FLOAT32, Shape(), tf.OnesInitializer)
     //val q:     tf.Variable = tf.variable("Q",     FLOAT32, Shape(), tf.OnesInitializer) 
 
-    val alpha = Tensor(0.5)
+    val alpha = Tensor(1.0)
     val nu = Tensor(1.0)
     val q = Tensor(1.0)
 
