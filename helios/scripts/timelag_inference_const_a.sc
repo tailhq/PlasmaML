@@ -56,7 +56,7 @@ def main(
     else if(mo_flag && !prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes = Seq(d, 30, 20, num_pred_dims)
+  val net_layer_sizes = Seq(d, 10, 10, num_pred_dims)
 
   val layer_shapes = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 

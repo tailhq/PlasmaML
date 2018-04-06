@@ -189,14 +189,6 @@ def run_exp(
 
   val sliding_window = collated_data.head._2._2.length
 
-  //val (causes, effects) = data.unzip
-
-  //val energies = data.map(_._2._2)
-
-  //val effect_times = data.map(_._2._1)
-
-  //val outputs = effects.groupBy(_._1).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
-
   val num_training = (collated_data.length*train_fraction).toInt
   val num_test = collated_data.length - num_training
 
@@ -210,7 +202,7 @@ def run_exp(
 
     val labels_timelags = dtf.tensor_f64(data.length)(data.map(d => d._2._3.toDouble):_*)
 
-    val (_, test_time_lags): (Tensor, Tensor) = (
+    val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
       labels_timelags(0 :: num_training),
       labels_timelags(num_training :: ))
 
@@ -220,7 +212,7 @@ def run_exp(
       features(0 :: num_training, ---), labels(0 :: num_training), num_training,
       features(num_training ::, ---), labels(num_training ::), num_test)
 
-    (tf_dataset, test_time_lags)
+    (tf_dataset, (train_time_lags, test_time_lags))
   })
 
   //Scale training features/labels, apply scaling to test features
@@ -236,12 +228,12 @@ def run_exp(
         scalers
       )
     }),
-    id[Tensor])
+    id[(Tensor, Tensor)])
 
   val model_train_eval = DataPipe(
-    (dataTuple: ((HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)), Tensor)) => {
+    (dataTuple: ((HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)), (Tensor, Tensor))) => {
 
-      val ((tf_dataset, scalers), test_time_lags) = dataTuple
+      val ((tf_dataset, scalers), (train_time_lags, test_time_lags)) = dataTuple
 
       val miniBatch = 512
 
@@ -342,7 +334,7 @@ def run_exp(
 
       val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir)
+      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir, train_time_lags)
     })
 
   //The processing pipeline
@@ -352,7 +344,8 @@ def run_exp(
     (tf_dataset, scalers),
     (model, estimator),
     reg_metrics, reg_time_lag,
-    tf_summary_dir) = process_data(collated_data)
+    tf_summary_dir,
+    train_time_lags) = process_data(collated_data)
 
   val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
 
@@ -368,7 +361,7 @@ def run_exp(
 
   try {
 
-    histogram(pred_time_lags_test.entriesIterator.map(_.asInstanceOf[Double]).toSeq)
+    histogram(toDoubleSeq(pred_time_lags_test).toSeq)
     title("Predicted Time Lags")
 
   } catch {
@@ -378,7 +371,7 @@ def run_exp(
 
   try {
 
-    histogram(err_time_lag_test.entriesIterator.toSeq.map(_.asInstanceOf[Double]))
+    histogram(toDoubleSeq(err_time_lag_test).toSeq)
     title("Histogram of Time Lag prediction errors")
 
   } catch {
@@ -420,34 +413,67 @@ def run_exp(
       .multiply(sliding_window - 1.0)
   }
 
-  val pred_targets_train = scalers._2(0).i(training_preds(::, 0))
 
-  val train_signal_predicted = collated_data.slice(0, num_training).zipWithIndex.map(c => {
-    val time_index = c._1._1
-    val pred_lag = pred_time_lags_train(c._2).scalar.asInstanceOf[Double]
-    val pred = pred_targets_train(c._2).scalar.asInstanceOf[Double]
+  val train_signal_predicted = if (mo_flag) {
+    val all_preds =
+      if (prob_timelags) scalers._2.i(training_preds(::, 0 :: sliding_window))
+      else scalers._2.i(training_preds(::, 0 :: -1))
 
-    (time_index + pred_lag, pred)
-  }).sortBy(_._1)
+    val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
+
+    val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+
+    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+  } else {
+    scalers._2(0).i(training_preds(::, 0))
+  }
+
+  val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
+
+  val training_signal_actual = (0 until num_training).map(n => {
+    val time_lag = pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
+    unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
+  })
 
   line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3, c._2._2(c._2._3))))
   hold()
-  line(train_signal_predicted)
+  line(toDoubleSeq(train_signal_predicted).toSeq)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Training Set Predictions")
   unhold()
 
+  val err_train     = train_signal_predicted.subtract(training_signal_actual)
+  val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
 
-  val err     = reg_metrics.preds.subtract(reg_metrics.targets)
-  val err_lag = reg_time_lag.preds.subtract(reg_time_lag.targets)
-
-  scatter(toDoubleSeq(err).zip(toDoubleSeq(err_lag)).toSeq)
+  scatter(toDoubleSeq(err_train).zip(toDoubleSeq(err_lag_train)).toSeq)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
+  title("Training Set Errors; Scatter")
+
+  scatter(toDoubleSeq(train_signal_predicted).zip(toDoubleSeq(pred_time_lags_train)).toSeq)
+  xAxis("Velocity")
+  yAxis("Time Lag")
+  title("Training Set; Scatter")
+
+  hold()
+
+  scatter(training_signal_actual.zip(toDoubleSeq(train_time_lags).toSeq))
+  legend(Seq("Predictions", "Actual Data"))
+  unhold()
+
+
+  val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
+  val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
+
+  scatter(toDoubleSeq(err_test).zip(toDoubleSeq(err_lag_test)).toSeq)
+  xAxis("Error in Velocity")
+  yAxis("Error in Time Lag")
+  title("Test Set Errors; Scatter")
 
   scatter(toDoubleSeq(reg_metrics.preds).zip(toDoubleSeq(reg_time_lag.preds)).toSeq)
   xAxis("Velocity")
   yAxis("Time Lag")
+  title("Test Set; Scatter")
 
   hold()
 

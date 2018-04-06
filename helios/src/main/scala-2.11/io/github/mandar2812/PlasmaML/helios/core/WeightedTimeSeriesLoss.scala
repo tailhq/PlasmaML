@@ -14,20 +14,20 @@ case class WeightedTimeSeriesLoss(
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    //val log_temperature: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
+    val log_temperature: tf.Variable = tf.variable("time_scale", input._1.dataType, Shape(), tf.OnesInitializer)
 
     val preds   = input._1(::, 0::size_causal_window)
     val prob    = input._1(::, size_causal_window::)/*.divide(log_temperature.exp)*/.softmax()
     val targets = input._2
 
-    val prior_prob_time_lags = preds.subtract(targets).square.softmax()
+    val prior_prob = preds.subtract(targets).square.multiply(-1.0).divide(log_temperature.exp).softmax()
 
-    val kl_divergence = prior_prob_time_lags.divide(prob).log.multiply(prior_prob_time_lags).sum(axes = 1).mean()
+    val kl_divergence = prior_prob.divide(prob).log.multiply(prior_prob).sum(axes = 1).mean()
 
-    val entropy = prob.log.multiply(prob.multiply(-1.0)).sum(axes = 1).mean()
-    //val prob = unorm_prob.divide(tf.stack(Seq.fill(size_causal_window)(unorm_prob.sum(axes = 1)), axis = -1))
+    //val entropy = prob.log.multiply(prob.multiply(-1.0)).sum(axes = 1).mean()
 
-    preds.subtract(input._2).square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(kl_divergence).add(entropy)
+    val model_errors = preds.subtract(input._2).square.multiply(prob.add(1.0)).sum(axes = 1).mean()
+    model_errors.add(kl_divergence)//.add(entropy)
   }
 }
 
