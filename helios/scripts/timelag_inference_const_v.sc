@@ -78,7 +78,10 @@ def main(
       error_exponent = p,
       weight_error = prior_wt)
   } else {
-    WeightedTimeSeriesLoss("Loss/ProbWeightedTS", num_outputs)
+    WeightedTimeSeriesLoss(
+      "Loss/ProbWeightedTS",
+      num_outputs,
+      error_wt = prior_wt)
   }
 
   val loss     = lossFunc >>
