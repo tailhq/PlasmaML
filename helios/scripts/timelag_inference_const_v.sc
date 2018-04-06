@@ -49,7 +49,7 @@ def main(
     else if(mo_flag && !prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes = Seq(d, 20, 15, num_pred_dims)
+  val net_layer_sizes = Seq(d, 20, 20, num_pred_dims)
 
   val layer_shapes = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
@@ -59,7 +59,7 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
+    (i: Int) => dtflearn.Tanh("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
   val lossFunc = if (!mo_flag){
@@ -72,7 +72,7 @@ def main(
       prior_scaling = corr_sc,
       batch = 512)
 
-  } else if(mo_flag && !prob_timelags){
+  } else if(mo_flag && !prob_timelags) {
     MOGrangerLoss(
       "Loss/MOGranger", num_outputs,
       error_exponent = p,
@@ -84,7 +84,7 @@ def main(
       error_wt = prior_wt)
   }
 
-  val loss     = lossFunc >>
+  val loss = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 

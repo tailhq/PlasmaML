@@ -66,7 +66,7 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
+    (i: Int) => dtflearn.Tanh("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
   val lossFunc = if (!mo_flag){

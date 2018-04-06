@@ -46,7 +46,7 @@ def main(
     else if(mo_flag && !prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes       = Seq(d, 20, num_pred_dims)
+  val net_layer_sizes       = Seq(d, 20, 20, num_pred_dims)
 
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
@@ -55,11 +55,11 @@ def main(
   val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
 
   //Prediction architecture
-  val architecture          = dtflearn.feedforward_stack(
-    (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
+  val architecture = dtflearn.feedforward_stack(
+    (i: Int) => dtflearn.Tanh("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
-  val lossFunc = if (!mo_flag){
+  val lossFunc = if (!mo_flag) {
 
     RBFWeightedSWLoss(
       "Loss/RBFWeightedL1", num_outputs,
@@ -69,16 +69,23 @@ def main(
       prior_scaling = corr_sc,
       batch = 512)
 
-  } else if(mo_flag && !prob_timelags){
+  } else if(mo_flag && !prob_timelags) {
+
     MOGrangerLoss(
       "Loss/MOGranger", num_outputs,
       error_exponent = p,
       weight_error = prior_wt)
+
   } else {
-    WeightedTimeSeriesLoss("Loss/ProbWeightedTS", num_outputs)
+
+    WeightedTimeSeriesLoss(
+      "Loss/ProbWeightedTS",
+      num_outputs,
+      error_wt = prior_wt)
+
   }
 
-  val loss     = lossFunc >>
+  val loss  = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
@@ -89,7 +96,8 @@ def main(
 
   timelagutils.run_exp(
     dataset,
-    iterations, optimizer, 512, sum_dir_prefix,
+    iterations, optimizer, 512,
+    sum_dir_prefix,
     mo_flag, prob_timelags,
     architecture, loss)
 }
