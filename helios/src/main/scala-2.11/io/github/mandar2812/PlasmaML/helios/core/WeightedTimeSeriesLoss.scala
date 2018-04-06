@@ -7,7 +7,8 @@ import org.platanios.tensorflow.api.ops.Output
 
 case class WeightedTimeSeriesLoss(
   override val name: String,
-  size_causal_window: Int) extends
+  size_causal_window: Int,
+  error_wt: Double = 1.5) extends
   Loss[(Output, Output)](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
@@ -17,7 +18,7 @@ case class WeightedTimeSeriesLoss(
     val log_temperature: tf.Variable = tf.variable("time_scale", input._1.dataType, Shape(), tf.OnesInitializer)
 
     val preds   = input._1(::, 0::size_causal_window)
-    val prob    = input._1(::, size_causal_window::)/*.divide(log_temperature.exp)*/.softmax()
+    val prob    = input._1(::, size_causal_window::).softmax()
     val targets = input._2
 
     val prior_prob = preds.subtract(targets).square.multiply(-1.0).divide(log_temperature.exp).softmax()
@@ -27,7 +28,7 @@ case class WeightedTimeSeriesLoss(
     //val entropy = prob.log.multiply(prob.multiply(-1.0)).sum(axes = 1).mean()
 
     val model_errors = preds.subtract(input._2).square.multiply(prob.add(1.0)).sum(axes = 1).mean()
-    model_errors.add(kl_divergence)//.add(entropy)
+    model_errors.multiply(error_wt).add(kl_divergence)//.add(entropy)
   }
 }
 

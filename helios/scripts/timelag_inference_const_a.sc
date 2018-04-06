@@ -56,7 +56,7 @@ def main(
     else if(mo_flag && !prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes = Seq(d, 10, 10, num_pred_dims)
+  val net_layer_sizes = Seq(d, 20, 20, num_pred_dims)
 
   val layer_shapes = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
@@ -85,7 +85,9 @@ def main(
       error_exponent = p,
       weight_error = prior_wt)
   } else {
-    WeightedTimeSeriesLoss("Loss/ProbWeightedTS", num_outputs)
+    WeightedTimeSeriesLoss(
+      "Loss/ProbWeightedTS", num_outputs,
+      error_wt = prior_wt)
   }
 
   val loss     = lossFunc >>
