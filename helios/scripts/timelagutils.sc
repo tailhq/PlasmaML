@@ -171,29 +171,9 @@ def generate_data(
   (data, joined_data)
 }
 
-//Runs an experiment given some architecture, loss and training parameters.
-def run_exp(
-  dataset: TLDATA,
-  iterations: Int             = 150000,
-  optimizer: Optimizer        = tf.train.AdaDelta(0.01),
-  miniBatch: Int              = 512,
-  sum_dir_prefix: String      = "",
-  mo_flag: Boolean            = false,
-  prob_timelags: Boolean      = false,
-  architecture: Layer[Output, Output],
-  loss: Layer[(Output, Output), Output]) = {
-
-  val train_fraction = 0.7
-
-  val (data, collated_data): TLDATA = dataset
-
-  val sliding_window = collated_data.head._2._2.length
-
-  val num_training = (collated_data.length*train_fraction).toInt
-  val num_test = collated_data.length - num_training
-
-  //Transform the generated data into a tensorflow compatible object
-  val load_data_into_tensors = DataPipe((data: Stream[(Int, (Tensor, Stream[Double], Int))]) => {
+//Transform the generated data into a tensorflow compatible object
+def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int) =
+  DataPipe((data: Stream[(Int, (Tensor, Stream[Double], Int))]) => {
     val features = dtf.stack(data.map(_._2._1), axis = 0)
 
     val labels = dtf.tensor_f64(
@@ -215,20 +195,42 @@ def run_exp(
     (tf_dataset, (train_time_lags, test_time_lags))
   })
 
-  //Scale training features/labels, apply scaling to test features
-  val scale_data = DataPipe(
-    DataPipe((dataset: HeliosDataSet) => {
+//Scale training features/labels, apply scaling to test features
+val scale_data = DataPipe(
+  DataPipe((dataset: HeliosDataSet) => {
 
-      val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization(dataset.trainData, dataset.trainLabels)
+    val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization(dataset.trainData, dataset.trainLabels)
 
-      (
-        dataset.copy(
-          trainData = norm_tr_data._1, trainLabels = norm_tr_data._2,
-          testData = scalers._1(dataset.testData)),
-        scalers
-      )
-    }),
-    id[(Tensor, Tensor)])
+    (
+      dataset.copy(
+        trainData = norm_tr_data._1, trainLabels = norm_tr_data._2,
+        testData = scalers._1(dataset.testData)),
+      scalers
+    )
+  }),
+  id[(Tensor, Tensor)]
+)
+
+//Runs an experiment given some architecture, loss and training parameters.
+def run_exp(
+  dataset: TLDATA,
+  iterations: Int             = 150000,
+  optimizer: Optimizer        = tf.train.AdaDelta(0.01),
+  miniBatch: Int              = 512,
+  sum_dir_prefix: String      = "",
+  mo_flag: Boolean            = false,
+  prob_timelags: Boolean      = false,
+  architecture: Layer[Output, Output],
+  loss: Layer[(Output, Output), Output]) = {
+
+  val train_fraction = 0.7
+
+  val (data, collated_data): TLDATA = dataset
+
+  val sliding_window = collated_data.head._2._2.length
+
+  val num_training = (collated_data.length*train_fraction).toInt
+  val num_test = collated_data.length - num_training
 
   val model_train_eval = DataPipe(
     (dataTuple: ((HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)), (Tensor, Tensor))) => {
@@ -338,7 +340,10 @@ def run_exp(
     })
 
   //The processing pipeline
-  val process_data = load_data_into_tensors > scale_data > model_train_eval
+  val process_data =
+    load_data_into_tensors(num_training, num_test, sliding_window) >
+      scale_data >
+      model_train_eval
 
   val (
     (tf_dataset, scalers),

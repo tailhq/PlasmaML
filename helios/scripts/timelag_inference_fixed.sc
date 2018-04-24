@@ -46,7 +46,7 @@ def main(
     else if(mo_flag && !prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes       = Seq(d, 20, 20, num_pred_dims)
+  val net_layer_sizes       = Seq(d, 40, num_pred_dims)
 
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
@@ -56,7 +56,7 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Tanh("Act_"+i), FLOAT64)(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
   val lossFunc = if (!mo_flag) {
@@ -81,7 +81,7 @@ def main(
     WeightedTimeSeriesLoss(
       "Loss/ProbWeightedTS",
       num_outputs,
-      error_wt = prior_wt)
+      prior_wt = prior_wt)
 
   }
 

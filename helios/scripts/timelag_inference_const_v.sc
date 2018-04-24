@@ -15,6 +15,7 @@ def main(
   sliding_window: Int    = 15,
   noise: Double          = 0.5,
   noiserot: Double       = 0.1,
+  num_neurons: Int       = 40,
   iterations: Int        = 150000,
   optimizer: Optimizer   = tf.train.AdaDelta(0.01),
   sum_dir_prefix: String = "const_v",
@@ -39,7 +40,7 @@ def main(
 
       val out = v.square.sum().scalar.asInstanceOf[Float]*alpha
 
-      (distance/out, out + scala.util.Random.nextGaussian().toFloat*noise.toFloat)
+      (distance/out, out + scala.util.Random.nextGaussian().toFloat)
     })
 
   val num_outputs        = sliding_window
@@ -49,7 +50,7 @@ def main(
     else if(mo_flag && !prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes = Seq(d, 20, 20, num_pred_dims)
+  val net_layer_sizes = Seq(d, num_neurons, num_pred_dims)
 
   val layer_shapes = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
@@ -59,7 +60,7 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Tanh("Act_"+i), FLOAT64)(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
   val lossFunc = if (!mo_flag){
@@ -81,7 +82,8 @@ def main(
     WeightedTimeSeriesLoss(
       "Loss/ProbWeightedTS",
       num_outputs,
-      error_wt = prior_wt)
+      prior_wt = prior_wt,
+      temperature = 0.75)
   }
 
   val loss = lossFunc >>
