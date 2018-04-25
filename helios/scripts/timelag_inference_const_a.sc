@@ -15,6 +15,8 @@ def main(
   sliding_window: Int    = 15,
   noise: Double          = 0.5,
   noiserot: Double       = 0.1,
+  num_neurons: Int       = 40,
+  num_hidden_layers: Int = 1,
   iterations: Int        = 150000,
   optimizer: Optimizer   = tf.train.AdaDelta(0.01),
   sum_dir_prefix: String = "const_a",
@@ -24,6 +26,7 @@ def main(
   corr_sc: Double        = 2.5,
   c_cutoff: Double       = 0.0,
   prior_wt: Double       = 1d,
+  prior_type: String     = "Hellinger",
   mo_flag: Boolean       = false,
   prob_timelags: Boolean = false) = {
 
@@ -54,9 +57,10 @@ def main(
   val num_pred_dims =
     if(!mo_flag) 2
     else if(mo_flag && !prob_timelags) sliding_window + 1
+    else if(!mo_flag && prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes = Seq(d, 20, 20, num_pred_dims)
+  val net_layer_sizes       = Seq(d) ++ Seq.fill(num_hidden_layers)(num_neurons) ++ Seq(num_pred_dims)
 
   val layer_shapes = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
@@ -69,8 +73,10 @@ def main(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
-  val lossFunc = if (!mo_flag){
 
+  val lossFunc = if (!mo_flag) {
+
+    if (!prob_timelags) {
       RBFWeightedSWLoss(
         "Loss/RBFWeightedL1", num_outputs,
         kernel_time_scale = time_scale,
@@ -78,17 +84,33 @@ def main(
         corr_cutoff = c_cutoff,
         prior_scaling = corr_sc,
         batch = 512)
+    } else {
+      WeightedTimeSeriesLossSO(
+        "Loss/ProbWeightedTS",
+        num_outputs,
+        prior_wt = prior_wt,
+        temperature = 0.75,
+        prior_type)
+    }
 
-  } else if(mo_flag && !prob_timelags){
+  } else if(mo_flag && !prob_timelags) {
+
     MOGrangerLoss(
       "Loss/MOGranger", num_outputs,
       error_exponent = p,
       weight_error = prior_wt)
+
   } else {
+
     WeightedTimeSeriesLoss(
-      "Loss/ProbWeightedTS", num_outputs,
-      prior_wt = prior_wt)
+      "Loss/ProbWeightedTS",
+      num_outputs,
+      prior_wt = prior_wt,
+      temperature = 0.75,
+      prior_type)
+
   }
+
 
   val loss     = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
