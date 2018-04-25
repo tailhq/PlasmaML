@@ -16,6 +16,7 @@ def main(
   noise: Double          = 0.5,
   noiserot: Double       = 0.1,
   num_neurons: Int       = 40,
+  num_hidden_layers: Int = 1,
   iterations: Int        = 150000,
   optimizer: Optimizer   = tf.train.AdaDelta(0.01),
   sum_dir_prefix: String = "const_v",
@@ -25,6 +26,7 @@ def main(
   corr_sc: Double        = 2.5,
   c_cutoff: Double       = 0.0,
   prior_wt: Double       = 1d,
+  prior_type: String     = "Hellinger",
   mo_flag: Boolean       = false,
   prob_timelags: Boolean = false) = {
 
@@ -43,47 +45,56 @@ def main(
       (distance/out, out + scala.util.Random.nextGaussian().toFloat)
     })
 
-  val num_outputs        = sliding_window
-
   val num_pred_dims =
     if(!mo_flag) 2
     else if(mo_flag && !prob_timelags) sliding_window + 1
+    else if(!mo_flag && prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes = Seq(d, num_neurons, num_pred_dims)
-
-  val layer_shapes = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
-
+  val num_outputs           = sliding_window
+  val net_layer_sizes       = Seq(d) ++ Seq.fill(num_hidden_layers)(num_neurons) ++ Seq(num_pred_dims)
+  val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
   val layer_parameter_names = (1 to net_layer_sizes.tail.length).map(s => "Linear_"+s+"/Weights")
-
-  val layer_datatypes = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
+  val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
-  val lossFunc = if (!mo_flag){
+  val lossFunc = if (!mo_flag) {
 
-    RBFWeightedSWLoss(
-      "Loss/RBFWeightedL1", num_outputs,
-      kernel_time_scale = time_scale,
-      kernel_norm_exponent = p,
-      corr_cutoff = c_cutoff,
-      prior_scaling = corr_sc,
-      batch = 512)
+    if (!prob_timelags) {
+      RBFWeightedSWLoss(
+        "Loss/RBFWeightedL1", num_outputs,
+        kernel_time_scale = time_scale,
+        kernel_norm_exponent = p,
+        corr_cutoff = c_cutoff,
+        prior_scaling = corr_sc,
+        batch = 512)
+    } else {
+      WeightedTimeSeriesLossSO(
+        "Loss/ProbWeightedTS",
+        num_outputs,
+        prior_wt = prior_wt,
+        temperature = 0.75)
+    }
 
   } else if(mo_flag && !prob_timelags) {
+
     MOGrangerLoss(
       "Loss/MOGranger", num_outputs,
       error_exponent = p,
       weight_error = prior_wt)
+
   } else {
+
     WeightedTimeSeriesLoss(
       "Loss/ProbWeightedTS",
       num_outputs,
       prior_wt = prior_wt,
       temperature = 0.75)
+
   }
 
   val loss = lossFunc >>
@@ -97,7 +108,7 @@ def main(
 
   timelagutils.run_exp(
     dataset, iterations, optimizer,
-    512, sum_dir_prefix,
+    miniBatch = 512, sum_dir_prefix,
     mo_flag, prob_timelags,
     architecture, loss)
 }

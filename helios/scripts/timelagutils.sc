@@ -8,7 +8,10 @@ import ammonite.ops.home
 import org.joda.time.DateTime
 
 import org.platanios.tensorflow.api._
+import org.platanios.tensorflow.api.types.DataType
+import org.platanios.tensorflow.api.learn.layers.{Activation, Input, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
+import org.platanios.tensorflow.api.ops.io.data.Dataset
 
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
@@ -19,14 +22,15 @@ import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 
-import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
+//Define some types for convenience.
+type DATA        = Stream[((Int, Tensor), (Int, Float))]
+type SLIDINGDATA = Stream[(Int, (Tensor, Stream[Double], Int))]
+type TLDATA      = (DATA, SLIDINGDATA)
 
+//Alias for the identity pipe/mapping
+def id[T]: DataPipe[T, T] = Pipe.identityPipe[T]
 
-
-type TLDATA = (Stream[((Int, Tensor), (Int, Float))], Stream[(Int, (Tensor, Stream[Double], Int))])
-
-def id[T] = Pipe.identityPipe[T]
-
+//subroutine to calculate sliding autocorrelation of a time series.
 def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
   val mean = data.sum/data.length
   val variance = data.map(_ - mean).map(math.pow(_, 2d)).sum/(data.length - 1d)
@@ -40,7 +44,6 @@ def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
   }).toStream
 }
 
-
 //Subroutine to generate synthetic
 //input-lagged output time series.
 def generate_data(
@@ -48,7 +51,7 @@ def generate_data(
   sliding_window: Int,
   noise: Double = 0.5,
   noiserot: Double = 0.1,
-  compute_output_and_lag: DataPipe[Tensor, (Float, Float)]) = {
+  compute_output_and_lag: DataPipe[Tensor, (Float, Float)]): TLDATA = {
 
   val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
     () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
@@ -196,18 +199,21 @@ def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int
   })
 
 //Scale training features/labels, apply scaling to test features
+
+val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
+
+  val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization(dataset.trainData, dataset.trainLabels)
+
+  (
+    dataset.copy(
+      trainData = norm_tr_data._1, trainLabels = norm_tr_data._2,
+      testData = scalers._1(dataset.testData)),
+    scalers
+  )
+})
+
 val scale_data = DataPipe(
-  DataPipe((dataset: HeliosDataSet) => {
-
-    val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization(dataset.trainData, dataset.trainLabels)
-
-    (
-      dataset.copy(
-        trainData = norm_tr_data._1, trainLabels = norm_tr_data._2,
-        testData = scalers._1(dataset.testData)),
-      scalers
-    )
-  }),
+  scale_helios_dataset,
   id[(Tensor, Tensor)]
 )
 
@@ -241,7 +247,7 @@ def run_exp(
 
       val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
         .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
-        .shuffle(100)
+        .shuffle(10)
         .batch(miniBatch)
         .prefetch(10)
 
@@ -253,7 +259,6 @@ def run_exp(
 
       val tf_summary_dir     = home/'tmp/summary_dir_index
 
-
       val input              = tf.learn.Input(FLOAT64, Shape(-1, tf_dataset.trainData.shape(1)))
 
       val num_outputs        = sliding_window
@@ -262,33 +267,13 @@ def run_exp(
 
       val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
-      val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+      val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-      val (model, estimator) = tf.createWith(graph = Graph()) {
-        val model = tf.learn.Model(
-          input, architecture, trainInput, trainingInputLayer,
-          loss, optimizer)
+      val (model, estimator) = dtflearn.build_tf_model(
+        architecture, input, trainInput, trainingInputLayer,
+        loss, optimizer, summariesDir, iterations)(training_data)
 
-        println("Training the regression model.")
-
-        val estimator = tf.learn.FileBasedEstimator(
-          model,
-          tf.learn.Configuration(Some(summariesDir)),
-          tf.learn.StopCriteria(maxSteps = Some(iterations)),
-          Set(
-            tf.learn.StepRateLogger(
-              log = false, summaryDir = summariesDir,
-              trigger = tf.learn.StepHookTrigger(5000)),
-            tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
-            tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
-          tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
-
-        estimator.train(() => training_data, tf.learn.StopCriteria(maxSteps = Some(iterations)))
-
-        (model, estimator)
-      }
-
-      val predictions = estimator.infer(() => tf_dataset.testData)
+      val predictions        = estimator.infer(() => tf_dataset.testData)
 
       val alpha = Tensor(1.0)
       val nu    = Tensor(1.0)
@@ -301,8 +286,13 @@ def run_exp(
       )
 
       val pred_time_lags_test = if(prob_timelags) {
-        //predictions(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
-        predictions(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
+        if(mo_flag) {
+          //predictions(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
+          predictions(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
+        } else {
+          //predictions(::, 1::).softmax().multiply(index_times).sum(axes = 1)
+          predictions(::, 1::).topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
+        }
       } else {
         predictions(::, -1)
           .multiply(alpha.add(1E-6).square.multiply(-1.0))
@@ -320,7 +310,7 @@ def run_exp(
           if (prob_timelags) scalers._2.i(predictions(::, 0 :: num_outputs))
           else scalers._2.i(predictions(::, 0 :: -1))
 
-        val repeated_times      = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
+        val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
 
         val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
 
@@ -380,7 +370,7 @@ def run_exp(
     title("Histogram of Time Lag prediction errors")
 
   } catch {
-    case e: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
+    case _: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
     case _ => println("Can't plot histogram due to exception")
   }
 
@@ -406,8 +396,13 @@ def run_exp(
   )
 
   val pred_time_lags_train = if(prob_timelags) {
-    //training_preds(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
-    training_preds(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
+    if(mo_flag) {
+      //training_preds(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
+      training_preds(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
+    } else {
+      //training_preds(::, 1::).softmax().multiply(index_times).sum(axes = 1)
+      training_preds(::, 1::).topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
+    }
   } else {
     training_preds(::, -1)
       .multiply(alpha.add(1E-6).square.multiply(-1.0))

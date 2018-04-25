@@ -9,37 +9,72 @@ case class WeightedTimeSeriesLoss(
   override val name: String,
   size_causal_window: Int,
   prior_wt: Double = 1.5,
-  temperature: Double = 1.0) extends
+  temperature: Double = 1.0,
+  prior_type: String = "Hellinger") extends
   Loss[(Output, Output)](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    /*val log_temperature: tf.Variable = tf.variable(
-      "time_scale",
-      input._1.dataType,
-      Shape(),
-      tf.OnesInitializer)*/
-
     val preds   = input._1(::, 0::size_causal_window)
     val prob    = input._1(::, size_causal_window::).softmax()
     val targets = input._2
 
-    val prior_prob = preds.subtract(targets).square.multiply(-1.0).divide(temperature).softmax()
+    val model_errors = preds.subtract(targets)
+
+    val prior_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
 
     def kl(prior: Output, p: Output): Output =
       prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
 
     val m = prior_prob.add(prob).divide(2.0)
 
-    val js_divergence = kl(prior_prob, m).add(kl(prob, m)).multiply(0.5)
+    val prior_term =
+      if(prior_type == "Jensen-Shannon") kl(prior_prob, m).add(kl(prob, m)).multiply(0.5)
+      else if(prior_type == "Hellinger") prior_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
+      else if(prior_type == "Cross-Entropy") prior_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
+      else if(prior_type == "Kullback-Leibler") kl(prior_prob, prob)
+      else Tensor(0.0).toOutput
 
-    //val hellinger_distance = prior_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
+    model_errors.square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(prior_term.multiply(prior_wt))
+  }
+}
 
-    val model_errors = preds.subtract(input._2).square
+case class WeightedTimeSeriesLossSO(
+  override val name: String,
+  size_causal_window: Int,
+  prior_wt: Double = 1.5,
+  temperature: Double = 1.0,
+  prior_type: String = "Jensen-Shannon") extends
+  Loss[(Output, Output)](name) {
 
-    model_errors/*.multiply(prob.add(1.0))*/.sum(axes = 1).mean().add(js_divergence.multiply(prior_wt))
+  override val layerType: String = s"WTSLossSO[horizon:$size_causal_window]"
+
+  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
+
+    val preds               = input._1(::, 0)
+    val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
+    val prob                = input._1(::, 1::).softmax()
+    val targets             = input._2
+
+    val model_errors = repeated_preds.subtract(targets)
+
+    val prior_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
+
+    def kl(prior: Output, p: Output): Output =
+      prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
+
+    val m = prior_prob.add(prob).divide(2.0)
+
+    val prior_term =
+      if(prior_type == "Jensen-Shannon") kl(prior_prob, m).add(kl(prob, m)).multiply(0.5)
+      else if(prior_type == "Hellinger") prior_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
+      else if(prior_type == "Cross-Entropy") prior_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
+      else if(prior_type == "Kullback-Leibler") kl(prior_prob, prob)
+      else Tensor(0.0).toOutput
+
+    model_errors.square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(prior_term.multiply(prior_wt))
   }
 }
 

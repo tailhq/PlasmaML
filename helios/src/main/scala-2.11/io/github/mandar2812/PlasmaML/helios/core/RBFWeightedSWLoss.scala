@@ -112,12 +112,12 @@ case class RBFWeightedSWLoss(
 
     val target_err = repeated_preds.subtract(targets)
 
-    val convolution_kernel_temporal = target_err
+    /*val convolution_kernel_temporal = target_err
       .l2Normalize(axes = 1)
       .square
       .multiply(-1/2.0)
       .divide(1.0)
-      .exp
+      .exp*/
 
     //Convolve the kernel with the loss tensor, yielding the weighted loss tensor
     val weighted_loss_tensor = target_err
@@ -127,14 +127,14 @@ case class RBFWeightedSWLoss(
       .divide(convolution_kernel.sum(axes = 1))
       .mean()
 
-    val weighted_temporal_loss_tensor = repeated_times
+    /*val weighted_temporal_loss_tensor = repeated_times
       .subtract(index_times)
       .square
       .multiply(convolution_kernel_temporal)
       .sum(axes = 1)
       .divide(convolution_kernel_temporal.sum(axes = 1))
       .mean()
-
+*/
     /*
     * Compute the prior term, which is an affine transformation
     * of the empirical Spearman Correlation between
@@ -148,6 +148,6 @@ case class RBFWeightedSWLoss(
 
     val offset: Double = (1.0 - math.abs(corr_cutoff))*prior_scaling
 
-    weighted_loss_tensor.add(weighted_temporal_loss_tensor).add(prior).add(offset)
+    weighted_loss_tensor/*.add(weighted_temporal_loss_tensor)*/.add(prior).add(offset)
   }
 }
