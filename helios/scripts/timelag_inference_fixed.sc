@@ -39,10 +39,10 @@ def main(
 
       val out = v.square.sum().scalar.asInstanceOf[Float]*alpha
 
-      (fixed_lag, out + scala.util.Random.nextGaussian().toFloat*noise.toFloat)
+      (fixed_lag, out + scala.util.Random.nextGaussian().toFloat)
     })
 
-  val num_outputs           = sliding_window
+  val num_outputs = sliding_window
 
   val num_pred_dims =
     if(!mo_flag) 2
@@ -50,17 +50,12 @@ def main(
     else if(!mo_flag && prob_timelags) sliding_window + 1
     else 2*sliding_window
 
-  val net_layer_sizes       = Seq(d) ++ Seq.fill(num_hidden_layers)(num_neurons) ++ Seq(num_pred_dims)
-
-  val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
-
-  val layer_parameter_names = (1 to net_layer_sizes.tail.length).map(s => "Linear_"+s+"/Weights")
-
-  val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
+  val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
+    timelagutils.get_ffnet_properties(d, num_pred_dims, num_neurons, num_hidden_layers)
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Tanh("Act_"+i), FLOAT64)(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     net_layer_sizes.tail)
 
 

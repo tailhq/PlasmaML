@@ -153,6 +153,7 @@ def generate_data(
     case _ => println("Can't plot histogram due to exception")
   }
 
+/*
   spline(effect_times)
   hold()
   spline(data.map(_._1._1))
@@ -161,6 +162,7 @@ def generate_data(
   yAxis("Time of Effect, "+0x03C6.toChar+"(t)")
   legend(Seq("t_ = "+0x03C6.toChar+"(t)", "t_ = t"))
   unhold()
+*/
 
   line(outputs)
   hold()
@@ -216,6 +218,18 @@ val scale_data = DataPipe(
   scale_helios_dataset,
   id[(Tensor, Tensor)]
 )
+
+def get_ffnet_properties(
+  d: Int, num_pred_dims: Int,
+  num_neurons: Int, num_hidden_layers: Int) = {
+
+  val net_layer_sizes       = Seq(d) ++ Seq.fill(num_hidden_layers)(num_neurons) ++ Seq(num_pred_dims)
+  val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
+  val layer_parameter_names = (1 to net_layer_sizes.tail.length).map(s => "Linear_"+s+"/Weights")
+  val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
+
+  (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes)
+}
 
 //Runs an experiment given some architecture, loss and training parameters.
 def run_exp(
