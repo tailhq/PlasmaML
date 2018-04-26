@@ -27,8 +27,8 @@ def main(
   c_cutoff: Double       = 0.0,
   prior_wt: Double       = 1d,
   prior_type: String     = "Hellinger",
-  mo_flag: Boolean       = false,
-  prob_timelags: Boolean = false) = {
+  mo_flag: Boolean       = true,
+  prob_timelags: Boolean = true) = {
 
   //Output computation
   val alpha = 100f
