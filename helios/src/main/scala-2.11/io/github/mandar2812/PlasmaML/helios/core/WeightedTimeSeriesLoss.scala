@@ -17,17 +17,13 @@ case class WeightedTimeSeriesLoss(
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    val preds         = input._1(::, 0::size_causal_window)
-    val targets       = input._2
+    val preds   = input._1(::, 0::size_causal_window)
+    val prob    = input._1(::, size_causal_window::).softmax()
+    val targets = input._2
 
-    val unscaled_prob = input._1(::, size_causal_window::)
-    val scale_factor  = unscaled_prob.max(axes = 1, true)
-    val prob          = unscaled_prob.subtract(scale_factor).softmax()
+    val model_errors = preds.subtract(targets)
 
-    val model_errors  = preds.subtract(targets)
-    val sq_errors     = model_errors.square
-    val err_sc_factor = sq_errors.min(axes = 1, true)
-    val prior_prob    = sq_errors.subtract(err_sc_factor).multiply(-1.0).divide(temperature).softmax()
+    val prior_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
 
     def kl(prior: Output, p: Output): Output =
       prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
@@ -57,21 +53,14 @@ case class WeightedTimeSeriesLossSO(
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output = {
 
-    val preds          = input._1(::, 0)
-    val targets        = input._2
+    val preds               = input._1(::, 0)
+    val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
+    val prob                = input._1(::, 1::).softmax()
+    val targets             = input._2
 
-    val repeated_preds = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
+    val model_errors = repeated_preds.subtract(targets)
 
-    val unscaled_prob  = input._1(::, 1::)
-    val scale_factor   = unscaled_prob.max(axes = 1, true)
-    val prob           = unscaled_prob.subtract(scale_factor).softmax()
-
-
-
-    val model_errors   = repeated_preds.subtract(targets)
-    val sq_errors      = model_errors.square
-    val err_sc_factor  = sq_errors.min(axes = 1, true)
-    val prior_prob     = sq_errors.subtract(err_sc_factor).multiply(-1.0).divide(temperature).softmax()
+    val prior_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
 
     def kl(prior: Output, p: Output): Output =
       prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
