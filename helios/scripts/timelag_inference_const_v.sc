@@ -15,9 +15,11 @@ def main(
   sliding_window: Int    = 15,
   noise: Double          = 0.5,
   noiserot: Double       = 0.1,
+  alpha: Double = 0.0,
   num_neurons: Int       = 40,
   num_hidden_layers: Int = 1,
   iterations: Int        = 150000,
+  miniBatch: Int         = 32,
   optimizer: Optimizer   = tf.train.AdaDelta(0.01),
   sum_dir_prefix: String = "const_v",
   reg: Double            = 0.01,
@@ -28,19 +30,20 @@ def main(
   prior_wt: Double       = 1d,
   prior_type: String     = "Hellinger",
   mo_flag: Boolean       = true,
-  prob_timelags: Boolean = true) = {
+  prob_timelags: Boolean = true,
+  timelag_pred_strategy: String = "mode") = {
 
   //Output computation
-  val alpha = 100f
+  val beta = 100f
 
 
   //Time Lag Computation
   // distance/velocity
-  val distance = alpha*10
+  val distance = beta*10
   val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
     (v: Tensor) => {
 
-      val out = v.square.sum().scalar.asInstanceOf[Float]*alpha
+      val out = v.square.sum().scalar.asInstanceOf[Float]*beta + 40f
 
       (distance/out, out + scala.util.Random.nextGaussian().toFloat)
     })
@@ -101,12 +104,13 @@ def main(
 
   val dataset: timelagutils.TLDATA = timelagutils.generate_data(
     d, n, sliding_window,
-    noise, noiserot,
+    noise, noiserot, alpha,
     compute_output)
 
   timelagutils.run_exp(
     dataset, iterations, optimizer,
-    miniBatch = 512, sum_dir_prefix,
+    miniBatch, sum_dir_prefix,
     mo_flag, prob_timelags,
+    timelag_pred_strategy,
     architecture, loss)
 }

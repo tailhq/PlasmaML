@@ -23,8 +23,8 @@ import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 
 //Define some types for convenience.
-type DATA        = Stream[((Int, Tensor), (Int, Float))]
-type SLIDINGDATA = Stream[(Int, (Tensor, Stream[Double], Int))]
+type DATA        = Stream[((Int, Tensor), (Float, Float))]
+type SLIDINGDATA = Stream[(Int, (Tensor, Stream[Double], Float))]
 type TLDATA      = (DATA, SLIDINGDATA)
 
 //Alias for the identity pipe/mapping
@@ -51,6 +51,7 @@ def generate_data(
   sliding_window: Int,
   noise: Double = 0.5,
   noiserot: Double = 0.1,
+  alpha: Double = 0.0,
   compute_output_and_lag: DataPipe[Tensor, (Float, Float)]): TLDATA = {
 
   val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
@@ -79,7 +80,7 @@ def generate_data(
 
   val rotation_op = get_rotation_operator(rotation)
 
-  val translation_op = DataPipe2((tr: Tensor, x: Tensor) => tr.add(x))
+  val translation_op = DataPipe2((tr: Tensor, x: Tensor) => tr.add(x.multiply(1.0f - alpha.toFloat)))
 
   val translation_vecs = random_gaussian_vec(d).iid(n+500-1).draw
 
@@ -90,14 +91,14 @@ def generate_data(
   val calculate_outputs =
     compute_output_and_lag >
       DataPipe(
-        DataPipe((d: Float) => d.toInt),
-        DataPipe((v: Float) => v + (scala.util.Random.nextGaussian()*noise).toFloat)
+        DataPipe((d: Float) => d),
+        DataPipe((v: Float) => v)
       )
 
 
   val generate_data_pipe = StreamDataPipe(
     DataPipe(id[Int], BifurcationPipe(id[Tensor], calculate_outputs))  >
-      DataPipe((pattern: (Int, (Tensor, (Int, Float)))) =>
+      DataPipe((pattern: (Int, (Tensor, (Float, Float)))) =>
         ((pattern._1, pattern._2._1.reshape(Shape(d))), (pattern._1+pattern._2._2._1, pattern._2._2._2)))
   )
 
@@ -107,7 +108,7 @@ def generate_data(
 
   val (causes, effects) = data.unzip
 
-  val outputs = effects.groupBy(_._1).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
+  val outputs = effects.groupBy(_._1.toInt).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
 
   val linear_segments = outputs.sliding(2).toList.map(s =>
     DataPipe((t: Double) => {
@@ -153,17 +154,6 @@ def generate_data(
     case _ => println("Can't plot histogram due to exception")
   }
 
-/*
-  spline(effect_times)
-  hold()
-  spline(data.map(_._1._1))
-  title("Time Warping/Delay")
-  xAxis("Time of Cause, t")
-  yAxis("Time of Effect, "+0x03C6.toChar+"(t)")
-  legend(Seq("t_ = "+0x03C6.toChar+"(t)", "t_ = t"))
-  unhold()
-*/
-
   line(outputs)
   hold()
   line(energies)
@@ -178,7 +168,7 @@ def generate_data(
 
 //Transform the generated data into a tensorflow compatible object
 def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int) =
-  DataPipe((data: Stream[(Int, (Tensor, Stream[Double], Int))]) => {
+  DataPipe((data: Stream[(Int, (Tensor, Stream[Double], Float))]) => {
     val features = dtf.stack(data.map(_._2._1), axis = 0)
 
     val labels = dtf.tensor_f64(
@@ -240,6 +230,7 @@ def run_exp(
   sum_dir_prefix: String      = "",
   mo_flag: Boolean            = false,
   prob_timelags: Boolean      = false,
+  timelag_pred_strategy: String = "mode",
   architecture: Layer[Output, Output],
   loss: Layer[(Output, Output), Output]) = {
 
@@ -300,13 +291,13 @@ def run_exp(
       )
 
       val pred_time_lags_test = if(prob_timelags) {
-        if(mo_flag) {
-          //predictions(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
-          predictions(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
-        } else {
-          //predictions(::, 1::).softmax().multiply(index_times).sum(axes = 1)
-          predictions(::, 1::).topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
-        }
+        val unsc_probs =
+          if(mo_flag) predictions(::, sliding_window::)
+          else predictions(::, 1::)
+
+        if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
+        else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+
       } else {
         predictions(::, -1)
           .multiply(alpha.add(1E-6).square.multiply(-1.0))
@@ -410,13 +401,12 @@ def run_exp(
   )
 
   val pred_time_lags_train = if(prob_timelags) {
-    if(mo_flag) {
-      //training_preds(::, sliding_window::).softmax().multiply(index_times).sum(axes = 1)
-      training_preds(::, sliding_window::).topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
-    } else {
-      //training_preds(::, 1::).softmax().multiply(index_times).sum(axes = 1)
-      training_preds(::, 1::).topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
-    }
+    val unsc_probs =
+      if(mo_flag) training_preds(::, sliding_window::)
+      else training_preds(::, 1::)
+
+    if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
+    else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
   } else {
     training_preds(::, -1)
       .multiply(alpha.add(1E-6).square.multiply(-1.0))
@@ -449,7 +439,7 @@ def run_exp(
     unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
   })
 
-  line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3, c._2._2(c._2._3))))
+  line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3.toInt, c._2._2(c._2._3.toInt))))
   hold()
   line(toDoubleSeq(train_signal_predicted).toSeq)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))

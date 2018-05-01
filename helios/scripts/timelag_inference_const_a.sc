@@ -15,9 +15,11 @@ def main(
   sliding_window: Int    = 15,
   noise: Double          = 0.5,
   noiserot: Double       = 0.1,
+  alpha: Double = 0.0,
   num_neurons: Int       = 40,
   num_hidden_layers: Int = 1,
   iterations: Int        = 150000,
+  miniBatch: Int         = 32,
   optimizer: Optimizer   = tf.train.AdaDelta(0.01),
   sum_dir_prefix: String = "const_a",
   reg: Double            = 0.01,
@@ -28,22 +30,23 @@ def main(
   prior_wt: Double       = 1d,
   prior_type: String     = "Hellinger",
   mo_flag: Boolean       = true,
-  prob_timelags: Boolean = true) = {
+  prob_timelags: Boolean = true,
+  timelag_pred_strategy: String = "mode") = {
 
   //Output computation
-  val alpha = 100f
+  val beta = 100f
   val compute_output = DataPipe(
     (v: Tensor) =>
       (
-        v.square.sum().scalar.asInstanceOf[Float]*alpha,
-        alpha*0.1f
+        v.square.sum().scalar.asInstanceOf[Float]*beta + 40f,
+        beta*0.1f
       )
   )
 
   //Time Lag Computation
   // 1/2*a*t^2 + u*t - s = 0
   // t = (-u + sqrt(u*u + 2as))/a
-  val distance = alpha*10
+  val distance = beta*10
 
   val compute_time_lag = DataPipe((va: (Float, Float)) => {
     val (v, a) = va
@@ -106,19 +109,20 @@ def main(
 
   }
 
-
   val loss     = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelagutils.TLDATA = timelagutils.generate_data(
-    d, n, sliding_window, noise, noiserot,
+    d, n, sliding_window, noise, noiserot, alpha,
     compute_output > compute_time_lag)
 
   timelagutils.run_exp(
     dataset,
-    iterations, optimizer, 512,
+    iterations, optimizer,
+    miniBatch,
     sum_dir_prefix,
     mo_flag, prob_timelags,
+    timelag_pred_strategy,
     architecture, loss)
 }
