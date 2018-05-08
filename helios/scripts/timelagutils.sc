@@ -168,27 +168,41 @@ def generate_data(
 
 //Transform the generated data into a tensorflow compatible object
 def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int) =
-  DataPipe((data: Stream[(Int, (Tensor, Stream[Double], Float))]) => {
-    val features = dtf.stack(data.map(_._2._1), axis = 0)
+  DataPipe((data: SLIDINGDATA) => {
+    require(
+      num_training + num_test == data.length,
+      "Size of train and test data must add up to total size of data!")
+    (data.take(num_training), data.takeRight(num_test))
+  }) > data_splits_to_tensors(sliding_window)
 
-    val labels = dtf.tensor_f64(
-      data.length, sliding_window)(
-      data.flatMap(_._2._2):_*)
+def data_splits_to_tensors(sliding_window: Int) =
+  DataPipe2((training_data: SLIDINGDATA, test_data: SLIDINGDATA)=> {
 
-    val labels_timelags = dtf.tensor_f64(data.length)(data.map(d => d._2._3.toDouble):_*)
+    val features_train = dtf.stack(training_data.map(_._2._1), axis = 0)
+
+    val features_test  = dtf.stack(test_data.map(_._2._1), axis = 0)
+
+    val labels_train = dtf.tensor_f64(
+      training_data.length, sliding_window)(
+      training_data.flatMap(_._2._2):_*)
+
+    val labels_test  = dtf.tensor_f64(
+      test_data.length, sliding_window)(
+      test_data.flatMap(_._2._2):_*)
 
     val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
-      labels_timelags(0 :: num_training),
-      labels_timelags(num_training :: ))
+      dtf.tensor_f64(training_data.length)(training_data.map(d => d._2._3.toDouble):_*),
+      dtf.tensor_f64(test_data.length)(test_data.map(d => d._2._3.toDouble):_*))
 
 
     //Create a helios data set.
     val tf_dataset = HeliosDataSet(
-      features(0 :: num_training, ---), labels(0 :: num_training), num_training,
-      features(num_training ::, ---), labels(num_training ::), num_test)
+      features_train, labels_train, training_data.length,
+      features_test, labels_test, test_data.length)
 
     (tf_dataset, (train_time_lags, test_time_lags))
   })
+
 
 //Scale training features/labels, apply scaling to test features
 
@@ -495,3 +509,274 @@ def run_exp(
 
 }
 
+
+def run_exp2(
+  dataset: (TLDATA, TLDATA),
+  iterations: Int             = 150000,
+  optimizer: Optimizer        = tf.train.AdaDelta(0.01),
+  miniBatch: Int              = 512,
+  sum_dir_prefix: String      = "",
+  mo_flag: Boolean            = false,
+  prob_timelags: Boolean      = false,
+  timelag_pred_strategy: String = "mode",
+  architecture: Layer[Output, Output],
+  loss: Layer[(Output, Output), Output]) = {
+
+  val (data, collated_data): TLDATA           = dataset._1
+  val (data_test, collated_data_test): TLDATA = dataset._2
+
+  val sliding_window = collated_data.head._2._2.length
+  val num_training   = collated_data.length
+  val num_test       = collated_data_test.length
+
+  val model_train_eval = DataPipe(
+    (dataTuple: ((HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)), (Tensor, Tensor))) => {
+
+      val ((tf_dataset, scalers), (train_time_lags, test_time_lags)) = dataTuple
+
+      val miniBatch = 512
+
+      val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
+        .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
+        .shuffle(10)
+        .batch(miniBatch)
+        .prefetch(10)
+
+      val dt = DateTime.now()
+
+      val summary_dir_index  =
+        if(mo_flag) sum_dir_prefix+"_timelag_inference_mo_"+dt.toString("YYYY-MM-dd-HH-mm")
+        else sum_dir_prefix+"_timelag_inference_"+dt.toString("YYYY-MM-dd-HH-mm")
+
+      val tf_summary_dir     = home/'tmp/summary_dir_index
+
+      val input              = tf.learn.Input(FLOAT64, Shape(-1, tf_dataset.trainData.shape(1)))
+
+      val num_outputs        = sliding_window
+
+      val trainInput         = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
+
+      val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
+
+      val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
+
+      val (model, estimator) = dtflearn.build_tf_model(
+        architecture, input, trainInput, trainingInputLayer,
+        loss, optimizer, summariesDir, iterations)(training_data)
+
+      val predictions        = estimator.infer(() => tf_dataset.testData)
+
+      val alpha = Tensor(1.0)
+      val nu    = Tensor(1.0)
+      val q     = Tensor(1.0)
+
+      val index_times = Tensor(
+        (0 until num_outputs).map(_.toDouble)
+      ).reshape(
+        Shape(num_outputs)
+      )
+
+      val pred_time_lags_test = if(prob_timelags) {
+        val unsc_probs =
+          if(mo_flag) predictions(::, sliding_window::)
+          else predictions(::, 1::)
+
+        if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
+        else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+
+      } else {
+        predictions(::, -1)
+          .multiply(alpha.add(1E-6).square.multiply(-1.0))
+          .exp
+          .multiply(q.square)
+          .add(1.0)
+          .pow(nu.square.pow(-1.0).multiply(-1.0))
+          .multiply(num_outputs - 1.0)
+      }
+
+      val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
+
+      val pred_targets: Tensor = if (mo_flag) {
+        val all_preds =
+          if (prob_timelags) scalers._2.i(predictions(::, 0 :: num_outputs))
+          else scalers._2.i(predictions(::, 0 :: -1))
+
+        val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
+
+        val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+
+        all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+      } else {
+        scalers._2(0).i(predictions(::, 0))
+      }
+
+      val actual_targets = (0 until num_test).map(n => {
+        val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+        tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Double]
+      })
+
+      val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir, train_time_lags)
+    })
+
+  //The processing pipeline
+  val process_data =
+    data_splits_to_tensors(sliding_window) >
+      scale_data >
+      model_train_eval
+
+  val (
+    (tf_dataset, scalers),
+    (model, estimator),
+    reg_metrics, reg_time_lag,
+    tf_summary_dir,
+    train_time_lags) = process_data(collated_data, collated_data_test)
+
+  val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
+
+  val mae_lag = err_time_lag_test
+    .abs.mean()
+    .scalar
+    .asInstanceOf[Double]
+
+  val pred_time_lags_test = reg_time_lag.preds
+
+  print("Mean Absolute Error in time lag = ")
+  pprint.pprintln(mae_lag)
+
+  try {
+
+    histogram(toDoubleSeq(pred_time_lags_test).toSeq)
+    title("Predicted Time Lags")
+
+  } catch {
+    case _: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
+    case _ => println("Can't plot histogram due to exception")
+  }
+
+  try {
+
+    histogram(toDoubleSeq(err_time_lag_test).toSeq)
+    title("Histogram of Time Lag prediction errors")
+
+  } catch {
+    case _: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
+    case _ => println("Can't plot histogram due to exception")
+  }
+
+  line(toDoubleSeq(reg_metrics.targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  hold()
+  line(toDoubleSeq(reg_metrics.preds).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
+  title("Test Set Predictions")
+  unhold()
+
+
+  //Perform same visualisation for training set
+  val training_preds = estimator.infer(() => tf_dataset.trainData)
+
+  val alpha = Tensor(0.5)
+  val nu    = Tensor(1.0)
+  val q     = Tensor(1.0)
+
+  val index_times = Tensor(
+    (0 until sliding_window).map(_.toDouble)
+  ).reshape(
+    Shape(sliding_window)
+  )
+
+  val pred_time_lags_train = if(prob_timelags) {
+    val unsc_probs =
+      if(mo_flag) training_preds(::, sliding_window::)
+      else training_preds(::, 1::)
+
+    if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
+    else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+
+  } else {
+    training_preds(::, -1)
+      .multiply(alpha.add(1E-6).square.multiply(-1.0))
+      .exp
+      .multiply(q.square)
+      .add(1.0)
+      .pow(nu.square.pow(-1.0).multiply(-1.0))
+      .multiply(sliding_window - 1.0)
+  }
+
+
+  val train_signal_predicted = if (mo_flag) {
+    val all_preds =
+      if (prob_timelags) scalers._2.i(training_preds(::, 0 :: sliding_window))
+      else scalers._2.i(training_preds(::, 0 :: -1))
+
+    val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
+
+    val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+
+    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+  } else {
+    scalers._2(0).i(training_preds(::, 0))
+  }
+
+  val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
+
+  val training_signal_actual = (0 until num_training).map(n => {
+    val time_lag = pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
+    unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
+  })
+
+  line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3.toInt, c._2._2(c._2._3.toInt))))
+  hold()
+  line(toDoubleSeq(train_signal_predicted).toSeq)
+  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
+  title("Training Set Predictions")
+  unhold()
+
+  val err_train     = train_signal_predicted.subtract(training_signal_actual)
+  val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
+
+  scatter(toDoubleSeq(err_train).zip(toDoubleSeq(err_lag_train)).toSeq)
+  xAxis("Error in Velocity")
+  yAxis("Error in Time Lag")
+  title("Training Set Errors; Scatter")
+
+  scatter(toDoubleSeq(train_signal_predicted).zip(toDoubleSeq(pred_time_lags_train)).toSeq)
+  xAxis("Velocity")
+  yAxis("Time Lag")
+  title("Training Set; Scatter")
+
+  hold()
+
+  scatter(training_signal_actual.zip(toDoubleSeq(train_time_lags).toSeq))
+  legend(Seq("Predictions", "Actual Data"))
+  unhold()
+
+
+  val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
+  val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
+
+  scatter(toDoubleSeq(err_test).zip(toDoubleSeq(err_lag_test)).toSeq)
+  xAxis("Error in Velocity")
+  yAxis("Error in Time Lag")
+  title("Test Set Errors; Scatter")
+
+  scatter(toDoubleSeq(reg_metrics.preds).zip(toDoubleSeq(reg_time_lag.preds)).toSeq)
+  xAxis("Velocity")
+  yAxis("Time Lag")
+  title("Test Set; Scatter")
+
+  hold()
+
+  scatter(toDoubleSeq(reg_metrics.targets).zip(toDoubleSeq(reg_time_lag.targets)).toSeq)
+  legend(Seq("Predictions", "Actual Data"))
+  unhold()
+
+  (
+    ((data, collated_data), (data_test, collated_data_test), tf_dataset),
+    (model, estimator, tf_summary_dir),
+    (reg_metrics, reg_time_lag),
+    scalers
+  )
+
+}

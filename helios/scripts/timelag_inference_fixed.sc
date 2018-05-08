@@ -17,6 +17,7 @@ def main(
   noise: Double                 = 0.5,
   noiserot: Double              = 0.1,
   alpha: Double                 = 0.0,
+  train_test_separate: Boolean  = false,
   num_neurons: Int              = 40,
   num_hidden_layers: Int        = 1,
   iterations: Int               = 150000,
@@ -108,12 +109,28 @@ def main(
     noise, noiserot, alpha,
     compute_output)
 
-  timelagutils.run_exp(
-    dataset,
-    iterations, optimizer,
-    miniBatch,
-    sum_dir_prefix,
-    mo_flag, prob_timelags,
-    timelag_pred_strategy,
-    architecture, loss)
+  if(train_test_separate) {
+    val dataset_test: timelagutils.TLDATA = timelagutils.generate_data(
+      d, n, sliding_window,
+      noise, noiserot, alpha,
+      compute_output)
+
+    timelagutils.run_exp2(
+      (dataset, dataset_test), iterations, optimizer,
+      miniBatch, sum_dir_prefix,
+      mo_flag, prob_timelags,
+      timelag_pred_strategy,
+      architecture, loss)
+  } else {
+
+    timelagutils.run_exp(
+      dataset,
+      iterations, optimizer,
+      miniBatch,
+      sum_dir_prefix,
+      mo_flag, prob_timelags,
+      timelag_pred_strategy,
+      architecture, loss)
+  }
+
 }
