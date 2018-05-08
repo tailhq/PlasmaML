@@ -407,6 +407,7 @@ def run_exp(
 
     if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
     else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+
   } else {
     training_preds(::, -1)
       .multiply(alpha.add(1E-6).square.multiply(-1.0))
