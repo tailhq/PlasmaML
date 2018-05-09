@@ -63,18 +63,18 @@ case class WeightedTimeSeriesLoss(
 
     val model_errors = preds.subtract(targets)
 
-    val prior_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
+    val target_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
 
     def kl(prior: Output, p: Output): Output =
       prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
 
-    val m = prior_prob.add(prob).divide(2.0)
+    val m = target_prob.add(prob).divide(2.0)
 
     val prior_term =
-      if(prior_type == "Jensen-Shannon") kl(prior_prob, m).add(kl(prob, m)).multiply(0.5)
-      else if(prior_type == "Hellinger") prior_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
-      else if(prior_type == "Cross-Entropy") prior_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
-      else if(prior_type == "Kullback-Leibler") kl(prior_prob, prob)
+      if(prior_type == "Jensen-Shannon") kl(target_prob, m).add(kl(prob, m)).multiply(0.5)
+      else if(prior_type == "Hellinger") target_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
+      else if(prior_type == "Cross-Entropy") target_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
+      else if(prior_type == "Kullback-Leibler") kl(target_prob, prob)
       else Tensor(0.0).toOutput
 
     model_errors.square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(prior_term.multiply(prior_wt))

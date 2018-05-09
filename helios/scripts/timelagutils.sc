@@ -170,8 +170,10 @@ def generate_data(
 def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int) =
   DataPipe((data: SLIDINGDATA) => {
     require(
+
       num_training + num_test == data.length,
       "Size of train and test data must add up to total size of data!")
+
     (data.take(num_training), data.takeRight(num_test))
   }) > data_splits_to_tensors(sliding_window)
 
