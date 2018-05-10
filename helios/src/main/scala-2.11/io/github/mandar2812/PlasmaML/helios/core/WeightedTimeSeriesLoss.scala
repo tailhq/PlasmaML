@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
+import io.github.mandar2812.dynaml.utils.annotation.Experimental
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.Loss
@@ -38,10 +39,21 @@ import org.platanios.tensorflow.api.ops.Output
   * @param prior_type The kind of divergence term to be used as a prior over the probability
   *                   distribution predicted for the time lag. Available options include.
   *                   <ul>
-  *                     <li>Hellinger distance (default)</li>
-  *                     <li>Kullback-Leibler Divergence</li>
-  *                     <li>Cross Entropy</li>
-  *                     <li>Jensen-Shannon Divergence</li>
+  *                     <li>
+  *                       <a href="https://en.wikipedia.org/wiki/Hellinger_distance">
+  *                         Hellinger distance</a> (default)
+  *                     </li>
+  *                     <li>
+  *                       <a href="https://en.wikipedia.org/wiki/Kullback–Leibler_divergence">
+  *                         Kullback-Leibler Divergence</a>
+  *                     </li>
+  *                     <li>
+  *                       <a href="https://en.wikipedia.org/wiki/Cross_entropy">Cross Entropy</a>
+  *                     </li>
+  *                     <li>
+  *                       <a href="https://en.wikipedia.org/wiki/Jensen–Shannon_divergence">
+  *                         Jensen-Shannon Divergence</a>
+  *                     </li>
   *                   </ul>
   *
   * */
@@ -81,6 +93,7 @@ case class WeightedTimeSeriesLoss(
   }
 }
 
+@Experimental
 case class WeightedTimeSeriesLossSO(
   override val name: String,
   size_causal_window: Int,
@@ -118,6 +131,7 @@ case class WeightedTimeSeriesLossSO(
   }
 }
 
+@Experimental
 case class WeightedTimeSeriesLossBeta(
   override val name: String,
   size_causal_window: Int,
@@ -186,6 +200,7 @@ case class WeightedTimeSeriesLossBeta(
 
 }
 
+@Experimental
 case class MOGrangerLoss(
   override val name: String,
   size_causal_window: Int,

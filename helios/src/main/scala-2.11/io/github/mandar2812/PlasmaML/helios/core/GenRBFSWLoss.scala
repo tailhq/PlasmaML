@@ -1,10 +1,12 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
+import io.github.mandar2812.dynaml.utils.annotation.Experimental
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.Loss
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.Output
 
+@Experimental
 /**
   * <h3>RBF-Kernel Weighted Solar Wind Loss (KSW Loss)</h3>
   *

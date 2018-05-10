@@ -7,13 +7,14 @@ import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
-import io.github.mandar2812.dynaml.tensorflow.dtf
+import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn}
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
+import spire.math.UByte
 
 /**
   * <h3>Helios</h3>
@@ -958,27 +959,9 @@ package object helios {
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
     //Now create the model
-    val (model, estimator) = tf.createWith(graph = Graph()) {
-      val model = tf.learn.Model(
-        input, arch, trainInput, trainingInputLayer,
-        loss, optimizer)
-
-      println("Training the linear regression model.")
-
-      val estimator = tf.learn.FileBasedEstimator(
-        model,
-        tf.learn.Configuration(Some(summariesDir)),
-        tf.learn.StopCriteria(maxSteps = Some(iterations)),
-        Set(
-          tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
-          tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
-          tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
-        tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
-
-      estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(iterations)))
-
-      (model, estimator)
-    }
+    val (model, estimator) =  dtflearn.build_tf_model[UByte, Double](
+      arch, input, trainInput, trainingInputLayer,
+      loss, optimizer, summariesDir, iterations)(trainData)
 
     val predictions = estimator.infer(() => dataSet.testData)
 
