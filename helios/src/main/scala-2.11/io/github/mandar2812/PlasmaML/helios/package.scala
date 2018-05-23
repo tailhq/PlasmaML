@@ -961,7 +961,7 @@ package object helios {
     //Now create the model
     val (model, estimator) =  dtflearn.build_tf_model[UByte, Double](
       arch, input, trainInput, trainingInputLayer,
-      loss, optimizer, summariesDir, iterations)(trainData)
+      loss, optimizer, summariesDir, dtflearn.max_iter_stop(iterations))(trainData)
 
     val predictions = estimator.infer(() => dataSet.testData)
 

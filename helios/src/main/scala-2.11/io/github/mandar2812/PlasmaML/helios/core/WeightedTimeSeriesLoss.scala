@@ -61,6 +61,7 @@ case class WeightedTimeSeriesLoss(
   override val name: String,
   size_causal_window: Int,
   prior_wt: Double = 1.5,
+  error_wt: Double = 1.0,
   temperature: Double = 1.0,
   prior_type: String = "Hellinger") extends
   Loss[(Output, Output)](name) {
@@ -82,14 +83,27 @@ case class WeightedTimeSeriesLoss(
 
     val m = target_prob.add(prob).divide(2.0)
 
-    val prior_term =
-      if(prior_type == "Jensen-Shannon") kl(target_prob, m).add(kl(prob, m)).multiply(0.5)
-      else if(prior_type == "Hellinger") target_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
-      else if(prior_type == "Cross-Entropy") target_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
-      else if(prior_type == "Kullback-Leibler") kl(target_prob, prob)
-      else Tensor(0.0).toOutput
+    val prior_term = prior_type match {
+      case "L2" =>
+        target_prob.subtract(prob).square.sum(axes = 1).divide(2.0).mean()
+      case "Hellinger" =>
+        target_prob.sqrt.subtract(prob.sqrt).square.sum(axes = 1).divide(2.0).sqrt.mean()
+      case "Jensen-Shannon" =>
+        kl(target_prob, m).add(kl(prob, m)).multiply(0.5)
+      case "Cross-Entropy" =>
+        target_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
+      case "Kullback-Leibler" =>
+        kl(target_prob, prob)
+      case _ =>
+        Tensor(0.0).toOutput
 
-    model_errors.square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(prior_term.multiply(prior_wt))
+    }
+
+    model_errors.square
+      .multiply(prob.add(1.0))
+      .sum(axes = 1).mean()
+      .multiply(error_wt)
+      .add(prior_term.multiply(prior_wt))
   }
 }
 

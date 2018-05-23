@@ -237,6 +237,18 @@ def get_ffnet_properties(
   (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes)
 }
 
+def get_ffnet_properties(
+  d: Int, num_pred_dims: Int,
+  layer_sizes: Seq[Int]) = {
+
+  val net_layer_sizes       = Seq(d) ++ layer_sizes ++ Seq(num_pred_dims)
+  val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
+  val layer_parameter_names = (1 to net_layer_sizes.tail.length).map(s => "Linear_"+s+"/Weights")
+  val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
+
+  (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes)
+}
+
 //Runs an experiment given some architecture, loss and training parameters.
 def run_exp(
   dataset: TLDATA,
@@ -292,7 +304,9 @@ def run_exp(
 
       val (model, estimator) = dtflearn.build_tf_model(
         architecture, input, trainInput, trainingInputLayer,
-        loss, optimizer, summariesDir, iterations)(training_data)
+        loss, optimizer, summariesDir,
+        dtflearn.max_iter_stop(iterations))(
+        training_data)
 
       val predictions        = estimator.infer(() => tf_dataset.testData)
 
@@ -564,7 +578,9 @@ def run_exp2(
 
       val (model, estimator) = dtflearn.build_tf_model(
         architecture, input, trainInput, trainingInputLayer,
-        loss, optimizer, summariesDir, iterations)(training_data)
+        loss, optimizer, summariesDir,
+        dtflearn.max_iter_stop(iterations))(
+        training_data)
 
       val predictions        = estimator.infer(() => tf_dataset.testData)
 

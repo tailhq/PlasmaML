@@ -18,8 +18,7 @@ def main(
   noiserot: Double              = 0.1,
   alpha: Double                 = 0.0,
   train_test_separate: Boolean  = false,
-  num_neurons: Int              = 40,
-  num_hidden_layers: Int        = 1,
+  num_neurons: Seq[Int]         = Seq(40),
   iterations: Int               = 150000,
   miniBatch: Int                = 32,
   optimizer: Optimizer          = tf.train.AdaDelta(0.01),
@@ -31,6 +30,8 @@ def main(
   c_cutoff: Double              = 0.0,
   prior_wt: Double              = 1d,
   prior_type: String            = "Hellinger",
+  temp: Double                  = 1.0,
+  error_wt: Double              = 1.0,
   mo_flag: Boolean              = true,
   prob_timelags: Boolean        = true,
   timelag_pred_strategy: String = "mode") = {
@@ -41,7 +42,7 @@ def main(
   val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
     (v: Tensor) => {
 
-      val out = v.square.sum().scalar.asInstanceOf[Float]*beta
+      val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d
 
       (fixed_lag, out + scala.util.Random.nextGaussian().toFloat)
     })
@@ -55,7 +56,7 @@ def main(
     else 2*sliding_window
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelagutils.get_ffnet_properties(d, num_pred_dims, num_neurons, num_hidden_layers)
+    timelagutils.get_ffnet_properties(d, num_pred_dims, num_neurons)
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
@@ -95,7 +96,8 @@ def main(
       "Loss/ProbWeightedTS",
       num_outputs,
       prior_wt = prior_wt,
-      temperature = 0.75,
+      error_wt = error_wt,
+      temperature = temp,
       prior_type)
 
   }
