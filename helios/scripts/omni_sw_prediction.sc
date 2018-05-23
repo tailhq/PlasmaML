@@ -16,7 +16,7 @@ def main(
   reg: Double = 0.001,
   prior_wt: Double = 0.85,
   error_wt: Double = 1.0,
-  temp: Double = 1.0,
+  temp: Double = 0.75,
   maxIt: Int = 200000,
   tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
   resFile: String = "mdi_rbfloss_results.csv") = {
@@ -66,6 +66,7 @@ def main(
     data, tt_partition, resample = re, scaleDown = sc_down)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
-    lossFunc = loss_func)
+    lossFunc = loss_func,
+    optimizer = opt)
 
 }
