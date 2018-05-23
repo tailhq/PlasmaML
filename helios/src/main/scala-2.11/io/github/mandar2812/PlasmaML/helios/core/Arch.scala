@@ -125,7 +125,7 @@ object Arch {
       tf.learn.SELU("SELU_4") >>
       tf.learn.Linear("FC_Layer_5", 64) >>
       tf.learn.SELU("SELU_5") >>
-      tf.learn.Linear("FC_layer_6", num_pred_dims)
+      tf.learn.Linear("FC_Layer_6", num_pred_dims)
   }
 
   private[PlasmaML] val cnn_sw_dynamic_timescales_v1 = {
