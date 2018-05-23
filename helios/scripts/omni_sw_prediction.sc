@@ -48,7 +48,7 @@ def main(
 
   val net_layer_sizes       = Seq(-1, 128, 64, 2*data.head._2._2.length)
   val layer_parameter_names = Seq(4, 5, 6).map(i => "FC_Layer_"+i+"/Weights")
-  val layer_datatypes       = Seq.fill(layer_parameter_names.length)("FLOAT32")
+  val layer_datatypes       = Seq("FLOAT32", "FLOAT64", "FLOAT64")
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
   val loss_func = WeightedTimeSeriesLoss(
