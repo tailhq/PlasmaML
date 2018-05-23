@@ -1,12 +1,10 @@
 import _root_.io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
-import io.github.mandar2812.PlasmaML.dynamics.mhd.{UpwindPropogate, UpwindTF}
+import io.github.mandar2812.PlasmaML.helios.core.WeightedTimeSeriesLoss
+import io.github.mandar2812.PlasmaML.utils.L2Regularization
 import io.github.mandar2812.dynaml.repl.Router.main
-import io.github.mandar2812.dynaml.tensorflow.dtflearn
-import io.github.mandar2812.dynaml.tensorflow.layers.FiniteHorizonCTRNN
 import org.joda.time._
 import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
-import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
@@ -15,6 +13,10 @@ def main(
   re: Boolean = true, sc_down: Int = 2,
   time_horizon: (Int, Int) = (18, 56),
   opt: Optimizer = tf.train.AdaDelta(0.01),
+  reg: Double = 0.001,
+  prior_wt: Double = 0.85,
+  error_wt: Double = 1.0,
+  temp: Double = 1.0,
   maxIt: Int = 200000,
   tmpdir: Path = root/"home"/System.getProperty("user.name")/"tmp",
   resFile: String = "mdi_rbfloss_results.csv") = {
@@ -40,24 +42,28 @@ def main(
 
   val summary_dir = if(re) "mdi_resample_"+test_year else "mdi_"+test_year
 
-  val architecture = {
-    tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.4f) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
-      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
-      tf.learn.Flatten("Flatten_5") >>
-      dtflearn.feedforward(64)(6) >>
-      dtflearn.Tanh("Tanh_6") >>
-      dtflearn.feedforward(16)(7) >>
-      dtflearn.Tanh("Tanh_7") >>
-      dtflearn.feedforward(4)(8) >>
-      FiniteHorizonCTRNN("fhctrnn_9", 4, 5, 0.2d) >>
-      tf.learn.Flatten("Flatten_9") >>
-      tf.learn.Linear("OutputLayer", 2)
-  }
+  val architecture = helios.learn.cnn_sw_v2(data.head._2._2.length)
+
+  val net_layer_sizes       = Seq(128, 64, data.head._2._2.length)
+  val layer_parameter_names = Seq(4, 5, 6).map(i => "FC_layer_"+i)
+  val layer_datatypes       = Seq.fill(layer_parameter_names.length)("FLOAT32")
+  val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
+
+  val loss_func = WeightedTimeSeriesLoss(
+    "Loss/ProbWeightedTS",
+    data.head._2._2.length,
+    prior_wt = prior_wt,
+    temperature = temp) >>
+    L2Regularization(
+      layer_parameter_names,
+      layer_datatypes,
+      layer_shapes,
+      reg)
 
   helios.run_experiment_omni(
     data, tt_partition, resample = re, scaleDown = sc_down)(
-    summary_dir, maxIt, tmpdir, arch = architecture)
+    summary_dir, maxIt, tmpdir,
+    arch = architecture,
+    lossFunc = loss_func)
 
 }
