@@ -44,8 +44,10 @@ def main(
 
   val architecture = helios.learn.cnn_sw_v2(data.head._2._2.length)
 
-  val net_layer_sizes       = Seq(128, 64, data.head._2._2.length)
-  val layer_parameter_names = Seq(4, 5, 6).map(i => "FC_Layer_"+i)
+
+
+  val net_layer_sizes       = Seq(-1, 128, 64, 2*data.head._2._2.length)
+  val layer_parameter_names = Seq(4, 5, 6).map(i => "FC_Layer_"+i+"/Weights")
   val layer_datatypes       = Seq.fill(layer_parameter_names.length)("FLOAT32")
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 

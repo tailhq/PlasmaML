@@ -122,9 +122,9 @@ object Arch {
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
       tf.learn.Linear("FC_Layer_4", 128) >>
-      tf.learn.SELU("SELU_4") >>
+      dtflearn.Phi("Act_4") >>
       tf.learn.Linear("FC_Layer_5", 64) >>
-      tf.learn.SELU("SELU_5") >>
+      dtflearn.Phi("Act_5") >>
       tf.learn.Linear("FC_Layer_6", num_pred_dims)
   }
 
