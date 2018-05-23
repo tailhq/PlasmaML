@@ -7,12 +7,14 @@ import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
-import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn}
+import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe}
+import io.github.mandar2812.dynaml.tensorflow.utils._
+import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
+import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import spire.math.UByte
 
@@ -47,6 +49,9 @@ package object helios {
 
     val cnn_xray_class_v1: Layer[Output, Output]              = Arch.cnn_xray_class_v1
 
+    def cnn_sw_v2(sliding_window: Int): Compose[Output, Output, Output] =
+      Arch.cnn_sw_v2(sliding_window, mo_flag = true, prob_timelags = true)
+
     /*
     * Loss Functions
     * */
@@ -60,6 +65,31 @@ package object helios {
       (name: String, horizon: Int) => new DynamicRBFSWLoss(name, horizon)
 
   }
+
+  val minmax_gauss_standardization: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
+    DataPipe2((features: Tensor, labels: Tensor) => {
+
+      val labels_mean = labels.mean(axes = 0)
+
+      val (features_min, features_max) = (features.min(axes = 0), features.max(axes = 0))
+
+      val n_data = features.shape(0).scalar.asInstanceOf[Int].toDouble
+
+      val labels_sd =
+        labels.subtract(labels_mean).square.mean(axes = 0).multiply(n_data/(n_data - 1d)).sqrt
+
+      val (features_scaler, labels_scaler) = (
+        MinMaxScalerTF(features_min, features_max),
+        GaussianScalerTF(labels_mean, labels_sd)
+      )
+
+      val (features_scaled, labels_scaled) = (
+        features_scaler(features),
+        labels_scaler(labels)
+      )
+
+      ((features_scaled, labels_scaled), (features_scaler, labels_scaler))
+    })
 
   /**
     * Download solar images from a specified source.
@@ -533,6 +563,18 @@ package object helios {
     )
   }
 
+  val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
+
+    val (norm_tr_data, scalers) = minmax_gauss_standardization(dataset.trainData, dataset.trainLabels)
+
+    (
+      dataset.copy(
+        trainData = norm_tr_data._1, trainLabels = norm_tr_data._2,
+        testData = scalers._1(dataset.testData)),
+      scalers
+    )
+  })
+
   /**
     * Calculate RMSE of a tensorflow based estimator.
     * */
@@ -874,16 +916,20 @@ package object helios {
     * @param results_id The suffix added the results/checkpoints directory name.
     * @param max_iterations The maximum number of iterations that the
     *                       network must be trained for.
-    * @param arch The neural architecture to train, defaults to [[Arch.cnn_sw_v1]]
+    * @param arch The neural architecture to train, defaults to [[learn.cnn_sw_v1]]
     *
     * */
   def run_experiment_omni(
     collated_data: Stream[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
     resample: Boolean = false, scaleDown: Int = 2)(
-    results_id: String, max_iterations: Int,
+    results_id: String,
+    max_iterations: Int,
     tempdir: Path = home/"tmp",
-    arch: Layer[Output, Output] = learn.cnn_sw_v1,
+    arch: Layer[Output, Output],
+    lossFunc: Layer[(Output, Output), Output],
+    mo_flag: Boolean = true,
+    prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.002)) = {
 
     val resDirName = "helios_omni_"+results_id
@@ -906,24 +952,18 @@ package object helios {
     * start loading it into tensors
     *
     * */
-
     val dataSet = helios.create_helios_data_set(
       collated_data,
       tt_partition,
       scaleDownFactor = scaleDown,
       resample)
 
-    val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
-    val train_labels = dataSet.trainLabels
+    val (norm_tf_data, scalers): (HeliosDataSet, (MinMaxScalerTF, GaussianScalerTF)) =
+      scale_helios_dataset(dataSet)
 
-    val labels_mean = dataSet.trainLabels.mean(axes = Tensor(0))
-
-    val labels_stddev = dataSet.trainLabels.subtract(labels_mean).square.mean(axes = Tensor(0)).sqrt
-
-    val norm_train_labels = train_labels.subtract(labels_mean).divide(labels_stddev)
-
-    val trainLabels = tf.data.TensorSlicesDataset(norm_train_labels)
+    val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData)
+    val trainLabels = tf.data.TensorSlicesDataset(norm_tf_data.trainLabels)
 
     val trainData =
       trainImages.zip(trainLabels)
@@ -946,12 +986,11 @@ package object helios {
     )
 
     val num_outputs = collated_data.head._2._2.length
+    val sliding_window = num_outputs
 
     val trainInput = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
-
-    val lossFunc = GenRBFSWLoss("Loss/RBFWeightedL2", num_outputs)
 
     val loss = lossFunc >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
@@ -965,22 +1004,58 @@ package object helios {
 
     val predictions = estimator.infer(() => dataSet.testData)
 
-    val pred_targets = predictions(::, 0)
-      .multiply(labels_stddev(0))
-      .add(labels_mean(0))
+    val alpha = Tensor(1.0)
+    val nu    = Tensor(1.0)
+    val q     = Tensor(1.0)
 
-    val pred_time_lags = predictions(::, 1)
-
-    val metrics = new HeliosOmniTSMetrics(
-      dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1),
-      dataSet.testLabels, dataSet.testLabels.shape(1),
-      dtf.tensor_f32(
-        dataSet.nTest)(
-        Seq.fill(dataSet.nTest)(tf.variable("Loss/RBFWeightedL2/time_scale").evaluate().scalar.asInstanceOf[Float].toDouble):_*
-      )
+    val index_times = Tensor(
+      (0 until num_outputs).map(_.toDouble)
+    ).reshape(
+      Shape(num_outputs)
     )
 
-    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev, collated_data)
+
+    val pred_time_lags_test = if(prob_timelags) {
+      val unsc_probs =
+        if(mo_flag) predictions(::, sliding_window::)
+        else predictions(::, 1::)
+
+      unsc_probs.topK(1)._2.reshape(Shape(dataSet.nTest)).cast(FLOAT64)
+
+    } else {
+      predictions(::, -1)
+        .multiply(alpha.add(1E-6).square.multiply(-1.0))
+        .exp
+        .multiply(q.square)
+        .add(1.0)
+        .pow(nu.square.pow(-1.0).multiply(-1.0))
+        .multiply(num_outputs - 1.0)
+    }
+
+
+    val pred_targets: Tensor = if (mo_flag) {
+      val all_preds =
+        if (prob_timelags) scalers._2.i(predictions(::, 0 :: num_outputs))
+        else scalers._2.i(predictions(::, 0 :: -1))
+
+      val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
+
+      val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+    } else {
+      scalers._2(0).i(predictions(::, 0))
+    }
+
+    val actual_targets = (0 until dataSet.nTest).map(n => {
+      val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+      dataSet.testLabels(n, time_lag).scalar.asInstanceOf[Double]
+    })
+
+
+    val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+    (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
 
   def run_experiment_omni_dynamic_time_scales(

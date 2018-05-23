@@ -96,6 +96,38 @@ object Arch {
       tf.learn.Linear("OutputLayer", 2)
   }
 
+  /**
+    * Dynamic causal time lag inference architecture. v 2.0
+    *
+    * @param sliding_window Size of finite time horizon for causal inference
+    * @param mo_flag Set to true for training one model for each output.
+    * @param prob_timelags Set to true if predicting causal time lag in a probabilistic manner.
+    * */
+  private[PlasmaML] def cnn_sw_v2(
+    sliding_window: Int,
+    mo_flag: Boolean,
+    prob_timelags: Boolean) = {
+
+    val num_pred_dims =
+      if(!mo_flag) 2
+      else if(mo_flag && !prob_timelags) sliding_window + 1
+      else if(!mo_flag && prob_timelags) sliding_window + 1
+      else 2*sliding_window
+
+    tf.learn.Cast("Input/Cast", FLOAT32) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 4, 64), (1, 1))(0) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 64, 32), (2, 2))(1) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 32, 16), (4, 4))(2) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 16, 8), (8, 8), dropout = false)(3) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.Flatten("Flatten_3") >>
+      tf.learn.Linear("FC_Layer_4", 128) >>
+      tf.learn.SELU("SELU_4") >>
+      tf.learn.Linear("FC_Layer_5", 64) >>
+      tf.learn.SELU("SELU_5") >>
+      tf.learn.Linear("FC_layer_6", num_pred_dims)
+  }
+
   private[PlasmaML] val cnn_sw_dynamic_timescales_v1 = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(2, num_channels_input = 4)(7, 3)(0.1f, true, 0.6f) >>
