@@ -928,7 +928,8 @@ package object helios {
     lossFunc: Layer[(Output, Output), Output],
     mo_flag: Boolean = true,
     prob_timelags: Boolean = true,
-    optimizer: Optimizer = tf.train.AdaDelta(0.002)) = {
+    optimizer: Optimizer = tf.train.AdaDelta(0.001),
+    miniBatchSize: Int = 16) = {
 
     val resDirName = "helios_omni_"+results_id
 
@@ -967,7 +968,7 @@ package object helios {
       trainImages.zip(trainLabels)
         .repeat()
         .shuffle(10000)
-        .batch(64)
+        .batch(miniBatchSize)
         .prefetch(10)
 
     /*
