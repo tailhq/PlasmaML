@@ -414,7 +414,7 @@ package object helios {
     } else train_set
 
     //Construct training features and labels
-    val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) =
+    val (features_train, labels_train): (Iterable[Array[Byte]], Iterable[Seq[Double]]) =
       processed_train_set.map(entry => {
         val (_, (path, data_label)) = entry
 
@@ -427,13 +427,16 @@ package object helios {
       }).unzip
 
     val features_tensor_train = dtf.tensor_from_buffer(
-      "UINT8", processed_train_set.length, scaled_height, scaled_width, num_channels)(
+      dtype = "UINT8", processed_train_set.length,
+      scaled_height, scaled_width, num_channels)(
       features_train.toArray.flatten[Byte])
 
-    val labels_tensor_train = dtf.tensor_from("FLOAT64", train_set.length, num_outputs)(labels_train.flatten[Double])
+    val labels_tensor_train = dtf.tensor_from(
+      dtype = "FLOAT64", train_set.length,
+      num_outputs)(labels_train.flatten[Double].toSeq)
 
     //Construct test features and labels
-    val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
+    val (features_test, labels_test): (Iterable[Array[Byte]], Iterable[Seq[Double]]) = test_set.map(entry => {
       val (_, (path, data_label)) = entry
 
       val im = Image.fromPath(path.toNIO)
@@ -448,7 +451,9 @@ package object helios {
       "UINT8", test_set.length, scaled_height, scaled_width, num_channels)(
       features_test.toArray.flatten[Byte])
 
-    val labels_tensor_test = dtf.tensor_from("FLOAT64", test_set.length, num_outputs)(labels_test.flatten[Double])
+    val labels_tensor_test = dtf.tensor_from(
+      dtype = "FLOAT64", test_set.length,
+      num_outputs)(labels_test.flatten[Double].toSeq)
 
     println("Helios data set created")
     working_set.copy(
