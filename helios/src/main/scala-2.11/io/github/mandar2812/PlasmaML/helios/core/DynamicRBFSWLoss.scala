@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
 import org.platanios.tensorflow.api.learn.Mode
-import org.platanios.tensorflow.api.learn.layers.Loss
+import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.Output
 
@@ -18,20 +18,20 @@ import org.platanios.tensorflow.api.ops.Output
 case class DynamicRBFSWLoss(
   override val name: String,
   size_causal_window: Int) extends
-  Loss[(Output, Output)](name) {
+  Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"DynamicRBFSW[$size_causal_window]"
 
-  private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
-
-  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
 
     //Obtain section corresponding to velocity predictions
-    val preds = input._1(::, 0)
+    val preds = input._1._1
 
-    val times = input._1(::, 1).sigmoid.multiply(scaling)
+    val times_and_scales = input._1._2
 
-    val timescales = input._1(::, 2).exp
+    val times = times_and_scales(::, 0)
+
+    val timescales = times_and_scales(::, 1)
 
     val repeated_timescales = tf.stack(Seq.fill(size_causal_window)(timescales), axis = -1)
 
@@ -58,4 +58,20 @@ case class DynamicRBFSWLoss(
 
     weighted_loss_tensor
   }
+}
+
+object DynamicRBFSWLoss {
+
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+
+      private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+
+      override val layerType: String = s"OutputDynamicRBFSW[$size_causal_window]"
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+        (input(::, 0), tf.concatenate(Seq(input(::, 1).sigmoid.multiply(scaling), input(::, 2).exp), axis = 1))
+      }
+    }
+
 }

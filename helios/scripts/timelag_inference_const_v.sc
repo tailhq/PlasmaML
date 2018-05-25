@@ -60,10 +60,20 @@ def main(
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     timelagutils.get_ffnet_properties(d, num_pred_dims, num_neurons)
 
+  val output_mapping =
+    if (!mo_flag) {
+
+      if (!prob_timelags) RBFWeightedSWLoss.output_mapping("Output/RBFWeightedL1", num_outputs, time_scale)
+      else WeightedTimeSeriesLossSO.output_mapping("Output/SOProbWeightedTS", num_outputs)
+
+    } else if(mo_flag && !prob_timelags) MOGrangerLoss.output_mapping("Output/MOGranger", num_outputs)
+    else WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", num_outputs)
+
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.02f) else dtflearn.Phi("Act_"+i), FLOAT64)(
-    net_layer_sizes.tail)
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+    net_layer_sizes.tail) >> output_mapping
+
 
   val lossFunc = if (!mo_flag) {
 

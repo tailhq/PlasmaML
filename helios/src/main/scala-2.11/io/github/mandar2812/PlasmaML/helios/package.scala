@@ -356,7 +356,7 @@ package object helios {
     *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
-    collated_data: Stream[(DateTime, (Path, Seq[Double]))],
+    collated_data: Iterable[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
     scaleDownFactor: Int = 4, resample: Boolean = false): HeliosDataSet = {
 
@@ -384,8 +384,8 @@ package object helios {
     }
 
     val working_set = HeliosDataSet(
-      null, null, train_set.length,
-      null, null, test_set.length)
+      null, null, train_set.toIterator.length,
+      null, null, test_set.toIterator.length)
 
     /*
     * If the `resample` flag is set to true,
@@ -410,7 +410,7 @@ package object helios {
 
       val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
 
-      helios.resample(train_set, selector)
+      helios.resample(train_set.toStream, selector)
     } else train_set
 
     def create_image_tensor_buffered(coll: Iterable[Array[Byte]]): Tensor = {
@@ -460,13 +460,13 @@ package object helios {
 
 
     //Construct training features and labels
-    val (features_train, labels_train) = split_features_and_labels(processed_train_set)
+    val (features_train, labels_train) = split_features_and_labels(processed_train_set.toStream)
 
     val features_tensor_train = create_image_tensor_buffered(features_train)
     val labels_tensor_train   = create_double_tensor_buffered(labels_train)
 
     //Construct test features and labels
-    val (features_test, labels_test) = split_features_and_labels(test_set)
+    val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
 
     val features_tensor_test = create_image_tensor_buffered(features_test)
     val labels_tensor_test   = create_double_tensor_buffered(labels_test)
@@ -945,8 +945,8 @@ package object helios {
     results_id: String,
     max_iterations: Int,
     tempdir: Path = home/"tmp",
-    arch: Layer[Output, Output],
-    lossFunc: Layer[(Output, Output), Output],
+    arch: Layer[Output, (Output, Output)],
+    lossFunc: Layer[((Output, Output), Output), Output],
     mo_flag: Boolean = true,
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
@@ -1005,10 +1005,9 @@ package object helios {
         dataSet.trainData.shape(3))
     )
 
-    val num_outputs = collated_data.head._2._2.length
-    val sliding_window = num_outputs
+    val causal_horizon = collated_data.head._2._2.length
 
-    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
+    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, causal_horizon))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
@@ -1018,53 +1017,41 @@ package object helios {
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
     //Now create the model
-    val (model, estimator) =  dtflearn.build_tf_model[UByte, Double](
+    val (model, estimator) = dtflearn.build_tf_model[UByte, Double, (Output, Output)](
       arch, input, trainInput, trainingInputLayer,
-      loss, optimizer, summariesDir, dtflearn.max_iter_stop(iterations))(trainData)
+      loss, optimizer, summariesDir,
+      dtflearn.max_iter_stop(iterations))(
+      trainData)
 
-    val predictions = estimator.infer(() => dataSet.testData)
-
-    val alpha = Tensor(1.0)
-    val nu    = Tensor(1.0)
-    val q     = Tensor(1.0)
+    val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
 
     val index_times = Tensor(
-      (0 until num_outputs).map(_.toDouble)
+      (0 until causal_horizon).map(_.toDouble)
     ).reshape(
-      Shape(num_outputs)
+      Shape(causal_horizon)
     )
 
 
     val pred_time_lags_test = if(prob_timelags) {
-      val unsc_probs =
-        if(mo_flag) predictions(::, sliding_window::)
-        else predictions(::, 1::)
+      val unsc_probs = predictions._2
 
       unsc_probs.topK(1)._2.reshape(Shape(dataSet.nTest)).cast(FLOAT64)
 
-    } else {
-      predictions(::, -1)
-        .multiply(alpha.add(1E-6).square.multiply(-1.0))
-        .exp
-        .multiply(q.square)
-        .add(1.0)
-        .pow(nu.square.pow(-1.0).multiply(-1.0))
-        .multiply(num_outputs - 1.0)
-    }
+    } else predictions._2
 
 
     val pred_targets: Tensor = if (mo_flag) {
       val all_preds =
-        if (prob_timelags) scalers._2.i(predictions(::, 0 :: num_outputs))
-        else scalers._2.i(predictions(::, 0 :: -1))
+        if (prob_timelags) scalers._2.i(predictions._1)
+        else scalers._2.i(predictions._1)
 
-      val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
+      val repeated_times = tf.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
 
       val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
 
       all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
     } else {
-      scalers._2(0).i(predictions(::, 0))
+      scalers._2(0).i(predictions._1)
     }
 
     val actual_targets = (0 until dataSet.nTest).map(n => {
@@ -1084,7 +1071,7 @@ package object helios {
     resample: Boolean = false)(
     results_id: String, max_iterations: Int,
     tempdir: Path = home/"tmp",
-    arch: Layer[Output, Output] = learn.cnn_sw_dynamic_timescales_v1) = {
+    arch: Layer[Output, (Output, Output)]) = {
 
     val resDirName = "helios_omni_"+results_id
 
@@ -1151,7 +1138,7 @@ package object helios {
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
 
-    val lossFunc = new DynamicRBFSWLoss("Loss/DynamicRBFWeightedL2", num_outputs)
+    val lossFunc = DynamicRBFSWLoss("Loss/DynamicRBFWeightedL2", num_outputs)
 
     val loss = lossFunc >>
       tf.learn.Mean("Loss/Mean") >>
@@ -1162,37 +1149,21 @@ package object helios {
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
     //Now create the model
-    val (model, estimator) = tf.createWith(graph = Graph()) {
-      val model = tf.learn.Model(
-        input, arch, trainInput, trainingInputLayer,
-        loss, optimizer)
+    val (model, estimator) = dtflearn.build_tf_model[UByte, Double, (Output, Output)](
+      arch, input, trainInput, trainingInputLayer,
+      loss, optimizer, summariesDir,
+      dtflearn.max_iter_stop(iterations))(
+      trainData)
 
-      println("Training the linear regression model.")
+    val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
 
-      val estimator = tf.learn.FileBasedEstimator(
-        model,
-        tf.learn.Configuration(Some(summariesDir)),
-        tf.learn.StopCriteria(maxSteps = Some(iterations)),
-        Set(
-          tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
-          tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
-          tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
-        tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
-
-      estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(iterations)))
-
-      (model, estimator)
-    }
-
-    val predictions = estimator.infer(() => dataSet.testData)
-
-    val pred_targets = predictions(::, 0)
+    val pred_targets = predictions._1
       .multiply(labels_stddev(0))
       .add(labels_mean(0))
 
-    val pred_time_lags = predictions(::, 1)
+    val pred_time_lags = predictions._2(::, 1)
 
-    val pred_time_scales = predictions(::, 2)
+    val pred_time_scales = predictions._2(::, 2)
 
     val metrics = new HeliosOmniTSMetrics(
       dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1), dataSet.testLabels,

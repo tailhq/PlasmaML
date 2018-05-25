@@ -66,7 +66,7 @@ def main(
         start_num_bits = 7, end_num_bits = 3)(
         relu_param = 0.1f, dropout = true,
         keep_prob = 0.6f) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(4) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
       tf.learn.Linear("FC_Layer_4", 256) >>

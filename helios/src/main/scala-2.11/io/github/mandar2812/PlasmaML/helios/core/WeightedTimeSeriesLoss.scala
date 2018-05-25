@@ -3,7 +3,7 @@ package io.github.mandar2812.PlasmaML.helios.core
 import io.github.mandar2812.dynaml.utils.annotation.Experimental
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.Mode
-import org.platanios.tensorflow.api.learn.layers.Loss
+import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 import org.platanios.tensorflow.api.ops.Output
 
 /**
@@ -64,14 +64,14 @@ case class WeightedTimeSeriesLoss(
   error_wt: Double = 1.0,
   temperature: Double = 1.0,
   prior_type: String = "Hellinger") extends
-  Loss[(Output, Output)](name) {
+  Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
-  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
 
-    val preds   = input._1(::, 0::size_causal_window)
-    val prob    = input._1(::, size_causal_window::).softmax()
+    val preds   = input._1._1
+    val prob    = input._1._2
     val targets = input._2
 
     val model_errors = preds.subtract(targets)
@@ -107,6 +107,17 @@ case class WeightedTimeSeriesLoss(
   }
 }
 
+object WeightedTimeSeriesLoss {
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+      override val layerType: String = s"OutputWTSLoss[horizon:$size_causal_window]"
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+        (input(::, 0::size_causal_window), input(::, size_causal_window::).softmax())
+      }
+    }
+}
+
 @Experimental
 case class WeightedTimeSeriesLossSO(
   override val name: String,
@@ -114,15 +125,15 @@ case class WeightedTimeSeriesLossSO(
   prior_wt: Double = 1.5,
   temperature: Double = 1.0,
   prior_type: String = "Hellinger") extends
-  Loss[(Output, Output)](name) {
+  Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"WTSLossSO[horizon:$size_causal_window]"
 
-  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
 
-    val preds               = input._1(::, 0)
+    val preds               = input._1._1
     val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
-    val prob                = input._1(::, 1::).softmax()
+    val prob                = input._1._2
     val targets             = input._2
 
     val model_errors = repeated_preds.subtract(targets)
@@ -145,6 +156,17 @@ case class WeightedTimeSeriesLossSO(
   }
 }
 
+object WeightedTimeSeriesLossSO {
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+      override val layerType: String = s"OutputWTSLossSO[horizon:$size_causal_window]"
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+        (input(::, 0), input(::, 1::).softmax())
+      }
+    }
+}
+
 @Experimental
 case class WeightedTimeSeriesLossBeta(
   override val name: String,
@@ -153,17 +175,17 @@ case class WeightedTimeSeriesLossBeta(
   prior_wt: Double = 1.5,
   temperature: Double = 1.0,
   prior_type: String = "Hellinger") extends
-  Loss[(Output, Output)](name) {
+  Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"WTSLossBeta[horizon:$size_causal_window]"
 
-  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
 
     //Extract the multi-variate predictions
-    val preds         = input._1(::, 0::size_causal_window)
+    val preds         = input._1._1
 
     //Extract parameters of the timalag predictive distribution
-    val alpha_beta    = input._1(::, size_causal_window::).square.add(1.0)
+    val alpha_beta    = input._1._2
     val (alpha, beta) = (alpha_beta(::, 0), alpha_beta(::, 1))
 
     val (stacked_alpha, stacked_beta) = (
@@ -214,6 +236,17 @@ case class WeightedTimeSeriesLossBeta(
 
 }
 
+object WeightedTimeSeriesLossBeta {
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+      override val layerType: String = s"OutputWTSLossBeta[horizon:$size_causal_window]"
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+        (input(::, 0::size_causal_window), input(::, size_causal_window::).square().add(1.0))
+      }
+    }
+}
+
 @Experimental
 case class MOGrangerLoss(
   override val name: String,
@@ -221,38 +254,25 @@ case class MOGrangerLoss(
   error_exponent: Double = 2.0,
   weight_error: Double,
   scale_lags: Boolean = true) extends
-  Loss[(Output, Output)](name) {
+  Loss[((Output, Output), Output)](name) {
 
   override val layerType = s"MOGrangerLoss[horizon:$size_causal_window]"
 
   private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
 
-  override protected def _forward(input: (Output, Output), mode: Mode) = {
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode) = {
 
     val alpha = Tensor(1.0)
     val nu = Tensor(1.0)
     val q = Tensor(1.0)
 
 
-    val predictions        = input._1(::, 0 :: -1)
-    val unscaled_lags      = input._1(::, -1)
+    val predictions    = input._1._1
+    val timelags       = input._1._2
 
-    val targets            = input._2
+    val targets        = input._2
 
-
-    val timelags           = if (scale_lags) {
-      unscaled_lags
-        .multiply(alpha.add(1E-6).square.multiply(-1.0))
-        .exp
-        .multiply(q.square)
-        .add(1.0)
-        .pow(nu.square.pow(-1.0).multiply(-1.0))
-        .multiply(scaling)
-    } else {
-      unscaled_lags
-    }
-
-    val repeated_times      = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
+    val repeated_times = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
 
     val index_times: Output = Tensor(
       (0 until size_causal_window).map(_.toDouble)
@@ -279,4 +299,39 @@ case class MOGrangerLoss(
 
     error_tensor.square.sum(axes = 1).multiply(0.5*weight_error).mean().add(weighted_temporal_loss_tensor)
   }
+}
+
+object MOGrangerLoss {
+
+  def output_mapping(
+    name: String,
+    size_causal_window: Int,
+    scale_lags: Boolean = true): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+
+      override val layerType: String = s"OutputMOGrangerLoss[horizon:$size_causal_window]"
+
+      private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+
+      val alpha = Tensor(1.0)
+      val nu    = Tensor(1.0)
+      val q     = Tensor(1.0)
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+
+        val lags = if (scale_lags) {
+          input(::, -1)
+            .multiply(alpha.add(1E-6).square.multiply(-1.0))
+            .exp
+            .multiply(q.square)
+            .add(1.0)
+            .pow(nu.square.pow(-1.0).multiply(-1.0))
+            .multiply(scaling)
+        } else {
+          input(::, -1)
+        }
+
+        (input(::, 0::size_causal_window), lags)
+      }
+    }
 }

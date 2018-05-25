@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
 import org.platanios.tensorflow.api.learn.Mode
-import org.platanios.tensorflow.api.learn.layers.Loss
+import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 import org.platanios.tensorflow.api.ops.Output
 import org.platanios.tensorflow.api.{::, FLOAT32, Shape, Tensor, tf}
 
@@ -13,16 +13,16 @@ case class SpaceTimeLoss(
   prior_scaling:        Double  = 1.0,
   batch:                Int     = -1,
   scale_lags:           Boolean = true) extends
-  Loss[(Output, Output)](name) {
+  Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"SpaceTimeLoss[horizon:$size_causal_window]"
 
   private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
 
-  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
 
-    val predictions   = input._1(::, 0)
-    val unscaled_lags = input._1(::, 1)
+    val predictions   = input._1._1
+    val unscaled_lags = input._1._2
     val targets       = input._2
 
     //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
@@ -42,7 +42,7 @@ case class SpaceTimeLoss(
     val nu = Tensor(1.0)
     val q = Tensor(1.0)
 
-    val timelags           = if (scale_lags) {
+    val timelags           = unscaled_lags/*if (scale_lags) {
       unscaled_lags
         .multiply(alpha.add(1E-6).square.multiply(-1.0))
         .exp
@@ -54,7 +54,7 @@ case class SpaceTimeLoss(
     } else {
       unscaled_lags.floor
     }
-
+*/
     val repeated_times = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
 
     val repeated_preds = tf.stack(Seq.fill(size_causal_window)(predictions), axis = -1)
@@ -98,4 +98,40 @@ case class SpaceTimeLoss(
 
     space_loss.add(time_loss).sum(axes = 1).mean().add(prior).add(offset)
   }
+}
+
+object SpaceTimeLoss {
+
+  def output_mapping(
+    name: String,
+    size_causal_window: Int,
+    scale_lags: Boolean = true): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+
+      override val layerType: String = s"OutputSpaceTimeLoss[horizon:$size_causal_window]"
+
+      private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+
+      val alpha = Tensor(1.0)
+      val nu    = Tensor(1.0)
+      val q     = Tensor(1.0)
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+
+        val lags = if (scale_lags) {
+          input(::, -1)
+            .multiply(alpha.add(1E-6).square.multiply(-1.0))
+            .exp
+            .multiply(q.square)
+            .add(1.0)
+            .pow(nu.square.pow(-1.0).multiply(-1.0))
+            .multiply(scaling)
+        } else {
+          input(::, -1)
+        }
+
+        (input(::, 0), lags)
+      }
+    }
+
 }

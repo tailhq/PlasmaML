@@ -23,13 +23,11 @@ case class GenRBFSWLoss(
   prior_weight:       Double = 1.0,
   prior_scaling:      Double = 1.0,
   batch:              Int    = -1)
-  extends Loss[(Output, Output)](name) {
+  extends Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"RBFSW[$size_causal_window]"
 
-  private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
-
-  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
 
     //Declare learnable parameters.
     val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
@@ -37,10 +35,10 @@ case class GenRBFSWLoss(
     val p                       = logp.exp
 
     //Declare relevant quantities
-    val predictions   = input._1(::, 0)
-    val unscaled_lags = input._1(::, 1)
+    val predictions   = input._1._1
+    val unscaled_lags = input._1._2
     val targets       = input._2
-    val timelags      = unscaled_lags.sigmoid.multiply(scaling)
+    val timelags      = unscaled_lags//.sigmoid.multiply(scaling)
 
     //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
     val batchSize =

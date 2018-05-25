@@ -259,8 +259,8 @@ def run_exp(
   mo_flag: Boolean            = false,
   prob_timelags: Boolean      = false,
   timelag_pred_strategy: String = "mode",
-  architecture: Layer[Output, Output],
-  loss: Layer[(Output, Output), Output]) = {
+  architecture: Layer[Output, (Output, Output)],
+  loss: Layer[((Output, Output), Output), Output]) = {
 
   val train_fraction = 0.7
 
@@ -302,17 +302,13 @@ def run_exp(
 
       val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-      val (model, estimator) = dtflearn.build_tf_model(
+      val (model, estimator) = dtflearn.build_tf_model[Double, Double, (Output, Output)](
         architecture, input, trainInput, trainingInputLayer,
         loss, optimizer, summariesDir,
         dtflearn.max_iter_stop(iterations))(
         training_data)
 
-      val predictions        = estimator.infer(() => tf_dataset.testData)
-
-      val alpha = Tensor(1.0)
-      val nu    = Tensor(1.0)
-      val q     = Tensor(1.0)
+      val predictions: (Tensor, Tensor)        = estimator.infer(() => tf_dataset.testData)
 
       val index_times = Tensor(
         (0 until num_outputs).map(_.toDouble)
@@ -321,29 +317,19 @@ def run_exp(
       )
 
       val pred_time_lags_test = if(prob_timelags) {
-        val unsc_probs =
-          if(mo_flag) predictions(::, sliding_window::)
-          else predictions(::, 1::)
+        val timelag_dist = predictions._2
 
-        if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
-        else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+        if (timelag_pred_strategy == "mode") timelag_dist.topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
+        else timelag_dist.multiply(index_times).sum(axes = 1)
 
-      } else {
-        predictions(::, -1)
-          .multiply(alpha.add(1E-6).square.multiply(-1.0))
-          .exp
-          .multiply(q.square)
-          .add(1.0)
-          .pow(nu.square.pow(-1.0).multiply(-1.0))
-          .multiply(num_outputs - 1.0)
-      }
+      } else predictions._2
 
       val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
 
       val pred_targets: Tensor = if (mo_flag) {
         val all_preds =
-          if (prob_timelags) scalers._2.i(predictions(::, 0 :: num_outputs))
-          else scalers._2.i(predictions(::, 0 :: -1))
+          if (prob_timelags) scalers._2.i(predictions._1)
+          else scalers._2.i(predictions._1)
 
         val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
 
@@ -351,7 +337,7 @@ def run_exp(
 
         all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
       } else {
-        scalers._2(0).i(predictions(::, 0))
+        scalers._2(0).i(predictions._1)
       }
 
       val actual_targets = (0 until num_test).map(n => {
@@ -418,11 +404,7 @@ def run_exp(
 
 
   //Perform same visualisation for training set
-  val training_preds = estimator.infer(() => tf_dataset.trainData)
-
-  val alpha = Tensor(0.5)
-  val nu    = Tensor(1.0)
-  val q     = Tensor(1.0)
+  val training_preds: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
 
   val index_times = Tensor(
     (0 until sliding_window).map(_.toDouble)
@@ -431,28 +413,18 @@ def run_exp(
   )
 
   val pred_time_lags_train = if(prob_timelags) {
-    val unsc_probs =
-      if(mo_flag) training_preds(::, sliding_window::)
-      else training_preds(::, 1::)
+    val unsc_probs = training_preds._2
 
     if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
-    else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+    else unsc_probs.multiply(index_times).sum(axes = 1)
 
-  } else {
-    training_preds(::, -1)
-      .multiply(alpha.add(1E-6).square.multiply(-1.0))
-      .exp
-      .multiply(q.square)
-      .add(1.0)
-      .pow(nu.square.pow(-1.0).multiply(-1.0))
-      .multiply(sliding_window - 1.0)
-  }
+  } else training_preds._2
 
 
   val train_signal_predicted = if (mo_flag) {
     val all_preds =
-      if (prob_timelags) scalers._2.i(training_preds(::, 0 :: sliding_window))
-      else scalers._2.i(training_preds(::, 0 :: -1))
+      if (prob_timelags) scalers._2.i(training_preds._1)
+      else scalers._2.i(training_preds._1)
 
     val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
 
@@ -460,7 +432,7 @@ def run_exp(
 
     all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
   } else {
-    scalers._2(0).i(training_preds(::, 0))
+    scalers._2(0).i(training_preds._1)
   }
 
   val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
@@ -535,8 +507,8 @@ def run_exp2(
   mo_flag: Boolean            = false,
   prob_timelags: Boolean      = false,
   timelag_pred_strategy: String = "mode",
-  architecture: Layer[Output, Output],
-  loss: Layer[(Output, Output), Output]) = {
+  architecture: Layer[Output, (Output, Output)],
+  loss: Layer[((Output, Output), Output), Output]) = {
 
   val (data, collated_data): TLDATA           = dataset._1
   val (data_test, collated_data_test): TLDATA = dataset._2
@@ -576,17 +548,13 @@ def run_exp2(
 
       val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-      val (model, estimator) = dtflearn.build_tf_model(
+      val (model, estimator) = dtflearn.build_tf_model[Double, Double, (Output, Output)](
         architecture, input, trainInput, trainingInputLayer,
         loss, optimizer, summariesDir,
         dtflearn.max_iter_stop(iterations))(
         training_data)
 
-      val predictions        = estimator.infer(() => tf_dataset.testData)
-
-      val alpha = Tensor(1.0)
-      val nu    = Tensor(1.0)
-      val q     = Tensor(1.0)
+      val predictions: (Tensor, Tensor)        = estimator.infer(() => tf_dataset.testData)
 
       val index_times = Tensor(
         (0 until num_outputs).map(_.toDouble)
@@ -595,29 +563,18 @@ def run_exp2(
       )
 
       val pred_time_lags_test = if(prob_timelags) {
-        val unsc_probs =
-          if(mo_flag) predictions(::, sliding_window::)
-          else predictions(::, 1::)
+        val unsc_probs = predictions._2
 
-        if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
-        else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+        unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
 
-      } else {
-        predictions(::, -1)
-          .multiply(alpha.add(1E-6).square.multiply(-1.0))
-          .exp
-          .multiply(q.square)
-          .add(1.0)
-          .pow(nu.square.pow(-1.0).multiply(-1.0))
-          .multiply(num_outputs - 1.0)
-      }
+      } else predictions._2
 
       val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
 
       val pred_targets: Tensor = if (mo_flag) {
         val all_preds =
-          if (prob_timelags) scalers._2.i(predictions(::, 0 :: num_outputs))
-          else scalers._2.i(predictions(::, 0 :: -1))
+          if (prob_timelags) scalers._2.i(predictions._1)
+          else scalers._2.i(predictions._1)
 
         val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
 
@@ -625,7 +582,7 @@ def run_exp2(
 
         all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
       } else {
-        scalers._2(0).i(predictions(::, 0))
+        scalers._2(0).i(predictions._1)
       }
 
       val actual_targets = (0 until num_test).map(n => {
@@ -692,11 +649,7 @@ def run_exp2(
 
 
   //Perform same visualisation for training set
-  val training_preds = estimator.infer(() => tf_dataset.trainData)
-
-  val alpha = Tensor(0.5)
-  val nu    = Tensor(1.0)
-  val q     = Tensor(1.0)
+  val training_preds: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
 
   val index_times = Tensor(
     (0 until sliding_window).map(_.toDouble)
@@ -705,28 +658,18 @@ def run_exp2(
   )
 
   val pred_time_lags_train = if(prob_timelags) {
-    val unsc_probs =
-      if(mo_flag) training_preds(::, sliding_window::)
-      else training_preds(::, 1::)
+    val unsc_probs = training_preds._2
 
     if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
-    else unsc_probs.softmax().multiply(index_times).sum(axes = 1)
+    else unsc_probs.multiply(index_times).sum(axes = 1)
 
-  } else {
-    training_preds(::, -1)
-      .multiply(alpha.add(1E-6).square.multiply(-1.0))
-      .exp
-      .multiply(q.square)
-      .add(1.0)
-      .pow(nu.square.pow(-1.0).multiply(-1.0))
-      .multiply(sliding_window - 1.0)
-  }
+  } else training_preds._2
 
 
   val train_signal_predicted = if (mo_flag) {
     val all_preds =
-      if (prob_timelags) scalers._2.i(training_preds(::, 0 :: sliding_window))
-      else scalers._2.i(training_preds(::, 0 :: -1))
+      if (prob_timelags) scalers._2.i(training_preds._1)
+      else scalers._2.i(training_preds._1)
 
     val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
 
@@ -734,8 +677,9 @@ def run_exp2(
 
     all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
   } else {
-    scalers._2(0).i(training_preds(::, 0))
+    scalers._2(0).i(training_preds._1)
   }
+
 
   val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
 

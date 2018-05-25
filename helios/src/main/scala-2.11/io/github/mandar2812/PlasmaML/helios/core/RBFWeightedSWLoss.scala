@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
 import org.platanios.tensorflow.api.learn.Mode
-import org.platanios.tensorflow.api.learn.layers.Loss
+import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.Output
 
@@ -33,42 +33,16 @@ case class RBFWeightedSWLoss(
   prior_scaling:        Double = 1.0,
   batch:                Int    = -1,
   scale_lags: Boolean = true)
-  extends Loss[(Output, Output)](name) {
+  extends Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"RBFSW[horizon:$size_causal_window, timescale:$kernel_time_scale]"
 
-  private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
 
-  override protected def _forward(input: (Output, Output), mode: Mode): Output = {
-
-    val predictions   = input._1(::, 0)
-    val unscaled_lags = input._1(::, 1)
+    val predictions   = input._1._1
+    val timelags = input._1._2
     val targets       = input._2
 
-
-    //Perform scaling of time lags using the generalized logistic curve.
-    //First define some parameters.
-
-    //val alpha: tf.Variable = tf.variable("alpha", FLOAT32, Shape(), tf.RandomUniformInitializer())
-    //val nu:    tf.Variable = tf.variable("nu",    FLOAT32, Shape(), tf.OnesInitializer)
-    //val q:     tf.Variable = tf.variable("Q",     FLOAT32, Shape(), tf.OnesInitializer) 
-
-    val alpha = Tensor(1.0)
-    val nu = Tensor(1.0)
-    val q = Tensor(1.0)
-
-    val timelags           = if (scale_lags) {
-      unscaled_lags
-        .multiply(alpha.add(1E-6).square.multiply(-1.0))
-        .exp
-        .multiply(q.square)
-        .add(1.0)
-        .pow(nu.square.pow(-1.0).multiply(-1.0))
-        .multiply(scaling)
-        .floor
-    } else {
-      unscaled_lags.floor
-    }
 
     //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
     val batchSize =
@@ -112,13 +86,6 @@ case class RBFWeightedSWLoss(
 
     val target_err = repeated_preds.subtract(targets)
 
-    /*val convolution_kernel_temporal = target_err
-      .l2Normalize(axes = 1)
-      .square
-      .multiply(-1/2.0)
-      .divide(1.0)
-      .exp*/
-
     //Convolve the kernel with the loss tensor, yielding the weighted loss tensor
     val weighted_loss_tensor = target_err
       .square
@@ -127,14 +94,6 @@ case class RBFWeightedSWLoss(
       .divide(convolution_kernel.sum(axes = 1))
       .mean()
 
-    /*val weighted_temporal_loss_tensor = repeated_times
-      .subtract(index_times)
-      .square
-      .multiply(convolution_kernel_temporal)
-      .sum(axes = 1)
-      .divide(convolution_kernel_temporal.sum(axes = 1))
-      .mean()
-*/
     /*
     * Compute the prior term, which is an affine transformation
     * of the empirical Spearman Correlation between
@@ -148,6 +107,44 @@ case class RBFWeightedSWLoss(
 
     val offset: Double = (1.0 - math.abs(corr_cutoff))*prior_scaling
 
-    weighted_loss_tensor/*.add(weighted_temporal_loss_tensor)*/.add(prior).add(offset)
+    weighted_loss_tensor.add(prior).add(offset)
   }
+}
+
+
+object RBFWeightedSWLoss {
+
+  def output_mapping(
+    name: String,
+    size_causal_window: Int,
+    kernel_time_scale: Double = 3d,
+    scale_lags: Boolean = true): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+
+      override val layerType: String = s"OutputRBFSW[horizon:$size_causal_window, timescale:$kernel_time_scale]"
+
+      private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+
+      val alpha = Tensor(1.0)
+      val nu    = Tensor(1.0)
+      val q     = Tensor(1.0)
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+
+        val lags = if (scale_lags) {
+          input(::, -1)
+            .multiply(alpha.add(1E-6).square.multiply(-1.0))
+            .exp
+            .multiply(q.square)
+            .add(1.0)
+            .pow(nu.square.pow(-1.0).multiply(-1.0))
+            .multiply(scaling)
+        } else {
+          input(::, -1)
+        }
+
+        (input(::, 0), lags)
+      }
+    }
+
 }
