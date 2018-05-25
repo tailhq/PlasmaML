@@ -59,6 +59,10 @@ def main(
 
   val num_pred_dims = 2*data.head._2._2.length
 
+  val output_mapping = WeightedTimeSeriesLoss.output_mapping(
+    "Output/ProbWeightedTS",
+    data.head._2._2.length)
+
   val architecture = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
@@ -74,7 +78,7 @@ def main(
       tf.learn.Linear("FC_Layer_5", 128) >>
       dtflearn.Phi("Act_5") >>
       tf.learn.Linear("FC_Layer_6", num_pred_dims)
-  }
+  } >> output_mapping
 
   val net_layer_sizes       = Seq(-1, 256, 128, num_pred_dims)
   val layer_parameter_names = Seq(4, 5, 6).map(i => "FC_Layer_"+i+"/Weights")
