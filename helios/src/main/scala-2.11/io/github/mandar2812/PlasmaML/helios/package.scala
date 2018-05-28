@@ -5,6 +5,7 @@ import breeze.linalg.DenseVector
 import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
+import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe}
@@ -351,22 +352,23 @@ package object helios {
     * @param tt_partition A function which takes each data element and
     *                     determines if it goes into the train or test split.
     *
-    * @param scaleDownFactor The exponent of 2 which determines how much the
+    * @param image_process The exponent of 2 which determines how much the
     *                        image will be scaled down. i.e. scaleDownFactor = 4
     *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
     collated_data: Iterable[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
-    scaleDownFactor: Int = 4, resample: Boolean = false): HeliosDataSet = {
+    image_process: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
+    resample: Boolean = false): HeliosDataSet = {
 
-    val scaleDown = 1/math.pow(2, scaleDownFactor)
+    //val scaleDown = 1/math.pow(2, image_process)
 
     val num_outputs = collated_data.head._2._2.length
 
-    print("Scaling down images by a factor of ")
-    pprint.pprintln(math.pow(2, scaleDownFactor))
-    println()
+    //print("Scaling down images by a factor of ")
+    //pprint.pprintln(math.pow(2, image_process))
+    //println()
 
     println("Separating data into train and test.")
     val (train_set, test_set) = collated_data.partition(tt_partition)
@@ -375,9 +377,9 @@ package object helios {
     //in the images
     val (scaled_height, scaled_width, num_channels) = {
 
-      val im = Image.fromPath(train_set.head._2._1.toNIO)
+      //val im = Image.fromPath(train_set.head._2._1.toNIO)
 
-      val scaled_image = im.copy.scale(scaleDown)
+      val scaled_image = image_process(Image.fromPath(train_set.head._2._1.toNIO))//im.copy.scale(scaleDown)
 
       (scaled_image.height, scaled_image.width, scaled_image.argb(0, 0).length)
 
@@ -449,15 +451,13 @@ package object helios {
 
       val (_, (path, data_label)) = entry
 
-      val im = Image.fromPath(path.toNIO)
+      //val im = Image.fromPath(path.toNIO)
 
-      val scaled_image = im.copy.scale(scaleDown)
+      val scaled_image = image_process(Image.fromPath(path.toNIO))//im.copy.scale(scaleDown)
 
       (scaled_image.argb.flatten.map(_.toByte), data_label)
 
     }).unzip
-
-
 
     //Construct training features and labels
     val (features_train, labels_train) = split_features_and_labels(processed_train_set.toStream)
@@ -941,7 +941,8 @@ package object helios {
   def run_experiment_omni(
     collated_data: Stream[(DateTime, (Path, Seq[Double]))],
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
-    resample: Boolean = false, scaleDown: Int = 2)(
+    resample: Boolean = false,
+    preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image])(
     results_id: String,
     max_iterations: Int,
     tempdir: Path = home/"tmp",
@@ -975,7 +976,7 @@ package object helios {
     val dataSet = helios.create_helios_data_set(
       collated_data,
       tt_partition,
-      scaleDownFactor = scaleDown,
+      image_process = preprocess_image,
       resample)
 
 
@@ -1097,7 +1098,7 @@ package object helios {
     val dataSet = helios.create_helios_data_set(
       collated_data,
       tt_partition,
-      scaleDownFactor = 2,
+      image_process = DataPipe((i: Image) => i.copy.scale(1.0/math.pow(2.0, 2.0))),
       resample)
 
     val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)

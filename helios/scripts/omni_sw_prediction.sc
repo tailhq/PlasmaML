@@ -1,11 +1,16 @@
-import _root_.io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
+import org.joda.time._
+import com.sksamuel.scrimage._
+
+import io.github.mandar2812.dynaml.repl.Router.main
+import io.github.mandar2812.dynaml.tensorflow.dtflearn
+import io.github.mandar2812.dynaml.pipes._
+
+import _root_.io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.core.WeightedTimeSeriesLoss
 import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
-import io.github.mandar2812.dynaml.repl.Router.main
-import io.github.mandar2812.dynaml.tensorflow.dtflearn
-import org.joda.time._
+
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -15,7 +20,6 @@ def main(
   test_year: Int           = 2003,
   image_source: SOHO       = SOHO(SOHOData.Instruments.MDIMAG, 512),
   re: Boolean              = true,
-  sc_down: Int             = 1,
   time_horizon: (Int, Int) = (18, 56),
   opt: Optimizer           = tf.train.AdaDelta(0.01),
   reg: Double              = 0.001,
@@ -48,14 +52,25 @@ def main(
 
   val dt = DateTime.now()
 
-  val summary_dir_prefix = "omni_swtl_"+image_source.instrument+"_"+image_source.size+"_"+sc_down
+
+  val image_sizes = image_source.size
+
+  val crop_solar_image = DataPipe((image: Image) => {
+
+    val image_magic_ratio = 268.0/512.0
+    val start = (1.0 - image_magic_ratio)*image_sizes/2
+    val patch_size = image_sizes*image_magic_ratio
+
+    image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
+  })
+
+  val summary_dir_prefix = "omni_swtl_"+image_source.instrument+"_"+image_source.size
 
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
     else "_"+dt.toString("YYYY-MM-dd-HH-mm")
 
   val summary_dir = summary_dir_prefix+summary_dir_postfix
-
 
   val num_pred_dims = 2*data.head._2._2.length
 
@@ -97,7 +112,8 @@ def main(
       reg)
 
   helios.run_experiment_omni(
-    data, tt_partition, resample = re, scaleDown = sc_down)(
+    data, tt_partition, resample = re,
+    preprocess_image = crop_solar_image)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
