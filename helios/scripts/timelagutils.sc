@@ -333,7 +333,7 @@ def run_exp(
 
         val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
 
-        val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+        val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
 
         all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
       } else {
@@ -428,7 +428,7 @@ def run_exp(
 
     val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
 
-    val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
 
     all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
   } else {
@@ -578,7 +578,7 @@ def run_exp2(
 
         val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
 
-        val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+        val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
 
         all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
       } else {
@@ -673,7 +673,7 @@ def run_exp2(
 
     val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
 
-    val conv_kernel = repeated_times.subtract(index_times).square.exp.floor.evaluate()
+    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
 
     all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
   } else {

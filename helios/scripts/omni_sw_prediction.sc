@@ -78,7 +78,7 @@ def main(
     "Output/ProbWeightedTS",
     data.head._2._2.length)
 
-  val ff_stack_sizes = Seq(128, 64, num_pred_dims)
+  val ff_stack_sizes = Seq(128, 64, 50, 30, num_pred_dims)
   val ff_index = 4
 
 
@@ -86,21 +86,21 @@ def main(
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
         size = 2, num_channels_input = 4)(
-        start_num_bits = 7, end_num_bits = 3)(
+        start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = true,
         keep_prob = 0.6f) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
-        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+        (i: Int) => if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
         ff_stack_sizes,
         starting_index = ff_index)
   } >> output_mapping
 
   val net_layer_sizes       = Seq(-1) ++ ff_stack_sizes
-  val layer_parameter_names = (ff_index until ff_index + ff_stack_sizes.length).toSeq.map(i => "FC_Layer_"+i+"/Weights")
-  val layer_datatypes       = Seq("FLOAT32", "FLOAT64", "FLOAT64")
+  val layer_parameter_names = (ff_index until ff_index + ff_stack_sizes.length).map(i => "Linear_"+i+"/Weights")
+  val layer_datatypes       = Seq("FLOAT64", "FLOAT64", "FLOAT64")
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
   val loss_func = WeightedTimeSeriesLoss(
