@@ -78,7 +78,9 @@ def main(
     "Output/ProbWeightedTS",
     data.head._2._2.length)
 
-  val feedforward_stack_sizes = Seq(128, 64, num_pred_dims)
+  val ff_stack_sizes = Seq(128, 64, num_pred_dims)
+  val ff_index = 4
+
 
   val architecture = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
@@ -92,12 +94,12 @@ def main(
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
         (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
-        feedforward_stack_sizes,
-        starting_index = 4)
+        ff_stack_sizes,
+        starting_index = ff_index)
   } >> output_mapping
 
-  val net_layer_sizes       = Seq(-1) ++ feedforward_stack_sizes
-  val layer_parameter_names = Seq(4, 5, 6).map(i => "FC_Layer_"+i+"/Weights")
+  val net_layer_sizes       = Seq(-1) ++ ff_stack_sizes
+  val layer_parameter_names = (ff_index until ff_index + ff_stack_sizes.length).toSeq.map(i => "FC_Layer_"+i+"/Weights")
   val layer_datatypes       = Seq("FLOAT32", "FLOAT64", "FLOAT64")
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
