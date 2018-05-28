@@ -61,7 +61,7 @@ def main(
     val start = (1.0 - image_magic_ratio)*image_sizes/2
     val patch_size = image_sizes*image_magic_ratio
 
-    image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
+    image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt).scale(0.5)
   })
 
   val summary_dir_prefix = "omni_swtl_"+image_source.instrument+"_"+image_source.size
@@ -78,6 +78,8 @@ def main(
     "Output/ProbWeightedTS",
     data.head._2._2.length)
 
+  val feedforward_stack_sizes = Seq(128, 64, num_pred_dims)
+
   val architecture = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
@@ -88,14 +90,13 @@ def main(
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
-      tf.learn.Linear("FC_Layer_4", 256) >>
-      dtflearn.Phi("Act_4") >>
-      tf.learn.Linear("FC_Layer_5", 128) >>
-      dtflearn.Phi("Act_5") >>
-      tf.learn.Linear("FC_Layer_6", num_pred_dims)
+      dtflearn.feedforward_stack(
+        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+        feedforward_stack_sizes,
+        starting_index = 4)
   } >> output_mapping
 
-  val net_layer_sizes       = Seq(-1, 256, 128, num_pred_dims)
+  val net_layer_sizes       = Seq(-1) ++ feedforward_stack_sizes
   val layer_parameter_names = Seq(4, 5, 6).map(i => "FC_Layer_"+i+"/Weights")
   val layer_datatypes       = Seq("FLOAT32", "FLOAT64", "FLOAT64")
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
