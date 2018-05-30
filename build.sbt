@@ -83,7 +83,7 @@ lazy val helios =
           """import breeze.linalg.DenseVector;"""
     ).dependsOn(mag_core, omni)
 
-lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, BuildInfoPlugin, sbtdocker.DockerPlugin)
   .settings(commonSettings: _*)
   .dependsOn(mag_core, omni, vanAllen, streamer, helios).settings(
   name := "PlasmaML",
@@ -108,7 +108,17 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
     "-J-Xms64m"
   ),
   dataDirectory := new File("data/"),
-  initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""")
-  .aggregate(mag_core, omni, vanAllen, streamer, helios)
+  initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""",
+  dockerfile in docker := {
+    val appDir: File = stage.value
+    val targetDir = "/app"
+
+    new Dockerfile {
+      from("openjdk:8-jre")
+      entryPoint(s"$targetDir/bin/${executableScriptName.value}")
+      copy(appDir, targetDir, chown = "daemon:daemon")
+    }
+  }
+).aggregate(mag_core, omni, vanAllen, streamer, helios)
   .settings(aggregate in update := false)
 
