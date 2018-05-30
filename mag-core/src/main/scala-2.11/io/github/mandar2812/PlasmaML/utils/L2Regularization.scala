@@ -59,5 +59,5 @@ case class StackTuple2(override val name: String, axis: Int)
   override val layerType: String = s"StackTuple2"
 
   override protected def _forward(input: (Output, Output), mode: Mode): Output =
-    tf.stack(Seq(input._1, input._2), axis)
+    tf.concatenate(Seq(input._1, input._2), axis)
 }
