@@ -827,9 +827,9 @@ package object helios {
 
     (
       dataset.copy(
-        trainLabels = norm_tr_images_and_labels._2,
+        trainLabels = norm_tr_images_and_labels._2/*,
         trainData = (norm_tr_images_and_labels._1, norm_histories),
-        testData = features_scaler(dataset.testData)),
+        testData = features_scaler(dataset.testData)*/),
       (features_scaler, scalers._2)
     )
   })
