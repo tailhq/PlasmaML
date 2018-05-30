@@ -64,7 +64,7 @@ def main(
     image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt).scale(0.5)
   })
 
-  val summary_dir_prefix = "omni_swtl_"+image_source.instrument+"_"+image_source.size
+  val summary_dir_prefix = "swtl_"+image_source.instrument+"_"+image_source.size
 
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
@@ -89,7 +89,7 @@ def main(
         start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = true,
         keep_prob = 0.6f) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
+      //dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(

@@ -302,7 +302,7 @@ def run_exp(
 
       val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-      val (model, estimator) = dtflearn.build_tf_model[Double, Double, (Output, Output)](
+      val (model, estimator) = dtflearn.build_tf_model(
         architecture, input, trainInput, trainingInputLayer,
         loss, optimizer, summariesDir,
         dtflearn.max_iter_stop(iterations))(
@@ -548,7 +548,7 @@ def run_exp2(
 
       val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-      val (model, estimator) = dtflearn.build_tf_model[Double, Double, (Output, Output)](
+      val (model, estimator) = dtflearn.build_tf_model(
         architecture, input, trainInput, trainingInputLayer,
         loss, optimizer, summariesDir,
         dtflearn.max_iter_stop(iterations))(

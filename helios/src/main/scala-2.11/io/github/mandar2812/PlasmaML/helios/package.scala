@@ -1018,7 +1018,7 @@ package object helios {
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
     //Now create the model
-    val (model, estimator) = dtflearn.build_tf_model[UByte, Double, (Output, Output)](
+    val (model, estimator) = dtflearn.build_tf_model(
       arch, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
       dtflearn.max_iter_stop(iterations))(
@@ -1150,7 +1150,7 @@ package object helios {
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
     //Now create the model
-    val (model, estimator) = dtflearn.build_tf_model[UByte, Double, (Output, Output)](
+    val (model, estimator) = dtflearn.build_tf_model(
       arch, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
       dtflearn.max_iter_stop(iterations))(
