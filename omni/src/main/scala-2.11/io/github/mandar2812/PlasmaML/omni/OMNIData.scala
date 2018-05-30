@@ -132,11 +132,35 @@ object OMNILoader {
     * */
   val forward_time_window = MetaPipe21(
     (deltaT: Int, timelag: Int) => (lines: Stream[(DateTime, Double)]) =>
-      lines.toList.sliding(deltaT+timelag+1).map((history) => {
+      lines.toList.sliding(deltaT+timelag+1).map(history => {
 
         val features: Seq[Double] = history.slice(deltaT, deltaT+timelag).map(_._2)
 
         (history.head._1, features)
+      }).toStream
+  )
+
+  /**
+    * Returns a pipe which constructs a running forward looking time window
+    * for a stream of date time stamped univariate values.
+    *
+    * <b>Usage</b>: For obtaining a pipe which takes (t, y(t)) and
+    * returns (t, ([y(t-h+1), ..., y(t)], [y(t+p), ..., y(t+p+n)]))
+    *
+    * {{{
+    *   val p = 5
+    *   val n = 10
+    *   val fpipe = OMNIData.forward_and_backward_time_window(h, (n, p))
+    * }}}
+    * */
+  val forward_and_backward_time_window = MetaPipe21(
+    (past: Int, future: (Int, Int)) => (lines: Stream[(DateTime, Double)]) =>
+      lines.toList.sliding(past+future._1+future._2+1).map(history => {
+
+        val features: Seq[Double] = history.slice(past+future._1, past+future._1+future._2).map(_._2)
+        val features_history: Seq[Double] = history.slice(0, past+1).map(_._2)
+
+        (history(past)._1, (features_history, features))
       }).toStream
   )
 
@@ -183,6 +207,31 @@ object OMNILoader {
       processWithDateTime >
       StreamDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_time_window(deltaT, time_window)
+
+  /**
+    * Returns a [[DataPipe]] which takes a list of omni csv file paths,
+    * extracts a chosen quantity as a sliding time series.
+    *
+    * @param deltaT The minimum time lag from which each window should start.
+    * @param time_window The size of the time window.
+    * @param targetColumn The quantity to extract,
+    *                     specified as the column number in the omni file,
+    *                     see [[OMNIData.Quantities]]
+    *
+    * <b>Usage</b>: A pipe which extracts a sliding time series of Dst,
+    * when given a list of file paths.
+    * {{{
+    *   val omni_process_pipe = OMNILoader.omniVarToSlidingTS(5, 10)(OMNIData.Quantities.Dst)
+    * }}}
+    * */
+  def omniVarToSlidingTS(
+    past: Int, deltaT: Int,
+    time_window: Int)(
+    targetColumn: Int) =
+    StreamFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
+      processWithDateTime >
+      StreamDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
+      forward_and_backward_time_window(past, (deltaT, time_window))
 
   /**
     * Returns a [[DataPipe]] which takes a list of omni csv file paths,

@@ -43,3 +43,21 @@ case class L1Regularization(names: Seq[String], dataTypes: Seq[String], shapes: 
     input.add(reg_term)
   }
 }
+
+case class Tuple2Layer[I1, O1, I2, O2](override val name: String, layer1: Layer[I1, O1], layer2: Layer[I2, O2])
+  extends Layer[(I1, I2), (O1, O2)](name) {
+
+  override val layerType: String = s"TupleLayer[${layer1.layerType}, ${layer2.layerType}]"
+
+  override protected def _forward(input: (I1, I2), mode: Mode): (O1, O2) =
+    (layer1.forward(input._1, mode), layer2.forward(input._2, mode))
+}
+
+case class StackTuple2(override val name: String, axis: Int)
+  extends Layer[(Output, Output), Output](name) {
+
+  override val layerType: String = s"StackTuple2"
+
+  override protected def _forward(input: (Output, Output), mode: Mode): Output =
+    tf.stack(Seq(input._1, input._2), axis)
+}

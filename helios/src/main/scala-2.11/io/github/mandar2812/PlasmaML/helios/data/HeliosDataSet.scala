@@ -14,3 +14,8 @@ case class HeliosDataSet(
     testLabels.close()
   }
 }
+
+
+case class AbstractDataSet[TI, TT](
+  trainData: TI, trainLabels: TT, nTrain: Int,
+  testData: TI, testLabels: TT, nTest: Int)
