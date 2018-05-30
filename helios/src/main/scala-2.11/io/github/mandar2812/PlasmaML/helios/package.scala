@@ -645,13 +645,15 @@ package object helios {
     }
 
     def create_double_tensor_buffered(coll: Iterable[Seq[Double]]): Tensor = {
+      val dimensions = coll.head.length
+
       val tensor_splits = coll.grouped(1000).map(split => {
 
         val split_size = split.toIterator.length
 
         dtf.tensor_from(
           dtype = "FLOAT64",
-          split_size, num_outputs)(
+          split_size, dimensions)(
           split.flatten[Double].toSeq)
 
       })
