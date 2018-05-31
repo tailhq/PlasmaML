@@ -12,6 +12,18 @@ import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
+
+def get_ffstack_properties(neuron_counts: Seq[Int], ff_index: Int): (Seq[Shape], Seq[String], Seq[String]) = {
+
+  val layer_parameter_names = (ff_index until ff_index + neuron_counts.length - 1).map(i => "Linear_"+i+"/Weights")
+  val layer_shapes          = neuron_counts.sliding(2).toSeq.map(c => Shape(c.head, c.last))
+  val layer_datatypes       = Seq.fill(layer_shapes.length)("FLOAT64")
+
+
+  (layer_shapes, layer_parameter_names, layer_datatypes)
+}
+
+
 @main
 def main(
   test_year: Int           = 2003,
@@ -75,9 +87,14 @@ def main(
     "Output/ProbWeightedTS",
     data.head._2._2._2.length)
 
-  val ff_stack_sizes = Seq(128, 64, 50, 30, num_pred_dims)
-  val ff_index = 4
+  val conv_ff_stack_sizes = Seq(128, 64)
+  val hist_ff_stack_sizes = Seq(18, 10)
+  val ff_stack_sizes      = Seq(50, 30, num_pred_dims)
 
+  val ff_index_conv = 1
+
+  val ff_index_hist = ff_index_conv + conv_ff_stack_sizes.length
+  val ff_index_fc   = ff_index_hist + hist_ff_stack_sizes.length
 
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
@@ -86,30 +103,44 @@ def main(
         start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = true,
         keep_prob = 0.6f) >>
-      //dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
-      tf.learn.Flatten("Flatten_3")
+      tf.learn.Flatten("Flatten_3") >>
+      dtflearn.feedforward_stack(
+        (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
+        conv_ff_stack_sizes,
+        starting_index = ff_index_conv)
   }
 
   val omni_history_stack = {
-    tf.learn.Cast("Input/Cast", FLOAT32)
+    tf.learn.Cast("Input/Cast", FLOAT64) >>
+      dtflearn.feedforward_stack(
+        (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i),
+        FLOAT64)(
+        hist_ff_stack_sizes,
+        starting_index = ff_index_hist)
   }
 
-  val feedforward_stack = dtflearn.feedforward_stack(
-    (i: Int) => if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
+  val fc_stack = dtflearn.feedforward_stack(
+    (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i),
+    FLOAT64)(
     ff_stack_sizes,
-    starting_index = ff_index)
+    starting_index = ff_index_fc)
 
 
   val architecture = Tuple2Layer("OmniCTLStack", image_neural_stack, omni_history_stack) >>
     StackTuple2("StackFeatures", axis = 1) >>
-    feedforward_stack >>
+    fc_stack >>
     output_mapping
 
-  val net_layer_sizes       = Seq(-1) ++ ff_stack_sizes
-  val layer_parameter_names = (ff_index until ff_index + ff_stack_sizes.length).map(i => "Linear_"+i+"/Weights")
-  val layer_datatypes       = Seq("FLOAT64", "FLOAT64", "FLOAT64")
-  val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
+  val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =
+    get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv)
+
+  val (layer_shapes_hist, layer_parameter_names_hist, layer_datatypes_hist) =
+    get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist)
+
+  val (layer_shapes_fc, layer_parameter_names_fc, layer_datatypes_fc) =
+    get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc)
+
 
   val loss_func = WeightedTimeSeriesLoss(
     "Loss/ProbWeightedTS",
@@ -117,9 +148,9 @@ def main(
     prior_wt = prior_wt,
     temperature = temp) >>
     L2Regularization(
-      layer_parameter_names,
-      layer_datatypes,
-      layer_shapes,
+      layer_parameter_names_conv ++ layer_parameter_names_hist ++ layer_parameter_names_fc,
+      layer_datatypes_conv ++ layer_datatypes_hist ++ layer_datatypes_fc,
+      layer_shapes_conv ++ layer_shapes_hist ++ layer_shapes_fc,
       reg)
 
   helios.run_experiment_omni_ext(
