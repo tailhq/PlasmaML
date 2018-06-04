@@ -1,18 +1,13 @@
 import breeze.linalg.{DenseMatrix, qr}
 import breeze.stats.distributions.Gaussian
-
 import com.quantifind.charts.Highcharts._
-
 import ammonite.ops.home
-
 import org.joda.time.DateTime
-
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.types.DataType
 import org.platanios.tensorflow.api.learn.layers.{Activation, Input, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.ops.io.data.Dataset
-
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.tensorflow._
@@ -20,6 +15,7 @@ import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
+import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 
 //Define some types for convenience.
@@ -248,6 +244,91 @@ def get_ffnet_properties(
 
   (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes)
 }
+
+def get_output_mapping(
+  causal_window: Int,
+  mo_flag: Boolean,
+  prob_timelags: Boolean,
+  dist_type: String,
+  time_scale: Double = 1.0) = if (!mo_flag) {
+  if (!prob_timelags) RBFWeightedSWLoss.output_mapping("Output/RBFWeightedL1", causal_window, time_scale)
+  else WeightedTimeSeriesLossSO.output_mapping("Output/SOProbWeightedTS", causal_window)
+
+} else if(mo_flag && !prob_timelags) {
+
+  MOGrangerLoss.output_mapping("Output/MOGranger", causal_window)
+
+} else {
+  dist_type match {
+    case "poisson" => WeightedTimeSeriesLossPoisson.output_mapping("Output/PoissonWeightedTS", causal_window)
+    case "beta"    => WeightedTimeSeriesLossBeta.output_mapping("Output/BetaWeightedTS", causal_window)
+    case _         => WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", causal_window)
+  }
+}
+
+def get_num_output_dims(
+  causal_window: Int,
+  mo_flag: Boolean,
+  prob_timelags: Boolean,
+  dist_type: String) =
+  if(!mo_flag) 2
+  else if(mo_flag && !prob_timelags) causal_window + 1
+  else if(!mo_flag && prob_timelags) causal_window + 1
+  else {
+    dist_type match {
+      case "poisson"  => causal_window + 1
+      case "gaussian" => causal_window + 2
+      case "beta"     => causal_window + 2
+      case _          => 2*causal_window
+    }
+  }
+
+
+def get_loss(
+  sliding_window: Int,
+  mo_flag: Boolean,
+  prob_timelags: Boolean,
+  p: Double                     = 1.0,
+  time_scale: Double            = 1.0,
+  corr_sc: Double               = 2.5,
+  c_cutoff: Double              = 0.0,
+  prior_wt: Double              = 1d,
+  prior_type: String            = "Hellinger",
+  temp: Double                  = 1.0,
+  error_wt: Double              = 1.0) =
+  if (!mo_flag) {
+    if (!prob_timelags) {
+      RBFWeightedSWLoss(
+        "Loss/RBFWeightedL1", sliding_window,
+        kernel_time_scale = time_scale,
+        kernel_norm_exponent = p,
+        corr_cutoff = c_cutoff,
+        prior_scaling = corr_sc,
+        batch = 512)
+    } else {
+      WeightedTimeSeriesLossSO(
+        "Loss/ProbWeightedTS",
+        sliding_window,
+        prior_wt = prior_wt,
+        temperature = 0.75)
+    }
+
+  } else if(mo_flag && !prob_timelags) {
+
+    MOGrangerLoss(
+      "Loss/MOGranger", sliding_window,
+      error_exponent = p,
+      weight_error = prior_wt)
+
+  } else {
+    WeightedTimeSeriesLoss(
+      "Loss/ProbWeightedTS",
+      sliding_window,
+      prior_wt = prior_wt,
+      error_wt = error_wt,
+      temperature = temp,
+      prior_type)
+  }
 
 //Runs an experiment given some architecture, loss and training parameters.
 def run_exp(

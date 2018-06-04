@@ -34,6 +34,7 @@ def main(
   error_wt: Double              = 1.0,
   mo_flag: Boolean              = true,
   prob_timelags: Boolean        = true,
+  dist_type: String             = "default",
   timelag_pred_strategy: String = "mode") = {
 
   //Output computation
@@ -47,25 +48,12 @@ def main(
       (fixed_lag, out + scala.util.Random.nextGaussian().toFloat)
     })
 
-  val num_outputs = sliding_window
-
-  val num_pred_dims =
-    if(!mo_flag) 2
-    else if(mo_flag && !prob_timelags) sliding_window + 1
-    else if(!mo_flag && prob_timelags) sliding_window + 1
-    else 2*sliding_window
+  val num_pred_dims = timelagutils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     timelagutils.get_ffnet_properties(d, num_pred_dims, num_neurons)
 
-  val output_mapping =
-    if (!mo_flag) {
-
-      if (!prob_timelags) RBFWeightedSWLoss.output_mapping("Output/RBFWeightedL1", num_outputs, time_scale)
-      else WeightedTimeSeriesLossSO.output_mapping("Output/SOProbWeightedTS", num_outputs)
-
-    } else if(mo_flag && !prob_timelags) MOGrangerLoss.output_mapping("Output/MOGranger", num_outputs)
-    else WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", num_outputs)
+  val output_mapping = timelagutils.get_output_mapping(sliding_window, mo_flag, prob_timelags, dist_type, time_scale)
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
@@ -73,45 +61,14 @@ def main(
     net_layer_sizes.tail) >> output_mapping
 
 
-  val lossFunc = if (!mo_flag) {
+  val lossFunc = timelagutils.get_loss(
+    sliding_window, mo_flag,
+    prob_timelags, p, time_scale,
+    corr_sc, c_cutoff,
+    prior_wt, prior_type,
+    temp, error_wt)
 
-    if (!prob_timelags) {
-      RBFWeightedSWLoss(
-        "Loss/RBFWeightedL1", num_outputs,
-        kernel_time_scale = time_scale,
-        kernel_norm_exponent = p,
-        corr_cutoff = c_cutoff,
-        prior_scaling = corr_sc,
-        batch = 512)
-    } else {
-      WeightedTimeSeriesLossSO(
-        "Loss/ProbWeightedTS",
-        num_outputs,
-        prior_wt = prior_wt,
-        temperature = 0.75,
-        prior_type)
-    }
-
-  } else if(mo_flag && !prob_timelags) {
-
-    MOGrangerLoss(
-      "Loss/MOGranger", num_outputs,
-      error_exponent = p,
-      weight_error = prior_wt)
-
-  } else {
-
-    WeightedTimeSeriesLoss(
-      "Loss/ProbWeightedTS",
-      num_outputs,
-      prior_wt = prior_wt,
-      error_wt = error_wt,
-      temperature = temp,
-      prior_type)
-
-  }
-
-  val loss  = lossFunc >>
+  val loss     = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 

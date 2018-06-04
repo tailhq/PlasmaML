@@ -39,7 +39,7 @@ class Upwind1D(
       Upwind1D.forwardProp(nTheta),
       Activation(
         (x: Tensor) => x,
-        (x: Tensor) => dtf.fill(FLOAT32, x.shape.entriesIterator.map(_.asInstanceOf[Int]).toSeq:_*)(1d)
+        (x: Tensor) => dtf.fill(FLOAT32, x.shape.entriesIterator.map(_.asInstanceOf[Int]).toSeq:_*)(1f)
       )
     )(
       (omega_rot, deltaR, deltaTheta)
