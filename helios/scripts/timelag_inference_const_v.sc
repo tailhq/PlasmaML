@@ -33,6 +33,7 @@ def main(
   error_wt: Double              = 1.0,
   mo_flag: Boolean              = true,
   prob_timelags: Boolean        = true,
+  poisson_dist: Boolean         = false,
   timelag_pred_strategy: String = "mode") = {
 
   //Output computation
@@ -54,6 +55,7 @@ def main(
     if(!mo_flag) 2
     else if(mo_flag && !prob_timelags) sliding_window + 1
     else if(!mo_flag && prob_timelags) sliding_window + 1
+    else if(mo_flag && prob_timelags && poisson_dist) sliding_window + 1
     else 2*sliding_window
 
   val num_outputs           = sliding_window
@@ -62,12 +64,18 @@ def main(
 
   val output_mapping =
     if (!mo_flag) {
-
       if (!prob_timelags) RBFWeightedSWLoss.output_mapping("Output/RBFWeightedL1", num_outputs, time_scale)
       else WeightedTimeSeriesLossSO.output_mapping("Output/SOProbWeightedTS", num_outputs)
 
-    } else if(mo_flag && !prob_timelags) MOGrangerLoss.output_mapping("Output/MOGranger", num_outputs)
-    else WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", num_outputs)
+    } else if(mo_flag && !prob_timelags) {
+
+      MOGrangerLoss.output_mapping("Output/MOGranger", num_outputs)
+
+    } else if(mo_flag && prob_timelags && poisson_dist) {
+
+      WeightedTimeSeriesLossPoisson.output_mapping("Output/PoissonWeightedTS", num_outputs)
+
+    } else WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", num_outputs)
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
@@ -101,13 +109,13 @@ def main(
       weight_error = prior_wt)
 
   } else {
-
-    WeightedTimeSeriesLoss(
-      "Loss/ProbWeightedTS",
-      num_outputs,
-      prior_wt = prior_wt,
-      temperature = temp)
-
+      WeightedTimeSeriesLoss(
+        "Loss/ProbWeightedTS",
+        num_outputs,
+        prior_wt = prior_wt,
+        error_wt = error_wt,
+        temperature = temp,
+        prior_type)
   }
 
   val loss = lossFunc >>

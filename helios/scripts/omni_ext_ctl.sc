@@ -87,9 +87,9 @@ def main(
     "Output/ProbWeightedTS",
     data.head._2._2._2.length)
 
-  val conv_ff_stack_sizes = Seq(128, 64)
-  val hist_ff_stack_sizes = Seq(18, 10)
-  val ff_stack_sizes      = Seq(50, 30, num_pred_dims)
+  val conv_ff_stack_sizes = Seq(256, 128)
+  val hist_ff_stack_sizes = Seq(32, 16)
+  val ff_stack_sizes      = Seq(80, 64, num_pred_dims)
 
   val ff_index_conv = 1
 

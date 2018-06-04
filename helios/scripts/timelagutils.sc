@@ -276,8 +276,6 @@ def run_exp(
 
       val ((tf_dataset, scalers), (train_time_lags, test_time_lags)) = dataTuple
 
-      val miniBatch = 512
-
       val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
         .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
         .shuffle(10)
@@ -377,7 +375,7 @@ def run_exp(
 
   try {
 
-    histogram(toDoubleSeq(pred_time_lags_test).toSeq)
+    histogram(dtfutils.toDoubleSeq(pred_time_lags_test).toSeq)
     title("Predicted Time Lags")
 
   } catch {
@@ -387,7 +385,7 @@ def run_exp(
 
   try {
 
-    histogram(toDoubleSeq(err_time_lag_test).toSeq)
+    histogram(dtfutils.toDoubleSeq(err_time_lag_test).toSeq)
     title("Histogram of Time Lag prediction errors")
 
   } catch {
@@ -395,9 +393,9 @@ def run_exp(
     case _ => println("Can't plot histogram due to exception")
   }
 
-  line(toDoubleSeq(reg_metrics.targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  line(dtfutils.toDoubleSeq(reg_metrics.targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
   hold()
-  line(toDoubleSeq(reg_metrics.preds).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  line(dtfutils.toDoubleSeq(reg_metrics.preds).zipWithIndex.map(c => (c._2, c._1)).toSeq)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Test Set Predictions")
   unhold()
@@ -444,7 +442,7 @@ def run_exp(
 
   line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3.toInt, c._2._2(c._2._3.toInt))))
   hold()
-  line(toDoubleSeq(train_signal_predicted).toSeq)
+  line(dtfutils.toDoubleSeq(train_signal_predicted).toSeq)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Training Set Predictions")
   unhold()
@@ -452,19 +450,19 @@ def run_exp(
   val err_train     = train_signal_predicted.subtract(training_signal_actual)
   val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
 
-  scatter(toDoubleSeq(err_train).zip(toDoubleSeq(err_lag_train)).toSeq)
+  scatter(dtfutils.toDoubleSeq(err_train).zip(dtfutils.toDoubleSeq(err_lag_train)).toSeq)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Training Set Errors; Scatter")
 
-  scatter(toDoubleSeq(train_signal_predicted).zip(toDoubleSeq(pred_time_lags_train)).toSeq)
+  scatter(dtfutils.toDoubleSeq(train_signal_predicted).zip(dtfutils.toDoubleSeq(pred_time_lags_train)).toSeq)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Training Set; Scatter")
 
   hold()
 
-  scatter(training_signal_actual.zip(toDoubleSeq(train_time_lags).toSeq))
+  scatter(training_signal_actual.zip(dtfutils.toDoubleSeq(train_time_lags).toSeq))
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 
@@ -472,19 +470,19 @@ def run_exp(
   val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
   val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
 
-  scatter(toDoubleSeq(err_test).zip(toDoubleSeq(err_lag_test)).toSeq)
+  scatter(dtfutils.toDoubleSeq(err_test).zip(dtfutils.toDoubleSeq(err_lag_test)).toSeq)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Test Set Errors; Scatter")
 
-  scatter(toDoubleSeq(reg_metrics.preds).zip(toDoubleSeq(reg_time_lag.preds)).toSeq)
+  scatter(dtfutils.toDoubleSeq(reg_metrics.preds).zip(dtfutils.toDoubleSeq(reg_time_lag.preds)).toSeq)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Test Set; Scatter")
 
   hold()
 
-  scatter(toDoubleSeq(reg_metrics.targets).zip(toDoubleSeq(reg_time_lag.targets)).toSeq)
+  scatter(dtfutils.toDoubleSeq(reg_metrics.targets).zip(dtfutils.toDoubleSeq(reg_time_lag.targets)).toSeq)
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 
@@ -521,8 +519,6 @@ def run_exp2(
     (dataTuple: ((HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)), (Tensor, Tensor))) => {
 
       val ((tf_dataset, scalers), (train_time_lags, test_time_lags)) = dataTuple
-
-      val miniBatch = 512
 
       val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
         .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
@@ -622,7 +618,7 @@ def run_exp2(
 
   try {
 
-    histogram(toDoubleSeq(pred_time_lags_test).toSeq)
+    histogram(dtfutils.toDoubleSeq(pred_time_lags_test).toSeq)
     title("Predicted Time Lags")
 
   } catch {
@@ -632,7 +628,7 @@ def run_exp2(
 
   try {
 
-    histogram(toDoubleSeq(err_time_lag_test).toSeq)
+    histogram(dtfutils.toDoubleSeq(err_time_lag_test).toSeq)
     title("Histogram of Time Lag prediction errors")
 
   } catch {
@@ -640,9 +636,9 @@ def run_exp2(
     case _ => println("Can't plot histogram due to exception")
   }
 
-  line(toDoubleSeq(reg_metrics.targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  line(dtfutils.toDoubleSeq(reg_metrics.targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
   hold()
-  line(toDoubleSeq(reg_metrics.preds).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  line(dtfutils.toDoubleSeq(reg_metrics.preds).zipWithIndex.map(c => (c._2, c._1)).toSeq)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Test Set Predictions")
   unhold()
@@ -690,7 +686,7 @@ def run_exp2(
 
   line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3.toInt, c._2._2(c._2._3.toInt))))
   hold()
-  line(toDoubleSeq(train_signal_predicted).toSeq)
+  line(dtfutils.toDoubleSeq(train_signal_predicted).toSeq)
   legend(Seq("Actual Output Signal", "Predicted Output Signal"))
   title("Training Set Predictions")
   unhold()
@@ -698,19 +694,19 @@ def run_exp2(
   val err_train     = train_signal_predicted.subtract(training_signal_actual)
   val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
 
-  scatter(toDoubleSeq(err_train).zip(toDoubleSeq(err_lag_train)).toSeq)
+  scatter(dtfutils.toDoubleSeq(err_train).zip(dtfutils.toDoubleSeq(err_lag_train)).toSeq)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Training Set Errors; Scatter")
 
-  scatter(toDoubleSeq(train_signal_predicted).zip(toDoubleSeq(pred_time_lags_train)).toSeq)
+  scatter(dtfutils.toDoubleSeq(train_signal_predicted).zip(dtfutils.toDoubleSeq(pred_time_lags_train)).toSeq)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Training Set; Scatter")
 
   hold()
 
-  scatter(training_signal_actual.zip(toDoubleSeq(train_time_lags).toSeq))
+  scatter(training_signal_actual.zip(dtfutils.toDoubleSeq(train_time_lags).toSeq))
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 
@@ -718,19 +714,19 @@ def run_exp2(
   val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
   val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
 
-  scatter(toDoubleSeq(err_test).zip(toDoubleSeq(err_lag_test)).toSeq)
+  scatter(dtfutils.toDoubleSeq(err_test).zip(dtfutils.toDoubleSeq(err_lag_test)).toSeq)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Test Set Errors; Scatter")
 
-  scatter(toDoubleSeq(reg_metrics.preds).zip(toDoubleSeq(reg_time_lag.preds)).toSeq)
+  scatter(dtfutils.toDoubleSeq(reg_metrics.preds).zip(dtfutils.toDoubleSeq(reg_time_lag.preds)).toSeq)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Test Set; Scatter")
 
   hold()
 
-  scatter(toDoubleSeq(reg_metrics.targets).zip(toDoubleSeq(reg_time_lag.targets)).toSeq)
+  scatter(dtfutils.toDoubleSeq(reg_metrics.targets).zip(dtfutils.toDoubleSeq(reg_time_lag.targets)).toSeq)
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 

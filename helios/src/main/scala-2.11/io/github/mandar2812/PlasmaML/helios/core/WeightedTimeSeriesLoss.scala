@@ -119,6 +119,75 @@ object WeightedTimeSeriesLoss {
 }
 
 @Experimental
+object WeightedTimeSeriesLossBeta {
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+      override val layerType: String = s"OutputWTSLossBeta[horizon:$size_causal_window]"
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+        val preds = input(::, 0::size_causal_window)
+        val alpha_beta = input(::, size_causal_window::).square().add(1.0)
+
+
+        val (alpha, beta) = (alpha_beta(::, 0), alpha_beta(::, 1))
+
+        val (stacked_alpha, stacked_beta) = (
+          tf.stack(Seq.fill(size_causal_window)(alpha), axis = 1),
+          tf.stack(Seq.fill(size_causal_window)(beta),  axis = 1))
+
+        val index_times   = Tensor(0 until size_causal_window).reshape(Shape(1, size_causal_window)).toOutput
+
+        val n             = Tensor(size_causal_window - 1.0).toOutput
+        val n_minus_t     = index_times.multiply(-1.0).add(n)
+
+        val norm_const    = stacked_alpha.logGamma
+          .add(stacked_beta.logGamma)
+          .subtract(stacked_alpha.add(stacked_beta).logGamma)
+
+        val prob          = index_times
+          .add(stacked_alpha).logGamma
+          .add(n_minus_t.add(stacked_beta).logGamma)
+          .add(n.add(1.0).logGamma)
+          .subtract(index_times.add(1.0).logGamma)
+          .subtract(n_minus_t.add(1.0).logGamma)
+          .subtract(norm_const).exp
+
+        (preds, prob)
+      }
+    }
+}
+
+@Experimental
+object WeightedTimeSeriesLossPoisson {
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+      override val layerType: String = s"OutputPoissonWTSLoss[horizon:$size_causal_window]"
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+
+        val preds = input(::, 0::size_causal_window)
+
+        val lambda = input(::, size_causal_window).square
+
+        val stacked_lambda = tf.stack(Seq.fill(size_causal_window)(lambda), axis = 1)
+
+        val index_times    = Tensor(0 until size_causal_window).reshape(Shape(1, size_causal_window)).toOutput
+
+        val unsc_prob      = index_times.multiply(stacked_lambda.logGamma)
+          .subtract(index_times.add(1.0).logGamma)
+          .subtract(stacked_lambda).exp
+
+        val norm_const     = unsc_prob.sum(axes = 1)
+
+        val prob           = unsc_prob.divide(tf.stack(Seq.fill(size_causal_window)(norm_const), axis = 1))
+
+        (preds, prob)
+      }
+    }
+}
+
+
+@Experimental
 case class WeightedTimeSeriesLossSO(
   override val name: String,
   size_causal_window: Int,
@@ -167,85 +236,6 @@ object WeightedTimeSeriesLossSO {
     }
 }
 
-@Experimental
-case class WeightedTimeSeriesLossBeta(
-  override val name: String,
-  size_causal_window: Int,
-  batchSize: Int,
-  prior_wt: Double = 1.5,
-  temperature: Double = 1.0,
-  prior_type: String = "Hellinger") extends
-  Loss[((Output, Output), Output)](name) {
-
-  override val layerType: String = s"WTSLossBeta[horizon:$size_causal_window]"
-
-  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
-
-    //Extract the multi-variate predictions
-    val preds         = input._1._1
-
-    //Extract parameters of the timalag predictive distribution
-    val alpha_beta    = input._1._2
-    val (alpha, beta) = (alpha_beta(::, 0), alpha_beta(::, 1))
-
-    val (stacked_alpha, stacked_beta) = (
-      tf.stack(Seq.fill(size_causal_window)(alpha), axis = 1),
-      tf.stack(Seq.fill(size_causal_window)(beta),  axis = 1))
-
-    val index_times   = Tensor(0 until size_causal_window).reshape(Shape(1, size_causal_window)).toOutput
-
-    val t             = tf.stack(Seq.fill(batchSize)(index_times), axis = 0)
-
-    val n             = Tensor(size_causal_window - 1.0).toOutput
-    val n_minus_t     = t.multiply(-1.0).add(n)
-
-    val norm_const    = stacked_alpha.logGamma
-      .add(stacked_beta.logGamma)
-      .subtract(stacked_alpha.add(stacked_beta).logGamma)
-
-
-
-    val prob          = t
-      .add(stacked_alpha).logGamma
-      .add(n_minus_t.add(stacked_beta).logGamma)
-      .add(n.add(1.0).logGamma)
-      .subtract(t.add(1.0).logGamma)
-      .subtract(n_minus_t.add(1.0).logGamma)
-      .subtract(norm_const).exp
-
-
-    val targets       = input._2
-    val model_errors  = preds.subtract(targets)
-    val target_prob   = model_errors.square.multiply(-1.0).divide(temperature).softmax()
-
-    def kl(prior: Output, p: Output): Output =
-      prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
-
-    val m = target_prob.add(prob).divide(2.0)
-
-    val prior_term =
-      if(prior_type == "Jensen-Shannon") kl(target_prob, m).add(kl(prob, m)).multiply(0.5)
-      else if(prior_type == "Hellinger") target_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
-      else if(prior_type == "Cross-Entropy") target_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
-      else if(prior_type == "Kullback-Leibler") kl(target_prob, prob)
-      else Tensor(0.0).toOutput
-
-    model_errors.square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(prior_term.multiply(prior_wt))
-  }
-
-
-}
-
-object WeightedTimeSeriesLossBeta {
-  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
-    new Layer[Output, (Output, Output)](name) {
-      override val layerType: String = s"OutputWTSLossBeta[horizon:$size_causal_window]"
-
-      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
-        (input(::, 0::size_causal_window), input(::, size_causal_window::).square().add(1.0))
-      }
-    }
-}
 
 @Experimental
 case class MOGrangerLoss(
