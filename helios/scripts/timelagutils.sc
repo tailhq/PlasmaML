@@ -260,9 +260,10 @@ def get_output_mapping(
 
 } else {
   dist_type match {
-    case "poisson" => WeightedTimeSeriesLossPoisson.output_mapping("Output/PoissonWeightedTS", causal_window)
-    case "beta"    => WeightedTimeSeriesLossBeta.output_mapping("Output/BetaWeightedTS", causal_window)
-    case _         => WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", causal_window)
+    case "poisson"  => WeightedTimeSeriesLossPoisson.output_mapping("Output/PoissonWeightedTS", causal_window)
+    case "beta"     => WeightedTimeSeriesLossBeta.output_mapping("Output/BetaWeightedTS", causal_window)
+    case "gaussian" => WeightedTimeSeriesLossGaussian.output_mapping("Output/GaussianWeightedTS", causal_window)
+    case _          => WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", causal_window)
   }
 }
 

@@ -26,26 +26,30 @@ def get_ffstack_properties(neuron_counts: Seq[Int], ff_index: Int): (Seq[Shape],
 
 @main
 def main(
-  test_year: Int           = 2003,
-  image_source: SOHO       = SOHO(SOHOData.Instruments.MDIMAG, 512),
-  re: Boolean              = true,
-  time_horizon: (Int, Int) = (18, 56),
-  opt: Optimizer           = tf.train.AdaDelta(0.01),
-  reg: Double              = 0.001,
-  prior_wt: Double         = 0.85,
-  error_wt: Double         = 1.0,
-  temp: Double             = 0.75,
-  maxIt: Int               = 200000,
-  miniBatch: Int           = 16,
-  tmpdir: Path             = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String          = "mdi_rbfloss_results.csv") = {
+  test_year: Int                = 2003,
+  image_source: SOHO            = SOHO(SOHOData.Instruments.MDIMAG, 512),
+  re: Boolean                   = true,
+  time_horizon: (Int, Int)      = (18, 56),
+  time_history: Int             = 8,
+  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128),
+  hist_ff_stack_sizes: Seq[Int] = Seq(32, 16),
+  ff_stack: Seq[Int]            = Seq(80, 64),
+  opt: Optimizer                = tf.train.AdaDelta(0.01),
+  reg: Double                   = 0.001,
+  prior_wt: Double              = 0.85,
+  error_wt: Double              = 1.0,
+  temp: Double                  = 0.75,
+  maxIt: Int                    = 200000,
+  miniBatch: Int                = 16,
+  tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
+  resFile: String               = "mdi_rbfloss_results.csv") = {
 
   //Data with MDI images
 
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni_ext(deltaT = time_horizon)
+  val data           = helios.generate_data_omni_ext(deltaT = time_horizon, history = time_history)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
@@ -87,9 +91,8 @@ def main(
     "Output/ProbWeightedTS",
     data.head._2._2._2.length)
 
-  val conv_ff_stack_sizes = Seq(256, 128)
-  val hist_ff_stack_sizes = Seq(32, 16)
-  val ff_stack_sizes      = Seq(80, 64, num_pred_dims)
+
+  val ff_stack_sizes      = ff_stack ++ Seq(num_pred_dims)
 
   val ff_index_conv = 1
 

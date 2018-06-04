@@ -186,6 +186,37 @@ object WeightedTimeSeriesLossPoisson {
     }
 }
 
+@Experimental
+object WeightedTimeSeriesLossGaussian {
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+      override val layerType: String = s"OutputGaussianWTSLoss[horizon:$size_causal_window]"
+
+      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+
+        val preds = input(::, 0::size_causal_window)
+
+        val mean = input(::, size_causal_window)
+
+        //Precision is 1/sigma^2
+        val precision = input(::, size_causal_window + 1).square
+
+        val stacked_mean = tf.stack(Seq.fill(size_causal_window)(mean), axis = 1)
+        val stacked_pre  = tf.stack(Seq.fill(size_causal_window)(precision), axis = 1)
+
+        val index_times    = Tensor(0 until size_causal_window).reshape(Shape(1, size_causal_window)).toOutput
+
+        val unsc_prob      = index_times.subtract(stacked_mean).square.multiply(-0.5).multiply(stacked_pre).exp
+
+        val norm_const     = unsc_prob.sum(axes = 1)
+
+        val prob           = unsc_prob.divide(tf.stack(Seq.fill(size_causal_window)(norm_const), axis = 1))
+
+        (preds, prob)
+      }
+    }
+}
+
 
 @Experimental
 case class WeightedTimeSeriesLossSO(
