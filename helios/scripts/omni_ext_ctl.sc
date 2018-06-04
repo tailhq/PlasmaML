@@ -27,6 +27,8 @@ def get_ffstack_properties(neuron_counts: Seq[Int], ff_index: Int): (Seq[Shape],
 @main
 def main(
   test_year: Int                = 2003,
+  start_year: Int               = 2001,
+  end_year: Int                 = 2006,
   image_source: SOHO            = SOHO(SOHOData.Instruments.MDIMAG, 512),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
@@ -49,7 +51,9 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni_ext(deltaT = time_horizon, history = time_history)
+  val data           = helios.generate_data_omni_ext(
+    year_start = start_year, year_end = end_year,
+    deltaT = time_horizon, history = time_history)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
