@@ -73,7 +73,7 @@ package object helios {
 
   val image_pixel_scaler = MinMaxScalerTF(Tensor(UByte(0)), Tensor(UByte(255)))
 
-  val std_features_and_labels: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
+  val std_images_and_outputs: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
     DataPipe2((features: Tensor, labels: Tensor) => {
 
       val labels_mean = labels.mean(axes = 0)
@@ -115,10 +115,9 @@ package object helios {
       (labels_scaled, labels_scaler)
     })
 
-  //@TODO: Also scale image pixels.
   val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
 
-    val (norm_tr_data, scalers) = std_features_and_labels(dataset.trainData, dataset.trainLabels)
+    val (norm_tr_data, scalers) = std_images_and_outputs(dataset.trainData, dataset.trainLabels)
 
     (
       dataset.copy(
@@ -131,7 +130,7 @@ package object helios {
 
   val scale_helios_dataset_ext = DataPipe((dataset: AbstractDataSet[(Tensor, Tensor), Tensor]) => {
 
-    val (norm_tr_images_and_labels, scalers) = std_features_and_labels(dataset.trainData._1, dataset.trainLabels)
+    val (norm_tr_images_and_labels, scalers) = std_images_and_outputs(dataset.trainData._1, dataset.trainLabels)
     val (norm_histories, history_scaler) = gauss_std(dataset.trainData._2)
 
     val features_scaler = scalers._1 * history_scaler
@@ -469,7 +468,7 @@ package object helios {
   /**
     * Create a processed tensor data set as a [[HeliosDataSet]] instance.
     *
-    * @param collated_data A Stream of date times, image paths and fluxes.
+    * @param collated_data A Stream of date times, image paths and outputs.
     *
     * @param tt_partition A function which takes each data element and
     *                     determines if it goes into the train or test split.
@@ -602,7 +601,18 @@ package object helios {
     )
   }
 
-
+  /**
+    * Create a processed tensor data set as a [[AbstractDataSet]] instance.
+    *
+    * @param collated_data A Stream of date times, image paths output histories and outputs.
+    *
+    * @param tt_partition A function which takes each data element and
+    *                     determines if it goes into the train or test split.
+    *
+    * @param image_process The exponent of 2 which determines how much the
+    *                        image will be scaled down. i.e. scaleDownFactor = 4
+    *                        corresponds to a 16 fold decrease in image size.
+    * */
   def create_helios_data_set(
     collated_data: Iterable[(DateTime, (Path, (Seq[Double], Seq[Double])))],
     tt_partition: ((DateTime, (Path, (Seq[Double], Seq[Double])))) => Boolean,
@@ -1221,7 +1231,7 @@ package object helios {
     * @param results_id The suffix added the results/checkpoints directory name.
     * @param max_iterations The maximum number of iterations that the
     *                       network must be trained for.
-    * @param arch The neural architecture to train, defaults to [[learn.cnn_sw_v1]]
+    * @param arch The neural architecture to train, for example see [[learn.cnn_sw_v1]]
     *
     * */
   def run_experiment_omni(
@@ -1377,7 +1387,7 @@ package object helios {
     * @param results_id The suffix added the results/checkpoints directory name.
     * @param max_iterations The maximum number of iterations that the
     *                       network must be trained for.
-    * @param arch The neural architecture to train, defaults to [[learn.cnn_sw_v1]]
+    * @param arch The neural architecture to train.
     *
     * */
   def run_experiment_omni_ext(
