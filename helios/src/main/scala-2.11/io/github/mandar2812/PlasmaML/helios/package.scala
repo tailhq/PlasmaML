@@ -210,8 +210,10 @@ package object helios {
     *
     * */
   def load_fluxes(
-    goes_files_path: Path, year_month: YearMonth,
-    goes_source: GOES, dirTreeCreated: Boolean = true) =
+    goes_files_path: Path,
+    year_month: YearMonth,
+    goes_source: GOES,
+    dirTreeCreated: Boolean = true): Stream[(DateTime, (Double, Double))] =
     GOESLoader.load_goes_data(
       goes_files_path, year_month,
       goes_source, dirTreeCreated)
@@ -251,7 +253,7 @@ package object helios {
     goes_reduce_func: (Stream[(DateTime, (Double, Double))]) => (DateTime, (Double, Double)),
     image_source: SOHO, images_path: Path,
     dt_round_off: (DateTime) => DateTime,
-    dirTreeCreated: Boolean = true) = {
+    dirTreeCreated: Boolean = true): Stream[(DateTime, (Path, (Double, Double)))] = {
 
     val proc_goes_data = load_fluxes(
       goes_data_path, year_month,
@@ -299,7 +301,7 @@ package object helios {
     goes_reduce_func: (Stream[(DateTime, (Double, Double))]) => (DateTime, (Double, Double)),
     image_source: SOHO, images_path: Path,
     dt_round_off: (DateTime) => DateTime,
-    dirTreeCreated: Boolean = true) = {
+    dirTreeCreated: Boolean = true): Stream[(DateTime, (Path, (Double, Double)))] = {
 
     val prepare_data = (ym: YearMonth) => collate_goes_data(ym)(
       goes_source, goes_data_path, goes_aggregation, goes_reduce_func,
