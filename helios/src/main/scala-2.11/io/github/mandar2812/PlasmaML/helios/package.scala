@@ -1292,7 +1292,7 @@ package object helios {
     * */
     println("Building the regression model.")
     val input = tf.learn.Input(
-      UINT8,
+      FLOAT64,
       Shape(
         -1,
         dataSet.trainData.shape(1),
@@ -1453,9 +1453,9 @@ package object helios {
 
     val input = tf.learn.Input[
       (Tensor, Tensor), (Output, Output),
-      (DataType.Aux[UByte], DataType.Aux[Double]),
+      (DataType.Aux[Double], DataType.Aux[Double]),
       (DataType, DataType), (Shape, Shape)](
-      (UINT8, FLOAT64),
+      (FLOAT64, FLOAT64),
       (
         Shape(
           -1,
