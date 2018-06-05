@@ -71,9 +71,9 @@ package object helios {
 
   }
 
-  val image_pixel_scaler = MinMaxScalerTF(Tensor(0.0), Tensor(255.0))
+  val image_pixel_scaler = MinMaxScalerTF(Tensor(UByte(0)), Tensor(UByte(255)))
 
-  val gauss_std_features_and_labels: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
+  val std_features_and_labels: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
     DataPipe2((features: Tensor, labels: Tensor) => {
 
       val labels_mean = labels.mean(axes = 0)
@@ -118,7 +118,7 @@ package object helios {
   //@TODO: Also scale image pixels.
   val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
 
-    val (norm_tr_data, scalers) = gauss_std_features_and_labels(dataset.trainData, dataset.trainLabels)
+    val (norm_tr_data, scalers) = std_features_and_labels(dataset.trainData, dataset.trainLabels)
 
     (
       dataset.copy(
@@ -131,7 +131,7 @@ package object helios {
 
   val scale_helios_dataset_ext = DataPipe((dataset: AbstractDataSet[(Tensor, Tensor), Tensor]) => {
 
-    val (norm_tr_images_and_labels, scalers) = gauss_std_features_and_labels(dataset.trainData._1, dataset.trainLabels)
+    val (norm_tr_images_and_labels, scalers) = std_features_and_labels(dataset.trainData._1, dataset.trainLabels)
     val (norm_histories, history_scaler) = gauss_std(dataset.trainData._2)
 
     val features_scaler = scalers._1 * history_scaler
@@ -608,14 +608,6 @@ package object helios {
     tt_partition: ((DateTime, (Path, (Seq[Double], Seq[Double])))) => Boolean,
     image_process: DataPipe[Image, Image],
     resample: Boolean): AbstractDataSet[(Tensor, Tensor), Tensor] = {
-
-    //val scaleDown = 1/math.pow(2, image_process)
-
-    val num_outputs = collated_data.head._2._2._2.length
-
-    //print("Scaling down images by a factor of ")
-    //pprint.pprintln(math.pow(2, image_process))
-    //println()
 
     println("Separating data into train and test.")
     val (train_set, test_set) = collated_data.partition(tt_partition)
@@ -1292,7 +1284,7 @@ package object helios {
     * */
     println("Building the regression model.")
     val input = tf.learn.Input(
-      FLOAT64,
+      UINT8,
       Shape(
         -1,
         dataSet.trainData.shape(1),
@@ -1453,9 +1445,9 @@ package object helios {
 
     val input = tf.learn.Input[
       (Tensor, Tensor), (Output, Output),
-      (DataType.Aux[Double], DataType.Aux[Double]),
+      (DataType.Aux[UByte], DataType.Aux[Double]),
       (DataType, DataType), (Shape, Shape)](
-      (FLOAT64, FLOAT64),
+      (UINT8, FLOAT64),
       (
         Shape(
           -1,
