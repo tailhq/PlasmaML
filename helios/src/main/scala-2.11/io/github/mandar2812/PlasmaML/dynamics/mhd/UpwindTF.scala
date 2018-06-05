@@ -9,7 +9,8 @@ import org.platanios.tensorflow.api.ops.variables.{Initializer, RandomUniformIni
 
 case class UpwindTF(
   override val name: String, rDomain: (Double, Double),
-  nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer()) extends Layer[Output, Output](name) {
+  nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer())
+  extends Layer[Output, Output](name) {
 
   override val layerType: String = "Upwind1D"
 
@@ -30,7 +31,8 @@ case class UpwindTF(
     val dv_dtheta = tf.constant(
       dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
         (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*),
-      FLOAT64, Shape(nTheta, nTheta), "DeltaV")
+      FLOAT64, Shape(nTheta, nTheta),
+      "DeltaV")
 
 
     val omega_rot = tf.variable("OmegaRot", input.dataType, Shape(), omegaInit)
@@ -38,7 +40,9 @@ case class UpwindTF(
     tf.stack(
       (1 to nR).scanLeft(input)((x, _) => {
         val invV = x.pow(-1d)
-          x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0)).multiply(invV).multiply(omega_rot).multiply(deltaR/deltaTheta))
+          x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0)).multiply(invV)
+            .multiply(omega_rot)
+            .multiply(deltaR/deltaTheta))
       }),
       axis = -1)
 
@@ -46,8 +50,11 @@ case class UpwindTF(
 }
 
 case class UpwindPropogate(
-  override val name: String, rDomain: (Double, Double),
-  nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer()) extends Layer[Output, Output](name) {
+  override val name: String,
+  rDomain: (Double, Double),
+  nR: Int, nTheta: Int,
+  omegaInit: Initializer = RandomUniformInitializer())
+  extends Layer[Output, Output](name) {
 
   override val layerType: String = s"UpwindPropogate[r:$rDomain, nR:$nR, nTheta:$nTheta]"
 
@@ -64,16 +71,23 @@ case class UpwindPropogate(
 
   override protected def _forward(input: Output, mode: Mode): Output = {
 
-    val velocities  = input(::, 0, ::)
+    val velocities = input(::, 0, ::)
+
+    val sliding_avg_tensor = dtf.tensor_f32(
+      nR, nR + 1)(
+      DenseMatrix.tabulate(nR, nR + 1)(
+        (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0
+      ).t.toArray:_*
+    )
 
     val sliding_avg = tf.constant(
-      dtf.tensor_f32(nR, nR + 1)(
-        DenseMatrix.tabulate(nR, nR + 1)(
-          (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0).t.toArray:_*),
+      sliding_avg_tensor,
       FLOAT64, Shape(nR, nR+1), "VAvgOp")
 
-
-    val deltat      = velocities.tensorDot(sliding_avg, Seq(1), Seq(0)).pow(-1d).multiply(deltaR).sum()
+    val deltat = velocities.tensorDot(sliding_avg, Seq(1), Seq(0))
+      .pow(-1d)
+      .multiply(deltaR)
+      .sum()
 
     val v = input(::, 0, -1).reshape(Shape())
 

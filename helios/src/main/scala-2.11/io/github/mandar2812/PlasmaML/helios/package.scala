@@ -71,12 +71,14 @@ package object helios {
 
   }
 
+  val image_pixel_scaler = MinMaxScalerTF(Tensor(0.0), Tensor(255.0))
+
   val gauss_std_features_and_labels: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
     DataPipe2((features: Tensor, labels: Tensor) => {
 
       val labels_mean = labels.mean(axes = 0)
 
-      val (features_min, features_max) = (features.min(axes = 0), features.max(axes = 0))
+      //val (features_min, features_max) = (features.min(axes = 0), features.max(axes = 0))
 
       val n_data = features.shape(0).scalar.asInstanceOf[Int].toDouble
 
@@ -84,12 +86,12 @@ package object helios {
         labels.subtract(labels_mean).square.mean(axes = 0).multiply(n_data/(n_data - 1d)).sqrt
 
       val (features_scaler, labels_scaler) = (
-        MinMaxScalerTF(features_min, features_max),
+        image_pixel_scaler,
         GaussianScalerTF(labels_mean, labels_sd)
       )
 
       val (features_scaled, labels_scaled) = (
-        features,
+        features_scaler(features),
         labels_scaler(labels)
       )
 
@@ -112,6 +114,36 @@ package object helios {
 
       (labels_scaled, labels_scaler)
     })
+
+  //@TODO: Also scale image pixels.
+  val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
+
+    val (norm_tr_data, scalers) = gauss_std_features_and_labels(dataset.trainData, dataset.trainLabels)
+
+    (
+      dataset.copy(
+        trainLabels = norm_tr_data._2,
+        trainData = norm_tr_data._1,
+        testData = scalers._1(dataset.testData)),
+      scalers
+    )
+  })
+
+  val scale_helios_dataset_ext = DataPipe((dataset: AbstractDataSet[(Tensor, Tensor), Tensor]) => {
+
+    val (norm_tr_images_and_labels, scalers) = gauss_std_features_and_labels(dataset.trainData._1, dataset.trainLabels)
+    val (norm_histories, history_scaler) = gauss_std(dataset.trainData._2)
+
+    val features_scaler = scalers._1 * history_scaler
+
+    (
+      dataset.copy(
+        trainLabels = norm_tr_images_and_labels._2,
+        trainData = (norm_tr_images_and_labels._1, norm_histories),
+        testData = (scalers._1(dataset.testData._1), history_scaler(dataset.testData._2))),
+      (features_scaler, scalers._2)
+    )
+  })
 
   /**
     * Download solar images from a specified source.
@@ -219,7 +251,8 @@ package object helios {
     goes_aggregation: Int,
     goes_reduce_func: (Stream[(DateTime, (Double, Double))]) => (DateTime, (Double, Double)),
     image_source: SOHO, images_path: Path,
-    dt_round_off: (DateTime) => DateTime, dirTreeCreated: Boolean = true) = {
+    dt_round_off: (DateTime) => DateTime,
+    dirTreeCreated: Boolean = true) = {
 
     val proc_goes_data = load_fluxes(
       goes_data_path, year_month,
@@ -806,33 +839,6 @@ package object helios {
       testLabels  = labels_tensor_test
     )
   }
-
-  //@TODO: Also scale image pixels.
-  val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
-
-    val (norm_tr_data, scalers) = gauss_std_features_and_labels(dataset.trainData, dataset.trainLabels)
-
-    (
-      dataset.copy(trainLabels = norm_tr_data._2),
-      scalers
-    )
-  })
-
-  val scale_helios_dataset_ext = DataPipe((dataset: AbstractDataSet[(Tensor, Tensor), Tensor]) => {
-
-    val (norm_tr_images_and_labels, scalers) = gauss_std_features_and_labels(dataset.trainData._1, dataset.trainLabels)
-    val (norm_histories, history_scaler) = gauss_std(dataset.trainData._2)
-
-    val features_scaler = scalers._1 * history_scaler
-
-    (
-      dataset.copy(
-        trainLabels = norm_tr_images_and_labels._2,
-        trainData = (dataset.trainData._1, norm_histories),
-        testData = (dataset.testData._1, history_scaler(dataset.testData._2))),
-      (features_scaler, scalers._2)
-    )
-  })
 
   /**
     * Calculate RMSE of a tensorflow based estimator.
