@@ -135,7 +135,7 @@ def main(
 
 
   val architecture = dtflearn.tuple2_layer("OmniCTLStack", image_neural_stack, omni_history_stack) >>
-    dtflearn.stack_tuple2("StackFeatures", axis = 1) >>
+    dtflearn.concat_tuple2("StackFeatures", axis = 1) >>
     fc_stack >>
     output_mapping
 
