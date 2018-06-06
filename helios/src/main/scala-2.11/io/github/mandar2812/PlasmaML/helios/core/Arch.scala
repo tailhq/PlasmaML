@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.helios.core
 
 import io.github.mandar2812.dynaml.tensorflow._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.ops.NN.SamePadding
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 
 /**
   * A collection of architectures building blocks
@@ -21,7 +21,7 @@ object Arch {
       dtflearn.conv2d_unit(Shape(2, 2, 64, 32), (2, 2))(1) >>
       dtflearn.conv2d_unit(Shape(2, 2, 32, 16), (4, 4))(2) >>
       dtflearn.conv2d_unit(Shape(2, 2, 16, 8), (8, 8), dropout = false)(3) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       tf.learn.Linear("FC_Layer_4", 128) >>
       tf.learn.ReLU("ReLU_4", 0.1f) >>
@@ -39,7 +39,7 @@ object Arch {
       dtflearn.conv2d_unit(Shape(2, 2, 32, 16), (4, 4))(2) >>
       dtflearn.conv2d_unit(Shape(2, 2, 16, 8), (8, 8))(3) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(4) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       tf.learn.Linear("FC_Layer_4", 64) >>
       tf.learn.SELU("SELU_5") >>
@@ -51,9 +51,9 @@ object Arch {
   private[PlasmaML] val cnn_goes_v1_2 = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.6f) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
-      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_5") >>
       dtflearn.feedforward(128)(6) >>
       dtflearn.Tanh("Tanh_6") >>
@@ -68,7 +68,7 @@ object Arch {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(2, 4)(7, 3)(0.1f, dropout = true, 0.6f) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(4) >>
-      tf.learn.MaxPool("MaxPool_6", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_6", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_6") >>
       dtflearn.feedforward(128)(7) >>
       tf.learn.SELU("SELU_7") >>
@@ -85,7 +85,7 @@ object Arch {
       dtflearn.conv2d_unit(Shape(2, 2, 64, 32), (2, 2))(1) >>
       dtflearn.conv2d_unit(Shape(2, 2, 32, 16), (4, 4))(2) >>
       dtflearn.conv2d_unit(Shape(2, 2, 16, 8), (8, 8), dropout = false)(3) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       tf.learn.Linear("FC_Layer_4", 128) >>
       tf.learn.SELU("SELU_4") >>
@@ -119,7 +119,7 @@ object Arch {
       dtflearn.conv2d_unit(Shape(2, 2, 64, 32), (2, 2))(1) >>
       dtflearn.conv2d_unit(Shape(2, 2, 32, 16), (4, 4))(2) >>
       dtflearn.conv2d_unit(Shape(2, 2, 16, 8), (8, 8), dropout = false)(3) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       tf.learn.Linear("FC_Layer_4", 128) >>
       dtflearn.Phi("Act_4") >>
@@ -132,7 +132,7 @@ object Arch {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(2, num_channels_input = 4)(7, 3)(0.1f, true, 0.6f) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(4) >>
-      tf.learn.MaxPool("MaxPool_6", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_6", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_6") >>
       dtflearn.feedforward(128)(7) >>
       tf.learn.SELU("SELU_7") >>

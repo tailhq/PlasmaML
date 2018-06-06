@@ -15,7 +15,7 @@ case class L2Regularization(
 
   override val layerType: String = s"L2Reg[gamma:$reg]"
 
-  override protected def _forward(input: Output, mode: Mode): Output = {
+  override protected def _forward(input: Output)(implicit mode: Mode): Output = {
 
     val weights = names.zip(dataTypes.zip(shapes)).map(n =>
       tf.variable(n._1, dataType = DataType.fromName(n._2._1), shape = n._2._2, reuse = ReuseExistingOnly)
@@ -32,7 +32,7 @@ case class L1Regularization(names: Seq[String], dataTypes: Seq[String], shapes: 
 
   override val layerType: String = s"L2Reg[gamma:$reg]"
 
-  override protected def _forward(input: Output, mode: Mode): Output = {
+  override protected def _forward(input: Output)(implicit mode: Mode): Output = {
 
     val weights = names.zip(dataTypes.zip(shapes)).map(n =>
       tf.variable(n._1, dataType = DataType.fromName(n._2._1), shape = n._2._2, reuse = ReuseExistingOnly)
