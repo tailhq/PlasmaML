@@ -15,7 +15,7 @@ class WeightedL2FluxLoss(
 
   override val layerType: String = "WeightedL2FluxLoss"
 
-  override protected def _forward(input: (Output, Output), mode: Mode): Output =
+  override protected def _forward(input: (Output, Output))(implicit mode: Mode): Output =
     if (input._2.dataType == FLOAT32)
       ops.NN.l2Loss((input._1 - input._2)*input._2.sigmoid.sqrt, name = name)
     else ops.NN.l2Loss((input._1 - input._2)*input._2.cast(FLOAT32).sigmoid.sqrt, name = name)
