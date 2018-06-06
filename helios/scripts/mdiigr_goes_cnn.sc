@@ -3,7 +3,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import ammonite.ops._
 import org.joda.time._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.ops.NN.SamePadding
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 
 /*
 * Mind your surroundings!
@@ -116,18 +116,18 @@ val input = tf.learn.Input(
 val trainInput = tf.learn.Input(FLOAT32, Shape(-1))
 
 val layer = tf.learn.Cast(name = "InputCast", FLOAT32) >>
-  tf.learn.Conv2D(name = "Conv2D_0", Shape(2, 2, 4, 64), 1, 1, SamePadding) >>
+  tf.learn.Conv2D(name = "Conv2D_0", Shape(2, 2, 4, 64), 1, 1, SameConvPadding) >>
   tf.learn.AddBias(name = "Bias_0") >>
   tf.learn.ReLU(name = "Act_0", 0.1f) >>
   tf.learn.Dropout(name = "Drop_0", 0.6f) >>
-  tf.learn.Conv2D(name = "Conv2D_1", Shape(2, 2, 64, 32), 2, 2, SamePadding) >>
+  tf.learn.Conv2D(name = "Conv2D_1", Shape(2, 2, 64, 32), 2, 2, SameConvPadding) >>
   tf.learn.AddBias(name = "Bias_1") >>
   tf.learn.ReLU(name = "Act_1", 0.1f) >>
   tf.learn.Dropout(name = "Drop_1", 0.6f) >>
-  tf.learn.Conv2D(name = "Conv2D_2", Shape(2, 2, 32, 16), 4, 4, SamePadding) >>
+  tf.learn.Conv2D(name = "Conv2D_2", Shape(2, 2, 32, 16), 4, 4, SameConvPadding) >>
   tf.learn.AddBias(name = "Bias_2") >>
   tf.learn.ReLU(name = "Act_2", 0.1f) >>
-  tf.learn.MaxPool(name = "MaxPool_0", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+  tf.learn.MaxPool(name = "MaxPool_0", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
   tf.learn.Flatten() >>
   tf.learn.Linear(name = "FC_Layer_0", 128) >>
   tf.learn.ReLU(name = "Act_3", 0.1f) >>
@@ -147,7 +147,7 @@ val optimizer = tf.train.AdaGrad(0.002)
 val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
 val (model, estimator) = tf.createWith(graph = Graph()) {
-  val model = tf.learn.Model(input, layer, trainInput, trainingInputLayer, loss, optimizer)
+  val model = tf.learn.Model.supervised(input, layer, trainInput, trainingInputLayer, loss, optimizer)
 
   println("Training the linear regression model.")
 

@@ -242,7 +242,7 @@ def main(
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
   val (model, estimator) = tf.createWith(graph = Graph()) {
-    val model = tf.learn.Model(
+    val model = tf.learn.Model.supervised(
       input, architecture, trainInput, trainingInputLayer,
       loss, optimizer)
 
