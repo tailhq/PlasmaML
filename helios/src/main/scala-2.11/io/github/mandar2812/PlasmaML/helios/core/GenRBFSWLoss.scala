@@ -27,7 +27,7 @@ case class GenRBFSWLoss(
 
   override val layerType: String = s"RBFSW[$size_causal_window]"
 
-  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output))(implicit mode: Mode): Output = {
 
     //Declare learnable parameters.
     val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)

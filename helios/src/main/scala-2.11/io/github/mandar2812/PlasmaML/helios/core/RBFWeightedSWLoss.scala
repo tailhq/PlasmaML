@@ -37,7 +37,7 @@ case class RBFWeightedSWLoss(
 
   override val layerType: String = s"RBFSW[horizon:$size_causal_window, timescale:$kernel_time_scale]"
 
-  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output))(implicit mode: Mode): Output = {
 
     val predictions   = input._1._1
     val timelags = input._1._2
@@ -129,7 +129,7 @@ object RBFWeightedSWLoss {
       val nu    = Tensor(1.0)
       val q     = Tensor(1.0)
 
-      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+      override protected def _forward(input: Output)(implicit mode: Mode): (Output, Output) = {
 
         val lags = if (scale_lags) {
           input(::, -1)
