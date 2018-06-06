@@ -26,7 +26,7 @@ case class UpwindTF(
   )
 
 
-  override protected def _forward(input: Output, mode: Mode): Output = {
+  override protected def _forward(input: Output)(implicit mode: Mode): Output = {
 
     val dv_dtheta = tf.constant(
       dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
@@ -69,7 +69,7 @@ case class UpwindPropogate(
     (thetaDomain._2 - thetaDomain._1)/nTheta
   )
 
-  override protected def _forward(input: Output, mode: Mode): Output = {
+  override protected def _forward(input: Output)(implicit mode: Mode): Output = {
 
     val velocities = input(::, 0, ::)
 
