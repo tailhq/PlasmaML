@@ -4,7 +4,7 @@ import io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.dynaml.tensorflow.dtflearn
-import org.platanios.tensorflow.api.ops.NN.SamePadding
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 
 @main
 def main(
@@ -51,9 +51,9 @@ def main(
   val architecture = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(2, 4)(6, 3)(0.01f, dropout = true, 0.6f) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false, relu_param = 0.01f)(4) >>
-      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_5", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_5") >>
       dtflearn.feedforward(128)(6) >>
       dtflearn.Tanh("Tanh_6") >>
