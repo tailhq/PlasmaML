@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.core.WeightedTimeSeriesLoss
 import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
-import io.github.mandar2812.PlasmaML.utils.{L2Regularization, StackTuple2, Tuple2Layer}
+import io.github.mandar2812.PlasmaML.utils.L2Regularization
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -108,7 +108,7 @@ def main(
       dtflearn.conv2d_pyramid(
         size = 2, num_channels_input = 4)(
         start_num_bits = 5, end_num_bits = 3)(
-        relu_param = 0.1f, dropout = true,
+        relu_param = 0.1f, dropout = false,
         keep_prob = 0.6f) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
@@ -134,8 +134,8 @@ def main(
     starting_index = ff_index_fc)
 
 
-  val architecture = Tuple2Layer("OmniCTLStack", image_neural_stack, omni_history_stack) >>
-    StackTuple2("StackFeatures", axis = 1) >>
+  val architecture = dtflearn.tuple2_layer("OmniCTLStack", image_neural_stack, omni_history_stack) >>
+    dtflearn.stack_tuple2("StackFeatures", axis = 1) >>
     fc_stack >>
     output_mapping
 

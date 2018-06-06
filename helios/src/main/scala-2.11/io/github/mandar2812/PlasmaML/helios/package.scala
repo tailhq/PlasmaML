@@ -78,8 +78,6 @@ package object helios {
 
       val labels_mean = labels.mean(axes = 0)
 
-      //val (features_min, features_max) = (features.min(axes = 0), features.max(axes = 0))
-
       val n_data = features.shape(0).scalar.asInstanceOf[Int].toDouble
 
       val labels_sd =
@@ -91,7 +89,7 @@ package object helios {
       )
 
       val (features_scaled, labels_scaled) = (
-        features_scaler(features),
+        features,
         labels_scaler(labels)
       )
 
@@ -122,8 +120,8 @@ package object helios {
     (
       dataset.copy(
         trainLabels = norm_tr_data._2,
-        trainData = norm_tr_data._1,
-        testData = scalers._1(dataset.testData)),
+        trainData = norm_tr_data._1/*,
+        testData = scalers._1(dataset.testData)*/),
       scalers
     )
   })
@@ -139,7 +137,7 @@ package object helios {
       dataset.copy(
         trainLabels = norm_tr_images_and_labels._2,
         trainData = (norm_tr_images_and_labels._1, norm_histories),
-        testData = (scalers._1(dataset.testData._1), history_scaler(dataset.testData._2))),
+        testData = (dataset.testData._1, history_scaler(dataset.testData._2))),
       (features_scaler, scalers._2)
     )
   })
