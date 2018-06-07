@@ -113,7 +113,7 @@ def main(
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = 4)(
+        size = 2, num_channels_input = 1)(
         start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = false,
         keep_prob = 0.6f) >>
