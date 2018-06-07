@@ -79,7 +79,11 @@ def main(
     val start = (1.0 - image_magic_ratio)*image_sizes/2
     val patch_size = image_sizes*image_magic_ratio
 
-    image.copy.filter(GrayscaleFilter).subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt).scale(0.5)
+    image.copy.subimage(
+      start.toInt, start.toInt,
+      patch_size.toInt, patch_size.toInt)
+      .scale(0.5)
+      .filter(GrayscaleFilter)
   })
 
   val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
