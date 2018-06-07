@@ -1,6 +1,7 @@
 import ammonite.ops._
 import org.joda.time._
 import com.sksamuel.scrimage._
+import com.sksamuel.scrimage.filter._
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.pipes._
@@ -78,8 +79,10 @@ def main(
     val start = (1.0 - image_magic_ratio)*image_sizes/2
     val patch_size = image_sizes*image_magic_ratio
 
-    image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt).scale(0.5)
+    image.copy.filter(GrayscaleFilter).subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt).scale(0.5)
   })
+
+  val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
 
   val summary_dir_prefix = "swtl_"+image_source.instrument+"_"+image_source.size
 
@@ -162,7 +165,9 @@ def main(
 
   helios.run_experiment_omni_ext(
     data, tt_partition, resample = re,
-    preprocess_image = crop_solar_image)(
+    preprocess_image = crop_solar_image,
+    image_to_bytearr = image_to_byte,
+    num_channels_image = 1)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
