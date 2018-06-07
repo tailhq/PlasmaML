@@ -58,8 +58,6 @@ def main(
     (dt, vf + scala.util.Random.nextGaussian().toFloat)
   })
 
-  val num_outputs   = sliding_window
-
   val num_pred_dims = timelagutils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =

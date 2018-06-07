@@ -60,15 +60,19 @@ package object helios {
     /*
     * Loss Functions
     * */
-    val weightedL2FluxLoss: (String) => WeightedL2FluxLoss =
+    val weightedL2FluxLoss: (String) => WeightedL2FluxLoss     =
       (name: String) => new WeightedL2FluxLoss(name)
 
-    val rBFWeightedSWLoss: (String, Int) => RBFWeightedSWLoss =
+    val rBFWeightedSWLoss: (String, Int) => RBFWeightedSWLoss  =
       (name: String, horizon: Int) => new RBFWeightedSWLoss(name, horizon)
 
-    val dynamicRBFSWLoss: (String, Int) => DynamicRBFSWLoss =
+    val dynamicRBFSWLoss: (String, Int) => DynamicRBFSWLoss    =
       (name: String, horizon: Int) => new DynamicRBFSWLoss(name, horizon)
 
+    val cdt_loss: WeightedTimeSeriesLoss.type                  = WeightedTimeSeriesLoss
+    val cdt_poisson_loss: WeightedTimeSeriesLossPoisson.type   = WeightedTimeSeriesLossPoisson
+    val cdt_gaussian_loss: WeightedTimeSeriesLossGaussian.type = WeightedTimeSeriesLossGaussian
+    val cdt_beta_loss: WeightedTimeSeriesLossGaussian.type     = WeightedTimeSeriesLossGaussian
   }
 
   val image_pixel_scaler = MinMaxScalerTF(Tensor(UByte(0)), Tensor(UByte(255)))

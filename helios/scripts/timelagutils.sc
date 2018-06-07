@@ -15,6 +15,7 @@ import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
+import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 
@@ -260,10 +261,10 @@ def get_output_mapping(
 
 } else {
   dist_type match {
-    case "poisson"  => WeightedTimeSeriesLossPoisson.output_mapping("Output/PoissonWeightedTS", causal_window)
-    case "beta"     => WeightedTimeSeriesLossBeta.output_mapping("Output/BetaWeightedTS", causal_window)
-    case "gaussian" => WeightedTimeSeriesLossGaussian.output_mapping("Output/GaussianWeightedTS", causal_window)
-    case _          => WeightedTimeSeriesLoss.output_mapping("Output/ProbWeightedTS", causal_window)
+    case "poisson"  => helios.learn.cdt_poisson_loss.output_mapping("Output/PoissonWeightedTS", causal_window)
+    case "beta"     => helios.learn.cdt_beta_loss.output_mapping("Output/BetaWeightedTS", causal_window)
+    case "gaussian" => helios.learn.cdt_gaussian_loss.output_mapping("Output/GaussianWeightedTS", causal_window)
+    case _          => helios.learn.cdt_loss.output_mapping("Output/ProbWeightedTS", causal_window)
   }
 }
 
@@ -322,7 +323,7 @@ def get_loss(
       weight_error = prior_wt)
 
   } else {
-    WeightedTimeSeriesLoss(
+    helios.learn.cdt_loss(
       "Loss/ProbWeightedTS",
       sliding_window,
       prior_wt = prior_wt,

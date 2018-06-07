@@ -53,7 +53,6 @@ def main(
 
   val num_pred_dims = timelagutils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
-
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     timelagutils.get_ffnet_properties(d, num_pred_dims, num_neurons)
 

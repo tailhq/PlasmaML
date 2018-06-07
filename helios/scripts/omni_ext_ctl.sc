@@ -91,7 +91,7 @@ def main(
 
   val num_pred_dims = 2*data.head._2._2._2.length
 
-  val output_mapping = WeightedTimeSeriesLoss.output_mapping(
+  val output_mapping = helios.learn.cdt_loss.output_mapping(
     "Output/ProbWeightedTS",
     data.head._2._2._2.length)
 
@@ -149,7 +149,7 @@ def main(
     get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc)
 
 
-  val loss_func = WeightedTimeSeriesLoss(
+  val loss_func = helios.learn.cdt_loss(
     "Loss/ProbWeightedTS",
     data.head._2._2._2.length,
     prior_wt = prior_wt,
