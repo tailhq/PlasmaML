@@ -33,8 +33,11 @@ import spire.math.UByte
 package object helios {
 
 
-  type HELIOS_OMNI_DATA = Stream[(DateTime, (Path, Seq[Double]))]
-  type HELIOS_OMNI_DATA_EXT = Stream[(DateTime, (Path, (Seq[Double], Seq[Double])))]
+  type HELIOS_OMNI_DATA        = Stream[(DateTime, (Path, Seq[Double]))]
+  type HELIOS_MC_OMNI_DATA     = Stream[(DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))]
+
+  type HELIOS_OMNI_DATA_EXT    = Stream[(DateTime, (Path, (Seq[Double], Seq[Double])))]
+  type HELIOS_MC_OMNI_DATA_EXT = Stream[(DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))]
 
   object learn {
 
@@ -207,6 +210,11 @@ package object helios {
     soho_source: SOHO, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] =
     SOHOLoader.load_images(soho_files_path, year_month, soho_source, dirTreeCreated)
 
+  def load_images(
+    soho_files_path: Path, year_month: YearMonth,
+    soho_sources: Seq[SOHO], dirTreeCreated: Boolean): Stream[(DateTime, (SOHO, Path))] =
+    SOHOLoader.load_images(soho_files_path, year_month, soho_sources, dirTreeCreated)
+
   /**
     * Load X-Ray fluxes averaged over all GOES missions
     *
@@ -329,7 +337,7 @@ package object helios {
     * @param end_year_month Ending Year-Month
     *
     * */
-  def collate_omni_data_range(
+  def join_omni(
     start_year_month: YearMonth,
     end_year_month: YearMonth,
     omni_source: OMNI, omni_data_path: Path,
@@ -395,7 +403,7 @@ package object helios {
     * @param end_year_month Ending Year-Month
     *
     * */
-  def collate_omni_data_range(
+  def join_omni(
     start_year_month: YearMonth,
     end_year_month: YearMonth,
     omni_source: OMNI, omni_data_path: Path,
@@ -444,6 +452,75 @@ package object helios {
         StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[Path])
 
     val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
+
+    omni_data.map(o => {
+      val image_option = images.get(o._1)
+      (o._1, image_option, o._2)
+    }).filter(_._2.isDefined)
+      .map(d => (d._1, (d._2.get, d._3)))
+
+  }
+
+  /**
+    * Create a joint data set between heliospheric
+    * images and L1 time series. Take time history of
+    * omni quantity as well as future trajectory.
+    *
+    * @param start_year_month Starting Year-Month
+    * @param end_year_month Ending Year-Month
+    *
+    * */
+  def join_omni(
+    start_year_month: YearMonth,
+    end_year_month: YearMonth,
+    omni_source: OMNI, omni_data_path: Path,
+    past_history: Int, deltaT: (Int, Int),
+    image_sources: Seq[SOHO], images_path: Path,
+    image_dir_tree: Boolean): HELIOS_MC_OMNI_DATA_EXT = {
+
+    val (start_instant, end_instant) = (
+      start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
+      end_year_month.toLocalDate(31).toDateTimeAtStartOfDay
+    )
+
+    val period = new Period(start_instant, end_instant)
+
+
+    print("Time period considered (in months): ")
+
+    val num_months = (12*period.getYears) + period.getMonths
+
+    pprint.pprintln(num_months)
+
+
+    //Extract OMNI data as stream
+
+    //First create the transformation pipe
+
+    val omni_processing =
+      OMNILoader.omniVarToSlidingTS(past_history, deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+        StreamDataPipe[(DateTime, (Seq[Double], Seq[Double]))](
+          (p: (DateTime, (Seq[Double], Seq[Double]))) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
+        )
+
+    val years = (start_year_month.getYear to end_year_month.getYear).toStream
+
+    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/omni2_"+i+".csv"))
+
+    //Extract paths to images, along with a time-stamp
+
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) => {
+      new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay, 0, 0)
+    })
+
+    val image_processing = StreamFlatMapPipe((year_month: YearMonth) =>
+      load_images(images_path, year_month, image_sources, image_dir_tree)) >
+      StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[(SOHO, Path)]) >
+      DataPipe((d: Stream[(DateTime, (SOHO, Path))]) =>
+        d.groupBy(_._1).mapValues(_.map(_._2).groupBy(_._1).mapValues(_.map(_._2).toSeq))
+      )
+
+    val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream)
 
     omni_data.map(o => {
       val image_option = images.get(o._1)
@@ -991,7 +1068,7 @@ package object helios {
     println("Start: "+year_start+" End: "+year_end)
 
 
-    helios.collate_omni_data_range(
+    helios.join_omni(
       new YearMonth(year_start, 1), new YearMonth(year_end, 12),
       omni_source, pwd/"data", deltaT, image_source, soho_dir)
   }
@@ -1039,7 +1116,7 @@ package object helios {
     println("Start: "+year_start+" End: "+year_end)
 
 
-    helios.collate_omni_data_range(
+    helios.join_omni(
       new YearMonth(year_start, 1), new YearMonth(year_end, 12),
       omni_source, pwd/"data", history, deltaT,
       image_source, soho_dir, true)

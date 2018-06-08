@@ -210,7 +210,7 @@ object SOHOLoader {
     *                       created inside the soho_files_path,
     *                       defaults to true.
     *
-    * @return Time stamped images for some soho instrument and image resolution.
+    * @return Time stamped images for each soho instrument and image resolution.
     * */
   def load_images(
     soho_files_path: Path, year_month: YearMonth,
