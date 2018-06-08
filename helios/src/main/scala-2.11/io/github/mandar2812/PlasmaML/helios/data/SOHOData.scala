@@ -62,9 +62,7 @@ object SOHOData {
       date.getYear.toString,
       "%02d".format(date.getMonthOfYear))
 
-    (year+month+"""(\d{2}?)_(\d{4}?)_("""+
-      sources.map(_.instrument).mkString("|")+")_("+
-      sources.map(_.size).mkString("|")+")\\.jpg").r
+    (year+month+"""(\d{2}?)_(\d{4}?)_("""+sources.map(s => s.instrument+"_"+s.size).mkString("|")+")\\.jpg").r
   }
 
 }
@@ -195,6 +193,60 @@ object SOHOLoader {
           year.toInt, month.toInt, day.toInt,
           time.take(2).toInt, time.takeRight(2).toInt),
         c._2
+      )
+    })).toStream
+  }
+
+  /**
+    * Load paths to SOHO images from the disk.
+    *
+    * @param soho_files_path The base directory in which soho data is stored.
+    *
+    * @param year_month The year-month from which the images were taken.
+    *
+    * @param soho_sources A sequence of data sources i.e. each one a [[SOHO]] instance.
+    *
+    * @param dirTreeCreated If SOHO directory structure has been
+    *                       created inside the soho_files_path,
+    *                       defaults to true.
+    *
+    * @return Time stamped images for some soho instrument and image resolution.
+    * */
+  def load_images(
+    soho_files_path: Path, year_month: YearMonth,
+    soho_sources: Seq[SOHO], dirTreeCreated: Boolean): Stream[(DateTime, (SOHO, Path))] = {
+
+
+    val (year, month) = (year_month.getYear.toString, "%02d".format(year_month.getMonthOfYear))
+    val filePattern = getFilePattern(year_month, soho_sources)
+
+    val image_paths = if(dirTreeCreated) {
+      ls! soho_files_path |? (s => s.isDir && soho_sources.map(_.instrument).contains(s.segments.last)) ||
+        (d => {
+          ls! d |?
+            (s => s.isDir && s.segments.contains(year)) ||
+            (ls! _) |?
+            (_.segments.contains(month))
+        }) ||
+        (ls! _ )
+    } else {
+      ls.rec! soho_files_path
+    }
+
+    (image_paths | (file => {
+      (filePattern.findFirstMatchIn(file.segments.last), file)
+    }) |? (_._1.isDefined) | (c => {
+      val Some(matchStr) = c._1
+
+      val (day, time, source_str) = (matchStr.group(1), matchStr.group(2), matchStr.group(3))
+
+      val source = SOHO(source_str.split("_").head, source_str.split("_").last.toInt)
+
+      (
+        new DateTime(
+          year.toInt, month.toInt, day.toInt,
+          time.take(2).toInt, time.takeRight(2).toInt),
+        (source, c._2)
       )
     })).toStream
   }
