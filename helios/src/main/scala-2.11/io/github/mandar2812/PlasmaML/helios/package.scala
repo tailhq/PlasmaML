@@ -204,7 +204,7 @@ package object helios {
 
   def load_images(
     soho_files_path: Path, year_month: YearMonth,
-    soho_source: SOHO, dirTreeCreated: Boolean = true) =
+    soho_source: SOHO, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] =
     SOHOLoader.load_images(soho_files_path, year_month, soho_source, dirTreeCreated)
 
   /**
@@ -434,14 +434,14 @@ package object helios {
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: DateTime => DateTime = (d: DateTime) => {
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) => {
       new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay, 0, 0)
-    }
+    })
 
     val image_processing =
-      StreamFlatMapPipe(
-        (year_month: YearMonth) => load_images(images_path, year_month, image_source, image_dir_tree)) >
-        StreamDataPipe((p: (DateTime, Path)) => (image_dt_roundoff(p._1), p._2))
+      StreamFlatMapPipe((year_month: YearMonth) =>
+        load_images(images_path, year_month, image_source, image_dir_tree)) >
+        StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[Path])
 
     val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
 

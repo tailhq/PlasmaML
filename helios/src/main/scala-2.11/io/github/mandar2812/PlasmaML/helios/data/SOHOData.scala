@@ -43,15 +43,28 @@ object SOHOData {
   }
 
   def getFilePattern(date: LocalDate, source: SOHO): Regex = {
-    val (year, month, day) = (date.getYear.toString, date.getMonthOfYear.toString, date.dayOfMonth.toString)
+    val (year, month, day) = (
+      date.getYear.toString,
+      "%02d".format(date.getMonthOfYear),
+      "%02d".format(date.getDayOfMonth))
 
-    (year+month+day+"""_(\d{4}?)_"""+source.instrument+"_"+source.size+"""\.jpg""").r
+    (year+month+day+"""_(\d{4}?)_"""+source.instrument+"_"+source.size+"\\.jpg").r
   }
 
   def getFilePattern(date: YearMonth, source: SOHO): Regex = {
-    val (year, month) = (date.getYear.toString, date.getMonthOfYear.toString)
+    val (year, month) = (date.getYear.toString, "%02d".format(date.getMonthOfYear))
 
-    (year+month+"""(\d{2}?)_(\d{4}?)_"""+source.instrument+"_"+source.size+".jpg").r
+    (year+month+"""(\d{2}?)_(\d{4}?)_"""+source.instrument+"_"+source.size+"\\.jpg").r
+  }
+
+  def getFilePattern(date: YearMonth, sources: Seq[SOHO]): Regex = {
+    val (year, month) = (
+      date.getYear.toString,
+      "%02d".format(date.getMonthOfYear))
+
+    (year+month+"""(\d{2}?)_(\d{4}?)_("""+
+      sources.map(_.instrument).mkString("|")+")_("+
+      sources.map(_.size).mkString("|")+")\\.jpg").r
   }
 
 }
