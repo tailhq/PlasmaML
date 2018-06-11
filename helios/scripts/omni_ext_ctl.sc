@@ -6,7 +6,7 @@ import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.PlasmaML.helios
-import io.github.mandar2812.PlasmaML.helios.core.WeightedTimeSeriesLoss
+import io.github.mandar2812.PlasmaML.helios.core.CausalDynamicTimeLag
 import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 import org.platanios.tensorflow.api.ops.NN.SamePadding

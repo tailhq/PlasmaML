@@ -57,7 +57,7 @@ import org.platanios.tensorflow.api.ops.Output
   *                   </ul>
   *
   * */
-case class WeightedTimeSeriesLoss(
+case class CausalDynamicTimeLag(
   override val name: String,
   size_causal_window: Int,
   prior_wt: Double = 1.5,
@@ -107,7 +107,7 @@ case class WeightedTimeSeriesLoss(
   }
 }
 
-object WeightedTimeSeriesLoss {
+object CausalDynamicTimeLag {
   def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
     new Layer[Output, (Output, Output)](name) {
       override val layerType: String = s"OutputWTSLoss[horizon:$size_causal_window]"

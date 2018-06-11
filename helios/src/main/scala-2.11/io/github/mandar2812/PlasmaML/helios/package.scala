@@ -49,15 +49,10 @@ package object helios {
     *
     * */
     val cnn_goes_v1: Layer[Output, Output]                    = Arch.cnn_goes_v1
-
     val cnn_goes_v1_1: Layer[Output, Output]                  = Arch.cnn_goes_v1_1
-
     val cnn_goes_v1_2: Layer[Output, Output]                  = Arch.cnn_goes_v1_2
-
     val cnn_sw_v1: Layer[Output, Output]                      = Arch.cnn_sw_v1
-
     val cnn_sw_dynamic_timescales_v1: Layer[Output, Output]   = Arch.cnn_sw_dynamic_timescales_v1
-
     val cnn_xray_class_v1: Layer[Output, Output]              = Arch.cnn_xray_class_v1
 
     def cnn_sw_v2(sliding_window: Int): Compose[Output, Output, Output] =
@@ -66,16 +61,10 @@ package object helios {
     /*
     * Loss Functions
     * */
-    val weightedL2FluxLoss: (String) => WeightedL2FluxLoss     =
-      (name: String) => new WeightedL2FluxLoss(name)
-
-    val rBFWeightedSWLoss: (String, Int) => RBFWeightedSWLoss  =
-      (name: String, horizon: Int) => new RBFWeightedSWLoss(name, horizon)
-
-    val dynamicRBFSWLoss: (String, Int) => DynamicRBFSWLoss    =
-      (name: String, horizon: Int) => new DynamicRBFSWLoss(name, horizon)
-
-    val cdt_loss: WeightedTimeSeriesLoss.type                  = WeightedTimeSeriesLoss
+    val weightedL2FluxLoss: WeightedL2FluxLoss.type            = WeightedL2FluxLoss
+    val rBFWeightedSWLoss: RBFWeightedSWLoss.type              = RBFWeightedSWLoss
+    val dynamicRBFSWLoss: DynamicRBFSWLoss.type                = DynamicRBFSWLoss
+    val cdt_loss: CausalDynamicTimeLag.type                    = CausalDynamicTimeLag
     val cdt_poisson_loss: WeightedTimeSeriesLossPoisson.type   = WeightedTimeSeriesLossPoisson
     val cdt_gaussian_loss: WeightedTimeSeriesLossGaussian.type = WeightedTimeSeriesLossGaussian
     val cdt_beta_loss: WeightedTimeSeriesLossGaussian.type     = WeightedTimeSeriesLossGaussian
@@ -1975,8 +1964,8 @@ package object helios {
   }
 
   def run_experiment_omni_dynamic_time_scales(
-    collated_data: Stream[(DateTime, (Path, Seq[Double]))],
-    tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
+    collated_data: Stream[PATTERN],
+    tt_partition: PATTERN => Boolean,
     resample: Boolean = false)(
     results_id: String, max_iterations: Int,
     tempdir: Path = home/"tmp",

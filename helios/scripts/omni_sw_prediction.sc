@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.pipes._
 
 import _root_.io.github.mandar2812.PlasmaML.helios
-import io.github.mandar2812.PlasmaML.helios.core.WeightedTimeSeriesLoss
+import io.github.mandar2812.PlasmaML.helios.core.CausalDynamicTimeLag
 import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 
@@ -74,7 +74,7 @@ def main(
 
   val num_pred_dims = 2*data.head._2._2.length
 
-  val output_mapping = WeightedTimeSeriesLoss.output_mapping(
+  val output_mapping = CausalDynamicTimeLag.output_mapping(
     "Output/ProbWeightedTS",
     data.head._2._2.length)
 
@@ -103,7 +103,7 @@ def main(
   val layer_datatypes       = Seq("FLOAT64", "FLOAT64", "FLOAT64")
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
 
-  val loss_func = WeightedTimeSeriesLoss(
+  val loss_func = CausalDynamicTimeLag(
     "Loss/ProbWeightedTS",
     data.head._2._2.length,
     prior_wt = prior_wt,

@@ -67,7 +67,7 @@ def main(
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
   conv_ff_stack_sizes: Seq[Int] = Seq(256, 128),
-  hist_ff_stack_sizes: Seq[Int] = Seq(32, 16),
+  hist_ff_stack_sizes: Seq[Int] = Seq(20, 16),
   ff_stack: Seq[Int]            = Seq(80, 64),
   opt: Optimizer                = tf.train.AdaDelta(0.01),
   reg: Double                   = 0.001,
@@ -127,20 +127,21 @@ def main(
 
     //val num_pixels = is.head.dimensions._1*is.head.dimensions._2
 
-    val im_byte_coll = is.map(_.argb.map(_.last.toByte))
+    //val im_byte_coll = is.map(_.argb.map(_.last.toByte))
 
     /*(0 until num_pixels).map(pixel_index => {
       val pixel_sample_for_index = im_byte_coll.map(_(pixel_index))
       median(pixel_sample_for_index.toStream).toByte
     }).toArray*/
 
-    im_byte_coll.flatMap(_.zipWithIndex)
+    /*im_byte_coll.flatMap(_.zipWithIndex)
       .groupBy(_._2)
       .mapValues(_.map(_._1))
       .toStream.par
       .map(c => (c._1, median(c._2).toByte))
       .toArray.sortBy(_._1)
-      .map(_._2)
+      .map(_._2)*/
+    is.head.argb.map(_.last.toByte)
   })
 
   val summary_dir_prefix = "swtl_"+image_sources.map(s => s.instrument+"_"+s.size).mkString("_")

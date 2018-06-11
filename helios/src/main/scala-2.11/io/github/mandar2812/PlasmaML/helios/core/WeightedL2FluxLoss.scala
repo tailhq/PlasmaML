@@ -9,7 +9,7 @@ import org.platanios.tensorflow.api.ops.Output
 /**
   * <h3>Weighted L2 Loss Function</h3>
   * */
-class WeightedL2FluxLoss(
+case class WeightedL2FluxLoss(
   override val name: String)
   extends Loss[(Output, Output)](name) {
 
