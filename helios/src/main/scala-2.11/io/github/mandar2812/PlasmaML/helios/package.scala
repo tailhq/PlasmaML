@@ -834,8 +834,8 @@ package object helios {
     println("Filtering complete data patterns")
     val complete_data = collated_data.filter(
       p =>
-        p._2._1.keys.forall(s => image_sources.contains(s)) &&
-          p._2._1.values.forall(s => !s.isEmpty)
+        image_sources.forall(s => p._2._1.keys.toSeq.contains(s)) &&
+          p._2._1.values.forall(s => s.nonEmpty)
     )
 
     print("Total data size: ")
