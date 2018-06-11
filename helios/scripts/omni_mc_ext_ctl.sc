@@ -112,9 +112,13 @@ def main(
     val start = (1.0 - image_magic_ratio)*image_sizes/2
     val patch_size = image_sizes*image_magic_ratio
 
-    image.copy.scaleTo(s512, s512).subimage(
-      start.toInt, start.toInt,
-      patch_size.toInt, patch_size.toInt)
+    val im_copy = if(image.dimensions._1 != s512) {
+      image.copy.scaleTo(s512, s512)
+    } else {
+      image.copy
+    }
+
+    im_copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
       .scale(0.5)
       .filter(GrayscaleFilter)
 
