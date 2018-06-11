@@ -63,7 +63,7 @@ def main(
   test_year: Int                = 2003,
   start_year: Int               = 2001,
   end_year: Int                 = 2006,
-  image_sources: Seq[SOHO]       = Seq(SOHO(MDIMAG, s512), SOHO(EIT171, s512)),
+  image_sources: Seq[SOHO]      = Seq(SOHO(MDIMAG, s512), SOHO(EIT171, s512)),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
@@ -112,13 +112,13 @@ def main(
     val start = (1.0 - image_magic_ratio)*image_sizes/2
     val patch_size = image_sizes*image_magic_ratio
 
-    val im_copy = if(image.dimensions._1 != s512) {
+    /*val im_copy = if(image.dimensions._1 != s512) {
       image.copy.scaleTo(s512, s512)
     } else {
       image.copy
-    }
+    }*/
 
-    im_copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
+    image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
       .scale(0.5)
       .filter(GrayscaleFilter)
 
