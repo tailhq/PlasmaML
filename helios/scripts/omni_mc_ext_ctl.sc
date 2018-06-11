@@ -139,7 +139,8 @@ def main(
       .mapValues(_.map(_._1))
       .toStream.par
       .map(c => (c._1, median(c._2).toByte))
-      .toArray.map(_._2)
+      .toArray.sortBy(_._1)
+      .map(_._2)
   })
 
   val summary_dir_prefix = "swtl_"+image_sources.map(s => s.instrument+"_"+s.size).mkString("_")
