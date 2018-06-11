@@ -8,11 +8,44 @@ import io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.core.WeightedTimeSeriesLoss
 import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
+import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
+import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Resolutions._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
+import scala.util.Random
+
+
+def median(list: Seq[Byte]): Double = {
+  val random: (Int) => Int = Random.nextInt
+
+  def medianK(list_sample: Seq[Byte], k: Int, pivot: Byte): Double = {
+    val split_list = list_sample.partition(_ < pivot)
+    val s = split_list._1.length
+
+    if(s == k) {
+      pivot
+    } else if (s == 0 && list_sample.sum == pivot * list_sample.length) {
+      pivot
+    } else if(s < k) {
+      medianK(split_list._2, k - s,
+        split_list._2(random(split_list._2.length)))
+    } else {
+      medianK(split_list._1, k,
+        split_list._1(random(split_list._1.length)))
+    }
+  }
+
+  if(list.length % 2 == 0) {
+    val medA = medianK(list, list.length/2, list(random(list.length)))
+    val medB = medianK(list, list.length/2 - 1, list(random(list.length)))
+    (medA + medB)/2.0
+  } else {
+    medianK(list, list.length/2, list(random(list.length)))
+  }
+}
 
 def get_ffstack_properties(neuron_counts: Seq[Int], ff_index: Int): (Seq[Shape], Seq[String], Seq[String]) = {
 
@@ -30,7 +63,7 @@ def main(
   test_year: Int                = 2003,
   start_year: Int               = 2001,
   end_year: Int                 = 2006,
-  image_source: SOHO            = SOHO(SOHOData.Instruments.MDIMAG, 512),
+  image_sources: Seq[SOHO]       = Seq(SOHO(MDIMAG, s512), SOHO(EIT171, s512)),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
@@ -52,8 +85,8 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni_ext(
-    year_start = start_year, year_end = end_year, image_source,
+  val data           = helios.generate_data_mc_omni_ext(
+    year_start = start_year, year_end = end_year, image_sources,
     deltaT = time_horizon, history = time_history)
 
   println("Starting data set created.")
@@ -64,14 +97,14 @@ def main(
 
   val test_end       = new DateTime(test_year, 12, 31, 23, 59)
 
-  val tt_partition   = (p: (DateTime, (Path, (Seq[Double], Seq[Double])))) =>
+  val tt_partition   = (p: helios.MC_PATTERN_EXT) =>
     if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._2.max >= sw_threshold) false
     else true
 
   val dt = DateTime.now()
 
 
-  val image_sizes = image_source.size
+  val image_sizes = image_sources.size
 
   val crop_solar_image = DataPipe((image: Image) => {
 
@@ -79,16 +112,34 @@ def main(
     val start = (1.0 - image_magic_ratio)*image_sizes/2
     val patch_size = image_sizes*image_magic_ratio
 
-    image.copy.subimage(
+    val im_copy = if(image.dimensions._1 != s512) {
+      image.copy.resizeTo(s512, s512)
+    } else {
+      image.copy
+    }
+
+    im_copy.subimage(
       start.toInt, start.toInt,
       patch_size.toInt, patch_size.toInt)
       .scale(0.5)
       .filter(GrayscaleFilter)
+
   })
 
-  val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
+  val images_to_byte = DataPipe((is: Seq[Image]) => {
 
-  val summary_dir_prefix = "swtl_"+image_source.instrument+"_"+image_source.size
+    val num_pixels = is.head.dimensions._1*is.head.dimensions._2
+
+    val im_byte_coll = is.map(_.argb.map(_.last.toByte))
+
+    (0 until num_pixels).map(pixel_index => {
+      val pixel_sample_for_index = im_byte_coll.map(_(pixel_index))
+      median(pixel_sample_for_index.toStream).toByte
+    }).toArray
+
+  })
+
+  val summary_dir_prefix = "swtl_"+image_sources.map(s => s.instrument+"_"+s.size).mkString("_")
 
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
@@ -113,7 +164,7 @@ def main(
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = 1)(
+        size = 2, num_channels_input = image_sources.length)(
         start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = false,
         keep_prob = 0.6f) >>
@@ -167,11 +218,11 @@ def main(
       layer_shapes_conv ++ layer_shapes_hist ++ layer_shapes_fc,
       reg)
 
-  helios.run_experiment_omni_ext(
+  helios.run_experiment_mc_omni_ext(
+    image_sources,
     data, tt_partition, resample = re,
-    preprocess_image = crop_solar_image,
-    image_to_bytearr = image_to_byte,
-    num_channels_image = 1)(
+    image_sources.map(s => (s, crop_solar_image)).toMap,
+    images_to_byte)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
     lossFunc = loss_func,

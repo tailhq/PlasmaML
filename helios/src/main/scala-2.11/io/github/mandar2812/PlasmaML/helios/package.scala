@@ -32,14 +32,15 @@ import spire.math.UByte
   * */
 package object helios {
 
+  type PATTERN                     = (DateTime, (Path, Seq[Double]))
+  type MC_PATTERN                  = (DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))
+  type PATTERN_EXT                 = (DateTime, (Path, (Seq[Double], Seq[Double])))
+  type MC_PATTERN_EXT              = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
 
-  type HELIOS_OMNI_DATA        = Stream[(DateTime, (Path, Seq[Double]))]
-  type HELIOS_MC_OMNI_DATA     = Stream[(DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))]
-
-  type PATTERN                 = (DateTime, (Path, (Seq[Double], Seq[Double])))
-  type MC_PATTERN              = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
-  type HELIOS_OMNI_DATA_EXT    = Stream[PATTERN]
-  type HELIOS_MC_OMNI_DATA_EXT = Stream[MC_PATTERN]
+  type HELIOS_OMNI_DATA        = Stream[PATTERN]
+  type HELIOS_MC_OMNI_DATA     = Stream[PATTERN_EXT]
+  type HELIOS_OMNI_DATA_EXT    = Stream[PATTERN_EXT]
+  type HELIOS_MC_OMNI_DATA_EXT = Stream[MC_PATTERN_EXT]
 
   object learn {
 
@@ -578,8 +579,8 @@ package object helios {
     *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
-    collated_data: Iterable[(DateTime, (Path, Seq[Double]))],
-    tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
+    collated_data: Iterable[PATTERN],
+    tt_partition: PATTERN => Boolean,
     image_process: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
     image_to_bytes: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     resample: Boolean = false): HeliosDataSet = {
@@ -713,8 +714,8 @@ package object helios {
     *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
-    collated_data: Iterable[PATTERN],
-    tt_partition: PATTERN => Boolean,
+    collated_data: Iterable[PATTERN_EXT],
+    tt_partition: PATTERN_EXT => Boolean,
     image_process: DataPipe[Image, Image],
     image_to_bytes: DataPipe[Image, Array[Byte]],
     num_image_channels: Int,
@@ -823,8 +824,8 @@ package object helios {
 
   def create_helios_data_set(
     image_sources: Seq[SOHO],
-    collated_data: Iterable[MC_PATTERN],
-    tt_partition: MC_PATTERN => Boolean,
+    collated_data: Iterable[MC_PATTERN_EXT],
+    tt_partition: MC_PATTERN_EXT => Boolean,
     image_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
     resample: Boolean): AbstractDataSet[(Tensor, Tensor), Tensor] = {
@@ -889,7 +890,7 @@ package object helios {
     } else train_set
 
 
-    def split_features_and_labels(coll: Stream[MC_PATTERN])
+    def split_features_and_labels(coll: Stream[MC_PATTERN_EXT])
     : (Iterable[(Array[Array[Byte]], Seq[Double])], Iterable[Seq[Double]]) = coll.map(entry => {
 
       val (_, (images_map, (data_history, data_label))) = entry
@@ -1254,6 +1255,58 @@ package object helios {
 
 
   /**
+    * Generate a starting data set for OMNI/L1 prediction tasks.
+    * This method makes the assumption that the data is stored
+    * in a directory ~/data_repo/helios in a standard directory tree
+    * generated after executing the [[data.SOHOLoader.bulk_download()]] method.
+    *
+    * @param image_sources A sequence of [[SOHO]] data source to extract from.
+    * @param year_start The starting time of the data
+    * @param year_end The end time of the data.
+    * */
+  def generate_data_mc_omni_ext(
+    year_start: Int = 2001, year_end: Int = 2005,
+    image_sources: Seq[SOHO] = Seq(SOHO(SOHOData.Instruments.MDIMAG, 512)),
+    omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
+    history: Int = 8,
+    deltaT: (Int, Int) = (18, 56)): HELIOS_MC_OMNI_DATA_EXT = {
+
+    /*
+     * Mind your surroundings!
+     * */
+    val os_name = System.getProperty("os.name")
+
+    println("OS: "+os_name)
+
+    val user_name = System.getProperty("user.name")
+
+    println("Running as user: "+user_name)
+
+    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+
+    require(year_end > year_start, "Data set must encompass more than one year")
+
+    print("Looking for data in directory ")
+    val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
+    pprint.pprintln(data_dir)
+
+    val soho_dir = data_dir/'soho
+
+    println("Preparing data-set as a Stream ")
+    print("Start: ")
+    pprint.pprintln(year_start)
+    print("End: ")
+    pprint.pprintln(year_end)
+    println()
+
+    helios.join_omni(
+      new YearMonth(year_start, 1),
+      new YearMonth(year_end, 12),
+      omni_source, pwd/"data", history, deltaT,
+      image_sources, soho_dir, true)
+  }
+
+  /**
     * Train a Neural architecture on a
     * processed data set.
     *
@@ -1603,7 +1656,7 @@ package object helios {
     * */
   def run_experiment_omni_ext(
     collated_data: HELIOS_OMNI_DATA_EXT,
-    tt_partition: ((DateTime, (Path, (Seq[Double], Seq[Double])))) => Boolean,
+    tt_partition: PATTERN_EXT => Boolean,
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
     image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
@@ -1745,6 +1798,178 @@ package object helios {
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
 
+
+  /**
+    * Train and test a CNN based solar wind prediction architecture.
+    *
+    * @param collated_data Data set of temporally joined
+    *                      image paths and GOES X-Ray fluxes.
+    *                      This is generally the output after
+    *                      executing [[collate_goes_data_range()]]
+    *                      with the relevant parameters.
+    * @param tt_partition A function which splits the data set
+    *                     into train and test sections, based on
+    *                     any Boolean function. If the function
+    *                     returns true then the instance falls into
+    *                     the training set else the test set
+    * @param resample If set to true, the training data is resampled
+    *                 to balance the occurrence of high flux and low
+    *                 flux events.
+    *
+    * @param tempdir A working directory where the results will be
+    *                archived, defaults to user_home_dir/tmp. The model
+    *                checkpoints and other results will be stored inside
+    *                another directory created in tempdir.
+    * @param results_id The suffix added the results/checkpoints directory name.
+    * @param max_iterations The maximum number of iterations that the
+    *                       network must be trained for.
+    * @param arch The neural architecture to train.
+    *
+    * */
+  def run_experiment_mc_omni_ext(
+    image_sources: Seq[SOHO],
+    collated_data: HELIOS_MC_OMNI_DATA_EXT,
+    tt_partition: MC_PATTERN_EXT => Boolean,
+    resample: Boolean = false,
+    image_pre_process: Map[SOHO, DataPipe[Image, Image]],
+    images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
+    num_channels_image: Int = 4)(
+    results_id: String,
+    max_iterations: Int,
+    tempdir: Path = home/"tmp",
+    arch: Layer[(Output, Output), (Output, Output)],
+    lossFunc: Layer[((Output, Output), Output), Output],
+    mo_flag: Boolean = true,
+    prob_timelags: Boolean = true,
+    optimizer: Optimizer = tf.train.AdaDelta(0.001),
+    miniBatchSize: Int = 16) = {
+
+    val resDirName = "helios_omni_"+results_id
+
+    val tf_summary_dir = tempdir/resDirName
+
+    val checkpoints =
+      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
+      else Seq()
+
+    val checkpoint_max =
+      if(checkpoints.isEmpty) 0
+      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
+
+    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
+
+
+    /*
+    * After data has been joined/collated,
+    * start loading it into tensors
+    *
+    * */
+    val dataSet: AbstractDataSet[(Tensor, Tensor), Tensor] = helios.create_helios_data_set(
+      image_sources,
+      collated_data,
+      tt_partition,
+      image_pre_process,
+      images_to_bytes,
+      resample)
+
+
+    val (norm_tf_data, scalers):
+      (AbstractDataSet[(Tensor, Tensor), Tensor], (ReversibleScaler[(Tensor, Tensor)], GaussianScalerTF)) =
+      scale_helios_dataset_ext(dataSet)
+
+    val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData._1)
+    val trainHistories = tf.data.TensorSlicesDataset(norm_tf_data.trainData._2)
+
+    val trainLabels = tf.data.TensorSlicesDataset(norm_tf_data.trainLabels)
+
+    val trainData =
+      trainImages.zip(trainHistories).zip(trainLabels)
+        .repeat()
+        .shuffle(10000)
+        .batch(miniBatchSize)
+        .prefetch(10)
+
+    /*
+    * Start building tensorflow network/graph
+    * */
+    println("Building the regression model.")
+
+    val input = tf.learn.Input[
+      (Tensor, Tensor), (Output, Output),
+      (DataType.Aux[UByte], DataType.Aux[Double]),
+      (DataType, DataType), (Shape, Shape)](
+      (UINT8, FLOAT64),
+      (
+        Shape(
+          -1,
+          dataSet.trainData._1.shape(1),
+          dataSet.trainData._1.shape(2),
+          dataSet.trainData._1.shape(3)),
+        Shape(
+          -1,
+          dataSet.trainData._2.shape(1))
+      )
+    )
+
+    val causal_horizon = collated_data.head._2._2._2.length
+
+    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, causal_horizon))
+
+    val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
+
+    val loss = lossFunc >>
+      tf.learn.ScalarSummary("Loss", "ModelLoss")
+
+    val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+
+    //Now create the model
+    val (model, estimator) = dtflearn.build_tf_model(
+      arch, input, trainInput, trainingInputLayer,
+      loss, optimizer, summariesDir,
+      dtflearn.max_iter_stop(iterations))(
+      trainData)
+
+    val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
+
+    val index_times = Tensor(
+      (0 until causal_horizon).map(_.toDouble)
+    ).reshape(
+      Shape(causal_horizon)
+    )
+
+
+    val pred_time_lags_test = if(prob_timelags) {
+      val unsc_probs = predictions._2
+
+      unsc_probs.topK(1)._2.reshape(Shape(dataSet.nTest)).cast(FLOAT64)
+
+    } else predictions._2
+
+
+    val pred_targets: Tensor = if (mo_flag) {
+      val all_preds =
+        if (prob_timelags) scalers._2.i(predictions._1)
+        else scalers._2.i(predictions._1)
+
+      val repeated_times = tf.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
+
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+    } else {
+      scalers._2(0).i(predictions._1)
+    }
+
+    val actual_targets = (0 until dataSet.nTest).map(n => {
+      val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+      dataSet.testLabels(n, time_lag).scalar.asInstanceOf[Double]
+    })
+
+
+    val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+    (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
+  }
 
   def run_experiment_omni_dynamic_time_scales(
     collated_data: Stream[(DateTime, (Path, Seq[Double]))],
