@@ -104,7 +104,7 @@ def main(
   val dt = DateTime.now()
 
 
-  val image_sizes = image_sources.size
+  val image_sizes = image_sources.head.size
 
   val crop_solar_image = DataPipe((image: Image) => {
 
