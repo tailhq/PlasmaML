@@ -4,6 +4,7 @@ import com.sksamuel.scrimage._
 import com.sksamuel.scrimage.filter._
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
+import io.github.mandar2812.dynaml.tensorflow.utils.dtfutils
 import io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.data.SOHO
@@ -45,17 +46,6 @@ def median(list: Seq[Byte]): Double = {
     medianK(list, list.length/2, list(random(list.length)))
   }
 }
-
-def get_ffstack_properties(neuron_counts: Seq[Int], ff_index: Int): (Seq[Shape], Seq[String], Seq[String]) = {
-
-  val layer_parameter_names = (ff_index until ff_index + neuron_counts.length - 1).map(i => "Linear_"+i+"/Weights")
-  val layer_shapes          = neuron_counts.sliding(2).toSeq.map(c => Shape(c.head, c.last))
-  val layer_datatypes       = Seq.fill(layer_shapes.length)("FLOAT64")
-
-
-  (layer_shapes, layer_parameter_names, layer_datatypes)
-}
-
 
 @main
 def main(
@@ -124,15 +114,6 @@ def main(
   })
 
   val images_to_byte = DataPipe((is: Seq[Image]) => {
-
-    //val num_pixels = is.head.dimensions._1*is.head.dimensions._2
-
-    //val im_byte_coll = is.map(_.argb.map(_.last.toByte))
-
-    /*(0 until num_pixels).map(pixel_index => {
-      val pixel_sample_for_index = im_byte_coll.map(_(pixel_index))
-      median(pixel_sample_for_index.toStream).toByte
-    }).toArray*/
 
     /*im_byte_coll.flatMap(_.zipWithIndex)
       .groupBy(_._2)
@@ -203,13 +184,13 @@ def main(
     output_mapping
 
   val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =
-    get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv)
 
   val (layer_shapes_hist, layer_parameter_names_hist, layer_datatypes_hist) =
-    get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist)
 
   val (layer_shapes_fc, layer_parameter_names_fc, layer_datatypes_fc) =
-    get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc)
 
 
   val loss_func = helios.learn.cdt_loss(
