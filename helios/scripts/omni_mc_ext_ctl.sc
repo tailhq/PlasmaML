@@ -11,6 +11,7 @@ import io.github.mandar2812.PlasmaML.helios.data.SOHO
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Resolutions._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.ops.NN.SamePadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -50,21 +51,21 @@ def median(list: Seq[Byte]): Double = {
 @main
 def main(
   test_year: Int                = 2003,
-  start_year: Int               = 2001,
-  end_year: Int                 = 2006,
+  start_year: Int               = 2000,
+  end_year: Int                 = 2007,
   image_sources: Seq[SOHO]      = Seq(SOHO(MDIMAG, s512), SOHO(EIT171, s512)),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
-  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128),
-  hist_ff_stack_sizes: Seq[Int] = Seq(20, 16),
-  ff_stack: Seq[Int]            = Seq(80, 64),
+  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64),
+  hist_ff_stack_sizes: Seq[Int] = Seq(16, 12),
+  ff_stack: Seq[Int]            = Seq(64, 32),
   opt: Optimizer                = tf.train.AdaDelta(0.01),
-  reg: Double                   = 0.001,
-  prior_wt: Double              = 0.85,
-  error_wt: Double              = 1.0,
-  temp: Double                  = 0.75,
-  maxIt: Int                    = 200000,
+  reg: Double                   = 0.0001,
+  prior_wt: Double              = 1.0,
+  error_wt: Double              = 4.0,
+  temp: Double                  = 2.5,
+  stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
   miniBatch: Int                = 16,
   tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
   resFile: String               = "mdi_rbfloss_results.csv") = {
@@ -140,20 +141,17 @@ def main(
     data.head._2._2._2.length)
 
 
-  val ff_stack_sizes      = ff_stack ++ Seq(num_pred_dims)
-
-  val ff_index_conv = 1
-
-  val ff_index_hist = ff_index_conv + conv_ff_stack_sizes.length
-  val ff_index_fc   = ff_index_hist + hist_ff_stack_sizes.length
+  val ff_stack_sizes = ff_stack ++ Seq(num_pred_dims)
+  val ff_index_conv  = 1
+  val ff_index_hist  = ff_index_conv + conv_ff_stack_sizes.length
+  val ff_index_fc    = ff_index_hist + hist_ff_stack_sizes.length
 
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
         size = 2, num_channels_input = image_sources.length)(
         start_num_bits = 5, end_num_bits = 3)(
-        relu_param = 0.1f, dropout = false,
-        keep_prob = 0.6f) >>
+        relu_param = 0.1f, dropout = false) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
@@ -209,7 +207,8 @@ def main(
     data, tt_partition, resample = re,
     image_sources.map(s => (s, crop_solar_image)).toMap,
     images_to_byte)(
-    summary_dir, maxIt, tmpdir,
+    summary_dir,
+    stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
     optimizer = opt)

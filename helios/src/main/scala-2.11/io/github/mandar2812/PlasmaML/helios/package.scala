@@ -15,6 +15,7 @@ import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import org.platanios.tensorflow.api._
+import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
@@ -1825,22 +1826,22 @@ package object helios {
     image_pre_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
     num_channels_image: Int = 4)(
-    results_id: String,
-    max_iterations: Int,
-    tempdir: Path = home/"tmp",
-    arch: Layer[(Output, Output), (Output, Output)],
-    lossFunc: Layer[((Output, Output), Output), Output],
-    mo_flag: Boolean = true,
-    prob_timelags: Boolean = true,
-    optimizer: Optimizer = tf.train.AdaDelta(0.001),
-    miniBatchSize: Int = 16,
-    inMemoryModel: Boolean = false) = {
+      results_id: String,
+      stop_criteria: StopCriteria = dtflearn.max_iter_stop(5000),
+      tempdir: Path = home/"tmp",
+      arch: Layer[(Output, Output), (Output, Output)],
+      lossFunc: Layer[((Output, Output), Output), Output],
+      mo_flag: Boolean = true,
+      prob_timelags: Boolean = true,
+      optimizer: Optimizer = tf.train.AdaDelta(0.001),
+      miniBatchSize: Int = 16,
+      inMemoryModel: Boolean = false) = {
 
     val resDirName = "helios_omni_"+results_id
 
     val tf_summary_dir = tempdir/resDirName
 
-    val checkpoints =
+    /*val checkpoints =
       if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
       else Seq()
 
@@ -1849,7 +1850,7 @@ package object helios {
       else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
 
     val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
-
+*/
 
     /*
     * After data has been joined/collated,
@@ -1917,8 +1918,7 @@ package object helios {
     //Now create the model
     val (model, estimator) = dtflearn.build_tf_model(
       arch, input, trainInput, trainingInputLayer,
-      loss, optimizer, summariesDir,
-      dtflearn.max_iter_stop(iterations))(
+      loss, optimizer, summariesDir, stop_criteria)(
       trainData, inMemory = inMemoryModel)
 
     val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
