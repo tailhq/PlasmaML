@@ -1844,7 +1844,8 @@ package object helios {
     mo_flag: Boolean = true,
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
-    miniBatchSize: Int = 16) = {
+    miniBatchSize: Int = 16,
+    inMemoryModel: Boolean = false) = {
 
     val resDirName = "helios_omni_"+results_id
 
@@ -1929,7 +1930,7 @@ package object helios {
       arch, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
       dtflearn.max_iter_stop(iterations))(
-      trainData)
+      trainData, inMemory = inMemoryModel)
 
     val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
 

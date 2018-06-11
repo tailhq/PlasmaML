@@ -6,8 +6,7 @@ import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.PlasmaML.helios
-import io.github.mandar2812.PlasmaML.helios.core.WeightedTimeSeriesLoss
-import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
+import io.github.mandar2812.PlasmaML.helios.data.SOHO
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Resolutions._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
@@ -112,13 +111,13 @@ def main(
     val start = (1.0 - image_magic_ratio)*image_sizes/2
     val patch_size = image_sizes*image_magic_ratio
 
-    /*val im_copy = if(image.dimensions._1 != s512) {
+    val im_copy = if(image.dimensions._1 != s512) {
       image.copy.scaleTo(s512, s512)
     } else {
       image.copy
-    }*/
+    }
 
-    image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
+    im_copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
       .scale(0.5)
       .filter(GrayscaleFilter)
 
@@ -126,15 +125,21 @@ def main(
 
   val images_to_byte = DataPipe((is: Seq[Image]) => {
 
-    val num_pixels = is.head.dimensions._1*is.head.dimensions._2
+    //val num_pixels = is.head.dimensions._1*is.head.dimensions._2
 
     val im_byte_coll = is.map(_.argb.map(_.last.toByte))
 
-    (0 until num_pixels).map(pixel_index => {
+    /*(0 until num_pixels).map(pixel_index => {
       val pixel_sample_for_index = im_byte_coll.map(_(pixel_index))
       median(pixel_sample_for_index.toStream).toByte
-    }).toArray
+    }).toArray*/
 
+    im_byte_coll.flatMap(_.zipWithIndex)
+      .groupBy(_._2)
+      .mapValues(_.map(_._1))
+      .toStream.par
+      .map(c => (c._1, median(c._2).toByte))
+      .toArray.map(_._2)
   })
 
   val summary_dir_prefix = "swtl_"+image_sources.map(s => s.instrument+"_"+s.size).mkString("_")
