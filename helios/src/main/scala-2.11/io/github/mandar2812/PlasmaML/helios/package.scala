@@ -1813,8 +1813,7 @@ package object helios {
     *                checkpoints and other results will be stored inside
     *                another directory created in tempdir.
     * @param results_id The suffix added the results/checkpoints directory name.
-    * @param max_iterations The maximum number of iterations that the
-    *                       network must be trained for.
+    * @param stop_criteria Criteria to stop training.
     * @param arch The neural architecture to train.
     *
     * */
