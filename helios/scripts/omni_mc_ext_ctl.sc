@@ -158,7 +158,7 @@ def main(
         (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
         conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
-      dtflearn.dctrnn("DCTRNN", conv_ff_stack_sizes.last, 10) >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 10, conv_ff_stack_sizes.last) >>
       tf.learn.Flatten("Flatten_4")
   }
 

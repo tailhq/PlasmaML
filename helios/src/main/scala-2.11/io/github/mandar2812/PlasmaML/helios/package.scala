@@ -14,6 +14,7 @@ import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
+import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
@@ -44,6 +45,8 @@ package object helios {
   type HELIOS_MC_OMNI_DATA_EXT = Stream[MC_PATTERN_EXT]
 
   object learn {
+
+    val upwind_1d: UpwindTF.type                               = UpwindTF
 
     /*
     * NN Architectures
