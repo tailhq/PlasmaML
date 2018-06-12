@@ -57,9 +57,9 @@ def main(
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
-  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128),
+  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64, 32),
   hist_ff_stack_sizes: Seq[Int] = Seq(20, 16),
-  ff_stack: Seq[Int]            = Seq(80, 64),
+  ff_stack: Seq[Int]            = Seq(128, 64),
   opt: Optimizer                = tf.train.AdaDelta(0.01),
   reg: Double                   = 0.0001,
   prior_wt: Double              = 1.0,
@@ -157,7 +157,9 @@ def main(
       dtflearn.feedforward_stack(
         (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
         conv_ff_stack_sizes,
-        starting_index = ff_index_conv)
+        starting_index = ff_index_conv) >>
+      dtflearn.dctrnn("DCTRNN", conv_ff_stack_sizes.last, 10) >>
+      tf.learn.Flatten("Flatten_4")
   }
 
   val omni_history_stack = {
