@@ -60,7 +60,10 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+    (i: Int) =>
+      if((i%2 == 0 && num_neurons.length%2 == 0) || (i%2 == 1 && num_neurons.length%2 == 1)) dtflearn.Phi("Act_"+i)
+      else tf.learn.ReLU("Act_"+i, 0.01f),
+    FLOAT64)(
     net_layer_sizes.tail) >> output_mapping
 
 

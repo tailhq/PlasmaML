@@ -386,7 +386,7 @@ def run_exp(
       val (model, estimator) = dtflearn.build_tf_model(
         architecture, input, trainInput, trainingInputLayer,
         loss, optimizer, summariesDir,
-        dtflearn.max_iter_stop(iterations))(
+        dtflearn.rel_loss_change_stop(0.005, iterations))(
         training_data)
 
       val predictions: (Tensor, Tensor)        = estimator.infer(() => tf_dataset.testData)
