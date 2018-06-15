@@ -53,9 +53,9 @@ def main(
   test_year: Int                = 2003,
   start_year: Int               = 2000,
   end_year: Int                 = 2007,
-  image_sources: Seq[SOHO]      = Seq(SOHO(MDIMAG, s512), SOHO(EIT171, s512)),
+  image_sources: Seq[SOHO]      = Seq(SOHO(MDIMAG, s512), SOHO(EIT195, s512)),
   re: Boolean                   = true,
-  time_horizon: (Int, Int)      = (18, 56),
+  time_horizon: (Int, Int)      = (24, 72),
   time_history: Int             = 8,
   conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64, 32),
   hist_ff_stack_sizes: Seq[Int] = Seq(20, 16),
@@ -141,27 +141,57 @@ def main(
     data.head._2._2._2.length)
 
 
+  /*
+  * The following code segment defines the
+  * dimensions of the architecture components.
+  * */
   val ff_stack_sizes = ff_stack ++ Seq(num_pred_dims)
   val ff_index_conv  = 1
   val ff_index_hist  = ff_index_conv + conv_ff_stack_sizes.length
   val ff_index_fc    = ff_index_hist + hist_ff_stack_sizes.length
 
+
+  /*
+  * =========
+  * Module A
+  * =========
+  *
+  * Segment of the architecture which
+  * acts on the image pixels.
+  *
+  * Consists of a CNN stack which
+  * feeds into a feed-forward stack
+  * followed by an Upwind 1d propagation
+  * model.
+  * */
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = image_sources.length)(
-        start_num_bits = 5, end_num_bits = 3)(
-        relu_param = 0.1f, dropout = false) >>
+      dtflearn.conv2d_unit(Shape(5, 5, image_sources.length, 64), dropout = false)(0) >>
+      tf.learn.MaxPool("MaxPool_0", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      dtflearn.conv2d_unit(Shape(3, 3, 64, 32), dropout = false)(1) >>
+      tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 32, 16), dropout = false)(2) >>
+      tf.learn.MaxPool("MaxPool_2", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 16, 8), dropout = false)(3) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
-        (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
+        (i: Int) => /*if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else */dtflearn.Phi("Act_"+i), FLOAT64)(
         conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
       helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 10, conv_ff_stack_sizes.last) >>
       tf.learn.Flatten("Flatten_4")
   }
 
+  /*
+  * =========
+  * Module B
+  * =========
+  *
+  * The following stack acts on the time history
+  * of the solar wind. It consists of a sequence
+  * of feed-forward layers.
+  * */
   val omni_history_stack = {
     tf.learn.Cast("Input/Cast", FLOAT64) >>
       dtflearn.feedforward_stack(
@@ -171,8 +201,17 @@ def main(
         starting_index = ff_index_hist)
   }
 
+  /*
+  * =========
+  * Module C
+  * =========
+  *
+  * The component of the prediction architecture which acts
+  * on the combination of the features produced by
+  * modules A and B
+  * */
   val fc_stack = dtflearn.feedforward_stack(
-    (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i),
+    (i: Int) => /*if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else*/ dtflearn.Phi("Act_"+i),
     FLOAT64)(
     ff_stack_sizes,
     starting_index = ff_index_fc)

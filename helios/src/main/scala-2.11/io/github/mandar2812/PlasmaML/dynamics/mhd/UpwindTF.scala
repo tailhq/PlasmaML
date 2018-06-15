@@ -12,7 +12,7 @@ case class UpwindTF(
   nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer())
   extends Layer[Output, Output](name) {
 
-  override val layerType: String = "Upwind1D"
+  override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR, nTheta:$nTheta]"
 
   /**
     * The Carrington longitude lies
