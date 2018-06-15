@@ -21,7 +21,7 @@ def main(
   iterations: Int               = 150000,
   miniBatch: Int                = 32,
   optimizer: Optimizer          = tf.train.AdaDelta(0.01),
-  sum_dir_prefix: String        = "const_a",
+  sum_dir_prefix: String        = "const_v",
   reg: Double                   = 0.01,
   p: Double                     = 1.0,
   time_scale: Double            = 1.0,
@@ -38,25 +38,18 @@ def main(
 
   //Output computation
   val beta = 100f
-  val compute_output = DataPipe(
-    (v: Tensor) =>
-      (
-        v.square.mean().scalar.asInstanceOf[Float]*beta*0.5f/d,
-        beta*0.05f
-      )
-  )
+
 
   //Time Lag Computation
-  // 1/2*a*t^2 + u*t - s = 0
-  // t = (-u + sqrt(u*u + 2as))/a
-  val distance = beta*10
+  // distance/velocity
+  //val distance = beta*10
+  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
+    (v: Tensor) => {
 
-  val compute_time_lag = DataPipe((va: (Float, Float)) => {
-    val (v, a) = va
-    val dt = (math.sqrt(v*v + 2*a*distance).toFloat - v)/a
-    val vf = math.sqrt(v*v + 2f*a*distance).toFloat
-    (dt, vf + scala.util.Random.nextGaussian().toFloat)
-  })
+      val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f
+
+      (math.log(1 + math.exp((out - 300f)/75f)).toFloat, out + scala.util.Random.nextGaussian().toFloat)
+    })
 
   val num_pred_dims = timelagutils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
@@ -79,19 +72,20 @@ def main(
     prior_wt, prior_type,
     temp, error_wt)
 
-  val loss     = lossFunc >>
+  val loss = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelagutils.TLDATA = timelagutils.generate_data(
-    d, n, sliding_window, noise, noiserot, alpha,
-    compute_output > compute_time_lag)
+    d, n, sliding_window,
+    noise, noiserot, alpha,
+    compute_output)
 
   if(train_test_separate) {
     val dataset_test: timelagutils.TLDATA = timelagutils.generate_data(
       d, n, sliding_window,
       noise, noiserot, alpha,
-      compute_output > compute_time_lag)
+      compute_output)
 
     timelagutils.run_exp2(
       (dataset, dataset_test), iterations, optimizer,
