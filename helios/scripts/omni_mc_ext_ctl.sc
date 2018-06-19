@@ -12,7 +12,7 @@ import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Resolutions._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 import org.platanios.tensorflow.api.learn.StopCriteria
-import org.platanios.tensorflow.api.ops.NN.SamePadding
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
@@ -167,13 +167,13 @@ def main(
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_unit(Shape(5, 5, image_sources.length, 64), dropout = false)(0) >>
-      tf.learn.MaxPool("MaxPool_0", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_0", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       dtflearn.conv2d_unit(Shape(3, 3, 64, 32), dropout = false)(1) >>
-      tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       dtflearn.conv2d_unit(Shape(2, 2, 32, 16), dropout = false)(2) >>
-      tf.learn.MaxPool("MaxPool_2", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_2", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       dtflearn.conv2d_unit(Shape(2, 2, 16, 8), dropout = false)(3) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
         (i: Int) => /*if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else */dtflearn.Phi("Act_"+i), FLOAT64)(
