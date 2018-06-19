@@ -3,7 +3,6 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
-import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.utils._
 
 import $file.timelagutils
@@ -67,10 +66,7 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) =>
-      if((i%2 == 0 && num_neurons.length%2 == 0) || (i%2 == 1 && num_neurons.length%2 == 1)) dtflearn.Phi("Act_"+i)
-      else tf.learn.ReLU("Act_"+i, 0.01f),
-    FLOAT64)(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     net_layer_sizes.tail) >> output_mapping
 
 
