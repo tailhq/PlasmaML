@@ -181,17 +181,21 @@ def data_splits_to_tensors(sliding_window: Int) =
 
     val features_test  = dtf.stack(test_data.map(_._2._1), axis = 0)
 
+    val labels_tr_flat = training_data.toList.flatMap(_._2._2.toList)
+
     val labels_train = dtf.tensor_f64(
       training_data.length, sliding_window)(
-      training_data.flatMap(_._2._2):_*)
+      labels_tr_flat:_*)
+
+    val labels_te_flat = test_data.toList.flatMap(_._2._2.toList)
 
     val labels_test  = dtf.tensor_f64(
       test_data.length, sliding_window)(
-      test_data.flatMap(_._2._2):_*)
+      labels_te_flat:_*)
 
     val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
-      dtf.tensor_f64(training_data.length)(training_data.map(d => d._2._3.toDouble):_*),
-      dtf.tensor_f64(test_data.length)(test_data.map(d => d._2._3.toDouble):_*))
+      dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*),
+      dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*))
 
 
     //Create a helios data set.
