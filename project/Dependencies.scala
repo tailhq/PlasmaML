@@ -82,6 +82,10 @@ object Dependencies {
     dynamlGroupID % dynamlArtifact % dynaMLVersion)
     .map(_.exclude("org.platanios", "tensorflow_2.11"))
     .map(_.exclude("org.platanios", "tensorflow-data_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-jni_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-examples_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-api_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-horovod_2.11"))
 
   val tf =
     if(packagedTFFlag) "org.platanios" % "tensorflow_2.11" % tfscala_version classifier tensorflow_classifier
