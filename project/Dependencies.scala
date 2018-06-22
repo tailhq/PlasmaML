@@ -6,7 +6,7 @@ object Dependencies {
 
   val scala = "2.11.8"
 
-  val tfscala_version = "0.2.2"
+  val tfscala_version = "0.2.0"
 
   //Set to true if, building with Nvidia GPU support.
   val gpuFlag: Boolean = false
@@ -20,10 +20,12 @@ object Dependencies {
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val latest_dynaml_release = "v1.5.3-beta.3"
+  val dynaml_branch = "tf-0.2.0"
+
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
     if(status == "local") ("io.github.mandar2812", "dynaml_2.11", latest_dynaml_release)
-    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "tf-0.2.0-SNAPSHOT")
+    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", s"$dynaml_branch-SNAPSHOT")
     else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", latest_dynaml_release)
 
   val platform: String = {
