@@ -22,7 +22,7 @@ case class DynamicRBFSWLoss(
 
   override val layerType: String = s"DynamicRBFSW[$size_causal_window]"
 
-  override protected def _forward(input: ((Output, Output), Output), mode: Mode): Output = {
+  override protected def _forward(input: ((Output, Output), Output))(implicit mode: Mode): Output = {
 
     //Obtain section corresponding to velocity predictions
     val preds = input._1._1
@@ -69,7 +69,7 @@ object DynamicRBFSWLoss {
 
       override val layerType: String = s"OutputDynamicRBFSW[$size_causal_window]"
 
-      override protected def _forward(input: Output, mode: Mode): (Output, Output) = {
+      override protected def _forward(input: Output)(implicit mode: Mode): (Output, Output) = {
         (input(::, 0), tf.concatenate(Seq(input(::, 1).sigmoid.multiply(scaling), input(::, 2).exp), axis = 1))
       }
     }

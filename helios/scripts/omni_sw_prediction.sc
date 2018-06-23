@@ -11,7 +11,7 @@ import io.github.mandar2812.PlasmaML.helios.core.CausalDynamicTimeLag
 import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 
-import org.platanios.tensorflow.api.ops.NN.SamePadding
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
@@ -90,7 +90,7 @@ def main(
         relu_param = 0.1f, dropout = true,
         keep_prob = 0.6f) >>
       //dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SamePadding) >>
+      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
         (i: Int) => if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(

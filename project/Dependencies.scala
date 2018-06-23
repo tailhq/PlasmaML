@@ -6,7 +6,7 @@ object Dependencies {
 
   val scala = "2.11.8"
 
-  val tfscala_version = "0.1.1"
+  val tfscala_version = "0.2.0"
 
   //Set to true if, building with Nvidia GPU support.
   val gpuFlag: Boolean = false
@@ -20,10 +20,12 @@ object Dependencies {
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val latest_dynaml_release = "v1.5.3-beta.3"
+  val dynaml_branch = "tf-0.2.0"
+
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
     if(status == "local") ("io.github.mandar2812", "dynaml_2.11", latest_dynaml_release)
-    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "-SNAPSHOT")
+    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", s"$dynaml_branch-SNAPSHOT")
     else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", latest_dynaml_release)
 
   val platform: String = {
@@ -82,6 +84,10 @@ object Dependencies {
     dynamlGroupID % dynamlArtifact % dynaMLVersion)
     .map(_.exclude("org.platanios", "tensorflow_2.11"))
     .map(_.exclude("org.platanios", "tensorflow-data_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-jni_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-examples_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-api_2.11"))
+    .map(_.exclude("org.platanios", "tensorflow-horovod_2.11"))
 
   val tf =
     if(packagedTFFlag) "org.platanios" % "tensorflow_2.11" % tfscala_version classifier tensorflow_classifier

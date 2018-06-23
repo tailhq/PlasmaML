@@ -181,17 +181,21 @@ def data_splits_to_tensors(sliding_window: Int) =
 
     val features_test  = dtf.stack(test_data.map(_._2._1), axis = 0)
 
+    val labels_tr_flat = training_data.toList.flatMap(_._2._2.toList)
+
     val labels_train = dtf.tensor_f64(
       training_data.length, sliding_window)(
-      training_data.flatMap(_._2._2):_*)
+      labels_tr_flat:_*)
+
+    val labels_te_flat = test_data.toList.flatMap(_._2._2.toList)
 
     val labels_test  = dtf.tensor_f64(
       test_data.length, sliding_window)(
-      test_data.flatMap(_._2._2):_*)
+      labels_te_flat:_*)
 
     val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
-      dtf.tensor_f64(training_data.length)(training_data.map(d => d._2._3.toDouble):_*),
-      dtf.tensor_f64(test_data.length)(test_data.map(d => d._2._3.toDouble):_*))
+      dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*),
+      dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*))
 
 
     //Create a helios data set.
@@ -412,11 +416,11 @@ def run_exp(
           if (prob_timelags) scalers._2.i(predictions._1)
           else scalers._2.i(predictions._1)
 
-        val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
+        val repeated_times = tfi.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
 
-        val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+        val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-        all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+        all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
       } else {
         scalers._2(0).i(predictions._1)
       }
@@ -507,11 +511,11 @@ def run_exp(
       if (prob_timelags) scalers._2.i(training_preds._1)
       else scalers._2.i(training_preds._1)
 
-    val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
+    val repeated_times      = tfi.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
 
-    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
   } else {
     scalers._2(0).i(training_preds._1)
   }
@@ -655,11 +659,11 @@ def run_exp2(
           if (prob_timelags) scalers._2.i(predictions._1)
           else scalers._2.i(predictions._1)
 
-        val repeated_times = tf.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
+        val repeated_times = tfi.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
 
-        val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+        val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-        all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+        all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
       } else {
         scalers._2(0).i(predictions._1)
       }
@@ -750,11 +754,11 @@ def run_exp2(
       if (prob_timelags) scalers._2.i(training_preds._1)
       else scalers._2.i(training_preds._1)
 
-    val repeated_times      = tf.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
+    val repeated_times      = tfi.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
 
-    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
   } else {
     scalers._2(0).i(training_preds._1)
   }

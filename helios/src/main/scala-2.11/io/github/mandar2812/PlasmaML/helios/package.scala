@@ -1419,7 +1419,7 @@ package object helios {
 
     //Now create the model
     val (model, estimator) = tf.createWith(graph = Graph()) {
-      val model = tf.learn.Model(
+      val model = tf.learn.Model.supervised(
         input, arch, trainInput, trainingInputLayer,
         loss, optimizer)
 
@@ -1601,11 +1601,11 @@ package object helios {
         if (prob_timelags) scalers._2.i(predictions._1)
         else scalers._2.i(predictions._1)
 
-      val repeated_times = tf.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
+      val repeated_times = tfi.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
 
-      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
     } else {
       scalers._2(0).i(predictions._1)
     }
@@ -1773,11 +1773,11 @@ package object helios {
         if (prob_timelags) scalers._2.i(predictions._1)
         else scalers._2.i(predictions._1)
 
-      val repeated_times = tf.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
+      val repeated_times = tfi.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
 
-      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
     } else {
       scalers._2(0).i(predictions._1)
     }
@@ -1843,16 +1843,6 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
-    /*val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
-      else Seq()
-
-    val checkpoint_max =
-      if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
-
-    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
-*/
 
     /*
     * After data has been joined/collated,
@@ -1945,11 +1935,11 @@ package object helios {
         if (prob_timelags) scalers._2.i(predictions._1)
         else scalers._2.i(predictions._1)
 
-      val repeated_times = tf.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
+      val repeated_times = tfi.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
 
-      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor.evaluate()
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1)).evaluate()
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
     } else {
       scalers._2(0).i(predictions._1)
     }
