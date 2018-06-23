@@ -20,7 +20,7 @@ object Dependencies {
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val latest_dynaml_release = "v1.5.3-beta.3"
-  val dynaml_branch = "tf-0.2.0"
+  val dynaml_branch = "master"
 
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
