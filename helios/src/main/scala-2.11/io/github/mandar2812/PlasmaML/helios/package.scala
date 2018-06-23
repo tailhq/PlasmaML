@@ -1843,16 +1843,6 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
-    /*val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
-      else Seq()
-
-    val checkpoint_max =
-      if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
-
-    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
-*/
 
     /*
     * After data has been joined/collated,
