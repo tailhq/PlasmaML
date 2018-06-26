@@ -91,8 +91,7 @@ def main(
     if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._2.max >= sw_threshold) false
     else true
 
-  val dt = DateTime.now()
-
+  val dt = DateTime.now().withZone(DateTimeZone.forOffsetHours(1))
 
   val image_sizes = image_sources.head.size
 
@@ -176,8 +175,9 @@ def main(
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
-        (i: Int) => /*if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else */dtflearn.Phi("Act_"+i), FLOAT64)(
-        conv_ff_stack_sizes,
+        get_act = i => dtflearn.Phi("Act_"+i),
+        dataType = FLOAT64)(
+        layer_sizes = conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
       helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 10, conv_ff_stack_sizes.last) >>
       tf.learn.Flatten("Flatten_4")
@@ -211,7 +211,7 @@ def main(
   * modules A and B
   * */
   val fc_stack = dtflearn.feedforward_stack(
-    (i: Int) => /*if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else*/ dtflearn.Phi("Act_"+i),
+    (i: Int) => dtflearn.Phi("Act_"+i),
     FLOAT64)(
     ff_stack_sizes,
     starting_index = ff_index_fc)
