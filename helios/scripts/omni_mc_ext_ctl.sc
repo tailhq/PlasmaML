@@ -68,7 +68,8 @@ def main(
   stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
   miniBatch: Int                = 16,
   tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String               = "mdi_rbfloss_results.csv") = {
+  resFile: String               = "mdi_rbfloss_results.csv",
+  inMemory: Boolean = false) = {
 
   //Data with MDI images
 
@@ -81,7 +82,7 @@ def main(
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
-  val sw_threshold = 650.0
+  val sw_threshold = 750.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
 
@@ -165,12 +166,10 @@ def main(
   * */
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_unit(Shape(5, 5, image_sources.length, 64), dropout = false)(0) >>
-      tf.learn.MaxPool("MaxPool_0", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
-      dtflearn.conv2d_unit(Shape(3, 3, 64, 32), dropout = false)(1) >>
+      dtflearn.conv2d_unit(Shape(4, 4, image_sources.length, 64), dropout = false)(0) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 64, 32), dropout = false)(1) >>
       tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       dtflearn.conv2d_unit(Shape(2, 2, 32, 16), dropout = false)(2) >>
-      tf.learn.MaxPool("MaxPool_2", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       dtflearn.conv2d_unit(Shape(2, 2, 16, 8), dropout = false)(3) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
@@ -179,7 +178,7 @@ def main(
         dataType = FLOAT64)(
         layer_sizes = conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
-      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 10, conv_ff_stack_sizes.last) >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 185, conv_ff_stack_sizes.last) >>
       tf.learn.Flatten("Flatten_4")
   }
 
@@ -252,6 +251,7 @@ def main(
     stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
-    optimizer = opt)
+    optimizer = opt,
+    inMemoryModel = inMemory)
 
 }

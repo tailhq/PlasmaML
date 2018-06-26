@@ -1,6 +1,8 @@
 package io.github.mandar2812.PlasmaML.dynamics.mhd
 
 import breeze.linalg.DenseMatrix
+import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.analysis.implicits._
 import io.github.mandar2812.dynaml.tensorflow.dtf
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.Mode
@@ -9,7 +11,7 @@ import org.platanios.tensorflow.api.ops.variables.{Initializer, RandomUniformIni
 
 case class UpwindTF(
   override val name: String, rDomain: (Double, Double),
-  nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer())
+  nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer(0.01, 1.0))
   extends Layer[Output, Output](name) {
 
   override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR, nTheta:$nTheta]"
@@ -37,7 +39,7 @@ case class UpwindTF(
 
     val omega_rot = tf.variable("OmegaRot", input.dataType, Shape(), omegaInit)
 
-    tf.stack(
+    val velocity_profile = tf.stack(
       (1 to nR).scanLeft(input)((x, _) => {
         val invV = x.pow(-1d)
           x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0)).multiply(invV)
@@ -46,6 +48,22 @@ case class UpwindTF(
       }),
       axis = -1)
 
+    val sun_earth_velocity = velocity_profile(::, 0, ---)
+
+    val rH = 50.0
+    val alpha = 0.15
+    val r = tf.constant(
+      dtf.tensor_f64(nR + 1)(
+        (utils.range(rDomain._1, rDomain._2, nR):+rDomain._2):_*
+      ).divide(rH),
+      FLOAT64,
+      Shape(nR + 1))
+
+    val v_acc = tf
+      .stack(Seq.fill(nR + 1)(sun_earth_velocity(::, 0).multiply(alpha)), axis = 1)
+      .multiply(r.multiply(-1.0).exp.multiply(-1.0).add(1.0))
+
+    sun_earth_velocity.add(v_acc)
   }
 }
 
