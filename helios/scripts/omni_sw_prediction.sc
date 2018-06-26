@@ -12,7 +12,7 @@ import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
-import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
+import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
