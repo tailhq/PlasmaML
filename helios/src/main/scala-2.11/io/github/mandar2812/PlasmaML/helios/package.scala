@@ -34,9 +34,30 @@ import spire.math.UByte
   * */
 package object helios {
 
+  /**
+    * A simple data pattern, consisting of
+    * a time stamp, path to an image, and a sequence of numbers
+    * */
   type PATTERN                     = (DateTime, (Path, Seq[Double]))
+
+  /**
+    * A pattern, consisting of
+    * a time stamp, a collection of images from multiple sources,
+    * and a sequence of numbers
+    * */
   type MC_PATTERN                  = (DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))
+
+  /**
+    * A pattern, consisting of
+    * a time stamp, path to an image, a tuple of numeric sequences
+    * */
   type PATTERN_EXT                 = (DateTime, (Path, (Seq[Double], Seq[Double])))
+
+  /**
+    * A pattern, consisting of
+    * a time stamp, a collection of images from multiple sources,
+    * and a tuple of sequence of numbers
+    * */
   type MC_PATTERN_EXT              = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
 
   type HELIOS_OMNI_DATA        = Stream[PATTERN]
@@ -256,9 +277,9 @@ package object helios {
     goes_source: GOES,
     goes_data_path: Path,
     goes_aggregation: Int,
-    goes_reduce_func: (Stream[(DateTime, (Double, Double))]) => (DateTime, (Double, Double)),
+    goes_reduce_func: Stream[(DateTime, (Double, Double))] => (DateTime, (Double, Double)),
     image_source: SOHO, images_path: Path,
-    dt_round_off: (DateTime) => DateTime,
+    dt_round_off: DateTime => DateTime,
     dirTreeCreated: Boolean = true): Stream[(DateTime, (Path, (Double, Double)))] = {
 
     val proc_goes_data = load_fluxes(
@@ -304,9 +325,9 @@ package object helios {
     goes_source: GOES,
     goes_data_path: Path,
     goes_aggregation: Int,
-    goes_reduce_func: (Stream[(DateTime, (Double, Double))]) => (DateTime, (Double, Double)),
+    goes_reduce_func: Stream[(DateTime, (Double, Double))] => (DateTime, (Double, Double)),
     image_source: SOHO, images_path: Path,
-    dt_round_off: (DateTime) => DateTime,
+    dt_round_off: DateTime => DateTime,
     dirTreeCreated: Boolean = true): Stream[(DateTime, (Path, (Double, Double)))] = {
 
     val prepare_data = (ym: YearMonth) => collate_goes_data(ym)(
@@ -371,9 +392,12 @@ package object helios {
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: (DateTime) => DateTime = (d: DateTime) => {
-      new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay, 0, 0)
-    }
+    val image_dt_roundoff: DateTime => DateTime =
+      d => new DateTime(
+        d.getYear, d.getMonthOfYear,
+        d.getDayOfMonth, d.getHourOfDay,
+        0, 0)
+
 
     val image_processing =
       StreamFlatMapPipe(
@@ -1054,7 +1078,7 @@ package object helios {
   def calculate_rmse(
     n: Int, n_part: Int)(
     labels_mean: Tensor, labels_stddev: Tensor)(
-    images: Tensor, labels: Tensor)(infer: (Tensor) => Tensor): Float = {
+    images: Tensor, labels: Tensor)(infer: Tensor => Tensor): Float = {
 
     def accuracy(im: Tensor, lab: Tensor): Float = {
       infer(im)
@@ -1245,7 +1269,7 @@ package object helios {
     helios.join_omni(
       new YearMonth(year_start, 1), new YearMonth(year_end, 12),
       omni_source, pwd/"data", history, deltaT,
-      image_source, soho_dir, true)
+      image_source, soho_dir, image_dir_tree = true)
   }
 
 
@@ -1298,7 +1322,7 @@ package object helios {
       new YearMonth(year_start, 1),
       new YearMonth(year_end, 12),
       omni_source, pwd/"data", history, deltaT,
-      image_sources, soho_dir, true)
+      image_sources, soho_dir, image_dir_tree = true)
   }
 
   /**

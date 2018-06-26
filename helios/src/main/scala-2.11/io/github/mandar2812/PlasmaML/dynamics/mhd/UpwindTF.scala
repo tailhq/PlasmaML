@@ -9,9 +9,23 @@ import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.Layer
 import org.platanios.tensorflow.api.ops.variables.{Initializer, RandomUniformInitializer}
 
+/**
+  * <h3>Upwind Solar Wind Model</h3>
+  *
+  * 1-Dimensional <i>up-wind</i> solar wind
+  * propagation model, implemented as a tensorflow
+  * computational layer.
+  *
+  * @param rDomain The lower and upper limits of the radial domain.
+  * @param nR Number of divisions of the radial domain.
+  * @param nTheta Number of divisions of the longitudinal domain.
+  * @param omegaInit Initialiser for the solar rotation speed.
+  * */
 case class UpwindTF(
-  override val name: String, rDomain: (Double, Double),
-  nR: Int, nTheta: Int, omegaInit: Initializer = RandomUniformInitializer(0.01, 1.0))
+  override val name: String,
+  rDomain: (Double, Double),
+  nR: Int, nTheta: Int,
+  omegaInit: Initializer = RandomUniformInitializer(0.01, 1.0))
   extends Layer[Output, Output](name) {
 
   override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR, nTheta:$nTheta]"
@@ -36,25 +50,32 @@ case class UpwindTF(
       FLOAT64, Shape(nTheta, nTheta),
       "DeltaV")
 
-
+    //Rotational speed of the sun, as a trainable parameter
     val omega_rot = tf.variable("OmegaRot", input.dataType, Shape(), omegaInit)
 
+    //Propagate solar wind, from r = rmin to r = rmax
     val velocity_profile = tf.stack(
       (1 to nR).scanLeft(input)((x, _) => {
+
         val invV = x.pow(-1d)
-          x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0)).multiply(invV)
-            .multiply(omega_rot)
-            .multiply(deltaR/deltaTheta))
+
+        x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0))
+          .multiply(invV)
+          .multiply(omega_rot)
+          .multiply(deltaR/deltaTheta))
       }),
       axis = -1)
 
+    //Extract velocity at carrington longitude = 0
     val sun_earth_velocity = velocity_profile(::, 0, ---)
 
+    //Compute residual acceleration
     val rH = 50.0
     val alpha = 0.15
+
     val r = tf.constant(
       dtf.tensor_f64(nR + 1)(
-        (utils.range(rDomain._1, rDomain._2, nR):+rDomain._2):_*
+        utils.range(rDomain._1, rDomain._2, nR) :+ rDomain._2 :_*
       ).divide(rH),
       FLOAT64,
       Shape(nR + 1))

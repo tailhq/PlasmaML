@@ -14,7 +14,7 @@ DateTimeZone.setDefault(DateTimeZone.UTC)
   * @param end_date Download until a date string "yyyy-mm-dd"
   * @param path Destination directory to put data
   * @param size Resolution of the images to be downloaded, 512 or 1024
-  * @param instrument The SOHO instrument from which to download,
+  * @param instrument The SDO instrument from which to download,
   *                   specified as a string. See [[SDOData.Instruments]]
   * */
 @main
