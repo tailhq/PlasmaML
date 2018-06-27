@@ -228,9 +228,19 @@ package object helios {
     SOHOLoader.load_images(soho_files_path, year_month, soho_source, dirTreeCreated)
 
   def load_images(
+    sdo_files_path: Path, year_month: YearMonth,
+    sdo_source: SDO, dirTreeCreated: Boolean): Stream[(DateTime, Path)] =
+    SDOLoader.load_images(sdo_files_path, year_month, sdo_source, dirTreeCreated)
+
+  def load_soho_mc(
     soho_files_path: Path, year_month: YearMonth,
     soho_sources: Seq[SOHO], dirTreeCreated: Boolean): Stream[(DateTime, (SOHO, Path))] =
     SOHOLoader.load_images(soho_files_path, year_month, soho_sources, dirTreeCreated)
+
+  def load_sdo_mc(
+    sdo_files_path: Path, year_month: YearMonth,
+    sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Stream[(DateTime, (SDO, Path))] =
+    SDOLoader.load_images(sdo_files_path, year_month, sdo_sources, dirTreeCreated)
 
   /**
     * Load X-Ray fluxes averaged over all GOES missions
@@ -534,7 +544,7 @@ package object helios {
     })
 
     val image_processing = StreamFlatMapPipe((year_month: YearMonth) =>
-      load_images(images_path, year_month, image_sources, image_dir_tree)) >
+      load_soho_mc(images_path, year_month, image_sources, image_dir_tree)) >
       StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[(SOHO, Path)]) >
       DataPipe((d: Stream[(DateTime, (SOHO, Path))]) =>
         d.groupBy(_._1).mapValues(_.map(_._2).groupBy(_._1).mapValues(_.map(_._2).toSeq))

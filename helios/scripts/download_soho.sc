@@ -2,6 +2,8 @@ import ammonite.ops._
 import org.joda.time._
 import io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
+import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
+import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Resolutions._
 import io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time.format.DateTimeFormat
 

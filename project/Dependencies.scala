@@ -75,7 +75,8 @@ object Dependencies {
   val commonDependencies = Seq(
     "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
     "org.jsoup" % "jsoup" % "1.9.1",
-    "joda-time" % "joda-time" % "2.9.3",
+    "joda-time" % "joda-time" % "2.10",
+    "org.joda" % "joda-convert" % "2.1",
     "org.json4s" % "json4s-native_2.11" % "3.3.0",
     "com.typesafe.slick" %% "slick" % "3.1.1"
   )

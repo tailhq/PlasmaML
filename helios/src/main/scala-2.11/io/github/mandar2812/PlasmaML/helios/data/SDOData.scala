@@ -2,8 +2,10 @@ package io.github.mandar2812.PlasmaML.helios.data
 
 import collection.JavaConverters._
 import ammonite.ops._
-import org.joda.time.LocalDate
+import org.joda.time.{DateTime, DateTimeZone, LocalDate, YearMonth}
 import org.jsoup.Jsoup
+
+import scala.util.matching.Regex
 
 /**
   * Helper class for downloading solar images from the
@@ -22,12 +24,16 @@ object SDOData {
     * */
   object Instruments {
 
+    //HMI images: Helioseismic & Magnetic Imager
     val HMIIC = "HMIIC"
 
     val HMIIF = "HMIIF"
 
     val HMID = "HMID"
 
+    val HMIB = "HMIB"
+
+    //AIA images: Atmospheric Imaging Assembly
     val AIA171 = "0171"
 
     val AIA131 = "0131"
@@ -43,6 +49,11 @@ object SDOData {
     val AIA335 = "0335"
 
     val AIA304 = "0304"
+
+    //Composite images
+    val HMI171 = "HMI171"
+
+    val AIA094335193 = "094335193"
   }
 
   object Resolutions {
@@ -52,12 +63,38 @@ object SDOData {
     val s4096 = 4096
   }
 
+  def getFilePattern(date: LocalDate, source: SDO): Regex = {
+    val (year, month, day) = (
+      date.getYear.toString,
+      "%02d".format(date.getMonthOfYear),
+      "%02d".format(date.getDayOfMonth))
+
+    (year+month+day+"""_(\d{6}?)_"""+"_"+source.size+"_"+source.instrument+"\\.jpg").r
+  }
+
+  def getFilePattern(date: YearMonth, source: SDO): Regex = {
+    val (year, month) = (date.getYear.toString, "%02d".format(date.getMonthOfYear))
+
+    (year+month+"""(\d{2}?)_(\d{6}?)_"""+source.size+"_"+source.instrument+"\\.jpg").r
+  }
+
+  def getFilePattern(date: YearMonth, sources: Seq[SDO]): Regex = {
+    val (year, month) = (
+      date.getYear.toString,
+      "%02d".format(date.getMonthOfYear))
+
+    (year+month+"""(\d{2}?)_(\d{6}?)_("""+sources.map(s => s.size+"_"+s.instrument).mkString("|")+")\\.jpg").r
+  }
+
+
 }
 
 
 object SDOLoader {
 
   import SDOData._
+
+  DateTimeZone.setDefault(DateTimeZone.UTC)
 
   /**
     * Download all the available images
@@ -127,5 +164,112 @@ object SDOLoader {
 
     download_day_range(download(path, createDirTree)(instrument, size))(start, end)
   }
+
+  /**
+    * Load paths to [[SDO]] images from the disk.
+    *
+    * @param sdo_files_path The base directory in which sdo data is stored.
+    *
+    * @param year_month The year-month from which the images were taken.
+    *
+    * @param sdo_source A data source i.e. a [[SDO]] instance.
+    *
+    * @param dirTreeCreated If SDO directory structure has been
+    *                       created inside the soho_files_path,
+    *                       defaults to true.
+    *
+    * @return Time stamped images for some soho instrument and image resolution.
+    * */
+  def load_images(
+    sdo_files_path: Path, year_month: YearMonth,
+    sdo_source: SDO, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] = {
+
+
+    val (year, month) = (year_month.getYear.toString, "%02d".format(year_month.getMonthOfYear))
+    val filePattern = getFilePattern(year_month, sdo_source)
+
+    val image_paths = if(dirTreeCreated) {
+      ls! sdo_files_path |? (s => s.isDir && s.segments.last == sdo_source.instrument) ||
+        (d => {
+          ls! d |?
+            (s => s.isDir && s.segments.contains(year)) ||
+            (ls! _) |?
+            (_.segments.contains(month))
+        }) ||
+        (ls! _ )
+    } else {
+      ls.rec! sdo_files_path
+    }
+
+    (image_paths | (file => {
+      (filePattern.findFirstMatchIn(file.segments.last), file)
+    }) |? (_._1.isDefined) | (c => {
+      val Some(matchStr) = c._1
+
+      val (day, time) = (matchStr.group(1), matchStr.group(2))
+
+      (
+        new DateTime(
+          year.toInt, month.toInt, day.toInt,
+          time.take(2).toInt, time.slice(2, 4).toInt, time.takeRight(2).toInt),
+        c._2
+      )
+    })).toStream
+  }
+
+  /**
+    * Load paths to [[SDO]] images from the disk.
+    *
+    * @param sdo_files_path The base directory in which sdo data is stored.
+    *
+    * @param year_month The year-month from which the images were taken.
+    *
+    * @param sdo_sources A sequence of data sources i.e. each one a [[SDO]] instance.
+    *
+    * @param dirTreeCreated If SDO directory structure has been
+    *                       created inside the soho_files_path,
+    *                       defaults to true.
+    *
+    * @return Time stamped images for each soho instrument and image resolution.
+    * */
+  def load_images(
+    sdo_files_path: Path, year_month: YearMonth,
+    sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Stream[(DateTime, (SDO, Path))] = {
+
+
+    val (year, month) = (year_month.getYear.toString, "%02d".format(year_month.getMonthOfYear))
+    val filePattern = getFilePattern(year_month, sdo_sources)
+
+    val image_paths = if(dirTreeCreated) {
+      ls! sdo_files_path |? (s => s.isDir && sdo_sources.map(_.instrument).contains(s.segments.last)) ||
+        (d => {
+          ls! d |?
+            (s => s.isDir && s.segments.contains(year)) ||
+            (ls! _) |?
+            (_.segments.contains(month))
+        }) ||
+        (ls! _ )
+    } else {
+      ls.rec! sdo_files_path
+    }
+
+    (image_paths | (file => {
+      (filePattern.findFirstMatchIn(file.segments.last), file)
+    }) |? (_._1.isDefined) | (c => {
+      val Some(matchStr) = c._1
+
+      val (day, time, source_str) = (matchStr.group(1), matchStr.group(2), matchStr.group(3))
+
+      val source = SDO(source_str.split("_").head, source_str.split("_").last.toInt)
+
+      (
+        new DateTime(
+          year.toInt, month.toInt, day.toInt,
+          time.take(2).toInt, time.slice(2, 4).toInt, time.takeRight(2).toInt),
+        (source, c._2)
+      )
+    })).toStream
+  }
+
 
 }
