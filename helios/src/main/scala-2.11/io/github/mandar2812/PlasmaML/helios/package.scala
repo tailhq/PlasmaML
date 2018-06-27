@@ -222,15 +222,26 @@ package object helios {
       throw new Exception("Not a valid data source: ")
   }
 
-  def load_images(
-    soho_files_path: Path, year_month: YearMonth,
-    soho_source: SOHO, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] =
-    SOHOLoader.load_images(soho_files_path, year_month, soho_source, dirTreeCreated)
-
-  def load_images(
-    sdo_files_path: Path, year_month: YearMonth,
-    sdo_source: SDO, dirTreeCreated: Boolean): Stream[(DateTime, Path)] =
-    SDOLoader.load_images(sdo_files_path, year_month, sdo_source, dirTreeCreated)
+  def load_images[T <: SolarImagesSource](
+    data_path: Path, year_month: YearMonth,
+    image_source: T, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] =
+    try {
+      image_source match {
+        case SOHO(i, s) => SOHOLoader.load_images(data_path, year_month, SOHO(i, s), dirTreeCreated)
+        case SDO(i, s)  => SDOLoader.load_images(data_path, year_month, SDO(i, s), dirTreeCreated)
+      }
+    } catch {
+      case _: MatchError =>
+        println("Image source must be one of SOHO or SDO")
+        Stream()
+      case e: OutOfMemoryError =>
+        e.printStackTrace()
+        println("\nOut of Memory!!")
+        Stream()
+      case e: Exception =>
+        e.printStackTrace()
+        Stream()
+    }
 
   def load_soho_mc(
     soho_files_path: Path, year_month: YearMonth,
