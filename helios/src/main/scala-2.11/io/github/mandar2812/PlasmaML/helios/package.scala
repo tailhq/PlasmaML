@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML
 
-import ammonite.ops.{Path, exists, home, ls, pwd, root}
+import ammonite.ops.{Path, RelPath, exists, home, ls, pwd, root}
 import breeze.linalg.DenseVector
 import org.joda.time._
 import com.sksamuel.scrimage.Image
@@ -1210,9 +1210,10 @@ package object helios {
     * Generate a starting data set for OMNI/L1 prediction tasks.
     * This method makes the assumption that the data is stored
     * in a directory ~/data_repo/helios in a standard directory tree
-    * generated after executing the [[data.SOHOLoader.bulk_download()]] method.
+    * generated after executing the [[data.SOHOLoader.bulk_download()]]
+    * or [[data.SDOLoader.bulk_download()]] methods.
     *
-    * @param image_source The [[SOHO]] data source to extract from
+    * @param image_source The image data source to extract from
     * @param year_start The starting time of the data
     * @param year_end The end time of the data.
     * */
@@ -1261,9 +1262,10 @@ package object helios {
     * Generate a starting data set for OMNI/L1 prediction tasks.
     * This method makes the assumption that the data is stored
     * in a directory ~/data_repo/helios in a standard directory tree
-    * generated after executing the [[data.SOHOLoader.bulk_download()]] method.
+    * generated after executing the [[data.SOHOLoader.bulk_download()]]
+    * or [[data.SDOLoader.bulk_download()]] methods.
     *
-    * @param image_source The [[SOHO]] data source to extract from
+    * @param image_source The image data source to extract from
     * @param year_start The starting time of the data
     * @param year_end The end time of the data.
     * */

@@ -76,7 +76,6 @@ def main[T <: SolarImagesSource](
 
   val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
 
-
   val summary_dir_prefix = "swtl_"+image_source.toString
 
   val summary_dir_postfix =
