@@ -4,11 +4,14 @@ import com.sksamuel.scrimage._
 
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
+import io.github.mandar2812.dynaml.tensorflow.utils.dtfutils
 import io.github.mandar2812.dynaml.pipes._
 
 import _root_.io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.core.CausalDynamicTimeLag
-import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
+import io.github.mandar2812.PlasmaML.helios.data.{SolarImagesSource, SOHO, SOHOData, SDO}
+import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
+import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
@@ -16,9 +19,11 @@ import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
-def main(
+def main[T <: SolarImagesSource](
+  year_start: Int          = 2001,
+  year_end: Int            = 2006,
   test_year: Int           = 2003,
-  image_source: SOHO       = SOHO(SOHOData.Instruments.MDIMAG, 512),
+  image_source: T          = SOHO(MDIMAG, 512),
   re: Boolean              = true,
   time_horizon: (Int, Int) = (18, 56),
   opt: Optimizer           = tf.train.AdaDelta(0.01),
@@ -36,7 +41,7 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni(deltaT = time_horizon)
+  val data           = helios.generate_data_omni[T](year_start, year_end, image_source, deltaT = time_horizon)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
@@ -53,18 +58,16 @@ def main(
   val dt = DateTime.now()
 
 
-  val image_sizes = image_source.size
+  val (image_sizes, magic_ratio) = image_source match {
+    case SOHO(_, s) => (s, 268.0/512.0)
+    case SDO(_, s)  => (s, 333.0/512.0)
+  }
 
-  val crop_solar_image = DataPipe((image: Image) => {
+  val image_preprocess =
+    helios.image_central_patch(magic_ratio, image_sizes) >
+      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
-    val image_magic_ratio = 268.0/512.0
-    val start = (1.0 - image_magic_ratio)*image_sizes/2
-    val patch_size = image_sizes*image_magic_ratio
-
-    image.copy.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt).scale(0.5)
-  })
-
-  val summary_dir_prefix = "swtl_"+image_source.instrument+"_"+image_source.size
+  val summary_dir_prefix = "swtl_"+image_source.toString
 
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
@@ -82,7 +85,7 @@ def main(
   val ff_index = 4
 
 
-  val architecture = {
+  val architecture =
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
         size = 2, num_channels_input = 4)(
@@ -95,16 +98,15 @@ def main(
       dtflearn.feedforward_stack(
         (i: Int) => if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
         ff_stack_sizes,
-        starting_index = ff_index)
-  } >> output_mapping
+        starting_index = ff_index) >>
+      output_mapping
 
-  val net_layer_sizes       = Seq(-1) ++ ff_stack_sizes
-  val layer_parameter_names = (ff_index until ff_index + ff_stack_sizes.length).map(i => "Linear_"+i+"/Weights")
-  val layer_datatypes       = Seq("FLOAT64", "FLOAT64", "FLOAT64")
-  val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
+
+  val (layer_shapes, layer_parameter_names, layer_datatypes) =
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index)
 
   val loss_func = CausalDynamicTimeLag(
-    "Loss/ProbWeightedTS",
+    "Loss/CDT-SW",
     data.head._2._2.length,
     prior_wt = prior_wt,
     temperature = temp) >>
@@ -116,7 +118,7 @@ def main(
 
   helios.run_experiment_omni(
     data, tt_partition, resample = re,
-    preprocess_image = crop_solar_image)(
+    preprocess_image = image_preprocess)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
     lossFunc = loss_func,

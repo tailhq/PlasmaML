@@ -46,13 +46,20 @@ package object data {
   sealed trait Source
   sealed trait SolarImagesSource extends Source
 
-  case class SOHO(instrument: String, size: Int = SOHOData.Resolutions.s512) extends SolarImagesSource
-  case class SDO(instrument: String, size: Int = SDOData.Resolutions.s512) extends SolarImagesSource
+  case class SOHO(instrument: String, size: Int = SOHOData.Resolutions.s512) extends SolarImagesSource {
+    override def toString: String = "SOHO_"+instrument+"_"+size
+  }
+
+  case class SDO(instrument: String, size: Int = SDOData.Resolutions.s512) extends SolarImagesSource {
+    override def toString: String = "SDO_"+instrument+"_"+size
+  }
 
   case class GOES(
     quantity: String = GOESData.Quantities.XRAY_FLUX_5m,
     format: String = GOESData.Formats.CSV) extends Source
 
-  case class OMNI(quantity: Int = OMNIData.Quantities.V_SW) extends Source
+  case class OMNI(quantity: Int = OMNIData.Quantities.V_SW) extends Source {
+    override def toString: String = "OMNI_"+OMNIData.columnNames(quantity).replace(" ", "_")
+  }
 
 }

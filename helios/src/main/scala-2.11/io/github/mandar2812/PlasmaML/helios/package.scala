@@ -95,6 +95,14 @@ package object helios {
     val cdt_beta_loss: WeightedTimeSeriesLossGaussian.type     = WeightedTimeSeriesLossGaussian
   }
 
+  val image_central_patch: MetaPipe21[Double, Int, Image, Image] =
+    MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Image) => {
+      val start = (1.0 - image_magic_ratio)*image_sizes/2
+      val patch_size = image_sizes*image_magic_ratio
+
+      image.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
+    })
+
   val image_pixel_scaler = MinMaxScalerTF(Tensor(UByte(0)), Tensor(UByte(255)))
 
   val std_images_and_outputs: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
@@ -375,11 +383,11 @@ package object helios {
     * @param end_year_month Ending Year-Month
     *
     * */
-  def join_omni(
+  def join_omni[T <: SolarImagesSource](
     start_year_month: YearMonth,
     end_year_month: YearMonth,
     omni_source: OMNI, omni_data_path: Path,
-    deltaT: (Int, Int), image_source: SOHO,
+    deltaT: (Int, Int), image_source: T,
     images_path: Path, image_dir_tree: Boolean = true): HELIOS_OMNI_DATA = {
 
     val (start_instant, end_instant) = (
@@ -422,7 +430,7 @@ package object helios {
 
     val image_processing =
       StreamFlatMapPipe(
-        (year_month: YearMonth) => load_images(images_path, year_month, image_source, image_dir_tree)) >
+        (year_month: YearMonth) => load_images[T](images_path, year_month, image_source, image_dir_tree)) >
       StreamDataPipe((p: (DateTime, Path)) => (image_dt_roundoff(p._1), p._2))
 
     val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
@@ -444,12 +452,12 @@ package object helios {
     * @param end_year_month Ending Year-Month
     *
     * */
-  def join_omni(
+  def join_omni[T <: SolarImagesSource](
     start_year_month: YearMonth,
     end_year_month: YearMonth,
     omni_source: OMNI, omni_data_path: Path,
     past_history: Int, deltaT: (Int, Int),
-    image_source: SOHO, images_path: Path,
+    image_source: T, images_path: Path,
     image_dir_tree: Boolean): HELIOS_OMNI_DATA_EXT = {
 
     val (start_instant, end_instant) = (
@@ -489,7 +497,7 @@ package object helios {
 
     val image_processing =
       StreamFlatMapPipe((year_month: YearMonth) =>
-        load_images(images_path, year_month, image_source, image_dir_tree)) >
+        load_images[T](images_path, year_month, image_source, image_dir_tree)) >
         StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[Path])
 
     val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
@@ -1208,9 +1216,9 @@ package object helios {
     * @param year_start The starting time of the data
     * @param year_end The end time of the data.
     * */
-  def generate_data_omni(
+  def generate_data_omni[T <: SolarImagesSource](
     year_start: Int = 2001, year_end: Int = 2005,
-    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512),
+    image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     deltaT: (Int, Int) = (18, 56)): HELIOS_OMNI_DATA = {
 
@@ -1233,15 +1241,19 @@ package object helios {
     val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
     pprint.pprintln(data_dir)
 
-    val soho_dir = data_dir/'soho
+    val images_dir = image_source match {
+      case _: SOHO => data_dir/'soho
+      case _: SDO  => data_dir/'sdo
+      case _       => data_dir
+    }
 
     println("Preparing data-set as a Stream ")
     println("Start: "+year_start+" End: "+year_end)
 
 
-    helios.join_omni(
+    helios.join_omni[T](
       new YearMonth(year_start, 1), new YearMonth(year_end, 12),
-      omni_source, pwd/"data", deltaT, image_source, soho_dir)
+      omni_source, pwd/"data", deltaT, image_source, images_dir)
   }
 
 
@@ -1255,9 +1267,9 @@ package object helios {
     * @param year_start The starting time of the data
     * @param year_end The end time of the data.
     * */
-  def generate_data_omni_ext(
+  def generate_data_omni_ext[T <: SolarImagesSource](
     year_start: Int = 2001, year_end: Int = 2005,
-    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512),
+    image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     history: Int = 8,
     deltaT: (Int, Int) = (18, 56)): HELIOS_OMNI_DATA_EXT = {
@@ -1281,16 +1293,20 @@ package object helios {
     val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
     pprint.pprintln(data_dir)
 
-    val soho_dir = data_dir/'soho
+    val images_dir = image_source match {
+      case _: SOHO => data_dir/'soho
+      case _: SDO  => data_dir/'sdo
+      case _       => data_dir
+    }
 
     println("Preparing data-set as a Stream ")
     println("Start: "+year_start+" End: "+year_end)
 
 
-    helios.join_omni(
+    helios.join_omni[T](
       new YearMonth(year_start, 1), new YearMonth(year_end, 12),
       omni_source, pwd/"data", history, deltaT,
-      image_source, soho_dir, image_dir_tree = true)
+      image_source, images_dir, image_dir_tree = true)
   }
 
 

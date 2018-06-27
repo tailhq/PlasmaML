@@ -1,36 +1,30 @@
 import ammonite.ops._
 import org.joda.time._
 import com.sksamuel.scrimage._
-import com.sksamuel.scrimage.filter._
+
+
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
+import io.github.mandar2812.dynaml.tensorflow.utils.dtfutils
 import io.github.mandar2812.dynaml.pipes._
-import _root_.io.github.mandar2812.PlasmaML.helios
-import io.github.mandar2812.PlasmaML.helios.core.CausalDynamicTimeLag
-import io.github.mandar2812.PlasmaML.helios.data.{SOHO, SOHOData}
+
+import io.github.mandar2812.PlasmaML.helios
+import io.github.mandar2812.PlasmaML.helios.data.{SolarImagesSource, SOHO, SOHOData, SDO}
+import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
+import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
+
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 
-def get_ffstack_properties(neuron_counts: Seq[Int], ff_index: Int): (Seq[Shape], Seq[String], Seq[String]) = {
-
-  val layer_parameter_names = (ff_index until ff_index + neuron_counts.length - 1).map(i => "Linear_"+i+"/Weights")
-  val layer_shapes          = neuron_counts.sliding(2).toSeq.map(c => Shape(c.head, c.last))
-  val layer_datatypes       = Seq.fill(layer_shapes.length)("FLOAT64")
-
-
-  (layer_shapes, layer_parameter_names, layer_datatypes)
-}
-
-
 @main
-def main(
+def main[T <: SolarImagesSource](
   test_year: Int                = 2003,
   start_year: Int               = 2001,
   end_year: Int                 = 2006,
-  image_source: SOHO            = SOHO(SOHOData.Instruments.MDIMAG, 512),
+  image_source: T               = SOHO(SOHOData.Instruments.MDIMAG, 512),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
@@ -52,13 +46,13 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni_ext(
+  val data           = helios.generate_data_omni_ext[T](
     year_start = start_year, year_end = end_year, image_source,
     deltaT = time_horizon, history = time_history)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
-  val sw_threshold = 650.0
+  val sw_threshold = 750.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
 
@@ -71,24 +65,19 @@ def main(
   val dt = DateTime.now()
 
 
-  val image_sizes = image_source.size
+  val (image_sizes, magic_ratio) = image_source match {
+    case SOHO(_, s) => (s, 268.0/512.0)
+    case SDO(_, s)  => (s, 333.0/512.0)
+  }
 
-  val crop_solar_image = DataPipe((image: Image) => {
-
-    val image_magic_ratio = 268.0/512.0
-    val start = (1.0 - image_magic_ratio)*image_sizes/2
-    val patch_size = image_sizes*image_magic_ratio
-
-    image.copy.subimage(
-      start.toInt, start.toInt,
-      patch_size.toInt, patch_size.toInt)
-      .scale(0.5)
-      .filter(GrayscaleFilter)
-  })
+  val image_preprocess =
+    helios.image_central_patch(magic_ratio, image_sizes) >
+      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
   val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
 
-  val summary_dir_prefix = "swtl_"+image_source.instrument+"_"+image_source.size
+
+  val summary_dir_prefix = "swtl_"+image_source.toString
 
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
@@ -147,17 +136,16 @@ def main(
     output_mapping
 
   val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =
-    get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv)
 
   val (layer_shapes_hist, layer_parameter_names_hist, layer_datatypes_hist) =
-    get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist)
 
   val (layer_shapes_fc, layer_parameter_names_fc, layer_datatypes_fc) =
-    get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc)
-
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc)
 
   val loss_func = helios.learn.cdt_loss(
-    "Loss/ProbWeightedTS",
+    "Loss/CDT-SW",
     data.head._2._2._2.length,
     prior_wt = prior_wt,
     temperature = temp) >>
@@ -169,7 +157,7 @@ def main(
 
   helios.run_experiment_omni_ext(
     data, tt_partition, resample = re,
-    preprocess_image = crop_solar_image,
+    preprocess_image = image_preprocess,
     image_to_bytearr = image_to_byte,
     num_channels_image = 1)(
     summary_dir, maxIt, tmpdir,
