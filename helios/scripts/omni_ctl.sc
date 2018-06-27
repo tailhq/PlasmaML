@@ -45,7 +45,7 @@ def main[T <: SolarImagesSource](
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
-  val sw_threshold = 650.0
+  val sw_threshold = 700.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
 
@@ -78,7 +78,7 @@ def main[T <: SolarImagesSource](
   val num_pred_dims = 2*data.head._2._2.length
 
   val output_mapping = CausalDynamicTimeLag.output_mapping(
-    "Output/ProbWeightedTS",
+    "Output/CDT-SW",
     data.head._2._2.length)
 
   val ff_stack_sizes = Seq(128, 64, 50, 30, num_pred_dims)

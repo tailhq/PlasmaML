@@ -52,7 +52,7 @@ def main[T <: SolarImagesSource](
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
-  val sw_threshold = 750.0
+  val sw_threshold = 700.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
 
@@ -74,7 +74,7 @@ def main[T <: SolarImagesSource](
     helios.image_central_patch(magic_ratio, image_sizes) >
       DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
-  val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
+  val image_to_byte = DataPipe((i: Image) => i.argb.flatten.map(_.toByte))
 
   val summary_dir_prefix = "swtl_"+image_source.toString
 
@@ -87,7 +87,7 @@ def main[T <: SolarImagesSource](
   val num_pred_dims = 2*data.head._2._2._2.length
 
   val output_mapping = helios.learn.cdt_loss.output_mapping(
-    "Output/ProbWeightedTS",
+    "Output/CDT-SW",
     data.head._2._2._2.length)
 
 
@@ -101,7 +101,7 @@ def main[T <: SolarImagesSource](
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = 1)(
+        size = 2, num_channels_input = 4)(
         start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = false,
         keep_prob = 0.6f) >>
@@ -158,7 +158,7 @@ def main[T <: SolarImagesSource](
     data, tt_partition, resample = re,
     preprocess_image = image_preprocess,
     image_to_bytearr = image_to_byte,
-    num_channels_image = 1)(
+    num_channels_image = 4)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
