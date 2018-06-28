@@ -182,7 +182,7 @@ object SDOLoader {
     * */
   def load_images(
     sdo_files_path: Path, year_month: YearMonth,
-    sdo_source: SDO, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] = {
+    sdo_source: SDO, dirTreeCreated: Boolean = true): Iterable[(DateTime, Path)] = {
 
 
     val (year, month) = (year_month.getYear.toString, "%02d".format(year_month.getMonthOfYear))
@@ -234,7 +234,7 @@ object SDOLoader {
     * */
   def load_images(
     sdo_files_path: Path, year_month: YearMonth,
-    sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Stream[(DateTime, (SDO, Path))] = {
+    sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Iterable[(DateTime, (SDO, Path))] = {
 
 
     val (year, month) = (year_month.getYear.toString, "%02d".format(year_month.getMonthOfYear))

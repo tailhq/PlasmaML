@@ -60,10 +60,10 @@ package object helios {
     * */
   type MC_PATTERN_EXT              = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
 
-  type HELIOS_OMNI_DATA        = Stream[PATTERN]
-  type HELIOS_MC_OMNI_DATA     = Stream[PATTERN_EXT]
-  type HELIOS_OMNI_DATA_EXT    = Stream[PATTERN_EXT]
-  type HELIOS_MC_OMNI_DATA_EXT = Stream[MC_PATTERN_EXT]
+  type HELIOS_OMNI_DATA        = Iterable[PATTERN]
+  type HELIOS_MC_OMNI_DATA     = Iterable[MC_PATTERN]
+  type HELIOS_OMNI_DATA_EXT    = Iterable[PATTERN_EXT]
+  type HELIOS_MC_OMNI_DATA_EXT = Iterable[MC_PATTERN_EXT]
 
   object learn {
 
@@ -232,7 +232,7 @@ package object helios {
 
   def load_images[T <: SolarImagesSource](
     data_path: Path, year_month: YearMonth,
-    image_source: T, dirTreeCreated: Boolean = true): Stream[(DateTime, Path)] =
+    image_source: T, dirTreeCreated: Boolean = true): Iterable[(DateTime, Path)] =
     try {
       image_source match {
         case SOHO(i, s) => SOHOLoader.load_images(data_path, year_month, SOHO(i, s), dirTreeCreated)
@@ -241,24 +241,24 @@ package object helios {
     } catch {
       case _: MatchError =>
         println("Image source must be one of SOHO or SDO")
-        Stream()
+        Iterable()
       case e: OutOfMemoryError =>
         e.printStackTrace()
         println("\nOut of Memory!!")
-        Stream()
+        Iterable()
       case e: Exception =>
         e.printStackTrace()
-        Stream()
+        Iterable()
     }
 
   def load_soho_mc(
     soho_files_path: Path, year_month: YearMonth,
-    soho_sources: Seq[SOHO], dirTreeCreated: Boolean): Stream[(DateTime, (SOHO, Path))] =
+    soho_sources: Seq[SOHO], dirTreeCreated: Boolean): Iterable[(DateTime, (SOHO, Path))] =
     SOHOLoader.load_images(soho_files_path, year_month, soho_sources, dirTreeCreated)
 
   def load_sdo_mc(
     sdo_files_path: Path, year_month: YearMonth,
-    sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Stream[(DateTime, (SDO, Path))] =
+    sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Iterable[(DateTime, (SDO, Path))] =
     SDOLoader.load_images(sdo_files_path, year_month, sdo_sources, dirTreeCreated)
 
   /**
@@ -430,7 +430,7 @@ package object helios {
 
     val image_processing =
       StreamFlatMapPipe(
-        (year_month: YearMonth) => load_images[T](images_path, year_month, image_source, image_dir_tree)) >
+        (year_month: YearMonth) => load_images[T](images_path, year_month, image_source, image_dir_tree).toStream) >
       StreamDataPipe((p: (DateTime, Path)) => (image_dt_roundoff(p._1), p._2))
 
     val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
@@ -497,7 +497,7 @@ package object helios {
 
     val image_processing =
       StreamFlatMapPipe((year_month: YearMonth) =>
-        load_images[T](images_path, year_month, image_source, image_dir_tree)) >
+        load_images[T](images_path, year_month, image_source, image_dir_tree).toStream) >
         StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[Path])
 
     val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
@@ -563,7 +563,7 @@ package object helios {
     })
 
     val image_processing = StreamFlatMapPipe((year_month: YearMonth) =>
-      load_soho_mc(images_path, year_month, image_sources, image_dir_tree)) >
+      load_soho_mc(images_path, year_month, image_sources, image_dir_tree).toStream) >
       StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[(SOHO, Path)]) >
       DataPipe((d: Stream[(DateTime, (SOHO, Path))]) =>
         d.groupBy(_._1).mapValues(_.map(_._2).groupBy(_._1).mapValues(_.map(_._2).toSeq))
@@ -625,7 +625,7 @@ package object helios {
     *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
-    collated_data: Iterable[PATTERN],
+    collated_data: HELIOS_OMNI_DATA,
     tt_partition: PATTERN => Boolean,
     image_process: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
     image_to_bytes: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
@@ -760,7 +760,7 @@ package object helios {
     *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
-    collated_data: Iterable[PATTERN_EXT],
+    collated_data: HELIOS_OMNI_DATA_EXT,
     tt_partition: PATTERN_EXT => Boolean,
     image_process: DataPipe[Image, Image],
     image_to_bytes: DataPipe[Image, Array[Byte]],
@@ -870,7 +870,7 @@ package object helios {
 
   def create_helios_data_set(
     image_sources: Seq[SOHO],
-    collated_data: Iterable[MC_PATTERN_EXT],
+    collated_data: HELIOS_MC_OMNI_DATA_EXT,
     tt_partition: MC_PATTERN_EXT => Boolean,
     image_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],

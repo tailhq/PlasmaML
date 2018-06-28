@@ -137,7 +137,7 @@ def main(
   val num_pred_dims = 2*data.head._2._2._2.length
 
   val output_mapping = helios.learn.cdt_loss.output_mapping(
-    "Output/ProbWeightedTS",
+    "Output/CDT-SW",
     data.head._2._2._2.length)
 
 
@@ -178,7 +178,7 @@ def main(
         dataType = FLOAT64)(
         layer_sizes = conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
-      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 185, conv_ff_stack_sizes.last) >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50, conv_ff_stack_sizes.last) >>
       tf.learn.Flatten("Flatten_4")
   }
 
@@ -232,7 +232,7 @@ def main(
 
 
   val loss_func = helios.learn.cdt_loss(
-    "Loss/ProbWeightedTS",
+    "Loss/CDT-SW",
     data.head._2._2._2.length,
     prior_wt = prior_wt,
     temperature = temp) >>
