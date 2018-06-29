@@ -631,8 +631,6 @@ package object helios {
     image_to_bytes: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     resample: Boolean = false): HeliosDataSet = {
 
-    //val scaleDown = 1/math.pow(2, image_process)
-
     val num_outputs = collated_data.head._2._2.length
 
     //print("Scaling down images by a factor of ")
@@ -938,7 +936,7 @@ package object helios {
     } else train_set
 
 
-    def split_features_and_labels(coll: Stream[MC_PATTERN_EXT])
+    def split_features_and_labels(coll: HELIOS_MC_OMNI_DATA_EXT)
     : (Iterable[(Array[Array[Byte]], Seq[Double])], Iterable[Seq[Double]]) = coll.map(entry => {
 
       val (_, (images_map, (data_history, data_label))) = entry

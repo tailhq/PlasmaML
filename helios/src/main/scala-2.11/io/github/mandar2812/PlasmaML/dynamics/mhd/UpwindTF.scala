@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.tensorflow.dtf
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.Layer
-import org.platanios.tensorflow.api.ops.variables.{Initializer, RandomUniformInitializer}
+import org.platanios.tensorflow.api.ops.variables.{ConstantInitializer, Initializer, RandomUniformInitializer}
 
 /**
   * <h3>Upwind Solar Wind Model</h3>
@@ -52,6 +52,7 @@ case class UpwindTF(
 
     //Rotational speed of the sun, as a trainable parameter
     val omega_rot = tf.variable("OmegaRot", input.dataType, Shape(), omegaInit)
+    val alpha     = tf.variable("alpha", input.dataType, Shape(), ConstantInitializer(0.15))
 
     //Propagate solar wind, from r = rmin to r = rmax
     val velocity_profile = tf.stack(
@@ -66,12 +67,8 @@ case class UpwindTF(
       }),
       axis = -1)
 
-    //Extract velocity at carrington longitude = 0
-    val sun_earth_velocity = velocity_profile(::, 0, ---)
-
     //Compute residual acceleration
     val rH = 50.0
-    val alpha = 0.15
 
     val r = tf.constant(
       dtf.tensor_f64(nR + 1)(
@@ -81,10 +78,14 @@ case class UpwindTF(
       Shape(nR + 1))
 
     val v_acc = tf
-      .stack(Seq.fill(nR + 1)(sun_earth_velocity(::, 0).multiply(alpha)), axis = 1)
-      .multiply(r.multiply(-1.0).exp.multiply(-1.0).add(1.0))
+      .stack(Seq.fill(nR + 1)(input.multiply(alpha)), axis = -1)
+      .multiply(
+        r.multiply(-1.0)
+          .exp.multiply(-1.0)
+          .add(1.0)
+      )
 
-    sun_earth_velocity.add(v_acc)
+    velocity_profile.add(v_acc)
   }
 }
 
