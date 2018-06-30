@@ -2052,7 +2052,7 @@ package object helios {
       tt_partition,
       image_process = DataPipe((i: Image) => i.copy.scale(1.0/math.pow(2.0, 2.0))),
       DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
-      resample)
+      4, resample)
 
     val trainImages = tf.data.TensorSlicesDataset(dataSet.trainData)
 
