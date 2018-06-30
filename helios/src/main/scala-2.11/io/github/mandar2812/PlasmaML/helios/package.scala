@@ -712,26 +712,25 @@ package object helios {
       dtf.concatenate(tensor_splits.toSeq, axis = 0)
     }
 
-    def split_features_and_labels(
-      coll: Stream[(DateTime, (Path, Seq[Double]))])
-    : (Iterable[Array[Byte]], Iterable[Seq[Double]]) = coll.map(entry => {
+    def split_features_and_labels(coll: HELIOS_OMNI_DATA): (Iterable[Array[Byte]], Iterable[Seq[Double]]) =
+      coll.map(entry => {
 
-      val (_, (path, data_label)) = entry
+        val (_, (path, data_label)) = entry
 
-      val image_bytes = (image_process > image_to_bytes)(Image.fromPath(path.toNIO))
+        val image_bytes = (image_process > image_to_bytes)(Image.fromPath(path.toNIO))
 
-      (image_bytes, data_label)
+        (image_bytes, data_label)
 
-    }).unzip
+      }).unzip
 
     //Construct training features and labels
-    val (features_train, labels_train) = split_features_and_labels(processed_train_set.toStream)
+    val (features_train, labels_train) = split_features_and_labels(processed_train_set)
 
     val features_tensor_train = create_image_tensor_buffered(features_train)
     val labels_tensor_train   = create_double_tensor_buffered(labels_train)
 
     //Construct test features and labels
-    val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
+    val (features_test, labels_test) = split_features_and_labels(test_set)
 
     val features_tensor_test = create_image_tensor_buffered(features_test)
     val labels_tensor_test   = create_double_tensor_buffered(labels_test)
@@ -825,7 +824,7 @@ package object helios {
       dtf.concatenate(tensor_splits.toSeq, axis = 0)
     }
 
-    def split_features_and_labels(coll: Stream[(DateTime, (Path, (Seq[Double], Seq[Double])))])
+    def split_features_and_labels(coll: HELIOS_OMNI_DATA_EXT)
     : (Iterable[(Array[Byte], Seq[Double])], Iterable[Seq[Double]]) = coll.map(entry => {
 
       val (_, (path, (data_history, data_label))) = entry
@@ -837,7 +836,7 @@ package object helios {
     }).unzip
 
     //Construct training features and labels
-    val (features_train, labels_train) = split_features_and_labels(processed_train_set.toStream)
+    val (features_train, labels_train) = split_features_and_labels(processed_train_set)
 
     val features_tensor_train = (
       create_image_tensor_buffered(features_train.map(_._1)),
