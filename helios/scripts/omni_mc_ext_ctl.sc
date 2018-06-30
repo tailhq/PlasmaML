@@ -178,7 +178,7 @@ def main(
         dataType = FLOAT64)(
         layer_sizes = conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
-      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50, conv_ff_stack_sizes.last) >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
       tf.learn.Flatten("Flatten_4")
   }
 

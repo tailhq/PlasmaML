@@ -96,12 +96,12 @@ def main[T <: SolarImagesSource](
         keep_prob = 0.6f) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
+      tf.learn.Flatten("Flatten_4") >>
       dtflearn.feedforward_stack(
-        (i: Int) => if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
+        (i: Int) => /*if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else */dtflearn.Phi("Act_"+i), FLOAT64)(
         ff_stack_sizes,
         starting_index = ff_index) >>
-      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50, ff_stack_sizes.last) >>
-      tf.learn.Flatten("Flatten_4") >>
       output_mapping
 
 

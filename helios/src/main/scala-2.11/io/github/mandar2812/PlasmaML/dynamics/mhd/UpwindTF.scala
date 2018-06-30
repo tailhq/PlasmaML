@@ -18,17 +18,15 @@ import org.platanios.tensorflow.api.ops.variables.{ConstantInitializer, Initiali
   *
   * @param rDomain The lower and upper limits of the radial domain.
   * @param nR Number of divisions of the radial domain.
-  * @param nTheta Number of divisions of the longitudinal domain.
   * @param omegaInit Initialiser for the solar rotation speed.
   * */
 case class UpwindTF(
   override val name: String,
-  rDomain: (Double, Double),
-  nR: Int, nTheta: Int,
+  rDomain: (Double, Double), nR: Int,
   omegaInit: Initializer = RandomUniformInitializer(0.01, 1.0))
   extends Layer[Output, Output](name) {
 
-  override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR, nTheta:$nTheta]"
+  override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR]"
 
   /**
     * The Carrington longitude lies
@@ -36,13 +34,14 @@ case class UpwindTF(
     * */
   val thetaDomain: (Double, Double) = (0d, 2*math.Pi)
 
-  protected val (deltaR, deltaTheta) = (
-    (rDomain._2 - rDomain._1)/nR,
-    (thetaDomain._2 - thetaDomain._1)/nTheta
-  )
+  protected val deltaR = (rDomain._2 - rDomain._1)/nR
 
 
   override protected def _forward(input: Output)(implicit mode: Mode): Output = {
+
+    val nTheta = input.shape(-1)
+
+    val deltaTheta = (thetaDomain._2 - thetaDomain._1)/nTheta
 
     val dv_dtheta = tf.constant(
       dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
