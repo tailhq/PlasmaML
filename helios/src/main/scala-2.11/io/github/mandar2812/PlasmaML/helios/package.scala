@@ -1548,8 +1548,7 @@ package object helios {
     *                checkpoints and other results will be stored inside
     *                another directory created in tempdir.
     * @param results_id The suffix added the results/checkpoints directory name.
-    * @param max_iterations The maximum number of iterations that the
-    *                       network must be trained for.
+    * @param stop_criteria When to stop training, an instance of [[StopCriteria]]
     * @param arch The neural architecture to train, for example see [[learn.cnn_sw_v1]]
     *
     * */
@@ -1572,15 +1571,15 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
-    val checkpoints =
+    /*val checkpoints =
       if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
       else Seq()
 
     val checkpoint_max =
       if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
+      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max*/
 
-    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
+    //val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
 
 
     /*
