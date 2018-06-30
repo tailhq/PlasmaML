@@ -629,6 +629,7 @@ package object helios {
     tt_partition: PATTERN => Boolean,
     image_process: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
     image_to_bytes: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+    num_image_channels: Int,
     resample: Boolean = false): HeliosDataSet = {
 
     val num_outputs = collated_data.head._2._2.length
@@ -648,7 +649,7 @@ package object helios {
 
       val scaled_image = image_process(Image.fromPath(train_set.head._2._1.toNIO))//im.copy.scale(scaleDown)
 
-      (scaled_image.height, scaled_image.width, scaled_image.argb(0, 0).length)
+      (scaled_image.height, scaled_image.width, num_image_channels/*scaled_image.argb(0, 0).length*/)
 
     }
 
@@ -1556,7 +1557,8 @@ package object helios {
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
-    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))(
+    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+    num_channels_image: Int = 4)(
     results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home/"tmp",
@@ -1592,6 +1594,7 @@ package object helios {
       tt_partition,
       preprocess_image,
       image_to_bytearr,
+      num_channels_image,
       resample)
 
 

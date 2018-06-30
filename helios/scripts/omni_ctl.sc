@@ -122,7 +122,8 @@ def main[T <: SolarImagesSource](
   helios.run_experiment_omni(
     data, tt_partition, resample = re,
     preprocess_image = image_preprocess,
-    image_to_bytearr = image_to_bytes)(
+    image_to_bytearr = image_to_bytes,
+    num_channels_image = 1)(
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
