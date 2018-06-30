@@ -57,7 +57,7 @@ case class UpwindTF(
     val velocity_profile = tf.stack(
       (1 to nR).scanLeft(input)((x, _) => {
 
-        val invV = x.pow(-1d)
+        val invV = x.pow(-1f)
 
         x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0))
           .multiply(invV)
