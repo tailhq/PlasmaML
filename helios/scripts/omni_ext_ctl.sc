@@ -11,6 +11,7 @@ import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImag
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import io.github.mandar2812.dynaml.DynaMLPipe
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -25,7 +26,7 @@ def main[T <: SolarImagesSource](
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
-  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64, 32),
+  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64, 32, 8),
   hist_ff_stack_sizes: Seq[Int] = Seq(32, 16),
   ff_stack: Seq[Int]            = Seq(80, 64),
   opt: Optimizer                = tf.train.AdaDelta(0.01),
@@ -69,9 +70,15 @@ def main[T <: SolarImagesSource](
 
   val image_preprocess =
     helios.image_central_patch(magic_ratio, image_sizes) >
-      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5).filter(GrayscaleFilter))
+      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
+
+  val (image_filter, num_channels) = image_source match {
+    case _: SOHO => (DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1)
+    case _: SDO  => (DynaMLPipe.identityPipe[Image], 4)
+  }
 
   val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
+
   val summary_dir_prefix = "swtl_"+image_source.toString
 
   val summary_dir_postfix =
@@ -97,7 +104,7 @@ def main[T <: SolarImagesSource](
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = 1)(
+        size = 2, num_channels_input = num_channels)(
         start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = false,
         keep_prob = 0.6f) >>
@@ -108,7 +115,7 @@ def main[T <: SolarImagesSource](
         conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
       tf.learn.Cast("Cast/Float", FLOAT32) >>
-      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 20) >>
       tf.learn.Flatten("Flatten_4")
   }
 
@@ -155,9 +162,9 @@ def main[T <: SolarImagesSource](
 
   helios.run_experiment_omni_ext(
     data, tt_partition, resample = re,
-    preprocess_image = image_preprocess,
+    preprocess_image = image_preprocess > image_filter,
     image_to_bytearr = image_to_byte,
-    num_channels_image = 1)(
+    num_channels_image = num_channels)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
