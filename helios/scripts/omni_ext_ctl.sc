@@ -1,19 +1,16 @@
 import ammonite.ops._
 import org.joda.time._
 import com.sksamuel.scrimage._
-
-
+import com.sksamuel.scrimage.filter.GrayscaleFilter
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.tensorflow.utils.dtfutils
 import io.github.mandar2812.dynaml.pipes._
-
 import io.github.mandar2812.PlasmaML.helios
-import io.github.mandar2812.PlasmaML.helios.data.{SolarImagesSource, SOHO, SOHOData, SDO}
+import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImagesSource}
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
-
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -28,7 +25,7 @@ def main[T <: SolarImagesSource](
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
-  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128),
+  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64, 32),
   hist_ff_stack_sizes: Seq[Int] = Seq(32, 16),
   ff_stack: Seq[Int]            = Seq(80, 64),
   opt: Optimizer                = tf.train.AdaDelta(0.01),
@@ -72,10 +69,9 @@ def main[T <: SolarImagesSource](
 
   val image_preprocess =
     helios.image_central_patch(magic_ratio, image_sizes) >
-      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
+      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5).filter(GrayscaleFilter))
 
-  val image_to_byte = DataPipe((i: Image) => i.argb.flatten.map(_.toByte))
-
+  val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
   val summary_dir_prefix = "swtl_"+image_source.toString
 
   val summary_dir_postfix =
@@ -91,17 +87,17 @@ def main[T <: SolarImagesSource](
     data.head._2._2._2.length)
 
 
-  val ff_stack_sizes      = ff_stack ++ Seq(num_pred_dims)
+  val ff_stack_sizes = ff_stack ++ Seq(num_pred_dims)
 
-  val ff_index_conv = 1
+  val ff_index_conv  = 1
 
-  val ff_index_hist = ff_index_conv + conv_ff_stack_sizes.length
-  val ff_index_fc   = ff_index_hist + hist_ff_stack_sizes.length
+  val ff_index_hist  = ff_index_conv + conv_ff_stack_sizes.length
+  val ff_index_fc    = ff_index_hist + hist_ff_stack_sizes.length
 
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = 4)(
+        size = 2, num_channels_input = 1)(
         start_num_bits = 5, end_num_bits = 3)(
         relu_param = 0.1f, dropout = false,
         keep_prob = 0.6f) >>
@@ -110,7 +106,10 @@ def main[T <: SolarImagesSource](
       dtflearn.feedforward_stack(
         (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
         conv_ff_stack_sizes,
-        starting_index = ff_index_conv)
+        starting_index = ff_index_conv) >>
+      tf.learn.Cast("Cast/Float", FLOAT32) >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
+      tf.learn.Flatten("Flatten_4")
   }
 
   val omni_history_stack = {
@@ -158,7 +157,7 @@ def main[T <: SolarImagesSource](
     data, tt_partition, resample = re,
     preprocess_image = image_preprocess,
     image_to_bytearr = image_to_byte,
-    num_channels_image = 4)(
+    num_channels_image = 1)(
     summary_dir, maxIt, tmpdir,
     arch = architecture,
     lossFunc = loss_func,

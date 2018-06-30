@@ -22,8 +22,8 @@ def main[T <: SolarImagesSource](
   year_start: Int               = 2001,
   year_end: Int                 = 2006,
   test_year: Int                = 2003,
-  pre_upwind_ff_sizes: Seq[Int] = Seq(128, 96, 50),
-  ff_stack_sizes: Seq[Int]      = Seq(128, 64, 50, 30),
+  pre_upwind_ff_sizes: Seq[Int] = Seq(256, 128, 64, 32),
+  ff_stack_sizes: Seq[Int]      = Seq(256, 128, 64),
   image_source: T               = SOHO(MDIMAG, 512),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
@@ -101,15 +101,13 @@ def main[T <: SolarImagesSource](
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
         (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
-        pre_upwind_ff_sizes,
-        starting_index = pre_upwind_index) >>
+        pre_upwind_ff_sizes, starting_index = pre_upwind_index) >>
       tf.learn.Cast("Cast/Float", FLOAT32) >>
       helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
       tf.learn.Flatten("Flatten_4") >>
       dtflearn.feedforward_stack(
         (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
-        ff_stack,
-        starting_index = ff_index) >>
+        ff_stack, starting_index = ff_index) >>
       output_mapping
 
 
