@@ -111,7 +111,7 @@ def main[T <: SolarImagesSource](
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
-        (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
+        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
         conv_ff_stack_sizes,
         starting_index = ff_index_conv) >>
       tf.learn.Cast("Cast/Float", FLOAT32) >>
@@ -122,14 +122,14 @@ def main[T <: SolarImagesSource](
   val omni_history_stack = {
     tf.learn.Cast("Input/Cast", FLOAT64) >>
       dtflearn.feedforward_stack(
-        (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i),
+        (i: Int) => dtflearn.Phi("Act_"+i),
         FLOAT64)(
         hist_ff_stack_sizes,
         starting_index = ff_index_hist)
   }
 
   val fc_stack = dtflearn.feedforward_stack(
-    (i: Int) => if(i%2 == 1) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i),
+    (i: Int) => dtflearn.Phi("Act_"+i),
     FLOAT64)(
     ff_stack_sizes,
     starting_index = ff_index_fc)
