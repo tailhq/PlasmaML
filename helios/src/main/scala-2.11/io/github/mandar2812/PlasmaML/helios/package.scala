@@ -1559,7 +1559,7 @@ package object helios {
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image])(
     results_id: String,
-    max_iterations: Int,
+    stop_criteria: StopCriteria,
     tempdir: Path = home/"tmp",
     arch: Layer[Output, (Output, Output)],
     lossFunc: Layer[((Output, Output), Output), Output],
@@ -1637,7 +1637,7 @@ package object helios {
     val (model, estimator) = dtflearn.build_tf_model(
       arch, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
-      dtflearn.max_iter_stop(iterations))(
+      stop_criteria)(
       trainData)
 
     val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)

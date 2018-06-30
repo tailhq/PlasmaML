@@ -12,27 +12,28 @@ import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImag
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
 def main[T <: SolarImagesSource](
-  year_start: Int          = 2001,
-  year_end: Int            = 2006,
-  test_year: Int           = 2003,
-  image_source: T          = SOHO(MDIMAG, 512),
-  re: Boolean              = true,
-  time_horizon: (Int, Int) = (18, 56),
-  opt: Optimizer           = tf.train.AdaDelta(0.01),
-  reg: Double              = 0.001,
-  prior_wt: Double         = 0.85,
-  error_wt: Double         = 1.0,
-  temp: Double             = 0.75,
-  maxIt: Int               = 200000,
-  miniBatch: Int           = 16,
-  tmpdir: Path             = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String          = "mdi_rbfloss_results.csv") = {
+  year_start: Int               = 2001,
+  year_end: Int                 = 2006,
+  test_year: Int                = 2003,
+  image_source: T               = SOHO(MDIMAG, 512),
+  re: Boolean                   = true,
+  time_horizon: (Int, Int)      = (18, 56),
+  opt: Optimizer                = tf.train.AdaDelta(0.01),
+  reg: Double                   = 0.001,
+  prior_wt: Double              = 0.85,
+  error_wt: Double              = 1.0,
+  temp: Double                  = 0.75,
+  stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
+  miniBatch: Int                = 16,
+  tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
+  resFile: String               = "mdi_rbfloss_results.csv") = {
 
   //Data with MDI images
 
@@ -118,7 +119,7 @@ def main[T <: SolarImagesSource](
   helios.run_experiment_omni(
     data, tt_partition, resample = re,
     preprocess_image = image_preprocess)(
-    summary_dir, maxIt, tmpdir,
+    summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
     optimizer = opt)
