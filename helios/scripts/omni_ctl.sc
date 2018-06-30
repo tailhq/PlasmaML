@@ -96,6 +96,7 @@ def main[T <: SolarImagesSource](
         keep_prob = 0.6f) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
+      tf.learn.Cast("Cast/Float", FLOAT32) >>
       helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
       tf.learn.Flatten("Flatten_4") >>
       dtflearn.feedforward_stack(
