@@ -1,19 +1,17 @@
 import ammonite.ops._
 import org.joda.time._
 import com.sksamuel.scrimage._
-
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.dtflearn
 import io.github.mandar2812.dynaml.tensorflow.utils.dtfutils
 import io.github.mandar2812.dynaml.pipes._
-
 import _root_.io.github.mandar2812.PlasmaML.helios
+import com.sksamuel.scrimage.filter.GrayscaleFilter
 import io.github.mandar2812.PlasmaML.helios.core.CausalDynamicTimeLag
-import io.github.mandar2812.PlasmaML.helios.data.{SolarImagesSource, SOHO, SOHOData, SDO}
+import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImagesSource}
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
-
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -65,7 +63,7 @@ def main[T <: SolarImagesSource](
 
   val image_preprocess =
     helios.image_central_patch(magic_ratio, image_sizes) >
-      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
+      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5).filter(GrayscaleFilter))
 
   val summary_dir_prefix = "swtl_"+image_source.toString
 
@@ -88,17 +86,18 @@ def main[T <: SolarImagesSource](
   val architecture =
     tf.learn.Cast("Input/Cast", FLOAT32) >>
       dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = 4)(
+        size = 2, num_channels_input = 1)(
         start_num_bits = 5, end_num_bits = 3)(
-        relu_param = 0.1f, dropout = true,
+        relu_param = 0.1f, dropout = false,
         keep_prob = 0.6f) >>
-      //dtflearn.conv2d_unit(Shape(2, 2, 8, 4), (16, 16), dropout = false)(5) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
         (i: Int) => if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else dtflearn.Phi("Act_"+i), FLOAT64)(
         ff_stack_sizes,
         starting_index = ff_index) >>
+      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50, ff_stack_sizes.last) >>
+      tf.learn.Flatten("Flatten_4") >>
       output_mapping
 
 
