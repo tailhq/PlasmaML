@@ -22,6 +22,8 @@ def main[T <: SolarImagesSource](
   year_start: Int               = 2001,
   year_end: Int                 = 2006,
   test_year: Int                = 2003,
+  pre_upwind_ff_sizes: Seq[Int] = Seq(128, 96, 50),
+  ff_stack_sizes: Seq[Int]      = Seq(128, 64, 50, 30),
   image_source: T               = SOHO(MDIMAG, 512),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
@@ -83,8 +85,9 @@ def main[T <: SolarImagesSource](
     "Output/CDT-SW",
     data.head._2._2.length)
 
-  val ff_stack_sizes = Seq(128, 64, 50, 30, num_pred_dims)
-  val ff_index = 4
+  val pre_upwind_index = 4
+  val ff_index         = pre_upwind_index + pre_upwind_ff_sizes.length
+  val ff_stack         = ff_stack_sizes :+ num_pred_dims
 
 
   val architecture =
@@ -96,18 +99,25 @@ def main[T <: SolarImagesSource](
         keep_prob = 0.6f) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
+      dtflearn.feedforward_stack(
+        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+        pre_upwind_ff_sizes,
+        starting_index = pre_upwind_index) >>
       tf.learn.Cast("Cast/Float", FLOAT32) >>
       helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
       tf.learn.Flatten("Flatten_4") >>
       dtflearn.feedforward_stack(
-        (i: Int) => /*if(i%2 == 0) tf.learn.ReLU("Act_"+i, 0.01f) else */dtflearn.Phi("Act_"+i), FLOAT64)(
-        ff_stack_sizes,
+        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+        ff_stack,
         starting_index = ff_index) >>
       output_mapping
 
 
   val (layer_shapes, layer_parameter_names, layer_datatypes) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index)
+
+  val (pre_upwind_layer_shapes, pre_upwind_layer_parameter_names, pre_upwind_layer_datatypes) =
+    dtfutils.get_ffstack_properties(Seq(-1) ++ pre_upwind_ff_sizes, pre_upwind_index)
 
   val loss_func = CausalDynamicTimeLag(
     "Loss/CDT-SW",
@@ -115,9 +125,9 @@ def main[T <: SolarImagesSource](
     prior_wt = prior_wt,
     temperature = temp) >>
     L2Regularization(
-      layer_parameter_names,
-      layer_datatypes,
-      layer_shapes,
+      pre_upwind_layer_parameter_names ++ layer_parameter_names,
+      pre_upwind_layer_datatypes ++ layer_datatypes,
+      pre_upwind_layer_shapes ++ layer_shapes,
       reg)
 
   helios.run_experiment_omni(
