@@ -34,19 +34,19 @@ case class UpwindTF(
     * */
   val thetaDomain: (Double, Double) = (0d, 2*math.Pi)
 
-  protected val deltaR = (rDomain._2 - rDomain._1)/nR
+  protected val deltaR: Float = (rDomain._2.toFloat - rDomain._1.toFloat)/nR
 
 
   override protected def _forward(input: Output)(implicit mode: Mode): Output = {
 
     val nTheta = input.shape(-1)
 
-    val deltaTheta = (thetaDomain._2 - thetaDomain._1)/nTheta
+    val deltaTheta: Float = (thetaDomain._2.toFloat - thetaDomain._1.toFloat)/nTheta
 
     val dv_dtheta = tf.constant(
       dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
         (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*),
-      FLOAT64, Shape(nTheta, nTheta),
+      input.dataType, Shape(nTheta, nTheta),
       "DeltaV")
 
     //Rotational speed of the sun, as a trainable parameter
@@ -70,10 +70,10 @@ case class UpwindTF(
     val rH = 50.0
 
     val r = tf.constant(
-      dtf.tensor_f64(nR + 1)(
+      dtf.tensor_f32(nR + 1)(
         utils.range(rDomain._1, rDomain._2, nR) :+ rDomain._2 :_*
       ).divide(rH),
-      FLOAT64,
+      input.dataType,
       Shape(nR + 1))
 
     val v_acc = tf
