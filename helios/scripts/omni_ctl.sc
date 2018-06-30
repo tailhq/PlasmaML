@@ -66,6 +66,9 @@ def main[T <: SolarImagesSource](
     helios.image_central_patch(magic_ratio, image_sizes) >
       DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5).filter(GrayscaleFilter))
 
+
+  val image_to_bytes = DataPipe((i: Image) => i.argb.map(_.last.toByte))
+
   val summary_dir_prefix = "swtl_"+image_source.toString
 
   val summary_dir_postfix =
@@ -118,7 +121,8 @@ def main[T <: SolarImagesSource](
 
   helios.run_experiment_omni(
     data, tt_partition, resample = re,
-    preprocess_image = image_preprocess)(
+    preprocess_image = image_preprocess,
+    image_to_bytearr = image_to_bytes)(
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,

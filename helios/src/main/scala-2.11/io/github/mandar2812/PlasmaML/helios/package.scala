@@ -1555,7 +1555,8 @@ package object helios {
     collated_data: HELIOS_OMNI_DATA,
     tt_partition: ((DateTime, (Path, Seq[Double]))) => Boolean,
     resample: Boolean = false,
-    preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image])(
+    preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
+    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))(
     results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home/"tmp",
@@ -1590,7 +1591,7 @@ package object helios {
       collated_data,
       tt_partition,
       preprocess_image,
-      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+      image_to_bytearr,
       resample)
 
 
