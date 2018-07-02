@@ -105,19 +105,15 @@ package object helios {
 
   val image_pixel_scaler = MinMaxScalerTF(Tensor(UByte(0)), Tensor(UByte(255)))
 
-  val std_images_and_outputs: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, GaussianScalerTF))] =
+  val std_images_and_outputs: DataPipe2[Tensor, Tensor, ((Tensor, Tensor), (MinMaxScalerTF, MinMaxScalerTF))] =
     DataPipe2((features: Tensor, labels: Tensor) => {
 
-      val labels_mean = labels.mean(axes = 0)
-
-      val n_data = features.shape(0).scalar.asInstanceOf[Int].toDouble
-
-      val labels_sd =
-        labels.subtract(labels_mean).square.mean(axes = 0).multiply(n_data/(n_data - 1d)).sqrt
+      val labels_min = labels.min(axes = 0)
+      val labels_max = labels.max(axes = 0)
 
       val (features_scaler, labels_scaler) = (
         image_pixel_scaler,
-        GaussianScalerTF(labels_mean, labels_sd)
+        MinMaxScalerTF(labels_min, labels_max)
       )
 
       val (features_scaled, labels_scaled) = (
@@ -145,6 +141,19 @@ package object helios {
       (labels_scaled, labels_scaler)
     })
 
+  val minmax_std: DataPipe[Tensor, (Tensor, MinMaxScalerTF)] =
+    DataPipe((labels: Tensor) => {
+
+      val labels_min = labels.min(axes = 0)
+      val labels_max = labels.max(axes = 0)
+
+      val labels_scaler = MinMaxScalerTF(labels_min, labels_max)
+
+      val labels_scaled = labels_scaler(labels)
+
+      (labels_scaled, labels_scaler)
+    })
+
   val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
 
     val (norm_tr_data, scalers) = std_images_and_outputs(dataset.trainData, dataset.trainLabels)
@@ -161,7 +170,7 @@ package object helios {
   val scale_helios_dataset_ext = DataPipe((dataset: AbstractDataSet[(Tensor, Tensor), Tensor]) => {
 
     val (norm_tr_images_and_labels, scalers) = std_images_and_outputs(dataset.trainData._1, dataset.trainLabels)
-    val (norm_histories, history_scaler) = gauss_std(dataset.trainData._2)
+    val (norm_histories, history_scaler) = minmax_std(dataset.trainData._2)
 
     val features_scaler = scalers._1 * history_scaler
 
@@ -1598,7 +1607,7 @@ package object helios {
       resample)
 
 
-    val (norm_tf_data, scalers): (HeliosDataSet, (MinMaxScalerTF, GaussianScalerTF)) =
+    val (norm_tf_data, scalers): (HeliosDataSet, (MinMaxScalerTF, MinMaxScalerTF)) =
       scale_helios_dataset(dataSet)
 
     val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData)
@@ -1759,7 +1768,7 @@ package object helios {
 
 
     val (norm_tf_data, scalers):
-      (AbstractDataSet[(Tensor, Tensor), Tensor], (ReversibleScaler[(Tensor, Tensor)], GaussianScalerTF)) =
+      (AbstractDataSet[(Tensor, Tensor), Tensor], (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF)) =
       scale_helios_dataset_ext(dataSet)
 
     val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData._1)
@@ -1922,7 +1931,7 @@ package object helios {
 
 
     val (norm_tf_data, scalers):
-      (AbstractDataSet[(Tensor, Tensor), Tensor], (ReversibleScaler[(Tensor, Tensor)], GaussianScalerTF)) =
+      (AbstractDataSet[(Tensor, Tensor), Tensor], (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF)) =
       scale_helios_dataset_ext(dataSet)
 
     val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData._1)

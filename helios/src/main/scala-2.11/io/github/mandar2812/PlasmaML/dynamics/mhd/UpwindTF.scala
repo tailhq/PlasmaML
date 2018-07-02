@@ -23,10 +23,13 @@ import org.platanios.tensorflow.api.ops.variables.{ConstantInitializer, Initiali
 case class UpwindTF(
   override val name: String,
   rDomain: (Double, Double), nR: Int,
+  vmin: Double = 200, vmax: Double = 1200,
   omegaInit: Initializer = RandomUniformInitializer(0.01, 1.0))
   extends Layer[Output, Output](name) {
 
   override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR]"
+
+  protected val (alpha, beta) = (Tensor(vmax).subtract(vmin), Tensor(vmin))
 
   /**
     * The Carrington longitude lies
@@ -35,7 +38,6 @@ case class UpwindTF(
   val thetaDomain: (Double, Double) = (0d, 2*math.Pi)
 
   protected val deltaR: Float = (rDomain._2.toFloat - rDomain._1.toFloat)/nR
-
 
   override protected def _forward(input: Output)(implicit mode: Mode): Output = {
 
@@ -57,7 +59,7 @@ case class UpwindTF(
     val velocity_profile = tf.stack(
       (1 to nR).scanLeft(input)((x, _) => {
 
-        val invV = x.pow(-1f)
+        val invV = x.multiply(alpha).add(beta).pow(-1f)
 
         x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0))
           .multiply(invV)
