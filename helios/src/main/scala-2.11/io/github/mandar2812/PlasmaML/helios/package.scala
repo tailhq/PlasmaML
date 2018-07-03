@@ -17,6 +17,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.StopCriteria
+import org.platanios.tensorflow.api.learn.estimators.Estimator
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
@@ -42,16 +43,16 @@ package object helios {
 
   /**
     * A pattern, consisting of
+    * a time stamp, path to an image, a tuple of numeric sequences
+    * */
+  type PATTERN_EXT                 = (DateTime, (Path, (Seq[Double], Seq[Double])))
+
+  /**
+    * A pattern, consisting of
     * a time stamp, a collection of images from multiple sources,
     * and a sequence of numbers
     * */
   type MC_PATTERN                  = (DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))
-
-  /**
-    * A pattern, consisting of
-    * a time stamp, path to an image, a tuple of numeric sequences
-    * */
-  type PATTERN_EXT                 = (DateTime, (Path, (Seq[Double], Seq[Double])))
 
   /**
     * A pattern, consisting of
@@ -1371,6 +1372,50 @@ package object helios {
       image_sources, soho_dir, image_dir_tree = true)
   }
 
+
+  def buffered_preds_helper(
+    predictiveModel: Estimator[
+      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
+      ((Tensor, Tensor), Tensor), ((Output, Output), Output),
+      ((DataType, DataType), DataType),
+      ((Shape, Shape), Shape), ((Output, Output), Output)],
+    workingData: (Tensor, Tensor),
+    buffer: Int, dataSize: Int): Some[(Tensor, Tensor)] = {
+    val preds_splits: (Iterable[Tensor], Iterable[Tensor]) = (0 until dataSize).grouped(buffer).map(indices => {
+
+      val dataSplit = (
+        workingData._1(indices.head::indices.last, ---),
+        workingData._2(indices.head::indices.last, ---)
+      )
+
+      predictiveModel.infer(() => dataSplit)
+    }).toIterable.unzip
+
+    Some((tfi.stack(preds_splits._1.toSeq), tfi.stack(preds_splits._2.toSeq)))
+  }
+
+  def buffered_preds(
+    predictiveModel: Estimator[
+      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
+      ((Tensor, Tensor), Tensor), ((Output, Output), Output),
+      ((DataType, DataType), DataType),
+      ((Shape, Shape), Shape), ((Output, Output), Output)])(
+    data: AbstractDataSet[(Tensor, Tensor), Tensor],
+    pred_flags: (Boolean, Boolean) = (false, true),
+    buff_size: Int = 400): (Option[(Tensor, Tensor)], Option[(Tensor, Tensor)]) = {
+
+    val train_preds =
+      if (pred_flags._1) buffered_preds_helper(predictiveModel, data.trainData, buff_size, data.nTrain)
+      else None
+
+    val test_preds =
+      if (pred_flags._2) buffered_preds_helper(predictiveModel, data.testData, buff_size, data.nTest)
+      else None
+
+    (train_preds, test_preds)
+  }
+
+
   /**
     * Train a Neural architecture on a
     * processed data set.
@@ -1582,16 +1627,6 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
-    /*val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
-      else Seq()
-
-    val checkpoint_max =
-      if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max*/
-
-    //val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
-
 
     /*
     * After data has been joined/collated,
@@ -1716,8 +1751,7 @@ package object helios {
     *                checkpoints and other results will be stored inside
     *                another directory created in tempdir.
     * @param results_id The suffix added the results/checkpoints directory name.
-    * @param max_iterations The maximum number of iterations that the
-    *                       network must be trained for.
+    * @param stop_criteria When to stop training.
     * @param arch The neural architecture to train.
     *
     * */
@@ -1729,7 +1763,7 @@ package object helios {
     image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     num_channels_image: Int = 4)(
     results_id: String,
-    max_iterations: Int,
+    stop_criteria: StopCriteria,
     tempdir: Path = home/"tmp",
     arch: Layer[(Output, Output), (Output, Output)],
     lossFunc: Layer[((Output, Output), Output), Output],
@@ -1741,17 +1775,6 @@ package object helios {
     val resDirName = "helios_omni_"+results_id
 
     val tf_summary_dir = tempdir/resDirName
-
-    val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
-      else Seq()
-
-    val checkpoint_max =
-      if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
-
-    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
-
 
     /*
     * After data has been joined/collated,
@@ -1820,10 +1843,11 @@ package object helios {
     val (model, estimator) = dtflearn.build_tf_model(
       arch, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
-      dtflearn.max_iter_stop(iterations))(
+      stop_criteria)(
       trainData)
 
-    val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
+
+    val predictions: (Tensor, Tensor) = buffered_preds(estimator)(dataSet, (false, true))._2.get
 
     val index_times = Tensor(
       (0 until causal_horizon).map(_.toDouble)
@@ -1900,16 +1924,16 @@ package object helios {
     image_pre_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
     num_channels_image: Int = 4)(
-      results_id: String,
-      stop_criteria: StopCriteria = dtflearn.max_iter_stop(5000),
-      tempdir: Path = home/"tmp",
-      arch: Layer[(Output, Output), (Output, Output)],
-      lossFunc: Layer[((Output, Output), Output), Output],
-      mo_flag: Boolean = true,
-      prob_timelags: Boolean = true,
-      optimizer: Optimizer = tf.train.AdaDelta(0.001),
-      miniBatchSize: Int = 16,
-      inMemoryModel: Boolean = false) = {
+    results_id: String,
+    stop_criteria: StopCriteria = dtflearn.max_iter_stop(5000),
+    tempdir: Path = home/"tmp",
+    arch: Layer[(Output, Output), (Output, Output)],
+    lossFunc: Layer[((Output, Output), Output), Output],
+    mo_flag: Boolean = true,
+    prob_timelags: Boolean = true,
+    optimizer: Optimizer = tf.train.AdaDelta(0.001),
+    miniBatchSize: Int = 16,
+    inMemoryModel: Boolean = false) = {
 
     val resDirName = "helios_omni_"+results_id
 
@@ -1985,7 +2009,7 @@ package object helios {
       loss, optimizer, summariesDir, stop_criteria)(
       trainData, inMemory = inMemoryModel)
 
-    val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
+    val predictions: (Tensor, Tensor) = buffered_preds(estimator)(dataSet, (false, true))._2.get
 
     val index_times = Tensor(
       (0 until causal_horizon).map(_.toDouble)
