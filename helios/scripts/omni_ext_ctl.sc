@@ -12,6 +12,7 @@ import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 import io.github.mandar2812.dynaml.DynaMLPipe
+import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -34,7 +35,7 @@ def main[T <: SolarImagesSource](
   prior_wt: Double              = 0.85,
   error_wt: Double              = 1.0,
   temp: Double                  = 0.75,
-  maxIt: Int                    = 200000,
+  stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
   miniBatch: Int                = 16,
   tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
   resFile: String               = "mdi_rbfloss_results.csv") = {
@@ -165,7 +166,7 @@ def main[T <: SolarImagesSource](
     preprocess_image = image_preprocess > image_filter,
     image_to_bytearr = image_to_byte,
     num_channels_image = num_channels)(
-    summary_dir, maxIt, tmpdir,
+    summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
     optimizer = opt)
