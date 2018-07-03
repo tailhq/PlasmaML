@@ -10,7 +10,6 @@ import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe}
 import io.github.mandar2812.dynaml.tensorflow.utils._
-import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
@@ -1384,8 +1383,8 @@ package object helios {
     val preds_splits: (Iterable[Tensor], Iterable[Tensor]) = (0 until dataSize).grouped(buffer).map(indices => {
 
       val dataSplit = (
-        workingData._1(indices.head::indices.last, ---),
-        workingData._2(indices.head::indices.last, ---)
+        workingData._1(indices.head::indices.last + 1, ---),
+        workingData._2(indices.head::indices.last + 1, ---)
       )
 
       predictiveModel.infer(() => dataSplit)
