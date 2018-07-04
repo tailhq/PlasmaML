@@ -610,9 +610,9 @@ package object helios {
 
 
   private def print_data_splits(train_fraction: Double): Unit = {
-    print("Training: %")
+    print("Training: % ")
     pprint.pprintln(train_fraction)
-    print("Test:     %")
+    print("Test:     % ")
     pprint.pprintln(100.0 - train_fraction)
   }
 
@@ -686,7 +686,7 @@ package object helios {
     num_image_channels: Int,
     resample: Boolean = false): HeliosDataSet = {
 
-    println("Separating data into train and test.")
+    println("Separating data into train and test.\n")
     val (train_set, test_set) = collated_data.partition(tt_partition)
 
 
@@ -769,7 +769,7 @@ package object helios {
       scaled_height, scaled_width, num_channels)(features_test, test_data_size)
     val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test)
 
-    println("Helios data set created")
+    println("Helios data set created\n")
     working_set.copy(
       trainData   = features_tensor_train,
       trainLabels = labels_tensor_train,
@@ -798,7 +798,7 @@ package object helios {
     num_image_channels: Int,
     resample: Boolean): AbstractDataSet[(Tensor, Tensor), Tensor] = {
 
-    println("Separating data into train and test.")
+    println("Separating data into train and test.\n")
     val (train_set, test_set) = collated_data.partition(tt_partition)
 
     print("Total data size: ")
@@ -896,7 +896,7 @@ package object helios {
     println("Loading targets in a buffered process")
     val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test)
 
-    println("Helios data set created")
+    println("Helios data set created\n")
     working_set.copy(
       trainData   = features_tensor_train,
       trainLabels = labels_tensor_train,
@@ -929,7 +929,7 @@ package object helios {
     pprint.pprintln(complete_data.toIterator.length)
     println()
 
-    println("Separating data into train and test.")
+    println("Separating data into train and test.\n")
     val (train_set, test_set) = complete_data.partition(tt_partition)
 
     print("Total data size: ")
@@ -1029,7 +1029,7 @@ package object helios {
 
     val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test)
 
-    println("Helios data set created")
+    println("Helios data set created\n")
     working_set.copy(
       trainData   = features_tensor_train,
       trainLabels = labels_tensor_train,
@@ -1061,7 +1061,7 @@ package object helios {
     pprint.pprintln(math.pow(2, scaleDownFactor))
     println()
 
-    println("Separating data into train and test.")
+    println("Separating data into train and test.\n")
     val (train_set, test_set) = collated_data.partition(tt_partition)
 
     //Calculate the height, width and number of channels
@@ -1133,7 +1133,7 @@ package object helios {
 
     val labels_tensor_test = dtf.tensor_from("FLOAT64", test_set.length, 2)(labels_test.flatten[Double])
 
-    println("Helios data set created")
+    println("Helios data set created\n")
     working_set.copy(
       trainData   = features_tensor_train,
       trainLabels = labels_tensor_train,
@@ -1436,7 +1436,7 @@ package object helios {
       predictiveModel.infer(() => dataSplit)
     }).toIterable.unzip
 
-    Some((tfi.stack(preds_splits._1.toSeq), tfi.stack(preds_splits._2.toSeq)))
+    Some((tfi.concatenate(preds_splits._1.toSeq, axis = 0), tfi.concatenate(preds_splits._2.toSeq, axis = 0)))
   }
 
   def buffered_preds(
