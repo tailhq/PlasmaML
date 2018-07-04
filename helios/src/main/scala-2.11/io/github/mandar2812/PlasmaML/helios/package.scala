@@ -697,7 +697,7 @@ package object helios {
 
         val split_size = split.toIterator.length
 
-        dtf.tensor_from_buffer(
+        dtf.tensor_from(
           dtype = "UINT8", split_size,
           scaled_height, scaled_width, num_channels)(
           split.toArray.flatten[Byte])
@@ -824,7 +824,7 @@ package object helios {
 
         val split_arr = split.toArray
 
-        dtf.tensor_from_buffer(
+        dtf.tensor_from(
           dtype = "UINT8", split_arr.length,
           scaled_height, scaled_width, num_channels)(
           split_arr.flatten[Byte])
@@ -965,7 +965,7 @@ package object helios {
 
         val split_size = split.toIterator.length
 
-        dtf.tensor_from_buffer(
+        dtf.tensor_from(
           dtype = "UINT8", split_size,
           scaled_height, scaled_width, num_channels)(
           split.toArray.flatten[Byte])
