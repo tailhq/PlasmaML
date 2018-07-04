@@ -639,7 +639,7 @@ package object helios {
       print("Progress %:\t")
       pprint.pprintln(progress)
 
-      dtf.tensor_from_buffer(
+      dtf.tensor_from(
         dtype = "UINT8", split_seq.length,
         image_height, image_width, num_channels)(
         split_seq.toArray.flatten[Byte])
