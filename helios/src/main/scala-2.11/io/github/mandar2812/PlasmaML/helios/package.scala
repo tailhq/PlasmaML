@@ -95,6 +95,10 @@ package object helios {
     val cdt_beta_loss: WeightedTimeSeriesLossGaussian.type     = WeightedTimeSeriesLossGaussian
   }
 
+  private var buffer_size = 500
+
+  def buffer_size_(s: Int) = buffer_size = s
+
   val image_central_patch: MetaPipe21[Double, Int, Image, Image] =
     MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Image) => {
       val start = (1.0 - image_magic_ratio)*image_sizes/2
@@ -604,10 +608,32 @@ package object helios {
     selector.iid(data.length).draw.map(data(_))
   }
 
-  def create_double_tensor_buffered(coll: Iterable[Seq[Double]]): Tensor = {
+  def create_image_tensor_buffered(buff_size: Int)(
+    image_height: Int, image_width: Int, num_channels: Int)(
+    coll: Iterable[Array[Byte]], size: Int): Tensor = {
+    val tensor_splits = coll.grouped(buff_size).toIterable.zipWithIndex.map(splitAndIndex => {
+
+      val split_arr = splitAndIndex._1.toArray
+
+      val progress = splitAndIndex._2*buff_size*100.0/size
+
+      print("Progress %:\t")
+      pprint.pprintln(progress)
+
+      dtf.tensor_from(
+        dtype = "UINT8", split_arr.length,
+        image_height, image_width, num_channels)(
+        split_arr.flatten[Byte])
+
+    })
+
+    dtf.concatenate(tensor_splits.toSeq, axis = 0)
+  }
+
+  def create_double_tensor_buffered(buff_size: Int)(coll: Iterable[Seq[Double]]): Tensor = {
     val dimensions = coll.head.length
 
-    val tensor_splits = coll.grouped(1000).map(split => {
+    val tensor_splits = coll.grouped(buff_size).map(split => {
 
       val split_size = split.toIterator.length
 
@@ -641,30 +667,37 @@ package object helios {
     num_image_channels: Int,
     resample: Boolean = false): HeliosDataSet = {
 
-    val num_outputs = collated_data.head._2._2.length
-
-    //print("Scaling down images by a factor of ")
-    //pprint.pprintln(math.pow(2, image_process))
-    //println()
-
     println("Separating data into train and test.")
     val (train_set, test_set) = collated_data.partition(tt_partition)
+
+
+    print("Total data size: ")
+    val total_data_size = collated_data.toIterator.length
+
+    pprint.pprintln(total_data_size)
+
+    val train_data_size = train_set.toIterator.length
+    val test_data_size  = test_set.toIterator.length
+
+    val train_fraction = train_data_size.toDouble*100/total_data_size
+    print("Training: ")
+    pprint.pprintln("%.2f".format(train_fraction))
+    print("Test: ")
+    pprint.pprintln("%.2f".format(100.0 - train_fraction))
 
     //Calculate the height, width and number of channels
     //in the images
     val (scaled_height, scaled_width, num_channels) = {
 
-      //val im = Image.fromPath(train_set.head._2._1.toNIO)
+      val scaled_image = image_process(Image.fromPath(train_set.head._2._1.toNIO))
 
-      val scaled_image = image_process(Image.fromPath(train_set.head._2._1.toNIO))//im.copy.scale(scaleDown)
-
-      (scaled_image.height, scaled_image.width, num_image_channels/*scaled_image.argb(0, 0).length*/)
+      (scaled_image.height, scaled_image.width, num_image_channels)
 
     }
 
     val working_set = HeliosDataSet(
-      null, null, train_set.toIterator.length,
-      null, null, test_set.toIterator.length)
+      null, null, train_data_size,
+      null, null, test_data_size)
 
     /*
     * If the `resample` flag is set to true,
@@ -692,36 +725,6 @@ package object helios {
       helios.resample(train_set.toStream, selector)
     } else train_set
 
-    def create_image_tensor_buffered(coll: Iterable[Array[Byte]]): Tensor = {
-      val tensor_splits = coll.grouped(1000).map(split => {
-
-        val split_size = split.toIterator.length
-
-        dtf.tensor_from(
-          dtype = "UINT8", split_size,
-          scaled_height, scaled_width, num_channels)(
-          split.toArray.flatten[Byte])
-
-      })
-
-      dtf.concatenate(tensor_splits.toSeq, axis = 0)
-    }
-
-    def create_double_tensor_buffered(coll: Iterable[Seq[Double]]): Tensor = {
-      val tensor_splits = coll.grouped(1000).map(split => {
-
-        val split_size = split.toIterator.length
-
-        dtf.tensor_from(
-          dtype = "FLOAT64",
-          split_size, num_outputs)(
-          split.flatten[Double].toSeq)
-
-      })
-
-      dtf.concatenate(tensor_splits.toSeq, axis = 0)
-    }
-
     def split_features_and_labels(coll: HELIOS_OMNI_DATA): (Iterable[Array[Byte]], Iterable[Seq[Double]]) =
       coll.map(entry => {
 
@@ -733,17 +736,21 @@ package object helios {
 
       }).unzip
 
+
+
     //Construct training features and labels
     val (features_train, labels_train) = split_features_and_labels(processed_train_set)
 
-    val features_tensor_train = create_image_tensor_buffered(features_train)
-    val labels_tensor_train   = create_double_tensor_buffered(labels_train)
+    val features_tensor_train = create_image_tensor_buffered(buffer_size)(
+      scaled_height, scaled_width, num_channels)(features_train, train_data_size)
+    val labels_tensor_train   = create_double_tensor_buffered(buffer_size)(labels_train)
 
     //Construct test features and labels
     val (features_test, labels_test) = split_features_and_labels(test_set)
 
-    val features_tensor_test = create_image_tensor_buffered(features_test)
-    val labels_tensor_test   = create_double_tensor_buffered(labels_test)
+    val features_tensor_test = create_image_tensor_buffered(buffer_size)(
+      scaled_height, scaled_width, num_channels)(features_test, test_data_size)
+    val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test)
 
     println("Helios data set created")
     working_set.copy(
@@ -777,11 +784,23 @@ package object helios {
     println("Separating data into train and test.")
     val (train_set, test_set) = collated_data.partition(tt_partition)
 
+    print("Total data size: ")
+    val total_data_size = collated_data.toIterator.length
+
+    pprint.pprintln(total_data_size)
+
+    val train_data_size = train_set.toIterator.length
+    val test_data_size  = test_set.toIterator.length
+
+    val train_fraction = train_data_size.toDouble*100/total_data_size
+    print("Training: ")
+    pprint.pprintln("%.2f".format(train_fraction))
+    print("Test: ")
+    pprint.pprintln("%.2f".format(100.0 - train_fraction))
+
     //Calculate the height, width and number of channels
     //in the images
     val (scaled_height, scaled_width, num_channels) = {
-
-      //val im = Image.fromPath(train_set.head._2._1.toNIO)
 
       val scaled_image = image_process(Image.fromPath(train_set.head._2._1.toNIO))
 
@@ -790,8 +809,8 @@ package object helios {
     }
 
     val working_set = AbstractDataSet[(Tensor, Tensor), Tensor](
-      null, null, train_set.toIterator.length,
-      null, null, test_set.toIterator.length)
+      null, null, train_data_size,
+      null, null, test_data_size)
 
     /*
     * If the `resample` flag is set to true,
@@ -819,20 +838,8 @@ package object helios {
       helios.resample(train_set.toStream, selector)
     } else train_set
 
-    def create_image_tensor_buffered(coll: Iterable[Array[Byte]]): Tensor = {
-      val tensor_splits = coll.grouped(1000).toIterable.map(split => {
 
-        val split_arr = split.toArray
 
-        dtf.tensor_from(
-          dtype = "UINT8", split_arr.length,
-          scaled_height, scaled_width, num_channels)(
-          split_arr.flatten[Byte])
-
-      })
-
-      dtf.concatenate(tensor_splits.toSeq, axis = 0)
-    }
 
     def split_features_and_labels(coll: HELIOS_OMNI_DATA_EXT)
     : (Iterable[(Array[Byte], Seq[Double])], Iterable[Seq[Double]]) = coll.map(entry => {
@@ -845,25 +852,37 @@ package object helios {
 
     }).unzip
 
+    println()
     //Construct training features and labels
+    println("Processing Training Data Set")
     val (features_train, labels_train) = split_features_and_labels(processed_train_set)
 
+    println("Loading features in a buffered process")
     val features_tensor_train = (
-      create_image_tensor_buffered(features_train.map(_._1)),
-      create_double_tensor_buffered(features_train.map(_._2))
+      create_image_tensor_buffered(buffer_size)(
+        scaled_height, scaled_width, num_channels)(
+        features_train.map(_._1), train_data_size),
+      create_double_tensor_buffered(buffer_size)(features_train.map(_._2))
     )
 
-    val labels_tensor_train   = create_double_tensor_buffered(labels_train)
+    println("Loading targets in a buffered process")
+    val labels_tensor_train   = create_double_tensor_buffered(buffer_size)(labels_train)
 
+    println()
     //Construct test features and labels
+    println("Processing Training Data Set")
     val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
 
+    println("Loading features in a buffered process")
     val features_tensor_test = (
-      create_image_tensor_buffered(features_test.map(_._1)),
-      create_double_tensor_buffered(features_test.map(_._2))
+      create_image_tensor_buffered(buffer_size)(
+        scaled_height, scaled_width, num_channels)(
+        features_test.map(_._1), test_data_size),
+      create_double_tensor_buffered(buffer_size)(features_test.map(_._2))
     )
 
-    val labels_tensor_test   = create_double_tensor_buffered(labels_test)
+    println("Loading targets in a buffered process")
+    val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test)
 
     println("Helios data set created")
     working_set.copy(
@@ -900,7 +919,21 @@ package object helios {
 
     println("Separating data into train and test.")
     val (train_set, test_set) = complete_data.partition(tt_partition)
-    println("Data set separation complete.")
+
+    print("Total data size: ")
+    val total_data_size = complete_data.toIterator.length
+
+    pprint.pprintln(total_data_size)
+
+    val train_data_size = train_set.toIterator.length
+    val test_data_size  = test_set.toIterator.length
+
+    val train_fraction = train_data_size.toDouble*100/total_data_size
+    print("Training: ")
+    pprint.pprintln("%.2f".format(train_fraction))
+    print("Test: ")
+    pprint.pprintln("%.2f".format(100.0 - train_fraction))
+
 
     //Calculate the height, width and number of channels
     //in the images
@@ -915,8 +948,8 @@ package object helios {
     }
 
     val working_set = AbstractDataSet[(Tensor, Tensor), Tensor](
-      null, null, train_set.toIterator.length,
-      null, null, test_set.toIterator.length)
+      null, null, train_data_size,
+      null, null, test_data_size)
 
     /*
     * If the `resample` flag is set to true,
@@ -960,40 +993,31 @@ package object helios {
 
     }).unzip
 
-    def create_image_tensor_buffered(coll: Iterable[Array[Byte]]): Tensor = {
-      val tensor_splits = coll.grouped(1000).map(split => {
 
-        val split_size = split.toIterator.length
-
-        dtf.tensor_from(
-          dtype = "UINT8", split_size,
-          scaled_height, scaled_width, num_channels)(
-          split.toArray.flatten[Byte])
-
-      })
-
-      dtf.concatenate(tensor_splits.toSeq, axis = 0)
-    }
 
     //Construct training features and labels
     val (features_train, labels_train) = split_features_and_labels(processed_train_set.toStream)
 
     val features_tensor_train = (
-      create_image_tensor_buffered(features_train.map(_._1.flatten)),
-      create_double_tensor_buffered(features_train.map(_._2))
+      create_image_tensor_buffered(buffer_size)(
+        scaled_height, scaled_width, num_channels)(
+        features_train.map(_._1.flatten), train_data_size),
+      create_double_tensor_buffered(buffer_size)(features_train.map(_._2))
     )
 
-    val labels_tensor_train   = create_double_tensor_buffered(labels_train)
+    val labels_tensor_train   = create_double_tensor_buffered(buffer_size)(labels_train)
 
     //Construct test features and labels
     val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
 
     val features_tensor_test = (
-      create_image_tensor_buffered(features_test.map(_._1.flatten)),
-      create_double_tensor_buffered(features_test.map(_._2))
+      create_image_tensor_buffered(buffer_size)(
+        scaled_height, scaled_width, num_channels)(
+        features_test.map(_._1.flatten), test_data_size),
+      create_double_tensor_buffered(buffer_size)(features_test.map(_._2))
     )
 
-    val labels_tensor_test   = create_double_tensor_buffered(labels_test)
+    val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test)
 
     println("Helios data set created")
     working_set.copy(
