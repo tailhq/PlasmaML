@@ -608,22 +608,41 @@ package object helios {
     selector.iid(data.length).draw.map(data(_))
   }
 
+
+  private def print_data_splits(train_fraction: Double): Unit = {
+    print("Training: ")
+    pprint.pprintln(train_fraction)
+    print("Test: ")
+    pprint.pprintln(100.0 - train_fraction)
+  }
+
+  /**
+    * Create a tensor from a collection of image data,
+    * in a buffered manner.
+    *
+    * @param buff_size The size of the buffer (in number of images to load at once)
+    * @param image_height The height, in pixels, of the image.
+    * @param image_width The width, in pixels, of the image.
+    * @param num_channels The number of channels in the image data.
+    * @param coll The collection which holds the data for each image.
+    * @param size The number of elements in the collection
+    * */
   def create_image_tensor_buffered(buff_size: Int)(
     image_height: Int, image_width: Int, num_channels: Int)(
     coll: Iterable[Array[Byte]], size: Int): Tensor = {
     val tensor_splits = coll.grouped(buff_size).toIterable.zipWithIndex.map(splitAndIndex => {
 
-      val split_arr = splitAndIndex._1.toArray
+      val split_seq = splitAndIndex._1.toSeq
 
       val progress = splitAndIndex._2*buff_size*100.0/size
 
       print("Progress %:\t")
       pprint.pprintln(progress)
 
-      dtf.tensor_from(
-        dtype = "UINT8", split_arr.length,
+      dtf.tensor_from_buffer(
+        dtype = "UINT8", split_seq.length,
         image_height, image_width, num_channels)(
-        split_arr.flatten[Byte])
+        split_seq.toArray.flatten[Byte])
 
     })
 
@@ -680,10 +699,8 @@ package object helios {
     val test_data_size  = test_set.toIterator.length
 
     val train_fraction = train_data_size.toDouble*100/total_data_size
-    print("Training: ")
-    pprint.pprintln("%.2f".format(train_fraction))
-    print("Test: ")
-    pprint.pprintln("%.2f".format(100.0 - train_fraction))
+
+    print_data_splits(train_fraction)
 
     //Calculate the height, width and number of channels
     //in the images
@@ -793,10 +810,8 @@ package object helios {
     val test_data_size  = test_set.toIterator.length
 
     val train_fraction = train_data_size.toDouble*100/total_data_size
-    print("Training: ")
-    pprint.pprintln("%.2f".format(train_fraction))
-    print("Test: ")
-    pprint.pprintln("%.2f".format(100.0 - train_fraction))
+
+    print_data_splits(train_fraction)
 
     //Calculate the height, width and number of channels
     //in the images
@@ -838,9 +853,6 @@ package object helios {
       helios.resample(train_set.toStream, selector)
     } else train_set
 
-
-
-
     def split_features_and_labels(coll: HELIOS_OMNI_DATA_EXT)
     : (Iterable[(Array[Byte], Seq[Double])], Iterable[Seq[Double]]) = coll.map(entry => {
 
@@ -870,7 +882,7 @@ package object helios {
 
     println()
     //Construct test features and labels
-    println("Processing Training Data Set")
+    println("Processing Test Data Set")
     val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
 
     println("Loading features in a buffered process")
@@ -929,10 +941,8 @@ package object helios {
     val test_data_size  = test_set.toIterator.length
 
     val train_fraction = train_data_size.toDouble*100/total_data_size
-    print("Training: ")
-    pprint.pprintln("%.2f".format(train_fraction))
-    print("Test: ")
-    pprint.pprintln("%.2f".format(100.0 - train_fraction))
+
+    print_data_splits(train_fraction)
 
 
     //Calculate the height, width and number of channels
