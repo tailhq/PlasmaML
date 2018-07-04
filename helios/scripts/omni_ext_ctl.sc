@@ -20,9 +20,8 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
 def main[T <: SolarImagesSource](
+  year_range: Range             = 2001 to 2004,
   test_year: Int                = 2003,
-  start_year: Int               = 2001,
-  end_year: Int                 = 2006,
   image_source: T               = SOHO(SOHOData.Instruments.MDIMAG, 512),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
@@ -46,12 +45,13 @@ def main[T <: SolarImagesSource](
   pprint.pprintln(test_year)
 
   val data           = helios.generate_data_omni_ext[T](
-    year_start = start_year, year_end = end_year, image_source,
-    deltaT = time_horizon, history = time_history)
+    year_range, image_source,
+    deltaT = time_horizon,
+    history = time_history)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
-  val sw_threshold = 700.0
+  val sw_threshold   = 700.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
 

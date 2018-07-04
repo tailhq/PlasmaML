@@ -50,9 +50,8 @@ def median(list: Seq[Byte]): Double = {
 
 @main
 def main(
+  year_range: Range             = 2001 to 2004,
   test_year: Int                = 2003,
-  start_year: Int               = 2000,
-  end_year: Int                 = 2007,
   image_sources: Seq[SOHO]      = Seq(SOHO(MDIMAG, s512), SOHO(EIT195, s512)),
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (24, 72),
@@ -77,12 +76,13 @@ def main(
   pprint.pprintln(test_year)
 
   val data           = helios.generate_data_mc_omni_ext(
-    year_start = start_year, year_end = end_year, image_sources,
-    deltaT = time_horizon, history = time_history)
+    year_range, image_sources,
+    deltaT = time_horizon,
+    history = time_history)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
-  val sw_threshold = 750.0
+  val sw_threshold   = 750.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
 

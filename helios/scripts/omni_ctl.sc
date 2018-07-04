@@ -19,8 +19,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
 def main[T <: SolarImagesSource](
-  year_start: Int               = 2001,
-  year_end: Int                 = 2006,
+  year_range: Range             = 2001 to 2004,
   test_year: Int                = 2003,
   pre_upwind_ff_sizes: Seq[Int] = Seq(256, 128, 64, 32),
   ff_stack_sizes: Seq[Int]      = Seq(256, 128, 64),
@@ -42,11 +41,11 @@ def main[T <: SolarImagesSource](
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni[T](year_start, year_end, image_source, deltaT = time_horizon)
+  val data           = helios.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
-  val sw_threshold = 700.0
+  val sw_threshold   = 700.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
 

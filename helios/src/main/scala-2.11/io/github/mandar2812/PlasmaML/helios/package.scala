@@ -610,9 +610,9 @@ package object helios {
 
 
   private def print_data_splits(train_fraction: Double): Unit = {
-    print("Training: ")
+    print("Training: %")
     pprint.pprintln(train_fraction)
-    print("Test: ")
+    print("Test:     %")
     pprint.pprintln(100.0 - train_fraction)
   }
 
@@ -1255,11 +1255,11 @@ package object helios {
     * or [[data.SDOLoader.bulk_download()]] methods.
     *
     * @param image_source The image data source to extract from
-    * @param year_start The starting time of the data
-    * @param year_end The end time of the data.
+    * @param year_range The range of years, for constructing the data,
+    *                   ex: (2000 to 2002)
     * */
   def generate_data_omni[T <: SolarImagesSource](
-    year_start: Int = 2001, year_end: Int = 2005,
+    year_range: Range,
     image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     deltaT: (Int, Int) = (18, 56)): HELIOS_OMNI_DATA = {
@@ -1277,7 +1277,7 @@ package object helios {
 
     val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
-    require(year_end > year_start, "Data set must encompass more than one year")
+    //require(year_end > year_start, "Data set must encompass more than one year")
 
     print("Looking for data in directory ")
     val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
@@ -1290,12 +1290,17 @@ package object helios {
     }
 
     println("Preparing data-set as a Stream ")
-    println("Start: "+year_start+" End: "+year_end)
-
+    print("Start: ")
+    pprint.pprintln(year_range.min)
+    print("End: ")
+    pprint.pprintln(year_range.max)
+    println()
 
     helios.join_omni[T](
-      new YearMonth(year_start, 1), new YearMonth(year_end, 12),
-      omni_source, pwd/"data", deltaT, image_source, images_dir)
+      new YearMonth(year_range.min, 1),
+      new YearMonth(year_range.max, 12),
+      omni_source, pwd/"data", deltaT,
+      image_source, images_dir)
   }
 
 
@@ -1307,11 +1312,11 @@ package object helios {
     * or [[data.SDOLoader.bulk_download()]] methods.
     *
     * @param image_source The image data source to extract from
-    * @param year_start The starting time of the data
-    * @param year_end The end time of the data.
+    * @param year_range   The range of years, for constructing the data,
+    *                     ex: (2000 to 2002)
     * */
   def generate_data_omni_ext[T <: SolarImagesSource](
-    year_start: Int = 2001, year_end: Int = 2005,
+    year_range: Range,
     image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     history: Int = 8,
@@ -1330,7 +1335,7 @@ package object helios {
 
     val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
-    require(year_end > year_start, "Data set must encompass more than one year")
+    //require(year_end > year_start, "Data set must encompass more than one year")
 
     print("Looking for data in directory ")
     val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
@@ -1343,13 +1348,19 @@ package object helios {
     }
 
     println("Preparing data-set as a Stream ")
-    println("Start: "+year_start+" End: "+year_end)
+    print("Start: ")
+    pprint.pprintln(year_range.min)
+    print("End: ")
+    pprint.pprintln(year_range.max)
+    println()
 
 
     helios.join_omni[T](
-      new YearMonth(year_start, 1), new YearMonth(year_end, 12),
+      new YearMonth(year_range.min, 1),
+      new YearMonth(year_range.max, 12),
       omni_source, pwd/"data", history, deltaT,
-      image_source, images_dir, image_dir_tree = true)
+      image_source, images_dir,
+      image_dir_tree = true)
   }
 
 
@@ -1360,11 +1371,11 @@ package object helios {
     * generated after executing the [[data.SOHOLoader.bulk_download()]] method.
     *
     * @param image_sources A sequence of [[SOHO]] data source to extract from.
-    * @param year_start The starting time of the data
-    * @param year_end The end time of the data.
+    * @param year_range The range of years, for constructing the data,
+    *                   ex: (2000 to 2002)
     * */
   def generate_data_mc_omni_ext(
-    year_start: Int = 2001, year_end: Int = 2005,
+    year_range: Range,
     image_sources: Seq[SOHO] = Seq(SOHO(SOHOData.Instruments.MDIMAG, 512)),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     history: Int = 8,
@@ -1383,7 +1394,7 @@ package object helios {
 
     val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
-    require(year_end > year_start, "Data set must encompass more than one year")
+    //require(year_end > year_start, "Data set must encompass more than one year")
 
     print("Looking for data in directory ")
     val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
@@ -1393,16 +1404,17 @@ package object helios {
 
     println("Preparing data-set as a Stream ")
     print("Start: ")
-    pprint.pprintln(year_start)
+    pprint.pprintln(year_range.min)
     print("End: ")
-    pprint.pprintln(year_end)
+    pprint.pprintln(year_range.max)
     println()
 
     helios.join_omni(
-      new YearMonth(year_start, 1),
-      new YearMonth(year_end, 12),
+      new YearMonth(year_range.min, 1),
+      new YearMonth(year_range.max, 12),
       omni_source, pwd/"data", history, deltaT,
-      image_sources, soho_dir, image_dir_tree = true)
+      image_sources, soho_dir,
+      image_dir_tree = true)
   }
 
 

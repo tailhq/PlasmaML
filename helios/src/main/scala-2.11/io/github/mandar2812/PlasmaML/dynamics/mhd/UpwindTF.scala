@@ -29,7 +29,7 @@ case class UpwindTF(
 
   override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR]"
 
-  protected val (alpha, beta) = (Tensor(vmax).subtract(vmin), Tensor(vmin))
+  protected val (alpha, beta) = (Tensor(vmax.toFloat).subtract(vmin.toFloat), Tensor(vmin.toFloat))
 
   /**
     * The Carrington longitude lies
