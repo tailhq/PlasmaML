@@ -820,14 +820,14 @@ package object helios {
     } else train_set
 
     def create_image_tensor_buffered(coll: Iterable[Array[Byte]]): Tensor = {
-      val tensor_splits = coll.grouped(1000).map(split => {
+      val tensor_splits = coll.grouped(1000).toIterable.map(split => {
 
-        val split_size = split.toIterator.length
+        val split_arr = split.toArray
 
         dtf.tensor_from_buffer(
-          dtype = "UINT8", split_size,
+          dtype = "UINT8", split_arr.length,
           scaled_height, scaled_width, num_channels)(
-          split.toArray.flatten[Byte])
+          split_arr.flatten[Byte])
 
       })
 
