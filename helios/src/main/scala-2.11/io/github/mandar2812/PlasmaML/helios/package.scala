@@ -886,7 +886,7 @@ package object helios {
     println("Processing Training Data Set")
     val (features_train, labels_train) = split_features_and_labels(processed_train_set)
 
-    println("Loading \n1) image features \n 2) time series history \n")
+    println("Loading \n1) image features \n 2) time series history")
     val features_tensor_train = (
       create_image_tensor_buffered(buffer_size)(
         scaled_height, scaled_width, num_channels)(
@@ -903,7 +903,7 @@ package object helios {
     println("Processing Test Data Set")
     val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
 
-    println("Loading \n\t1) image features \n\t2) time series history \n")
+    println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_test = (
       create_image_tensor_buffered(buffer_size)(
         scaled_height, scaled_width, num_channels)(
@@ -1029,7 +1029,7 @@ package object helios {
     println("Processing Training Data Set")
     val (features_train, labels_train) = split_features_and_labels(processed_train_set.toStream)
 
-    println("Loading \n\t1) image features \n\t 2) time series history \n")
+    println("Loading \n\t1) image features \n\t 2) time series history")
     val features_tensor_train = (
       create_image_tensor_buffered(buffer_size)(
         scaled_height, scaled_width, num_channels)(
@@ -1045,7 +1045,7 @@ package object helios {
     println("Processing Test Data Set")
     val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
 
-    println("Loading \n\t1) image features \n\t 2) time series history \n")
+    println("Loading \n\t1) image features \n\t 2) time series history")
     val features_tensor_test = (
       create_image_tensor_buffered(buffer_size)(
         scaled_height, scaled_width, num_channels)(
