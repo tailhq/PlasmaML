@@ -79,7 +79,7 @@ def main[T <: SolarImagesSource](
       DataPipe((i: Image) => i.argb.map(_.last.toByte)))
     case _: SDO  => (
       DynaMLPipe.identityPipe[Image], 4,
-      DataPipe((i: Image) => i.argb.flatten))
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
   }
 
 
