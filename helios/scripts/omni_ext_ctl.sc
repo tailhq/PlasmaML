@@ -73,12 +73,15 @@ def main[T <: SolarImagesSource](
     helios.image_central_patch(magic_ratio, image_sizes) >
       DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
-  val (image_filter, num_channels) = image_source match {
-    case _: SOHO => (DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1)
-    case _: SDO  => (DynaMLPipe.identityPipe[Image], 4)
+  val (image_filter, num_channels, image_to_byte) = image_source match {
+    case _: SOHO => (
+      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
+      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
+    case _: SDO  => (
+      DynaMLPipe.identityPipe[Image], 4,
+      DataPipe((i: Image) => i.argb.flatten))
   }
 
-  val image_to_byte = DataPipe((i: Image) => i.argb.map(_.last.toByte))
 
   val summary_dir_prefix = "swtl_"+image_source.toString
 
