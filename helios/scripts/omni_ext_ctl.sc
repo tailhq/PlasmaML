@@ -77,9 +77,14 @@ def main[T <: SolarImagesSource](
     case _: SOHO => (
       DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
       DataPipe((i: Image) => i.argb.map(_.last.toByte)))
-    case _: SDO  => (
+
+    case SDO(AIA094335193, s) => (
       DynaMLPipe.identityPipe[Image], 4,
       DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
+
+    case _: SDO  => (
+      DynaMLPipe.identityPipe[Image], 1,
+      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
   }
 
 
