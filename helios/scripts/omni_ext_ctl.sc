@@ -39,7 +39,6 @@ def main[T <: SolarImagesSource](
   tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
   resFile: String               = "mdi_rbfloss_results.csv") = {
 
-  //Data with MDI images
 
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)

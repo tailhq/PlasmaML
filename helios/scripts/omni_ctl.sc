@@ -23,6 +23,7 @@ def main[T <: SolarImagesSource](
   pre_upwind_ff_sizes: Seq[Int] = Seq(256, 128, 64, 32),
   ff_stack_sizes: Seq[Int]      = Seq(256, 128, 64),
   image_source: T               = SOHO(MDIMAG, 512),
+  buffer_size: Int              = 2000,
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
   opt: Optimizer                = tf.train.AdaDelta(0.01),
@@ -40,7 +41,7 @@ def main[T <: SolarImagesSource](
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  helios.data.buffer_size_(300)
+  helios.data.buffer_size_(buffer_size)
 
   val data           = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
 
