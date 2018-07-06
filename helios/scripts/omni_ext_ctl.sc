@@ -23,6 +23,7 @@ def main[T <: SolarImagesSource](
   test_year: Int                = 2003,
   image_source: T               = SOHO(SOHOData.Instruments.MDIMAG, 512),
   re: Boolean                   = true,
+  buffer_size: Int              = 2000,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
   conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64, 32, 8),
@@ -43,7 +44,7 @@ def main[T <: SolarImagesSource](
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  helios.data.buffer_size_(1000)
+  helios.data.buffer_size_(buffer_size)
 
   val data           = helios.data.generate_data_omni_ext[T](
     year_range, image_source,
