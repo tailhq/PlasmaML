@@ -15,7 +15,7 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni()
+  val data           = helios.data.generate_data_omni(2001 to 2003)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
@@ -32,7 +32,7 @@ def main(
   val summary_dir = if(re) "mdi_dynamic_resample_"+test_year else "mdi_dynamic_"+test_year
 
   helios.run_experiment_omni_dynamic_time_scales(
-    data, tt_partition, resample = re)(
+    data.toStream, tt_partition, resample = re)(
     summary_dir, 150000, tmpdir)
 
 }

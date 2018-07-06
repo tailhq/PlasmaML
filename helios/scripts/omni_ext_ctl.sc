@@ -43,7 +43,7 @@ def main[T <: SolarImagesSource](
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_omni_ext[T](
+  val data           = helios.data.generate_data_omni_ext[T](
     year_range, image_source,
     deltaT = time_horizon,
     history = time_history)
@@ -69,7 +69,7 @@ def main[T <: SolarImagesSource](
   }
 
   val image_preprocess =
-    helios.image_central_patch(magic_ratio, image_sizes) >
+    helios.data.image_central_patch(magic_ratio, image_sizes) >
       DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
   val (image_filter, num_channels, image_to_byte) = image_source match {

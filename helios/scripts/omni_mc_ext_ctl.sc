@@ -74,7 +74,7 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_mc_omni_ext(
+  val data           = helios.data.generate_data_mc_omni_ext(
     year_range, image_sources,
     deltaT = time_horizon,
     history = time_history)
@@ -87,7 +87,7 @@ def main(
 
   val test_end       = new DateTime(test_year, 12, 31, 23, 59)
 
-  val tt_partition   = (p: helios.MC_PATTERN_EXT) =>
+  val tt_partition   = (p: helios.data.MC_PATTERN_EXT) =>
     if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._2.max >= sw_threshold) false
     else true
 

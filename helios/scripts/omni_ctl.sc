@@ -40,9 +40,9 @@ def main[T <: SolarImagesSource](
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  helios.buffer_size_(300)
+  helios.data.buffer_size_(300)
 
-  val data           = helios.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
+  val data           = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
@@ -65,7 +65,7 @@ def main[T <: SolarImagesSource](
   }
 
   val image_preprocess =
-    helios.image_central_patch(magic_ratio, image_sizes) >
+    helios.data.image_central_patch(magic_ratio, image_sizes) >
       DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5).filter(GrayscaleFilter))
 
 
