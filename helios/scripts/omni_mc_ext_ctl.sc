@@ -3,8 +3,7 @@ import org.joda.time._
 import com.sksamuel.scrimage._
 import com.sksamuel.scrimage.filter._
 import io.github.mandar2812.dynaml.repl.Router.main
-import io.github.mandar2812.dynaml.tensorflow.dtflearn
-import io.github.mandar2812.dynaml.tensorflow.utils.dtfutils
+import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.data.SOHO

@@ -1,7 +1,9 @@
 package io.github.mandar2812.PlasmaML.omni
 
+import ammonite.ops.Path
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes.{DataPipe, MetaPipe21, StreamDataPipe, StreamFlatMapPipe}
+import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
@@ -16,7 +18,9 @@ object OMNIData {
 
   val logger = Logger.getLogger(this.getClass)
 
-  val omni_uri = "pub/data/omni/"
+  val base_url = "ftp://spdf.gsfc.nasa.gov/"
+
+  val omni_uri = "pub/data/omni/low_res_omni/"
 
   /**
     * The column numbers of important quantities in
@@ -80,7 +84,7 @@ object OMNIData {
   * */
 object OMNILoader {
 
-  import io.github.mandar2812.PlasmaML.omni.OMNIData.{columnFillValues, dateColumns}
+  import io.github.mandar2812.PlasmaML.omni.OMNIData._
 
   //Set time zone to UTC.
   DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -90,6 +94,20 @@ object OMNILoader {
     * */
   val dt_format: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/D/H")
 
+  def get_download_url(year: Int): String = base_url + omni_uri + s"omni2_$year.dat"
+
+  def download(year_range: Range = 2001 to 2017, path: Path): Unit = {
+
+    println("Downloading OMNI hourly data")
+    println()
+
+    year_range.foreach(y => {
+      print("Year: ")
+      pprint.pprintln(y)
+      utils.downloadURL(get_download_url(y), (path/("omni2_"+y+".csv")).toString)
+    })
+
+  }
   /**
     * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
     * reads an OMNI file cleans it and extracts the columns specified

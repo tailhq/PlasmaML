@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML
 
-import ammonite.ops.{Path, RelPath, exists, home, ls, pwd, root}
+import ammonite.ops.{Path, exists, home, ls, pwd, root}
 import breeze.linalg.DenseVector
 import org.joda.time._
 import com.sksamuel.scrimage.Image
@@ -8,7 +8,7 @@ import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
-import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe}
+import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe, dtfutils}
 import io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
@@ -64,6 +64,42 @@ package object helios {
   type HELIOS_MC_OMNI_DATA     = Iterable[MC_PATTERN]
   type HELIOS_OMNI_DATA_EXT    = Iterable[PATTERN_EXT]
   type HELIOS_MC_OMNI_DATA_EXT = Iterable[MC_PATTERN_EXT]
+
+  type IMAGE_TS                = (Tensor, Tensor)
+
+  type TF_DATA                 = AbstractDataSet[
+    Tensor, Output, DataType, Shape,
+    Tensor, Output, DataType, Shape]
+
+  type TF_DATA_EXT             = AbstractDataSet[
+    (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+    Tensor, Output, DataType, Shape]
+
+  type SC_TF_DATA_EXT          = (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF))
+
+  type SC_TF_DATA              = (TF_DATA, (MinMaxScalerTF, MinMaxScalerTF))
+
+  private def TF_DATA_EXT(
+    trData: IMAGE_TS,
+    trLabels: Tensor,
+    sizeTr: Int,
+    tData: IMAGE_TS,
+    tLabels: Tensor,
+    sizeT: Int): AbstractDataSet[
+    IMAGE_TS, (Output, Output), (DataType, DataType), (Shape, Shape),
+    Tensor, Output, DataType, Shape] =
+    AbstractDataSet(trData, trLabels, sizeTr, tData, tLabels, sizeT)
+
+  private def TF_DATA(
+    trData: Tensor,
+    trLabels: Tensor,
+    sizeTr: Int,
+    tData: Tensor,
+    tLabels: Tensor,
+    sizeT: Int): AbstractDataSet[
+    Tensor, Output, DataType, Shape,
+    Tensor, Output, DataType, Shape] =
+    AbstractDataSet(trData, trLabels, sizeTr, tData, tLabels, sizeT)
 
   object learn {
 
@@ -158,7 +194,7 @@ package object helios {
       (labels_scaled, labels_scaler)
     })
 
-  val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
+  val scale_helios_dataset = DataPipe[TF_DATA, SC_TF_DATA]((dataset: TF_DATA) => {
 
     val (norm_tr_data, scalers) = std_images_and_outputs(dataset.trainData, dataset.trainLabels)
 
@@ -171,7 +207,7 @@ package object helios {
     )
   })
 
-  val scale_helios_dataset_ext = DataPipe((dataset: AbstractDataSet[(Tensor, Tensor), Tensor]) => {
+  val scale_helios_dataset_ext = DataPipe[TF_DATA_EXT, SC_TF_DATA_EXT]((dataset: TF_DATA_EXT) => {
 
     val (norm_tr_images_and_labels, scalers) = std_images_and_outputs(dataset.trainData._1, dataset.trainLabels)
     val (norm_histories, history_scaler) = minmax_std(dataset.trainData._2)
@@ -641,7 +677,7 @@ package object helios {
       print("Progress %:\t")
       pprint.pprintln(progress)
 
-      dtf.tensor_from(
+      dtf.tensor_from_buffer(
         dtype = "UINT8", split_seq.length,
         image_height, image_width, num_channels)(
         split_seq.toArray.flatten[Byte])
@@ -693,7 +729,7 @@ package object helios {
     image_process: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
     image_to_bytes: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     num_image_channels: Int,
-    resample: Boolean = false): HeliosDataSet = {
+    resample: Boolean = false): TF_DATA = {
 
     println("Separating data into train and test.\n")
     val (train_set, test_set) = collated_data.partition(tt_partition)
@@ -721,7 +757,7 @@ package object helios {
 
     }
 
-    val working_set = HeliosDataSet(
+    val working_set = TF_DATA(
       null, null, train_data_size,
       null, null, test_data_size)
 
@@ -807,13 +843,13 @@ package object helios {
     *                        image will be scaled down. i.e. scaleDownFactor = 4
     *                        corresponds to a 16 fold decrease in image size.
     * */
-  def create_helios_data_set(
+  def create_helios_ts_data_set(
     collated_data: HELIOS_OMNI_DATA_EXT,
     tt_partition: PATTERN_EXT => Boolean,
     image_process: DataPipe[Image, Image],
     image_to_bytes: DataPipe[Image, Array[Byte]],
     num_image_channels: Int,
-    resample: Boolean): AbstractDataSet[(Tensor, Tensor), Tensor] = {
+    resample: Boolean): TF_DATA_EXT = {
 
     println("Separating data into train and test.\n")
     val (train_set, test_set) = collated_data.partition(tt_partition)
@@ -840,7 +876,7 @@ package object helios {
 
     }
 
-    val working_set = AbstractDataSet[(Tensor, Tensor), Tensor](
+    val working_set: TF_DATA_EXT = TF_DATA_EXT(
       null, null, train_data_size,
       null, null, test_data_size)
 
@@ -925,13 +961,13 @@ package object helios {
   }
 
 
-  def create_helios_data_set(
+  def create_mc_helios_ts_data_set(
     image_sources: Seq[SOHO],
     collated_data: HELIOS_MC_OMNI_DATA_EXT,
     tt_partition: MC_PATTERN_EXT => Boolean,
     image_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
-    resample: Boolean): AbstractDataSet[(Tensor, Tensor), Tensor] = {
+    resample: Boolean): TF_DATA_EXT = {
 
     println()
     println("Filtering complete data patterns")
@@ -976,7 +1012,7 @@ package object helios {
 
     }
 
-    val working_set = AbstractDataSet[(Tensor, Tensor), Tensor](
+    val working_set = TF_DATA_EXT(
       null, null, train_data_size,
       null, null, test_data_size)
 
@@ -1473,7 +1509,7 @@ package object helios {
       ((Tensor, Tensor), Tensor), ((Output, Output), Output),
       ((DataType, DataType), DataType),
       ((Shape, Shape), Shape), ((Output, Output), Output)])(
-    data: AbstractDataSet[(Tensor, Tensor), Tensor],
+    data: TF_DATA_EXT,
     pred_flags: (Boolean, Boolean) = (false, true),
     buff_size: Int = 400): (Option[(Tensor, Tensor)], Option[(Tensor, Tensor)]) = {
 
@@ -1700,7 +1736,6 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
-
     /*
     * After data has been joined/collated,
     * start loading it into tensors
@@ -1714,15 +1749,11 @@ package object helios {
       num_channels_image,
       resample)
 
-
-    val (norm_tf_data, scalers): (HeliosDataSet, (MinMaxScalerTF, MinMaxScalerTF)) =
+    val (norm_tf_data, scalers): SC_TF_DATA =
       scale_helios_dataset(dataSet)
 
-    val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData)
-    val trainLabels = tf.data.TensorSlicesDataset(norm_tf_data.trainLabels)
-
     val trainData =
-      trainImages.zip(trainLabels)
+      norm_tf_data.training_data
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
@@ -1767,14 +1798,12 @@ package object helios {
       Shape(causal_horizon)
     )
 
-
     val pred_time_lags_test = if(prob_timelags) {
       val unsc_probs = predictions._2
 
       unsc_probs.topK(1)._2.reshape(Shape(dataSet.nTest)).cast(FLOAT64)
 
     } else predictions._2
-
 
     val pred_targets: Tensor = if (mo_flag) {
       val all_preds =
@@ -1794,7 +1823,6 @@ package object helios {
       val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
       dataSet.testLabels(n, time_lag).scalar.asInstanceOf[Double]
     })
-
 
     val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
@@ -1854,7 +1882,7 @@ package object helios {
     * start loading it into tensors
     *
     * */
-    val dataSet: AbstractDataSet[(Tensor, Tensor), Tensor] = helios.create_helios_data_set(
+    val dataSet: TF_DATA_EXT = helios.create_helios_ts_data_set(
       collated_data,
       tt_partition,
       image_process = preprocess_image,
@@ -1863,17 +1891,10 @@ package object helios {
       resample)
 
 
-    val (norm_tf_data, scalers):
-      (AbstractDataSet[(Tensor, Tensor), Tensor], (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF)) =
-      scale_helios_dataset_ext(dataSet)
-
-    val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData._1)
-    val trainHistories = tf.data.TensorSlicesDataset(norm_tf_data.trainData._2)
-
-    val trainLabels = tf.data.TensorSlicesDataset(norm_tf_data.trainLabels)
+    val (norm_tf_data, scalers): SC_TF_DATA_EXT = scale_helios_dataset_ext(dataSet)
 
     val trainData =
-      trainImages.zip(trainHistories).zip(trainLabels)
+      norm_tf_data.training_data
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
@@ -2018,7 +2039,7 @@ package object helios {
     * start loading it into tensors
     *
     * */
-    val dataSet: AbstractDataSet[(Tensor, Tensor), Tensor] = helios.create_helios_data_set(
+    val dataSet: TF_DATA_EXT = helios.create_mc_helios_ts_data_set(
       image_sources,
       collated_data,
       tt_partition,
@@ -2028,16 +2049,11 @@ package object helios {
 
 
     val (norm_tf_data, scalers):
-      (AbstractDataSet[(Tensor, Tensor), Tensor], (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF)) =
+      (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF)) =
       scale_helios_dataset_ext(dataSet)
 
-    val trainImages = tf.data.TensorSlicesDataset(norm_tf_data.trainData._1)
-    val trainHistories = tf.data.TensorSlicesDataset(norm_tf_data.trainData._2)
-
-    val trainLabels = tf.data.TensorSlicesDataset(norm_tf_data.trainLabels)
-
     val trainData =
-      trainImages.zip(trainHistories).zip(trainLabels)
+      norm_tf_data.training_data
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
