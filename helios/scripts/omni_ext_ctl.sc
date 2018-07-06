@@ -43,6 +43,8 @@ def main[T <: SolarImagesSource](
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
+  helios.data.buffer_size_(1000)
+
   val data           = helios.data.generate_data_omni_ext[T](
     year_range, image_source,
     deltaT = time_horizon,
