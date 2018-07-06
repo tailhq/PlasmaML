@@ -11,6 +11,7 @@ import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImag
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import io.github.mandar2812.dynaml.DynaMLPipe
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
@@ -67,10 +68,22 @@ def main[T <: SolarImagesSource](
 
   val image_preprocess =
     helios.data.image_central_patch(magic_ratio, image_sizes) >
-      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5).filter(GrayscaleFilter))
+      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
 
-  val image_to_bytes = DataPipe((i: Image) => i.argb.map(_.last.toByte))
+  val (image_filter, num_channels, image_to_byte) = image_source match {
+    case _: SOHO => (
+      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
+      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
+
+    case SDO(AIA094335193, s) => (
+      DynaMLPipe.identityPipe[Image], 4,
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
+
+    case _: SDO  => (
+      DynaMLPipe.identityPipe[Image], 1,
+      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
+  }
 
   val summary_dir_prefix = "swtl_"+image_source.toString
 
@@ -131,9 +144,9 @@ def main[T <: SolarImagesSource](
 
   helios.run_experiment_omni(
     data, tt_partition, resample = re,
-    preprocess_image = image_preprocess,
-    image_to_bytearr = image_to_bytes,
-    num_channels_image = 1)(
+    preprocess_image = image_preprocess > image_filter,
+    image_to_bytearr = image_to_byte,
+    num_channels_image = num_channels)(
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
