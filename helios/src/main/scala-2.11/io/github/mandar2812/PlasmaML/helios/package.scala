@@ -1,22 +1,19 @@
 package io.github.mandar2812.PlasmaML
 
-import ammonite.ops.{Path, exists, home, ls, pwd, root}
-import breeze.linalg.DenseVector
+import ammonite.ops.{Path, exists, home, ls}
 import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe
-import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe, dtfutils}
+import io.github.mandar2812.dynaml.tensorflow.implicits._
 import io.github.mandar2812.dynaml.tensorflow.utils._
-import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.StopCriteria
-import org.platanios.tensorflow.api.learn.estimators.Estimator
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
@@ -61,6 +58,7 @@ package object helios {
     }).sum/num_elem).toFloat
   }
 
+/*
   def buffered_preds_helper(
     predictiveModel: Estimator[
       (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
@@ -102,6 +100,7 @@ package object helios {
 
     (train_preds, test_preds)
   }
+*/
 
 
   object learn {
@@ -362,7 +361,9 @@ package object helios {
       scale_helios_dataset(dataSet)
 
     val trainData =
-      norm_tf_data.training_data
+      norm_tf_data.training_data[
+        Output, DataType, Shape,
+        Output, DataType, Shape]
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
@@ -399,7 +400,11 @@ package object helios {
       stop_criteria)(
       trainData)
 
-    val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
+    val predictions: (Tensor, Tensor) = dtfutils.predict_data[
+      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, Output,
+      (Tensor, Tensor), (Tensor, Tensor)
+      ](estimator, dataSet, (false, true), _buffer_size)._2.get
 
     val index_times = Tensor(
       (0 until causal_horizon).map(_.toDouble)
@@ -503,7 +508,9 @@ package object helios {
     val (norm_tf_data, scalers): SC_TF_DATA_EXT = scale_helios_dataset_ext(dataSet)
 
     val trainData =
-      norm_tf_data.training_data
+      norm_tf_data.training_data[
+        (Output, Output), (DataType, DataType), (Shape, Shape),
+        Output, DataType, Shape]
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
@@ -550,7 +557,11 @@ package object helios {
       trainData)
 
 
-    val predictions: (Tensor, Tensor) = buffered_preds(estimator)(dataSet, (false, true))._2.get
+    val predictions: (Tensor, Tensor) = dtfutils.predict_data[
+      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
+      Tensor, Output, DataType, Shape, Output,
+      (Tensor, Tensor), (Tensor, Tensor)
+      ](estimator, dataSet, (false, true), _buffer_size)._2.get
 
     val index_times = Tensor(
       (0 until causal_horizon).map(_.toDouble)
@@ -662,7 +673,9 @@ package object helios {
       scale_helios_dataset_ext(dataSet)
 
     val trainData =
-      norm_tf_data.training_data
+      norm_tf_data.training_data[
+        (Output, Output), (DataType, DataType), (Shape, Shape),
+        Output, DataType, Shape]
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
@@ -707,7 +720,11 @@ package object helios {
       loss, optimizer, summariesDir, stop_criteria)(
       trainData, inMemory = inMemoryModel)
 
-    val predictions: (Tensor, Tensor) = buffered_preds(estimator)(dataSet, (false, true))._2.get
+    val predictions: (Tensor, Tensor) = dtfutils.predict_data[
+      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
+      Tensor, Output, DataType, Shape, Output,
+      (Tensor, Tensor), (Tensor, Tensor)
+      ](estimator, dataSet, (false, true), _buffer_size)._2.get
 
     val index_times = Tensor(
       (0 until causal_horizon).map(_.toDouble)

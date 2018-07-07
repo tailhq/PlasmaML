@@ -74,20 +74,7 @@ def main[T <: SolarImagesSource](
     helios.data.image_central_patch(magic_ratio, image_sizes) >
       DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
-  val (image_filter, num_channels, image_to_byte) = image_source match {
-    case _: SOHO => (
-      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
-      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
-
-    case SDO(AIA094335193, s) => (
-      DynaMLPipe.identityPipe[Image], 4,
-      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
-
-    case _: SDO  => (
-      DynaMLPipe.identityPipe[Image], 1,
-      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
-  }
-
+  val (image_filter, num_channels, image_to_byte) = helios.data.image_process_metadata(image_source)
 
   val summary_dir_prefix = "swtl_"+image_source.toString
 
@@ -113,11 +100,11 @@ def main[T <: SolarImagesSource](
 
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = num_channels)(
-        start_num_bits = 5, end_num_bits = 3)(
-        relu_param = 0.1f, dropout = false,
-        keep_prob = 0.6f) >>
+      dtflearn.conv2d_unit(Shape(4, 4, num_channels, 20), dropout = false)(0) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 20, 15), dropout = false)(1) >>
+      tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 15, 10), dropout = false)(2) >>
+      dtflearn.conv2d_unit(Shape(2, 2, 10, 8), dropout = false)(3) >>
       tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(

@@ -71,19 +71,7 @@ def main[T <: SolarImagesSource](
       DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
 
-  val (image_filter, num_channels, image_to_byte) = image_source match {
-    case _: SOHO => (
-      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
-      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
-
-    case SDO(AIA094335193, s) => (
-      DynaMLPipe.identityPipe[Image], 4,
-      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
-
-    case _: SDO  => (
-      DynaMLPipe.identityPipe[Image], 1,
-      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
-  }
+  val (image_filter, num_channels, image_to_byte) = helios.data.image_process_metadata(image_source)
 
   val summary_dir_prefix = "swtl_"+image_source.toString
 

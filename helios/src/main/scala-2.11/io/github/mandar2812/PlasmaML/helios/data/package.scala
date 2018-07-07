@@ -3,17 +3,18 @@ package io.github.mandar2812.PlasmaML.helios
 import ammonite.ops.{Path, pwd, root}
 import breeze.linalg.DenseVector
 import com.sksamuel.scrimage.Image
+import com.sksamuel.scrimage.filter.GrayscaleFilter
 import io.github.mandar2812.PlasmaML.helios
+import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
-import io.github.mandar2812.dynaml.tensorflow.dtf
+import io.github.mandar2812.dynaml.tensorflow.{dtf, data => dtfdata}
 import io.github.mandar2812.dynaml.tensorflow.utils.{AbstractDataSet, GaussianScalerTF, MinMaxScalerTF}
 import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import org.joda.time._
 import spire.math.UByte
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.types.DataType
 
 
 /**
@@ -58,13 +59,9 @@ package object data {
 
   type IMAGE_TS                = (Tensor, Tensor)
 
-  type TF_DATA                 = AbstractDataSet[
-    Tensor, Output, DataType, Shape,
-    Tensor, Output, DataType, Shape]
+  type TF_DATA                 = AbstractDataSet[Tensor, Tensor]
 
-  type TF_DATA_EXT             = AbstractDataSet[
-    (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
-    Tensor, Output, DataType, Shape]
+  type TF_DATA_EXT             = AbstractDataSet[(Tensor, Tensor), Tensor]
 
   type SC_TF_DATA_EXT          = (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF))
 
@@ -76,9 +73,7 @@ package object data {
     sizeTr: Int,
     tData: IMAGE_TS,
     tLabels: Tensor,
-    sizeT: Int): AbstractDataSet[
-    IMAGE_TS, (Output, Output), (DataType, DataType), (Shape, Shape),
-    Tensor, Output, DataType, Shape] =
+    sizeT: Int): AbstractDataSet[IMAGE_TS, Tensor] =
     AbstractDataSet(trData, trLabels, sizeTr, tData, tLabels, sizeT)
 
   private def TF_DATA(
@@ -87,9 +82,7 @@ package object data {
     sizeTr: Int,
     tData: Tensor,
     tLabels: Tensor,
-    sizeT: Int): AbstractDataSet[
-    Tensor, Output, DataType, Shape,
-    Tensor, Output, DataType, Shape] =
+    sizeT: Int): AbstractDataSet[Tensor, Tensor] =
     AbstractDataSet(trData, trLabels, sizeTr, tData, tLabels, sizeT)
 
 
@@ -142,10 +135,30 @@ package object data {
     override def toString: String = "OMNI_"+OMNIData.columnNames(quantity).replace(" ", "_")
   }
 
+  def image_process_metadata[S <: SolarImagesSource](image_source: S)
+  : (DataPipe[Image, Image], Int, DataPipe[Image, Array[Byte]]) = image_source match {
+    case _: SOHO => (
+      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
+      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
+
+    case SDO(AIA094335193, _) => (
+      DynaMLPipe.identityPipe[Image], 4,
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
+
+    case SDO(HMI171, _) => (
+      DynaMLPipe.identityPipe[Image], 4,
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
+
+    case _: SDO  => (
+      DynaMLPipe.identityPipe[Image], 1,
+      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
+  }
 
   private var buffer_size = 500
 
   def buffer_size_(s: Int) = buffer_size = s
+
+  def _buffer_size: Int = buffer_size
 
   val image_central_patch: MetaPipe21[Double, Int, Image, Image] =
     MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Image) => {
@@ -664,6 +677,7 @@ package object data {
     pprint.pprintln(100.0 - train_fraction)
   }
 
+/*
   /**
     * Create a tensor from a collection of image data,
     * in a buffered manner.
@@ -748,6 +762,7 @@ package object data {
 
     dtf.concatenate(tensor_splits.toSeq, axis = 0)
   }
+*/
 
   def create_double_tensor_buffered(buff_size: Int)(coll: Iterable[Seq[Double]], size: Int): Tensor = {
 
@@ -866,7 +881,8 @@ package object data {
     val (features_train, labels_train) = split_features_and_labels(processed_train_set)
 
     println("Loading features ")
-    val features_tensor_train = create_image_tensor_buffered(buffer_size,
+    val features_tensor_train = dtfdata.create_image_tensor_buffered(
+      buffer_size,
       image_process > image_to_bytes,
       scaled_height, scaled_width,
       num_channels)(
@@ -882,7 +898,7 @@ package object data {
     val (features_test, labels_test) = split_features_and_labels(test_set)
 
     println("Loading features ")
-    val features_tensor_test = create_image_tensor_buffered(
+    val features_tensor_test = dtfdata.create_image_tensor_buffered(
       buffer_size, image_process > image_to_bytes,
       scaled_height, scaled_width,
       num_channels)(
@@ -994,7 +1010,7 @@ package object data {
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_train = (
-      create_image_tensor_buffered(buffer_size,
+      dtfdata.create_image_tensor_buffered(buffer_size,
         image_process > image_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_train.map(_._1), train_data_size),
@@ -1012,7 +1028,7 @@ package object data {
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_test = (
-      create_image_tensor_buffered(
+      dtfdata.create_image_tensor_buffered(
         buffer_size, image_process > image_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_test.map(_._1), test_data_size),
@@ -1133,7 +1149,7 @@ package object data {
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_train = (
-      create_image_tensor_buffered(buffer_size,
+      dtfdata.create_image_tensor_buffered(buffer_size,
         image_sources, image_process, images_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_train.map(_._1), train_data_size),
@@ -1150,7 +1166,7 @@ package object data {
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_test = (
-      create_image_tensor_buffered(buffer_size,
+      dtfdata.create_image_tensor_buffered(buffer_size,
         image_sources, image_process, images_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_test.map(_._1), test_data_size),
