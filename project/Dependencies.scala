@@ -25,7 +25,7 @@ object Dependencies {
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
     if(status == "local") ("io.github.mandar2812", "dynaml_2.11", latest_dynaml_release)
-    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", "6c974625ec")
+    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", s"$dynaml_branch-SNAPSHOT")
     else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", latest_dynaml_release)
 
   val platform: String = {
