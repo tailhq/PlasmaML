@@ -150,7 +150,7 @@ package object data {
       DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
 
     case _: SDO  => (
-      DynaMLPipe.identityPipe[Image], 1,
+      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
       DataPipe((i: Image) => i.argb.map(_.last.toByte)))
   }
 
