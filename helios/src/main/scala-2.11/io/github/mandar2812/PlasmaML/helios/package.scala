@@ -297,6 +297,19 @@ package object helios {
   }
 
 
+  private def write_predictions(
+    preds: Seq[Double],
+    targets: Seq[Double],
+    timelags: Seq[Double],
+    file: Path): Unit = {
+
+    //write predictions and ground truth to a csv file
+
+    val resScatter = preds.zip(targets).zip(timelags).map(p => Seq(p._1._1, p._1._2, p._2))
+
+    DynaMLPipe.streamToFile(file.toString())(resScatter.map(_.mkString(",")).toStream)
+  }
+
   /**
     * Train and test a CNN based solar wind prediction architecture.
     *
@@ -439,6 +452,14 @@ package object helios {
     })
 
     val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+    //write predictions and ground truth to a csv file
+
+    write_predictions(
+      dtfutils.toDoubleSeq(pred_targets).toSeq,
+      actual_targets,
+      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+      tf_summary_dir/"scatter_test.csv")
 
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
@@ -599,6 +620,13 @@ package object helios {
 
 
     val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+    write_predictions(
+      dtfutils.toDoubleSeq(pred_targets).toSeq,
+      actual_targets,
+      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+      tf_summary_dir/"scatter_test.csv")
+
 
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
@@ -762,6 +790,12 @@ package object helios {
 
 
     val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+    write_predictions(
+      dtfutils.toDoubleSeq(pred_targets).toSeq,
+      actual_targets,
+      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+      tf_summary_dir/"scatter_test.csv")
 
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
