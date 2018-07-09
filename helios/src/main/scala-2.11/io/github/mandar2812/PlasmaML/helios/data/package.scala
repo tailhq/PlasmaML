@@ -820,7 +820,7 @@ package object data {
     val train_data_size = train_set.toIterator.length
     val test_data_size  = test_set.toIterator.length
 
-    val train_fraction = train_data_size.toDouble*100/total_data_size
+    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
 
     print_data_splits(train_fraction)
 
@@ -948,7 +948,7 @@ package object data {
     val train_data_size = train_set.toIterator.length
     val test_data_size  = test_set.toIterator.length
 
-    val train_fraction = train_data_size.toDouble*100/total_data_size
+    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
 
     print_data_splits(train_fraction)
 
@@ -1083,7 +1083,7 @@ package object data {
     val train_data_size = train_set.toIterator.length
     val test_data_size  = test_set.toIterator.length
 
-    val train_fraction = train_data_size.toDouble*100/total_data_size
+    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
 
     print_data_splits(train_fraction)
 
