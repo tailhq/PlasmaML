@@ -673,96 +673,11 @@ package object data {
   private def print_data_splits(train_fraction: Double): Unit = {
     print("Training: % ")
     pprint.pprintln(train_fraction)
+
     print("Test:     % ")
-    pprint.pprintln(100.0 - train_fraction)
+    val test_fraction = math.round(100*(100f - train_fraction.toFloat))/100d
+    pprint.pprintln(test_fraction)
   }
-
-/*
-  /**
-    * Create a tensor from a collection of image data,
-    * in a buffered manner.
-    *
-    * @param buff_size The size of the buffer (in number of images to load at once)
-    * @param image_height The height, in pixels, of the image.
-    * @param image_width The width, in pixels, of the image.
-    * @param num_channels The number of channels in the image data.
-    * @param coll The collection which holds the data for each image.
-    * @param size The number of elements in the collection
-    * */
-  def create_image_tensor_buffered(
-    buff_size: Int,
-    image_to_bytes: DataPipe[Image, Array[Byte]],
-    image_height: Int, image_width: Int, num_channels: Int)(
-    coll: Iterable[Path], size: Int): Tensor = {
-
-    val load_image = StreamDataPipe(DataPipe((p: Path) => Image.fromPath(p.toNIO)) > image_to_bytes)
-
-    println()
-    val tensor_splits = coll.grouped(buff_size).toIterable.zipWithIndex.map(splitAndIndex => {
-
-      val split_seq = splitAndIndex._1.toStream
-
-      val progress = splitAndIndex._2*buff_size*100.0/size
-
-      print("Progress %:\t")
-      pprint.pprintln(progress)
-
-      dtf.tensor_from_buffer(
-        dtype = "UINT8", split_seq.length,
-        image_height, image_width, num_channels)(load_image(split_seq).flatten.toArray)
-
-    })
-
-    dtf.concatenate(tensor_splits.toSeq, axis = 0)
-  }
-
-  /**
-    * Create a tensor from a collection of image data,
-    * in a buffered manner.
-    *
-    * @param buff_size The size of the buffer (in number of images to load at once)
-    * @param image_height The height, in pixels, of the image.
-    * @param image_width The width, in pixels, of the image.
-    * @param num_channels The number of channels in the image data.
-    * @param coll The collection which holds the data for each image.
-    * @param size The number of elements in the collection
-    * */
-  def create_image_tensor_buffered(
-    buff_size: Int, image_sources: Seq[SOHO],
-    image_process: Map[SOHO, DataPipe[Image, Image]],
-    images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
-    image_height: Int, image_width: Int, num_channels: Int)(
-    coll: Iterable[Map[SOHO, Seq[Path]]], size: Int): Tensor = {
-
-    val load_image = StreamDataPipe(DataPipe((images_map: Map[SOHO, Seq[Path]]) => {
-      image_sources.map(source => {
-
-        val images_for_source = images_map(source).map(p => image_process(source)(Image.fromPath(p.toNIO)))
-
-        images_to_bytes(images_for_source)
-      }).toArray.flatten
-    }))
-
-    println()
-    val tensor_splits = coll.grouped(buff_size).toIterable.zipWithIndex.map(splitAndIndex => {
-
-      val split_seq = splitAndIndex._1.toStream
-
-      val progress = splitAndIndex._2*buff_size*100.0/size
-
-      print("Progress %:\t")
-      pprint.pprintln(progress)
-
-      dtf.tensor_from_buffer(
-        dtype = "UINT8", split_seq.length,
-        image_height, image_width, num_channels)(
-        load_image(split_seq).flatten.toArray)
-
-    })
-
-    dtf.concatenate(tensor_splits.toSeq, axis = 0)
-  }
-*/
 
   def create_double_tensor_buffered(buff_size: Int)(coll: Iterable[Seq[Double]], size: Int): Tensor = {
 

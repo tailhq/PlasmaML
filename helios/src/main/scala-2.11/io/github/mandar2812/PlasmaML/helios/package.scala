@@ -58,51 +58,6 @@ package object helios {
     }).sum/num_elem).toFloat
   }
 
-/*
-  def buffered_preds_helper(
-    predictiveModel: Estimator[
-      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
-      ((Tensor, Tensor), Tensor), ((Output, Output), Output),
-      ((DataType, DataType), DataType),
-      ((Shape, Shape), Shape), ((Output, Output), Output)],
-    workingData: (Tensor, Tensor),
-    buffer: Int, dataSize: Int): Some[(Tensor, Tensor)] = {
-    val preds_splits: (Iterable[Tensor], Iterable[Tensor]) = (0 until dataSize).grouped(buffer).map(indices => {
-
-      val dataSplit = (
-        workingData._1(indices.head::indices.last + 1, ---),
-        workingData._2(indices.head::indices.last + 1, ---)
-      )
-
-      predictiveModel.infer(() => dataSplit)
-    }).toIterable.unzip
-
-    Some((tfi.concatenate(preds_splits._1.toSeq, axis = 0), tfi.concatenate(preds_splits._2.toSeq, axis = 0)))
-  }
-
-  def buffered_preds(
-    predictiveModel: Estimator[
-      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
-      ((Tensor, Tensor), Tensor), ((Output, Output), Output),
-      ((DataType, DataType), DataType),
-      ((Shape, Shape), Shape), ((Output, Output), Output)])(
-    data: TF_DATA_EXT,
-    pred_flags: (Boolean, Boolean) = (false, true),
-    buff_size: Int = 400): (Option[(Tensor, Tensor)], Option[(Tensor, Tensor)]) = {
-
-    val train_preds =
-      if (pred_flags._1) buffered_preds_helper(predictiveModel, data.trainData, buff_size, data.nTrain)
-      else None
-
-    val test_preds =
-      if (pred_flags._2) buffered_preds_helper(predictiveModel, data.testData, buff_size, data.nTest)
-      else None
-
-    (train_preds, test_preds)
-  }
-*/
-
-
   object learn {
 
     val upwind_1d: UpwindTF.type                               = UpwindTF
