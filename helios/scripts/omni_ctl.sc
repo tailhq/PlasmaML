@@ -94,9 +94,9 @@ def main[T <: SolarImagesSource](
 
   val architecture =
     tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_pyramid(4, num_channels)(4, 2)(0.01f, dropout = false) >>
+      dtflearn.conv2d_pyramid(4, num_channels)(4, 2)(0.01f, dropout = false, starting_index = 0) >>
       tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
-      dtflearn.conv2d_pyramid(2, 4)(4, 2)(0.01f, dropout = false) >>
+      dtflearn.conv2d_pyramid(2, 4)(4, 2)(0.01f, dropout = false, starting_index = 3) >>
       tf.learn.MaxPool("MaxPool_2", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
       tf.learn.Flatten("Flatten_1") >>
       dtflearn.feedforward_stack(

@@ -9,7 +9,7 @@ import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
-import io.github.mandar2812.dynaml.tensorflow.{dtf, data => dtfdata}
+import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata}
 import io.github.mandar2812.dynaml.tensorflow.utils.{AbstractDataSet, GaussianScalerTF, MinMaxScalerTF}
 import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import org.joda.time._
