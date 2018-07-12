@@ -54,7 +54,7 @@ def generate_data(year_start: Int = 2001, year_end: Int = 2005) = {
 
   println("Preparing data-set as a Stream ")
   println("Start: "+year_start+" End: "+year_end)
-  helios.collate_goes_data_range(
+  helios.data.collate_goes_data_range(
     new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
     GOES(GOESData.Quantities.XRAY_FLUX_5m),
     goes_dir,
@@ -96,7 +96,7 @@ def run_experiment(
   *
   * */
 
-  val dataSet = helios.create_helios_goes_data_set(
+  val dataSet = helios.data.create_helios_goes_data_set(
     collated_data,
     tt_partition,
     scaleDownFactor = 2)

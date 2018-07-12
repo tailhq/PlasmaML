@@ -87,20 +87,18 @@ def main[T <: SolarImagesSource](
     "Output/CDT-SW",
     data.head._2._2.length)
 
-  val pre_upwind_index = 4
+  val pre_upwind_index = 6
   val ff_index         = pre_upwind_index + pre_upwind_ff_sizes.length
   val ff_stack         = ff_stack_sizes :+ num_pred_dims
 
 
   val architecture =
     tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_unit(Shape(4, 4, num_channels, 20), dropout = false)(0) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 20, 15), dropout = true)(1) >>
+      dtflearn.conv2d_pyramid(4, num_channels)(4, 2)(0.01f, dropout = false) >>
       tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 15, 10), dropout = false)(2) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 10, 8), dropout = false)(3) >>
+      dtflearn.conv2d_pyramid(2, 4)(4, 2)(0.01f, dropout = false) >>
       tf.learn.MaxPool("MaxPool_2", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
-      tf.learn.Flatten("Flatten_3") >>
+      tf.learn.Flatten("Flatten_1") >>
       dtflearn.feedforward_stack(
         (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
         pre_upwind_ff_sizes, starting_index = pre_upwind_index) >>

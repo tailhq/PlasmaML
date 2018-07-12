@@ -22,7 +22,7 @@ def main(
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  val data           = helios.generate_data_goes()
+  val data           = helios.data.generate_data_goes()
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
