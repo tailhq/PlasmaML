@@ -26,5 +26,5 @@ def apply(start_date: String, end_date: String, path: Path, size: Int, instrumen
   val start_dt = formatter.parseLocalDate(start_date)
   val end_dt   = formatter.parseLocalDate(end_date)
 
-  helios.download_image_data(SOHO(instrument, size), path)(start_dt, end_dt)
+  helios.data.download_image_data(SOHO(instrument, size), path)(start_dt, end_dt)
 }

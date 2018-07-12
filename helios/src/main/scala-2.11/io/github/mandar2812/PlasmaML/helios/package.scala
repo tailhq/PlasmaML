@@ -60,7 +60,7 @@ package object helios {
 
   object learn {
 
-    val upwind_1d: UpwindTF.type                               = UpwindTF
+    val upwind_1d: UpwindTF.type                              = UpwindTF
 
     /*
     * NN Architectures
