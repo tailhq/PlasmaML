@@ -34,8 +34,7 @@ def main[T <: SolarImagesSource](
   temp: Double                  = 0.75,
   stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
   miniBatch: Int                = 16,
-  tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String               = "mdi_rbfloss_results.csv") = {
+  tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp") = {
 
   //Data with MDI images
 

@@ -6,21 +6,21 @@ import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow._
 import io.github.mandar2812.dynaml.tensorflow.utils._
 import io.github.mandar2812.dynaml.tensorflow.layers._
-import io.github.mandar2812.dynaml.tensorflow.learn._
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader, OmniOSA}
 import _root_.io.github.mandar2812.PlasmaML.utils._
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.platanios.tensorflow.api._
+import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
 def main(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
   horizon: Int = 24, history: Int = 6, num_hidden_units: Int = 6,
-  iterations: Int = 50000, optimizer: Optimizer = tf.train.AdaDelta(0.005),
-  reg: Double = 0.001,
-  stormsFile: String = OmniOSA.stormsFileJi) = {
+  stop_criteria: StopCriteria = dtflearn.rel_loss_change_stop(0.005, 100000),
+  optimizer: Optimizer = tf.train.AdaDelta(0.005),
+  reg: Double = 0.001, stormsFile: String = OmniOSA.stormsFileJi) = {
 
   DateTimeZone.setDefault(DateTimeZone.UTC)
 
@@ -69,14 +69,22 @@ def main(
   val architecture = tf.learn.Flatten("Flatten_0") >>
     dtflearn.feedforward(num_hidden_units)(0) >>
     dtflearn.Tanh("Tanh_0") >>
-    DynamicTimeStepCTRNN("fhctrnn_1", num_hidden_units, horizon) >>
-    FiniteHorizonLinear("fhproj_2", num_hidden_units, quantities.length, horizon)
+    DynamicTimeStepCTRNN("fhctrnn_1", horizon) >>
+    FiniteHorizonLinear("fhproj_2", quantities.length)
 
   val layer_params = Seq(
     "Linear_0/Weights",
-    "fhctrnn_1/fhctrnn_1/Weights",
-    "fhctrnn_1/fhctrnn_1/Gain",
-    "fhctrnn_1/fhctrnn_1/Weights")
+    "fhctrnn_1/Weights",
+    "fhctrnn_1/Gain",
+    "fhproj_2/Weights"
+  )
+
+  val layer_shapes = Seq(
+    Shape(-1, num_hidden_units),
+    Shape(num_hidden_units, num_hidden_units),
+    Shape(num_hidden_units, num_hidden_units),
+    Shape(quantities.length, num_hidden_units)
+  )
 
   val input = tf.learn.Input(FLOAT64, Shape(-1, quantities.length, history))
 
@@ -87,7 +95,7 @@ def main(
   val lossFunc = MVTimeSeriesLoss("Loss/MVTS")
 
   val loss = lossFunc >>
-    L2Regularization(layer_params, layer_params.map(_ => "FLOAT64"), reg) >>
+    L2Regularization(layer_params, layer_params.map(_ => "FLOAT64"), layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
@@ -98,28 +106,11 @@ def main(
     .batch(1024)
     .prefetch(10)
 
-  val (model, estimator) = tf.createWith(graph = Graph()) {
-    val model = tf.learn.Model(
-      input, architecture, trainOutput, trainingInputLayer,
-      loss, optimizer)
-
-    println("Training the linear regression model.")
-
-    val estimator = tf.learn.FileBasedEstimator(
-      model,
-      tf.learn.Configuration(Some(summariesDir)),
-      tf.learn.StopCriteria(maxSteps = Some(iterations)),
-      Set(
-        tf.learn.StepRateLogger(log = false, summaryDir = summariesDir, trigger = tf.learn.StepHookTrigger(5000)),
-        tf.learn.SummarySaver(summariesDir, tf.learn.StepHookTrigger(5000)),
-        tf.learn.CheckpointSaver(summariesDir, tf.learn.StepHookTrigger(5000))),
-      tensorBoardConfig = tf.learn.TensorBoardConfig(summariesDir, reloadInterval = 5000))
-
-    estimator.train(() => trainData, tf.learn.StopCriteria(maxSteps = Some(iterations)))
-
-    (model, estimator)
-  }
-
+  val (model, estimator) = dtflearn.build_tf_model(
+    architecture, input, trainOutput, trainingInputLayer,
+    loss, optimizer, summariesDir,
+    stop_criteria)(
+    trainData)
   /*
   * Set up the test data processing pipeline
   * */
@@ -182,12 +173,12 @@ def main(
 
 def apply(
   yearrange: Range, quantities: Seq[Int] = Seq(Dst, V_SW, B_Z),
-  horizon: Int = 24, history: Int = 6,  num_hidden_units: Int = 6,
-  iterations: Int = 50000,
-  optimizer: Optimizer = tf.train.AdaDelta(0.005), reg: Double = 0.001,
-  stormsFile: String = OmniOSA.stormsFileJi) =
+  horizon: Int = 24, history: Int = 6, num_hidden_units: Int = 6,
+  stop_criteria: StopCriteria = dtflearn.rel_loss_change_stop(0.005, 100000),
+  optimizer: Optimizer = tf.train.AdaDelta(0.005),
+  reg: Double = 0.001, stormsFile: String = OmniOSA.stormsFileJi) =
   main(
     yearrange, quantities, horizon, history,
-    num_hidden_units, iterations, optimizer, reg,
+    num_hidden_units, stop_criteria, optimizer, reg,
     stormsFile
   )
