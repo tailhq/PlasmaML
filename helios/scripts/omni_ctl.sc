@@ -77,9 +77,11 @@ def main[T <: SolarImagesSource](
   val patch_range = get_patch_range(magic_ratio, image_sizes/2)
 
   val image_preprocess =
-  helios.data.image_central_patch(magic_ratio, image_sizes) >
+    dtfpipe.read_image(num_channels, 2) >
+      dtfpipe.extract_image_patch(patch_range, patch_range)
+  /*helios.data.image_central_patch(magic_ratio, image_sizes) >
     DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
-
+*/
   val summary_dir_prefix = "swtl_"+image_source.toString
 
   val summary_dir_postfix =
@@ -137,8 +139,7 @@ def main[T <: SolarImagesSource](
 
   helios.run_experiment_omni(
     dataset, tt_partition, resample = re,
-    preprocess_image = image_preprocess > image_filter,
-    image_to_bytearr = image_to_byte,
+    read_image = image_preprocess,
     num_channels_image = num_channels,
     processed_image_size = (patch_range.length, patch_range.length))(
     summary_dir, stop_criteria, tmpdir,
