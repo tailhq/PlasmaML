@@ -393,7 +393,7 @@ package object helios {
 
     //Now create the model
     val (model, estimator) = dtflearn.build_tf_model(
-      arch/* >> rescale_outputs*/, input, trainInput, trainingInputLayer,
+      arch, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
       stop_criteria)(
       trainData)
