@@ -382,7 +382,7 @@ package object helios {
       UINT8, Shape(-1) ++ data_shapes._1
     )
 
-    val trainInput = tf.learn.Input(FLOAT64, Shape(-1) ++ data_shapes._2/)
+    val trainInput = tf.learn.Input(FLOAT64, Shape(-1) ++ data_shapes._2)
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
