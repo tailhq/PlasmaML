@@ -13,10 +13,14 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.learn.StopCriteria
+import org.platanios.tensorflow.api.implicits.helpers.OutputToTensor
+import org.platanios.tensorflow.api.learn.estimators.Estimator.SupportedInferInput
+import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
+import org.platanios.tensorflow.api.ops.io.data.{Data, Dataset}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
+import org.platanios.tensorflow.api.ops.Function
 import spire.math.UByte
 
 /**
@@ -297,6 +301,7 @@ package object helios {
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
     image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+    processed_image_size: (Int, Int) = (-1, -1),
     num_channels_image: Int = 4)(
     results_id: String,
     stop_criteria: StopCriteria,
@@ -312,26 +317,58 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
+    val num_outputs = collated_data.data.head._2._2.length
+
     /*
     * After data has been joined/collated,
     * start loading it into tensors
     *
     * */
-    val dataSet = helios.data.create_helios_data_set(
+
+    val image_process = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
+      preprocess_image >
+      image_to_bytearr >
+      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+        "UINT8", processed_image_size._1,
+        processed_image_size._2,
+        num_channels_image)(arr))
+
+    val process_patterns = DataPipe((p: PATTERN) => p._2) >
+      (image_process * DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*)))
+
+    val dataSet: TF_DATA = helios.data.create_helios_data_set(
       collated_data,
       tt_partition,
-      preprocess_image,
-      image_to_bytearr,
-      num_channels_image,
       resample)
 
     val (norm_tf_data, scalers): SC_TF_DATA =
-      scale_helios_dataset(dataSet)
+      scale_helios_dataset(
+        dataSet.copy[(Tensor, Tensor)](
+          training_dataset = dataSet.training_dataset.map(process_patterns),
+          test_dataset     = dataSet.test_dataset.map(process_patterns)
+        ))
+
+    val causal_horizon = collated_data.data.head._2._2.length
+
+    val data_shapes = (
+      Shape(processed_image_size._1, processed_image_size._2, num_channels_image),
+      Shape(causal_horizon)
+    )
+
+    val stackOutput = DataPipe((it: Iterable[Output]) => tf.stack(it.toSeq, axis = 0))
+
+    val stackOperation = DataPipe((coll: Iterable[(Output, Output)]) => coll.unzip) > (stackOutput * stackOutput)
 
     val trainData =
-      norm_tf_data.training_data[
-        Output, DataType, Shape,
-        Output, DataType, Shape]
+      norm_tf_data.training_dataset.build[
+        (Tensor, Tensor),
+        (Output, Output),
+        (DataType, DataType),
+        (DataType, DataType),
+        (Shape, Shape)](
+        Left(DynaMLPipe.identityPipe[Tensor]*DynaMLPipe.identityPipe[Tensor]),
+        dataType = (UINT8, FLOAT64),
+        data_shapes)
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
@@ -342,17 +379,10 @@ package object helios {
     * */
     println("Building the regression model.")
     val input = tf.learn.Input(
-      UINT8,
-      Shape(
-        -1,
-        dataSet.trainData.shape(1),
-        dataSet.trainData.shape(2),
-        dataSet.trainData.shape(3))
+      UINT8, Shape(-1) ++ data_shapes._1
     )
 
-    val causal_horizon = collated_data.head._2._2.length
-
-    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, causal_horizon))
+    val trainInput = tf.learn.Input(FLOAT64, Shape(-1) ++ data_shapes._2/)
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
@@ -363,16 +393,19 @@ package object helios {
 
     //Now create the model
     val (model, estimator) = dtflearn.build_tf_model(
-      arch, input, trainInput, trainingInputLayer,
+      arch/* >> rescale_outputs*/, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
       stop_criteria)(
       trainData)
 
-    val predictions: (Tensor, Tensor) = dtfutils.predict_data[
+    val nTest = norm_tf_data.test_dataset.size
+
+    val predictions: (Tensor, Tensor) = dtfutils.buffered_preds[
       Tensor, Output, DataType, Shape, (Output, Output),
       Tensor, Output, DataType, Shape, Output,
-      (Tensor, Tensor), (Tensor, Tensor)
-      ](estimator, dataSet, (false, true), _buffer_size)._2.get
+      Output, (Tensor, Tensor), (Tensor, Tensor)](
+      estimator, tfi.stack(norm_tf_data.test_dataset.data.toSeq.map(_._1), axis = 0),
+      _buffer_size, nTest)
 
     val index_times = Tensor(
       (0 until causal_horizon).map(_.toDouble)
@@ -380,10 +413,10 @@ package object helios {
       Shape(causal_horizon)
     )
 
-    val pred_time_lags_test = if(prob_timelags) {
+    val pred_time_lags_test: Tensor = if(prob_timelags) {
       val unsc_probs = predictions._2
 
-      unsc_probs.topK(1)._2.reshape(Shape(dataSet.nTest)).cast(FLOAT64)
+      unsc_probs.topK(1)._2.reshape(Shape(nTest)).cast(FLOAT64)
 
     } else predictions._2
 
@@ -401,9 +434,13 @@ package object helios {
       scalers._2(0).i(predictions._1)
     }
 
-    val actual_targets = (0 until dataSet.nTest).map(n => {
-      val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
-      dataSet.testLabels(n, time_lag).scalar.asInstanceOf[Double]
+    val test_labels = dataSet.test_dataset.data.map(_._2._2).toSeq
+
+    val actual_targets = test_labels.zipWithIndex.map(zi => {
+      val (z, index) = zi
+      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
+
+      z(time_lag)
     })
 
     val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
@@ -755,7 +792,7 @@ package object helios {
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
 
-  def run_experiment_omni_dynamic_time_scales(
+  /*def run_experiment_omni_dynamic_time_scales(
     collated_data: Stream[PATTERN],
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false)(
@@ -863,7 +900,7 @@ package object helios {
     )
 
     (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev, collated_data)
-  }
+  }*/
 
 
 }

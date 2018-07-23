@@ -9,8 +9,9 @@ import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
-import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata}
-import io.github.mandar2812.dynaml.tensorflow.utils.{AbstractDataSet, GaussianScalerTF, MinMaxScalerTF}
+import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtfpipe}
+import io.github.mandar2812.dynaml.tensorflow.data.{AbstractDataSet, DataSet, TFDataSet, ZipDataSet}
+import io.github.mandar2812.dynaml.tensorflow.utils.{GaussianScalerTF, MinMaxScalerTF, MinMaxScalerTO}
 import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import org.joda.time._
 import spire.math.UByte
@@ -52,20 +53,20 @@ package object data {
     * */
   type MC_PATTERN_EXT              = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
 
-  type HELIOS_OMNI_DATA        = Iterable[PATTERN]
+  type HELIOS_OMNI_DATA        = DataSet[PATTERN]
   type HELIOS_MC_OMNI_DATA     = Iterable[MC_PATTERN]
   type HELIOS_OMNI_DATA_EXT    = Iterable[PATTERN_EXT]
   type HELIOS_MC_OMNI_DATA_EXT = Iterable[MC_PATTERN_EXT]
 
   type IMAGE_TS                = (Tensor, Tensor)
 
-  type TF_DATA                 = AbstractDataSet[Tensor, Tensor]
+  type TF_DATA                 = TFDataSet[PATTERN]
 
   type TF_DATA_EXT             = AbstractDataSet[(Tensor, Tensor), Tensor]
 
   type SC_TF_DATA_EXT          = (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF))
 
-  type SC_TF_DATA              = (TF_DATA, (MinMaxScalerTF, MinMaxScalerTF))
+  type SC_TF_DATA              = (TFDataSet[(Tensor, Tensor)], (ReversibleScaler[Tensor], MinMaxScalerTF))
 
   private def TF_DATA_EXT(
     trData: IMAGE_TS,
@@ -154,11 +155,11 @@ package object data {
       DataPipe((i: Image) => i.argb.map(_.last.toByte)))
   }
 
-  private var buffer_size = 500
+  private var size_buffer = 500
 
-  def buffer_size_(s: Int) = buffer_size = s
+  def buffer_size_(s: Int) = size_buffer = s
 
-  def _buffer_size: Int = buffer_size
+  def _buffer_size: Int = size_buffer
 
   val image_central_patch: MetaPipe21[Double, Int, Image, Image] =
     MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Image) => {
@@ -166,6 +167,16 @@ package object data {
       val patch_size = image_sizes*image_magic_ratio
 
       image.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
+    })
+
+  val extract_central_patch: MetaPipe21[Double, Int, Output, Output] =
+    MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Output) => {
+      val start = (1.0 - image_magic_ratio)*image_sizes/2
+      val patch_size = image_sizes*image_magic_ratio
+
+      val patch_range = start.toInt to (start.toInt + patch_size.toInt)
+
+      dtfpipe.extract_image_patch(patch_range, patch_range)(image)
     })
 
   val image_pixel_scaler = MinMaxScalerTF(Tensor(UByte(0)), Tensor(UByte(255)))
@@ -219,16 +230,37 @@ package object data {
       (labels_scaled, labels_scaler)
     })
 
-  val scale_helios_dataset = DataPipe[TF_DATA, SC_TF_DATA]((dataset: TF_DATA) => {
+  val scale_helios_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
 
-    val (norm_tr_data, scalers) = std_images_and_outputs(dataset.trainData, dataset.trainLabels)
+    //val (norm_tr_data, scalers) = std_images_and_outputs(dataset.trainData, dataset.trainLabels)
 
-    (
+    /*(
       dataset.copy(
         trainLabels = norm_tr_data._2,
         trainData = norm_tr_data._1/*,
         testData = scalers._1(dataset.testData)*/),
       scalers
+    )*/
+
+    val concat_targets = tfi.stack(
+      dataset.training_dataset.map(DataPipe((p: (Tensor, Tensor)) => p._2)).data.toSeq
+    )
+
+    val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
+
+    val image_scaler = new ReversibleScaler[Tensor] {
+      override val i: Scaler[Tensor] = Scaler((o: Tensor) => o)
+
+      override def run(data: Tensor): Tensor = data
+    }
+
+    val targets_scaler = MinMaxScalerTF(min, max)
+
+    (
+      dataset.copy(
+        training_dataset = dataset.training_dataset.map(image_scaler * targets_scaler)
+      ),
+      (image_scaler, targets_scaler)
     )
   })
 
@@ -485,13 +517,17 @@ package object data {
 
     val omni_processing =
       OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
-        StreamDataPipe[(DateTime, Seq[Double])](
+        IterableDataPipe[(DateTime, Seq[Double])](
           (p: (DateTime, Seq[Double])) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
     val years = (start_year_month.getYear to end_year_month.getYear).toStream
 
-    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/omni2_"+i+".csv"))
+
+    val omni_data = dtfdata.dataset(start_year_month.getYear to end_year_month.getYear)
+      .map(DataPipe((i: Int) => omni_data_path.toString()+s"/omni2_$i.csv"))
+      .transform(omni_processing)
+      .to_supervised(DynaMLPipe.identityPipe[(DateTime, Seq[Double])])
 
     //Extract paths to images, along with a time-stamp
 
@@ -503,18 +539,17 @@ package object data {
 
 
     val image_processing =
-      StreamFlatMapPipe(
+      IterableFlatMapPipe(
         (year_month: YearMonth) => load_images[T](images_path, year_month, image_source, image_dir_tree).toStream) >
-        StreamDataPipe((p: (DateTime, Path)) => (image_dt_roundoff(p._1), p._2))
+        IterableDataPipe((p: (DateTime, Path)) => (image_dt_roundoff(p._1), p._2))
 
-    val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
+    val images = dtfdata.dataset(0 to num_months)
+      .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
+      .transform(image_processing)
+      .to_supervised(DynaMLPipe.identityPipe[(DateTime, Path)])
 
-    omni_data.map(o => {
-      val image_option = images.get(o._1)
-      (o._1, image_option, o._2)
-    }).filter(_._2.isDefined)
-      .map(d => (d._1, (d._2.get, d._3)))
 
+    images.join(omni_data)
   }
 
   /**
@@ -711,47 +746,27 @@ package object data {
     * @param tt_partition A function which takes each data element and
     *                     determines if it goes into the train or test split.
     *
-    * @param image_process The exponent of 2 which determines how much the
-    *                        image will be scaled down. i.e. scaleDownFactor = 4
-    *                        corresponds to a 16 fold decrease in image size.
     * */
   def create_helios_data_set(
     collated_data: HELIOS_OMNI_DATA,
     tt_partition: PATTERN => Boolean,
-    image_process: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
-    image_to_bytes: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
-    num_image_channels: Int,
     resample: Boolean = false): TF_DATA = {
 
     println("Separating data into train and test.\n")
-    val (train_set, test_set) = collated_data.partition(tt_partition)
+    val experiment_data = collated_data.partition(DataPipe(tt_partition))
 
 
     print("Total data size: ")
-    val total_data_size = collated_data.toIterator.length
+    val total_data_size = collated_data.size
 
     pprint.pprintln(total_data_size)
 
-    val train_data_size = train_set.toIterator.length
-    val test_data_size  = test_set.toIterator.length
+    val train_data_size = experiment_data.training_dataset.size
+    //val test_data_size  = experiment_data.test_dataset.size
 
     val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
 
     print_data_splits(train_fraction)
-
-    //Calculate the height, width and number of channels
-    //in the images
-    val (scaled_height, scaled_width, num_channels) = {
-
-      val scaled_image = image_process(Image.fromPath(train_set.head._2._1.toNIO))
-
-      (scaled_image.height, scaled_image.width, num_image_channels)
-
-    }
-
-    val working_set = TF_DATA(
-      null, null, train_data_size,
-      null, null, test_data_size)
 
     /*
     * If the `resample` flag is set to true,
@@ -759,7 +774,7 @@ package object data {
     * flux events through re-sampling.
     *
     * */
-    val processed_train_set = if(resample) {
+    val resample_op = DataPipe((d: Iterable[PATTERN]) => if(resample) {
 
       /*
       * Resample training set with
@@ -767,7 +782,7 @@ package object data {
       * between max and min of a sliding
       * time window.
       * */
-      val un_prob = train_set.map(p => {
+      val un_prob = d.map(p => {
 
         math.abs(p._2._2.max - p._2._2.min)/math.abs(p._2._2.min)
       }).map(math.exp)
@@ -776,59 +791,15 @@ package object data {
 
       val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
 
-      helios.data.resample(train_set.toStream, selector)
-    } else train_set
+      helios.data.resample(experiment_data.training_dataset.data.toStream, selector)
 
-    def split_features_and_labels(coll: HELIOS_OMNI_DATA): (Iterable[Path], Iterable[Seq[Double]]) =
-      coll.map(entry => {
+    } else d)
 
-        val (_, (path, data_label)) = entry
 
-        //val image_bytes = (image_process > image_to_bytes)(Image.fromPath(path.toNIO))
 
-        (path, data_label)
-
-      }).unzip
-
-    println()
-    //Construct training features and labels
-    println("Processing Training Data Set")
-    val (features_train, labels_train) = split_features_and_labels(processed_train_set)
-
-    println("Loading features ")
-    val features_tensor_train = dtfdata.create_image_tensor_buffered(
-      buffer_size,
-      image_process > image_to_bytes,
-      scaled_height, scaled_width,
-      num_channels)(
-      features_train,
-      train_data_size)
-
-    println("Loading targets ")
-    val labels_tensor_train   = create_double_tensor_buffered(buffer_size)(labels_train, train_data_size)
-
-    println()
-    //Construct test features and labels
-    println("Processing Test Data Set")
-    val (features_test, labels_test) = split_features_and_labels(test_set)
-
-    println("Loading features ")
-    val features_tensor_test = dtfdata.create_image_tensor_buffered(
-      buffer_size, image_process > image_to_bytes,
-      scaled_height, scaled_width,
-      num_channels)(
-      features_test,
-      test_data_size)
-
-    println("Loading targets ")
-    val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test, test_data_size)
-
-    println("Helios data set created\n")
-    working_set.copy(
-      trainData   = features_tensor_train,
-      trainLabels = labels_tensor_train,
-      testData    = features_tensor_test,
-      testLabels  = labels_tensor_test
+    experiment_data.copy(
+      training_dataset = experiment_data.training_dataset.transform(resample_op),
+      test_dataset = experiment_data.test_dataset
     )
   }
 
@@ -925,16 +896,16 @@ package object data {
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_train = (
-      dtfdata.create_image_tensor_buffered(buffer_size,
+      dtfdata.create_image_tensor_buffered(size_buffer,
         image_process > image_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_train.map(_._1), train_data_size),
-      create_double_tensor_buffered(buffer_size)(
+      create_double_tensor_buffered(size_buffer)(
         features_train.map(_._2), train_data_size)
     )
 
     println("Loading targets")
-    val labels_tensor_train   = create_double_tensor_buffered(buffer_size)(labels_train, train_data_size)
+    val labels_tensor_train   = create_double_tensor_buffered(size_buffer)(labels_train, train_data_size)
 
     println()
     //Construct test features and labels
@@ -944,15 +915,15 @@ package object data {
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_test = (
       dtfdata.create_image_tensor_buffered(
-        buffer_size, image_process > image_to_bytes,
+        size_buffer, image_process > image_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_test.map(_._1), test_data_size),
-      create_double_tensor_buffered(buffer_size)(
+      create_double_tensor_buffered(size_buffer)(
         features_test.map(_._2), test_data_size)
     )
 
     println("Loading targets ")
-    val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test, test_data_size)
+    val labels_tensor_test   = create_double_tensor_buffered(size_buffer)(labels_test, test_data_size)
 
     println("Helios data set created\n")
     working_set.copy(
@@ -1064,15 +1035,15 @@ package object data {
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_train = (
-      dtfdata.create_image_tensor_buffered(buffer_size,
+      dtfdata.create_image_tensor_buffered(size_buffer,
         image_sources, image_process, images_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_train.map(_._1), train_data_size),
-      create_double_tensor_buffered(buffer_size)(features_train.map(_._2), train_data_size)
+      create_double_tensor_buffered(size_buffer)(features_train.map(_._2), train_data_size)
     )
 
     println("Loading targets")
-    val labels_tensor_train   = create_double_tensor_buffered(buffer_size)(labels_train, train_data_size)
+    val labels_tensor_train   = create_double_tensor_buffered(size_buffer)(labels_train, train_data_size)
 
     println()
     //Construct test features and labels
@@ -1081,16 +1052,16 @@ package object data {
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_test = (
-      dtfdata.create_image_tensor_buffered(buffer_size,
+      dtfdata.create_image_tensor_buffered(size_buffer,
         image_sources, image_process, images_to_bytes,
         scaled_height, scaled_width, num_channels)(
         features_test.map(_._1), test_data_size),
-      create_double_tensor_buffered(buffer_size)(
+      create_double_tensor_buffered(size_buffer)(
         features_test.map(_._2), test_data_size)
     )
 
     println("Loading targets")
-    val labels_tensor_test   = create_double_tensor_buffered(buffer_size)(labels_test, test_data_size)
+    val labels_tensor_test   = create_double_tensor_buffered(size_buffer)(labels_test, test_data_size)
 
     println("Helios data set created\n")
     working_set.copy(
@@ -1312,8 +1283,6 @@ package object data {
     println("Running as user: "+user_name)
 
     val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
-
-    //require(year_end > year_start, "Data set must encompass more than one year")
 
     print("Looking for data in directory ")
     val data_dir = home_dir_prefix/user_name/"data_repo"/'helios

@@ -2,7 +2,7 @@ import ammonite.ops._
 import org.joda.time._
 import com.sksamuel.scrimage._
 import io.github.mandar2812.dynaml.repl.Router.main
-import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils}
+import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils, dtfpipe}
 import io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import com.sksamuel.scrimage.filter.GrayscaleFilter
@@ -43,7 +43,7 @@ def main[T <: SolarImagesSource](
 
   helios.data.buffer_size_(buffer_size)
 
-  val data           = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
+  val dataset           = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
@@ -65,12 +65,20 @@ def main[T <: SolarImagesSource](
     case SDO(_, s)  => (s, 333.0/512.0)
   }
 
-  val image_preprocess =
-    helios.data.image_central_patch(magic_ratio, image_sizes) >
-      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
-
-
   val (image_filter, num_channels, image_to_byte) = helios.data.image_process_metadata(image_source)
+
+  def get_patch_range(magic_ratio: Double, image_sizes: Int) = {
+    val start = (1.0 - magic_ratio)*image_sizes/2
+    val patch_size = image_sizes*magic_ratio/2
+
+    start.toInt to (start.toInt + patch_size.toInt)
+  }
+
+  val patch_range = get_patch_range(magic_ratio, image_sizes/2)
+
+  val image_preprocess =
+  helios.data.image_central_patch(magic_ratio, image_sizes) >
+    DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
   val summary_dir_prefix = "swtl_"+image_source.toString
 
@@ -80,11 +88,11 @@ def main[T <: SolarImagesSource](
 
   val summary_dir = summary_dir_prefix+summary_dir_postfix
 
-  val num_pred_dims = 2*data.head._2._2.length
+  val num_pred_dims = 2*dataset.data.head._2._2.length
 
   val output_mapping = CausalDynamicTimeLag.output_mapping(
     "Output/CDT-SW",
-    data.head._2._2.length)
+    dataset.data.head._2._2.length)
 
   val pre_upwind_index = 6
   val ff_index         = pre_upwind_index + pre_upwind_ff_sizes.length
@@ -118,7 +126,7 @@ def main[T <: SolarImagesSource](
 
   val loss_func = CausalDynamicTimeLag(
     "Loss/CDT-SW",
-    data.head._2._2.length,
+    dataset.data.head._2._2.length,
     prior_wt = prior_wt,
     temperature = temp) >>
     L2Regularization(
@@ -128,10 +136,11 @@ def main[T <: SolarImagesSource](
       reg)
 
   helios.run_experiment_omni(
-    data, tt_partition, resample = re,
+    dataset, tt_partition, resample = re,
     preprocess_image = image_preprocess > image_filter,
     image_to_bytearr = image_to_byte,
-    num_channels_image = num_channels)(
+    num_channels_image = num_channels,
+    processed_image_size = (patch_range.length, patch_range.length))(
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,

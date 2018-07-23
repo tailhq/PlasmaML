@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.omni
 
 import ammonite.ops.Path
 import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.pipes.{DataPipe, MetaPipe21, StreamDataPipe, StreamFlatMapPipe}
+import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
 import org.joda.time.{DateTime, DateTimeZone}
@@ -127,7 +127,7 @@ object OMNILoader {
     * time stamped data as a [[Tuple2]] of [[DateTime]] and a Scala sequence containing
     * the extracted quantities.
     * */
-  val processWithDateTime = StreamDataPipe((line: String) => {
+  val processWithDateTime = IterableDataPipe((line: String) => {
     val splits = line.split(",")
     val num_splits = splits.length
 
@@ -149,7 +149,7 @@ object OMNILoader {
     * }}}
     * */
   val forward_time_window = MetaPipe21(
-    (deltaT: Int, timelag: Int) => (lines: Stream[(DateTime, Double)]) =>
+    (deltaT: Int, timelag: Int) => (lines: Iterable[(DateTime, Double)]) =>
       lines.toList.sliding(deltaT+timelag+1).map(history => {
 
         val features: Seq[Double] = history.slice(deltaT, deltaT+timelag).map(_._2)
@@ -172,7 +172,7 @@ object OMNILoader {
     * }}}
     * */
   val forward_and_backward_time_window = MetaPipe21(
-    (past: Int, future: (Int, Int)) => (lines: Stream[(DateTime, Double)]) =>
+    (past: Int, future: (Int, Int)) => (lines: Iterable[(DateTime, Double)]) =>
       lines.toList.sliding(past+future._1+future._2+1).map(history => {
 
         val features: Seq[Double] = history.slice(past+future._1, past+future._1+future._2).map(_._2)
@@ -188,7 +188,7 @@ object OMNILoader {
     * <b>Usage</b>: See [[forward_time_window]].
     * */
   val mv_forward_time_window = MetaPipe21(
-    (deltaT: Int, timelag: Int) => (lines: Stream[(DateTime, Seq[Double])]) => {
+    (deltaT: Int, timelag: Int) => (lines: Iterable[(DateTime, Seq[Double])]) => {
       val num_quantities = lines.head._2.length
 
       lines.toList.sliding(deltaT+timelag+1).map((history) => {
@@ -221,9 +221,9 @@ object OMNILoader {
     * }}}
     * */
   def omniVarToSlidingTS(deltaT: Int, time_window: Int)(targetColumn: Int = OMNIData.Quantities.V_SW) =
-    StreamFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
       processWithDateTime >
-      StreamDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
+      IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_time_window(deltaT, time_window)
 
   /**
@@ -248,7 +248,7 @@ object OMNILoader {
     targetColumn: Int) =
     StreamFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
       processWithDateTime >
-      StreamDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
+      IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_and_backward_time_window(past, (deltaT, time_window))
 
   /**
