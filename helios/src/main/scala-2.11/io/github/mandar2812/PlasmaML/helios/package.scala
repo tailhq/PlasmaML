@@ -403,7 +403,7 @@ package object helios {
     val predictions: (Tensor, Tensor) = dtfutils.buffered_preds[
       Tensor, Output, DataType, Shape, (Output, Output),
       Tensor, Output, DataType, Shape, Output,
-      Output, (Tensor, Tensor), (Tensor, Tensor)](
+      Tensor, (Tensor, Tensor), (Tensor, Tensor)](
       estimator, tfi.stack(norm_tf_data.test_dataset.data.toSeq.map(_._1), axis = 0),
       _buffer_size, nTest)
 
