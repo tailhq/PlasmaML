@@ -66,7 +66,7 @@ package object data {
 
   type SC_TF_DATA_EXT          = (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF))
 
-  type SC_TF_DATA              = (TFDataSet[(Tensor, Tensor)], (ReversibleScaler[Tensor], MinMaxScalerTF))
+  type SC_TF_DATA              = (TFDataSet[(Output, Tensor)], (ReversibleScaler[Output], MinMaxScalerTF))
 
   private def TF_DATA_EXT(
     trData: IMAGE_TS,
@@ -230,28 +230,18 @@ package object data {
       (labels_scaled, labels_scaler)
     })
 
-  val scale_helios_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
-
-    //val (norm_tr_data, scalers) = std_images_and_outputs(dataset.trainData, dataset.trainLabels)
-
-    /*(
-      dataset.copy(
-        trainLabels = norm_tr_data._2,
-        trainData = norm_tr_data._1/*,
-        testData = scalers._1(dataset.testData)*/),
-      scalers
-    )*/
+  val scale_helios_dataset = DataPipe((dataset: TFDataSet[(Output, Tensor)]) => {
 
     val concat_targets = tfi.stack(
-      dataset.training_dataset.map(DataPipe((p: (Tensor, Tensor)) => p._2)).data.toSeq
+      dataset.training_dataset.map(DataPipe((p: (Output, Tensor)) => p._2)).data.toSeq
     )
 
     val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
 
-    val image_scaler = new ReversibleScaler[Tensor] {
-      override val i: Scaler[Tensor] = Scaler((o: Tensor) => o)
+    val image_scaler = new ReversibleScaler[Output] {
+      override val i: Scaler[Output] = Scaler((o: Output) => o)
 
-      override def run(data: Tensor): Tensor = data
+      override def run(data: Output): Output = data
     }
 
     val targets_scaler = MinMaxScalerTF(min, max)

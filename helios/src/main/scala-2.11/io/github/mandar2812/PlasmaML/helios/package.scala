@@ -13,14 +13,10 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.implicits.helpers.OutputToTensor
-import org.platanios.tensorflow.api.learn.estimators.Estimator.SupportedInferInput
-import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
+import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
-import org.platanios.tensorflow.api.ops.io.data.{Data, Dataset}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
-import org.platanios.tensorflow.api.ops.Function
 import spire.math.UByte
 
 /**
@@ -299,8 +295,7 @@ package object helios {
     collated_data: HELIOS_OMNI_DATA,
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false,
-    preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
-    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+    read_image: DataPipe[Path, Output] = dtfpipe.read_image(0, 1),
     processed_image_size: (Int, Int) = (-1, -1),
     num_channels_image: Int = 4)(
     results_id: String,
@@ -325,13 +320,7 @@ package object helios {
     *
     * */
 
-    val image_process = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
-      preprocess_image >
-      image_to_bytearr >
-      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
-        "UINT8", processed_image_size._1,
-        processed_image_size._2,
-        num_channels_image)(arr))
+    val image_process = read_image
 
     val process_patterns = DataPipe((p: PATTERN) => p._2) >
       (image_process * DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*)))
@@ -343,7 +332,7 @@ package object helios {
 
     val (norm_tf_data, scalers): SC_TF_DATA =
       scale_helios_dataset(
-        dataSet.copy[(Tensor, Tensor)](
+        dataSet.copy[(Output, Tensor)](
           training_dataset = dataSet.training_dataset.map(process_patterns),
           test_dataset     = dataSet.test_dataset.map(process_patterns)
         ))
@@ -360,15 +349,10 @@ package object helios {
     val stackOperation = DataPipe((coll: Iterable[(Output, Output)]) => coll.unzip) > (stackOutput * stackOutput)
 
     val trainData =
-      norm_tf_data.training_dataset.build[
-        (Tensor, Tensor),
-        (Output, Output),
-        (DataType, DataType),
-        (DataType, DataType),
-        (Shape, Shape)](
-        Left(DynaMLPipe.identityPipe[Tensor]*DynaMLPipe.identityPipe[Tensor]),
-        dataType = (UINT8, FLOAT64),
-        data_shapes)
+      norm_tf_data.training_dataset.build_buffered[
+        (Tensor, Tensor), (Output, Output),
+        (DataType, DataType), (DataType, DataType),
+        (Shape, Shape)](_buffer_size, stackOperation, (UINT8, FLOAT64), data_shapes)
         .repeat()
         .shuffle(10000)
         .batch(miniBatchSize)
@@ -403,8 +387,8 @@ package object helios {
     val predictions: (Tensor, Tensor) = dtfutils.buffered_preds[
       Tensor, Output, DataType, Shape, (Output, Output),
       Tensor, Output, DataType, Shape, Output,
-      Tensor, (Tensor, Tensor), (Tensor, Tensor)](
-      estimator, tfi.stack(norm_tf_data.test_dataset.data.toSeq.map(_._1), axis = 0),
+      Output, (Tensor, Tensor), (Tensor, Tensor)](
+      estimator, tf.stack(norm_tf_data.test_dataset.data.toSeq.map(_._1), axis = 0),
       _buffer_size, nTest)
 
     val index_times = Tensor(
