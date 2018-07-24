@@ -309,6 +309,7 @@ package object helios {
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
     miniBatchSize: Int = 16) = {
 
+    //The directories to write model parameters and summaries.
     val resDirName = "helios_omni_"+results_id
 
     val tf_summary_dir = tempdir/resDirName
@@ -316,9 +317,12 @@ package object helios {
     val num_outputs = collated_data.data.head._2._2.length
 
     /*
-    * After data has been joined/collated,
-    * start loading it into tensors
+    * Create the data processing pipe for processing each image.
     *
+    * 1. Load the image into a scrimage object
+    * 2. Apply pre-processing filters on the image
+    * 3. Convert the processed image into a byte array
+    * 4. Load the byte array into a tensor
     * */
 
     val image_process = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >

@@ -12,7 +12,8 @@ import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtfpipe}
 import io.github.mandar2812.dynaml.tensorflow.data.{AbstractDataSet, DataSet, TFDataSet, ZipDataSet}
 import io.github.mandar2812.dynaml.tensorflow.utils.{GaussianScalerTF, MinMaxScalerTF, MinMaxScalerTO}
-import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
+import io.github.mandar2812.dynaml.DynaMLPipe._
+import io.github.mandar2812.dynaml.utils
 import org.joda.time._
 import spire.math.UByte
 import org.platanios.tensorflow.api._
@@ -143,11 +144,11 @@ package object data {
       DataPipe((i: Image) => i.argb.map(_.last.toByte)))
 
     case SDO(AIA094335193, _) => (
-      DynaMLPipe.identityPipe[Image], 4,
+      identityPipe[Image], 4,
       DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
 
     case SDO(HMI171, _) => (
-      DynaMLPipe.identityPipe[Image], 4,
+      identityPipe[Image], 4,
       DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
 
     case _: SDO  => (
@@ -231,17 +232,7 @@ package object data {
     })
 
   val scale_helios_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
-
-    //val (norm_tr_data, scalers) = std_images_and_outputs(dataset.trainData, dataset.trainLabels)
-
-    /*(
-      dataset.copy(
-        trainLabels = norm_tr_data._2,
-        trainData = norm_tr_data._1/*,
-        testData = scalers._1(dataset.testData)*/),
-      scalers
-    )*/
-
+    
     val concat_targets = tfi.stack(
       dataset.training_dataset.map(DataPipe((p: (Tensor, Tensor)) => p._2)).data.toSeq
     )
@@ -521,32 +512,30 @@ package object data {
           (p: (DateTime, Seq[Double])) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
-    val years = (start_year_month.getYear to end_year_month.getYear).toStream
-
 
     val omni_data = dtfdata.dataset(start_year_month.getYear to end_year_month.getYear)
-      .map(DataPipe((i: Int) => omni_data_path.toString()+s"/omni2_$i.csv"))
+      .map(DataPipe((i: Int) => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
       .transform(omni_processing)
-      .to_supervised(DynaMLPipe.identityPipe[(DateTime, Seq[Double])])
+      .to_supervised(identityPipe[(DateTime, Seq[Double])])
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: DateTime => DateTime =
-      d => new DateTime(
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) => 
+      new DateTime(
         d.getYear, d.getMonthOfYear,
         d.getDayOfMonth, d.getHourOfDay,
         0, 0)
+    )
 
 
-    val image_processing =
-      IterableFlatMapPipe(
-        (year_month: YearMonth) => load_images[T](images_path, year_month, image_source, image_dir_tree).toStream) >
-        IterableDataPipe((p: (DateTime, Path)) => (image_dt_roundoff(p._1), p._2))
+    val image_processing = IterableFlatMapPipe(
+      (year_month: YearMonth) => load_images[T](images_path, year_month, image_source, image_dir_tree)) > 
+      IterableDataPipe(image_dt_roundoff * identityPipe[Path])
 
     val images = dtfdata.dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
-      .to_supervised(DynaMLPipe.identityPipe[(DateTime, Path)])
+      .to_supervised(identityPipe[(DateTime, Path)])
 
 
     images.join(omni_data)
@@ -607,7 +596,7 @@ package object data {
     val image_processing =
       StreamFlatMapPipe((year_month: YearMonth) =>
         load_images[T](images_path, year_month, image_source, image_dir_tree).toStream) >
-        StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[Path])
+        StreamDataPipe(image_dt_roundoff * identityPipe[Path])
 
     val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
 
@@ -673,7 +662,7 @@ package object data {
 
     val image_processing = StreamFlatMapPipe((year_month: YearMonth) =>
       load_soho_mc(images_path, year_month, image_sources, image_dir_tree).toStream) >
-      StreamDataPipe(image_dt_roundoff * DynaMLPipe.identityPipe[(SOHO, Path)]) >
+      StreamDataPipe(image_dt_roundoff * identityPipe[(SOHO, Path)]) >
       DataPipe((d: Stream[(DateTime, (SOHO, Path))]) =>
         d.groupBy(_._1).mapValues(_.map(_._2).groupBy(_._1).mapValues(_.map(_._2).toSeq))
       )
