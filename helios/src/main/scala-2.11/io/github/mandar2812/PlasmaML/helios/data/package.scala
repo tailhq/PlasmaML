@@ -162,6 +162,10 @@ package object data {
 
   def _buffer_size: Int = size_buffer
 
+  val image_scale: MetaPipe[Double, Image, Image] = MetaPipe(
+    (factor: Double) => (image: Image) => image.copy.scale(factor)
+  )
+
   val image_central_patch: MetaPipe21[Double, Int, Image, Image] =
     MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Image) => {
       val start = (1.0 - image_magic_ratio)*image_sizes/2
@@ -169,6 +173,13 @@ package object data {
 
       image.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
     })
+
+  def get_patch_range(magic_ratio: Double, image_sizes: Int) = {
+    val start = (1.0 - magic_ratio)*image_sizes/2
+    val patch_size = image_sizes*magic_ratio/2
+
+    start.toInt to (start.toInt + patch_size.toInt)
+  }
 
   val extract_central_patch: MetaPipe21[Double, Int, Output, Output] =
     MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Output) => {
@@ -1277,7 +1288,7 @@ package object data {
     print("Looking for data in directory ")
     val data_dir = images_data_dir match {
       case None       =>  home_dir_prefix/user_name/"data_repo"/'helios
-      case Some(path) => path
+      case Some(path) =>  path
     }
 
     pprint.pprintln(data_dir)

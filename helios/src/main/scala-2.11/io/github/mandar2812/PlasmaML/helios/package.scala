@@ -329,7 +329,7 @@ package object helios {
       preprocess_image >
       image_to_bytearr >
       DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
-        "UINT8", processed_image_size._1,
+        dtype = "UINT8", processed_image_size._1,
         processed_image_size._2,
         num_channels_image)(arr))
 

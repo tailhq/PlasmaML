@@ -1,17 +1,17 @@
 import ammonite.ops._
 import org.joda.time._
-import com.sksamuel.scrimage._
+
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils, dtfpipe}
-import io.github.mandar2812.dynaml.pipes._
+
 import _root_.io.github.mandar2812.PlasmaML.helios
-import com.sksamuel.scrimage.filter.GrayscaleFilter
-import io.github.mandar2812.PlasmaML.helios.core.CausalDynamicTimeLag
+import _root_.io.github.mandar2812.PlasmaML.helios.data
 import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImagesSource}
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
-import io.github.mandar2812.dynaml.DynaMLPipe
+
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
@@ -42,16 +42,18 @@ def main[T <: SolarImagesSource](
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
-  helios.data.buffer_size_(buffer_size)
+  data.buffer_size_(buffer_size)
 
-  val dataset        = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon, images_data_dir = path_to_images)
+  val dataset = data.generate_data_omni[T](
+    year_range, image_source,
+    deltaT = time_horizon,
+    images_data_dir = path_to_images)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
   val sw_threshold   = 700.0
 
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
-
   val test_end       = new DateTime(test_year, 12, 31, 23, 59)
 
   val tt_partition   = (p: (DateTime, (Path, Seq[Double]))) =>
@@ -64,26 +66,15 @@ def main[T <: SolarImagesSource](
     case SDO(_, s)  => (s, 333.0/512.0)
   }
 
-  val (image_filter, num_channels, image_to_byte) = helios.data.image_process_metadata(image_source)
+  val (image_filter, num_channels, image_to_byte) = data.image_process_metadata(image_source)
 
-  def get_patch_range(magic_ratio: Double, image_sizes: Int) = {
-    val start = (1.0 - magic_ratio)*image_sizes/2
-    val patch_size = image_sizes*magic_ratio/2
+  val patch_range = data.get_patch_range(magic_ratio, image_sizes/2)
 
-    start.toInt to (start.toInt + patch_size.toInt)
-  }
+  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
 
-  val patch_range = get_patch_range(magic_ratio, image_sizes/2)
-
-  val image_preprocess =
-    helios.data.image_central_patch(magic_ratio, image_sizes) >
-      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
-
-
+  //Set the path of the summary directory
   val summary_dir_prefix  = "swtl_"+image_source.toString
-
   val dt                  = DateTime.now()
-
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
     else "_"+dt.toString("YYYY-MM-dd-HH-mm")
@@ -91,8 +82,7 @@ def main[T <: SolarImagesSource](
   val summary_dir         = summary_dir_prefix+summary_dir_postfix
 
 
-
-
+  //Set some meta-information for the prediction architecture
   val num_pred_dims    = 2*dataset.data.head._2._2.length
   val pre_upwind_index = 6
   val ff_index         = pre_upwind_index + pre_upwind_ff_sizes.length
@@ -134,7 +124,7 @@ def main[T <: SolarImagesSource](
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     ff_stack, starting_index = ff_index)
 
-  val output_mapping = CausalDynamicTimeLag.output_mapping(
+  val output_mapping = helios.learn.cdt_loss.output_mapping(
     "Output/CDT-SW",
     dataset.data.head._2._2.length)
 
