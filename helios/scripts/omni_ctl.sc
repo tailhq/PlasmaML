@@ -124,7 +124,7 @@ def main[T <: SolarImagesSource](
   val (pre_upwind_layer_shapes, pre_upwind_layer_parameter_names, pre_upwind_layer_datatypes) =
     dtfutils.get_ffstack_properties(Seq(-1) ++ pre_upwind_ff_sizes, pre_upwind_index)
 
-  val loss_func = CausalDynamicTimeLag(
+  val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",
     dataset.data.head._2._2.length,
     prior_wt = prior_wt,

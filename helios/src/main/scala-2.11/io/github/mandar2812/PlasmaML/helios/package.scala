@@ -4,23 +4,19 @@ import ammonite.ops.{Path, exists, home, ls}
 import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
-import io.github.mandar2812.dynaml.DynaMLPipe
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe, dtfutils}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
 import io.github.mandar2812.dynaml.tensorflow.utils._
-import _root_.io.github.mandar2812.PlasmaML.helios.core._
-import _root_.io.github.mandar2812.PlasmaML.helios.data._
+import io.github.mandar2812.PlasmaML.helios.core._
+import io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.implicits.helpers.OutputToTensor
-import org.platanios.tensorflow.api.learn.estimators.Estimator.SupportedInferInput
-import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
+import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
-import org.platanios.tensorflow.api.ops.io.data.{Data, Dataset}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
-import org.platanios.tensorflow.api.ops.Function
 import spire.math.UByte
 
 /**
@@ -266,7 +262,7 @@ package object helios {
 
     val resScatter = preds.zip(targets).zip(timelags).map(p => Seq(p._1._1, p._1._2, p._2))
 
-    DynaMLPipe.streamToFile(file.toString())(resScatter.map(_.mkString(",")).toStream)
+    streamToFile(file.toString())(resScatter.map(_.mkString(",")).toStream)
   }
 
   /**
@@ -299,7 +295,7 @@ package object helios {
     collated_data: HELIOS_OMNI_DATA,
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false,
-    preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
+    preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
     image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     processed_image_size: (Int, Int) = (-1, -1),
     num_channels_image: Int = 4)(
@@ -333,8 +329,10 @@ package object helios {
         processed_image_size._2,
         num_channels_image)(arr))
 
+    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*))
+
     val process_patterns = DataPipe((p: PATTERN) => p._2) >
-      (image_process * DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*)))
+      (image_process * load_targets_into_tensor)
 
     val dataSet: TF_DATA = helios.data.create_helios_data_set(
       collated_data,
@@ -355,10 +353,6 @@ package object helios {
       Shape(causal_horizon)
     )
 
-    val stackOutput = DataPipe((it: Iterable[Output]) => tf.stack(it.toSeq, axis = 0))
-
-    val stackOperation = DataPipe((coll: Iterable[(Output, Output)]) => coll.unzip) > (stackOutput * stackOutput)
-
     val trainData =
       norm_tf_data.training_dataset.build[
         (Tensor, Tensor),
@@ -366,11 +360,11 @@ package object helios {
         (DataType, DataType),
         (DataType, DataType),
         (Shape, Shape)](
-        Left(DynaMLPipe.identityPipe[Tensor]*DynaMLPipe.identityPipe[Tensor]),
+        Left(identityPipe[Tensor]*identityPipe[Tensor]),
         dataType = (UINT8, FLOAT64),
         data_shapes)
         .repeat()
-        .shuffle(10000)
+        .shuffle(1000)
         .batch(miniBatchSize)
         .prefetch(10)
 
@@ -487,7 +481,7 @@ package object helios {
     collated_data: HELIOS_OMNI_DATA_EXT,
     tt_partition: PATTERN_EXT => Boolean,
     resample: Boolean = false,
-    preprocess_image: DataPipe[Image, Image] = DynaMLPipe.identityPipe[Image],
+    preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
     image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     num_channels_image: Int = 4)(
     results_id: String,
