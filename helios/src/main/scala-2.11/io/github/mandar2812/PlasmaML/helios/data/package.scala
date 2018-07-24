@@ -11,7 +11,7 @@ import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtfpipe}
 import io.github.mandar2812.dynaml.tensorflow.data.{AbstractDataSet, DataSet, TFDataSet, ZipDataSet}
-import io.github.mandar2812.dynaml.tensorflow.utils.{GaussianScalerTF, MinMaxScalerTF, MinMaxScalerTO}
+import io.github.mandar2812.dynaml.tensorflow.utils.{GaussianScalerTF, MinMaxScalerTF}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.utils
 import org.joda.time._
@@ -27,6 +27,11 @@ import org.platanios.tensorflow.api._
   * @author mandar2812
   * */
 package object data {
+
+
+  private implicit val dateOrdering = new Ordering[DateTime] {
+    override def compare(x: DateTime, y: DateTime): Int = if(x.isBefore(y)) -1 else 1
+  }
 
   /**
     * A simple data pattern, consisting of
@@ -516,7 +521,6 @@ package object data {
     //Extract OMNI data as stream
 
     //First create the transformation pipe
-
     val omni_processing =
       OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
         IterableDataPipe[(DateTime, Seq[Double])](
@@ -540,8 +544,13 @@ package object data {
 
 
     val image_processing = IterableFlatMapPipe(
-      (year_month: YearMonth) => load_images[T](images_path, year_month, image_source, image_dir_tree)) > 
-      IterableDataPipe(image_dt_roundoff * identityPipe[Path])
+      (year_month: YearMonth) => {
+        val images_for_month = load_images[T](images_path, year_month, image_source, image_dir_tree)
+
+        val grouped_images = images_for_month.map(patt => (image_dt_roundoff(patt._1), patt._2)).groupBy(_._1)
+
+        grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
+      })
 
     val images = dtfdata.dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
