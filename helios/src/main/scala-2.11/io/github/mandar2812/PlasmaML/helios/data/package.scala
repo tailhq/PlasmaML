@@ -1258,7 +1258,8 @@ package object data {
     year_range: Range,
     image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
-    deltaT: (Int, Int) = (18, 56)): HELIOS_OMNI_DATA = {
+    deltaT: (Int, Int) = (18, 56),
+    images_data_dir: Option[Path] = None): HELIOS_OMNI_DATA = {
 
     /*
      * Mind your surroundings!
@@ -1274,7 +1275,11 @@ package object data {
     val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
 
     print("Looking for data in directory ")
-    val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
+    val data_dir = images_data_dir match {
+      case None       =>  home_dir_prefix/user_name/"data_repo"/'helios
+      case Some(path) => path
+    }
+
     pprint.pprintln(data_dir)
 
     val images_dir = image_source match {

@@ -34,7 +34,8 @@ def main[T <: SolarImagesSource](
   temp: Double                  = 0.75,
   stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
   miniBatch: Int                = 16,
-  tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp") = {
+  tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
+  path_to_images: Option[Path]  = None) = {
 
   //Data with MDI images
 
@@ -43,7 +44,7 @@ def main[T <: SolarImagesSource](
 
   helios.data.buffer_size_(buffer_size)
 
-  val dataset        = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
+  val dataset        = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon, images_data_dir = path_to_images)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
