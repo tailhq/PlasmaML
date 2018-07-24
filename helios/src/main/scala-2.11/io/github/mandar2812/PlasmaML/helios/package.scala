@@ -351,7 +351,7 @@ package object helios {
     * 4. Load the byte array into a tensor
     * */
 
-    val image_process = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
+    val load_image_into_tensor = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
       preprocess_image >
       image_to_bytearr >
       DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
@@ -361,20 +361,14 @@ package object helios {
 
     val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*))
 
-    val process_patterns = DataPipe((p: PATTERN) => p._2) >
-      (image_process * load_targets_into_tensor)
-
     val dataSet: TF_DATA = helios.data.create_helios_data_set(
       collated_data,
+      load_image_into_tensor,
+      load_targets_into_tensor,
       tt_partition,
       resample)
 
-    val (norm_tf_data, scalers): SC_TF_DATA =
-      scale_helios_dataset(
-        dataSet.copy[(Tensor, Tensor)](
-          training_dataset = dataSet.training_dataset.map(process_patterns),
-          test_dataset     = dataSet.test_dataset.map(process_patterns)
-        ))
+    val (norm_tf_data, scalers): SC_TF_DATA = scale_helios_dataset(dataSet)
 
     val causal_horizon = collated_data.data.head._2._2.length
 
@@ -383,20 +377,16 @@ package object helios {
       Shape(causal_horizon)
     )
 
-    val trainData =
-      norm_tf_data.training_dataset.build[
-        (Tensor, Tensor),
-        (Output, Output),
-        (DataType, DataType),
-        (DataType, DataType),
+    val trainData = norm_tf_data.training_dataset.build[
+        (Tensor, Tensor), (Output, Output),
+        (DataType, DataType), (DataType, DataType),
         (Shape, Shape)](
-        Left(identityPipe[Tensor]*identityPipe[Tensor]),
-        dataType = (UINT8, FLOAT64),
-        data_shapes)
-        .repeat()
-        .shuffle(1000)
-        .batch(miniBatchSize)
-        .prefetch(10)
+      Left(identityPipe[Tensor]*identityPipe[Tensor]),
+      dataType = (UINT8, FLOAT64), data_shapes)
+      .repeat()
+      .shuffle(1000)
+      .batch(miniBatchSize)
+      .prefetch(10)
 
     /*
     * Start building tensorflow network/graph
@@ -413,12 +403,10 @@ package object helios {
     val loss = lossFunc >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-    val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
-
     //Now create the model
     val (model, estimator) = dtflearn.build_tf_model(
       arch, input, trainInput, trainingInputLayer,
-      loss, optimizer, summariesDir,
+      loss, optimizer, java.nio.file.Paths.get(tf_summary_dir.toString()),
       stop_criteria)(
       trainData)
 
@@ -458,7 +446,7 @@ package object helios {
       scalers._2(0).i(predictions._1)
     }
 
-    val test_labels = dataSet.test_dataset.data.map(_._2._2).toSeq
+    val test_labels = dataSet.test_dataset.data.map(_._2).map(t => dtfutils.toDoubleSeq(t).toSeq).toSeq
 
     val actual_targets = test_labels.zipWithIndex.map(zi => {
       val (z, index) = zi

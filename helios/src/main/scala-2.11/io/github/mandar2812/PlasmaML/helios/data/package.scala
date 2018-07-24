@@ -37,27 +37,27 @@ package object data {
     * A simple data pattern, consisting of
     * a time stamp, path to an image, and a sequence of numbers
     * */
-  type PATTERN                     = (DateTime, (Path, Seq[Double]))
+  type PATTERN                 = (DateTime, (Path, Seq[Double]))
 
   /**
     * A pattern, consisting of
     * a time stamp, path to an image, a tuple of numeric sequences
     * */
-  type PATTERN_EXT                 = (DateTime, (Path, (Seq[Double], Seq[Double])))
+  type PATTERN_EXT             = (DateTime, (Path, (Seq[Double], Seq[Double])))
 
   /**
     * A pattern, consisting of
     * a time stamp, a collection of images from multiple sources,
     * and a sequence of numbers
     * */
-  type MC_PATTERN                  = (DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))
+  type MC_PATTERN              = (DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))
 
   /**
     * A pattern, consisting of
     * a time stamp, a collection of images from multiple sources,
     * and a tuple of sequence of numbers
     * */
-  type MC_PATTERN_EXT              = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
+  type MC_PATTERN_EXT          = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
 
   type HELIOS_OMNI_DATA        = DataSet[PATTERN]
   type HELIOS_MC_OMNI_DATA     = Iterable[MC_PATTERN]
@@ -66,13 +66,13 @@ package object data {
 
   type IMAGE_TS                = (Tensor, Tensor)
 
-  type TF_DATA                 = TFDataSet[PATTERN]
+  type TF_DATA                 = TFDataSet[(Tensor, Tensor)]
 
   type TF_DATA_EXT             = AbstractDataSet[(Tensor, Tensor), Tensor]
 
   type SC_TF_DATA_EXT          = (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF))
 
-  type SC_TF_DATA              = (TFDataSet[(Tensor, Tensor)], (ReversibleScaler[Tensor], MinMaxScalerTF))
+  type SC_TF_DATA              = (TF_DATA, (ReversibleScaler[Tensor], MinMaxScalerTF))
 
   private def TF_DATA_EXT(
     trData: IMAGE_TS,
@@ -758,6 +758,8 @@ package object data {
     * */
   def create_helios_data_set(
     collated_data: HELIOS_OMNI_DATA,
+    read_image: DataPipe[Path, Tensor],
+    read_targets: DataPipe[Seq[Double], Tensor],
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false): TF_DATA = {
 
@@ -776,6 +778,9 @@ package object data {
     val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
 
     print_data_splits(train_fraction)
+
+    val process_patterns = DataPipe((p: PATTERN) => p._2) >
+      (read_image * read_targets)
 
     /*
     * If the `resample` flag is set to true,
@@ -806,9 +811,9 @@ package object data {
 
 
 
-    experiment_data.copy(
-      training_dataset = experiment_data.training_dataset.transform(resample_op),
-      test_dataset = experiment_data.test_dataset
+    experiment_data.copy[(Tensor, Tensor)](
+      training_dataset = experiment_data.training_dataset.transform(resample_op).map(process_patterns),
+      test_dataset = experiment_data.test_dataset.map(process_patterns)
     )
   }
 
