@@ -8,6 +8,7 @@ import io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import io.github.mandar2812.dynaml.pipes._
+import io.github.mandar2812.dynaml.analysis.implicits._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtfpipe}
 import io.github.mandar2812.dynaml.tensorflow.data.{AbstractDataSet, DataSet, TFDataSet, ZipDataSet}
@@ -83,15 +84,6 @@ package object data {
     sizeT: Int): AbstractDataSet[IMAGE_TS, Tensor] =
     AbstractDataSet(trData, trLabels, sizeTr, tData, tLabels, sizeT)
 
-  private def TF_DATA(
-    trData: Tensor,
-    trLabels: Tensor,
-    sizeTr: Int,
-    tData: Tensor,
-    tLabels: Tensor,
-    sizeT: Int): AbstractDataSet[Tensor, Tensor] =
-    AbstractDataSet(trData, trLabels, sizeTr, tData, tLabels, sizeT)
-
 
 
   /**
@@ -105,14 +97,14 @@ package object data {
   /**
     * Perform a bulk download of images within some date range
     * */
-  def download_day_range(download: (LocalDate) => Unit)(start: LocalDate, end: LocalDate): Unit = {
+  def download_day_range(download: LocalDate => Unit)(start: LocalDate, end: LocalDate): Unit = {
 
     val num_days = new Duration(start.toDateTimeAtStartOfDay, end.toDateTimeAtStartOfDay).getStandardDays.toInt
 
     (0 to num_days).map(start.plusDays).par.foreach(download)
   }
 
-  def download_month_range(download: (YearMonth) => Unit)(start: YearMonth, end: YearMonth): Unit = {
+  def download_month_range(download: YearMonth => Unit)(start: YearMonth, end: YearMonth): Unit = {
 
     val period = new Period(
       start.toLocalDate(1).toDateTimeAtStartOfDay,
@@ -702,9 +694,20 @@ package object data {
     * Resample data according to a provided
     * bounded discrete random variable
     * */
-  def resample[T, V](
+  /*def resample[T, V](
     data: Stream[(DateTime, (V, T))],
     selector: DiscreteDistrRV[Int]): Stream[(DateTime, (V, T))] = {
+
+    //Resample training set ot
+    //emphasize extreme events.
+    println("\nResampling data instances\n")
+
+    selector.iid(data.length).draw.map(data(_))
+  }*/
+
+  def resample[T](
+    data: Stream[T],
+    selector: DiscreteDistrRV[Int]): Stream[T] = {
 
     //Resample training set ot
     //emphasize extreme events.
@@ -761,7 +764,9 @@ package object data {
     read_image: DataPipe[Path, Tensor],
     read_targets: DataPipe[Seq[Double], Tensor],
     tt_partition: PATTERN => Boolean,
-    resample: Boolean = false): TF_DATA = {
+    resample: Boolean = false,
+    image_history: Int = 0,
+    image_history_downsampling: Int = 1): TF_DATA = {
 
     println("Separating data into train and test.\n")
     val experiment_data = collated_data.partition(DataPipe(tt_partition))
@@ -773,22 +778,50 @@ package object data {
     pprint.pprintln(total_data_size)
 
     val train_data_size = experiment_data.training_dataset.size
-    //val test_data_size  = experiment_data.test_dataset.size
 
     val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
 
     print_data_splits(train_fraction)
 
-    val process_patterns = DataPipe((p: PATTERN) => p._2) >
-      (read_image * read_targets)
+    val trim_time_stamp = DataPipe((p: PATTERN) => p._2)
+
+    val load_only_images = trim_time_stamp > (read_image * identityPipe[Seq[Double]])
+
+    val load_only_targets = identityPipe[Tensor] * read_targets
+
+    val get_image_history = if(image_history > 0) {
+      val slices = utils.range(
+        min = 0d, image_history.toDouble,
+        image_history_downsampling).map(_.toInt)
+
+      val indices = slices :+ image_history
+
+      DataPipe((data_stream: Iterable[(Tensor, Seq[Double])]) => data_stream.sliding(image_history).map(group => {
+
+        val gr = group.toSeq
+
+        val images = tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
+
+        (images, gr(indices.last)._2)
+      }).toIterable)
+
+    } else {
+      identityPipe[Iterable[(Tensor, Seq[Double])]]
+    }
+
+
+    val processed_data = experiment_data.copy[(Tensor, Seq[Double])](
+      training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
+      test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
+    )
 
     /*
     * If the `resample` flag is set to true,
-    * balance the occurence of high and low
+    * balance the occurrences of high and low
     * flux events through re-sampling.
     *
     * */
-    val resample_op = DataPipe((d: Iterable[PATTERN]) => if(resample) {
+    val resample_op = DataPipe((d: Iterable[(Tensor, Seq[Double])]) => if(resample) {
 
       /*
       * Resample training set with
@@ -796,24 +829,24 @@ package object data {
       * between max and min of a sliding
       * time window.
       * */
-      val un_prob = d.map(p => {
+      val un_prob: Array[Double] = d.map(p => {
 
-        math.abs(p._2._2.max - p._2._2.min)/math.abs(p._2._2.min)
-      }).map(math.exp)
+        math.abs(p._2.max - p._2.min)/math.abs(p._2.min)
+      }).map(math.exp).toArray
 
       val normalizer = un_prob.sum
 
-      val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
+      val selector = MultinomialRV(DenseVector(un_prob)/normalizer)
 
-      helios.data.resample(experiment_data.training_dataset.data.toStream, selector)
+      helios.data.resample[(Tensor, Seq[Double])](d.toStream, selector)
 
     } else d)
 
 
 
-    experiment_data.copy[(Tensor, Tensor)](
-      training_dataset = experiment_data.training_dataset.transform(resample_op).map(process_patterns),
-      test_dataset = experiment_data.test_dataset.map(process_patterns)
+    processed_data.copy[(Tensor, Tensor)](
+      training_dataset = processed_data.training_dataset.transform(resample_op).map(load_only_targets),
+      test_dataset = processed_data.test_dataset.map(load_only_targets)
     )
   }
 

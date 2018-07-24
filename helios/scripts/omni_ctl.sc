@@ -27,6 +27,8 @@ def main[T <: SolarImagesSource](
   buffer_size: Int              = 2000,
   re: Boolean                   = true,
   time_horizon: (Int, Int)      = (18, 56),
+  image_hist: Int               = 0,
+  image_hist_downsamp: Int      = 1,
   opt: Optimizer                = tf.train.AdaDelta(0.01),
   reg: Double                   = 0.001,
   prior_wt: Double              = 0.85,
@@ -99,7 +101,7 @@ def main[T <: SolarImagesSource](
   * */
   val conv_section =
     dtflearn.conv2d_pyramid(
-      size = 4, num_channels)(
+      size = 4, num_channels*(image_hist_downsamp + 1))(
       start_num_bits = 4, end_num_bits = 2)(
       relu_param = 0.01f, dropout = false,
       starting_index = 0) >>
@@ -162,6 +164,8 @@ def main[T <: SolarImagesSource](
     preprocess_image = image_preprocess > image_filter,
     image_to_bytearr = image_to_byte,
     num_channels_image = num_channels,
+    image_history = image_hist,
+    image_history_downsampling = image_hist_downsamp,
     processed_image_size = (patch_range.length, patch_range.length))(
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,

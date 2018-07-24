@@ -324,7 +324,9 @@ package object helios {
     preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
     image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     processed_image_size: (Int, Int) = (-1, -1),
-    num_channels_image: Int = 4)(
+    num_channels_image: Int = 4,
+    image_history: Int = 0,
+    image_history_downsampling: Int = 1)(
     results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home/"tmp",
@@ -366,14 +368,16 @@ package object helios {
       load_image_into_tensor,
       load_targets_into_tensor,
       tt_partition,
-      resample)
+      resample,
+      image_history,
+      image_history_downsampling)
 
     val (norm_tf_data, scalers): SC_TF_DATA = scale_helios_dataset(dataSet)
 
     val causal_horizon = collated_data.data.head._2._2.length
 
     val data_shapes = (
-      Shape(processed_image_size._1, processed_image_size._2, num_channels_image),
+      Shape(processed_image_size._1, processed_image_size._2, num_channels_image*(image_history_downsampling + 1)),
       Shape(causal_horizon)
     )
 
