@@ -794,7 +794,7 @@ package object data {
         min = 0d, image_history.toDouble,
         image_history_downsampling).map(_.toInt)
 
-      val indices = slices :+ image_history
+      val indices = slices :+ (image_history - 1)
 
       DataPipe((data_stream: Iterable[(Tensor, Seq[Double])]) => data_stream.sliding(image_history).map(group => {
 
