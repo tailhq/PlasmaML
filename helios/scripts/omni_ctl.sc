@@ -43,7 +43,7 @@ def main[T <: SolarImagesSource](
 
   helios.data.buffer_size_(buffer_size)
 
-  val dataset           = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
+  val dataset        = helios.data.generate_data_omni[T](year_range, image_source, deltaT = time_horizon)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
@@ -54,10 +54,8 @@ def main[T <: SolarImagesSource](
   val test_end       = new DateTime(test_year, 12, 31, 23, 59)
 
   val tt_partition   = (p: (DateTime, (Path, Seq[Double]))) =>
-  if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max >= sw_threshold) false
-  else true
-
-  val dt = DateTime.now()
+    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max >= sw_threshold) false
+    else true
 
 
   val (image_sizes, magic_ratio) = image_source match {
@@ -77,45 +75,78 @@ def main[T <: SolarImagesSource](
   val patch_range = get_patch_range(magic_ratio, image_sizes/2)
 
   val image_preprocess =
-  helios.data.image_central_patch(magic_ratio, image_sizes) >
-    DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
+    helios.data.image_central_patch(magic_ratio, image_sizes) >
+      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
 
-  val summary_dir_prefix = "swtl_"+image_source.toString
+
+  val summary_dir_prefix  = "swtl_"+image_source.toString
+
+  val dt                  = DateTime.now()
 
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
     else "_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-  val summary_dir = summary_dir_prefix+summary_dir_postfix
+  val summary_dir         = summary_dir_prefix+summary_dir_postfix
 
-  val num_pred_dims = 2*dataset.data.head._2._2.length
+
+
+
+  val num_pred_dims    = 2*dataset.data.head._2._2.length
+  val pre_upwind_index = 6
+  val ff_index         = pre_upwind_index + pre_upwind_ff_sizes.length
+  val ff_stack         = ff_stack_sizes :+ num_pred_dims
+
+  /*
+  * Construct architecture components.
+  *
+  * 1) Convolutional segment: Consists of two convolutional pyramids interspersed by batch normalisation
+  * 2) Pre Upwind feed-forward segment.
+  * 3) Upwind 1D computational layer.
+  * 4) Post Upwind feed-forward segment.
+  * 5) A post processing output mapping.
+  * */
+  val conv_section =
+    dtflearn.conv2d_pyramid(
+      size = 4, num_channels)(
+      start_num_bits = 4, end_num_bits = 2)(
+      relu_param = 0.01f, dropout = false,
+      starting_index = 0) >>
+      tf.learn.MaxPool(
+        "MaxPool_1", Seq(1, 2, 2, 1),
+        1, 1, SameConvPadding) >>
+      dtflearn.conv2d_pyramid(
+        size = 2, num_channels_input = 4)(
+        start_num_bits = 4, end_num_bits = 2)(
+        relu_param = 0.01f, dropout = false,
+        starting_index = 3) >>
+      tf.learn.MaxPool(
+        "MaxPool_2",
+        Seq(1, 2, 2, 1), 1, 1,
+        SameConvPadding)
+
+  val pre_upwind_ff_stack = dtflearn.feedforward_stack(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+    pre_upwind_ff_sizes, starting_index = pre_upwind_index)
+
+  val post_upwind_ff_stack = dtflearn.feedforward_stack(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+    ff_stack, starting_index = ff_index)
 
   val output_mapping = CausalDynamicTimeLag.output_mapping(
     "Output/CDT-SW",
     dataset.data.head._2._2.length)
 
-  val pre_upwind_index = 6
-  val ff_index         = pre_upwind_index + pre_upwind_ff_sizes.length
-  val ff_stack         = ff_stack_sizes :+ num_pred_dims
 
-
-  val architecture =
-    tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_pyramid(4, num_channels)(4, 2)(0.01f, dropout = false, starting_index = 0) >>
-      tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
-      dtflearn.conv2d_pyramid(2, 4)(4, 2)(0.01f, dropout = false, starting_index = 3) >>
-      tf.learn.MaxPool("MaxPool_2", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
-      tf.learn.Flatten("Flatten_1") >>
-      dtflearn.feedforward_stack(
-        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
-        pre_upwind_ff_sizes, starting_index = pre_upwind_index) >>
-      tf.learn.Cast("Cast/Float", FLOAT32) >>
-      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
-      tf.learn.Flatten("Flatten_4") >>
-      dtflearn.feedforward_stack(
-        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
-        ff_stack, starting_index = ff_index) >>
-      output_mapping
+  val architecture = tf.learn.Cast("Input/Cast", FLOAT32) >>
+    conv_section >>
+    tf.learn.Flatten("Flatten_1") >>
+    /*pre_upwind_ff_stack >>
+    tf.learn.Cast("Cast/Float", FLOAT32) >>
+    helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
+    tf.learn.Flatten("Flatten_4") >>*/
+    post_upwind_ff_stack >>
+    output_mapping
 
 
   val (layer_shapes, layer_parameter_names, layer_datatypes) =
@@ -130,9 +161,9 @@ def main[T <: SolarImagesSource](
     prior_wt = prior_wt,
     temperature = temp) >>
     L2Regularization(
-      pre_upwind_layer_parameter_names ++ layer_parameter_names,
-      pre_upwind_layer_datatypes ++ layer_datatypes,
-      pre_upwind_layer_shapes ++ layer_shapes,
+      /*pre_upwind_layer_parameter_names ++ */layer_parameter_names,
+      /*pre_upwind_layer_datatypes ++ */layer_datatypes,
+      /*pre_upwind_layer_shapes ++ */layer_shapes,
       reg)
 
   helios.run_experiment_omni(
