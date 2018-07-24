@@ -605,7 +605,7 @@ package object data {
 
     val years = (start_year_month.getYear to end_year_month.getYear).toStream
 
-    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/omni2_"+i+".csv"))
+    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
 
     //Extract paths to images, along with a time-stamp
 
@@ -672,7 +672,7 @@ package object data {
 
     val years = (start_year_month.getYear to end_year_month.getYear).toStream
 
-    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/omni2_"+i+".csv"))
+    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
 
     //Extract paths to images, along with a time-stamp
 

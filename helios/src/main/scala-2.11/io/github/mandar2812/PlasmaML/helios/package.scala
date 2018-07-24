@@ -18,6 +18,7 @@ import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
 import spire.math.UByte
+import com.quantifind.charts.Highcharts._
 
 /**
   * <h3>Helios</h3>
@@ -251,7 +252,6 @@ package object helios {
     (model, estimator, metrics, metrics_class, tf_summary_dir, labels_mean, labels_stddev, collated_data)
   }
 
-
   private def write_predictions(
     preds: Seq[Double],
     targets: Seq[Double],
@@ -263,6 +263,32 @@ package object helios {
     val resScatter = preds.zip(targets).zip(timelags).map(p => Seq(p._1._1, p._1._2, p._2))
 
     streamToFile(file.toString())(resScatter.map(_.mkString(",")).toStream)
+  }
+
+  def visualise_cdt_results(results_path: Path): Unit = {
+
+    val split_line = DataPipe[String, Array[Double]](_.split(',').map(_.toDouble))
+
+    val process_pipe = DataPipe[Path, String](_.toString()) >
+      fileToStream >
+      StreamDataPipe(split_line)
+
+    val scatter_data = process_pipe(results_path)
+
+    regression(scatter_data.map(p => (p.head, p(1))))
+    hold()
+    title("Scatter Plot: Model Predictions")
+    xAxis("Prediction")
+    yAxis("Actual Target")
+    unhold()
+
+    scatter(scatter_data.map(p => (p.head, p.last)))
+    hold()
+    title("Scatter Plot: Output Timelag Relationship")
+    xAxis("Prediction")
+    yAxis("Predicted Time Lag")
+    unhold()
+
   }
 
   /**
