@@ -102,7 +102,7 @@ def main[T <: SolarImagesSource](
   val conv_section =
     dtflearn.conv2d_pyramid(
       size = 4, num_channels*(image_hist_downsamp + 1))(
-      start_num_bits = 4, end_num_bits = 2)(
+      start_num_bits = 3, end_num_bits = 2)(
       relu_param = 0.01f, dropout = false,
       starting_index = 0) >>
       tf.learn.MaxPool(
@@ -110,7 +110,7 @@ def main[T <: SolarImagesSource](
         1, 1, SameConvPadding) >>
       dtflearn.conv2d_pyramid(
         size = 2, num_channels_input = 4)(
-        start_num_bits = 4, end_num_bits = 2)(
+        start_num_bits = 3, end_num_bits = 2)(
         relu_param = 0.01f, dropout = false,
         starting_index = 3) >>
       tf.learn.MaxPool(
