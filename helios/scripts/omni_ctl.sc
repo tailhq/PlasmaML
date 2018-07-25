@@ -100,7 +100,11 @@ def main[T <: SolarImagesSource](
   * 5) A post processing output mapping.
   * */
   val conv_section =
-    dtflearn.conv2d_pyramid(
+    dtflearn.inception_unit(num_channels*(image_hist_downsamp + 1))(1) >>
+      dtflearn.inception_unit(4)(2) >>
+      dtflearn.inception_unit(4)(3)
+
+    /*dtflearn.conv2d_pyramid(
       size = 4, num_channels*(image_hist_downsamp + 1))(
       start_num_bits = 3, end_num_bits = 2)(
       relu_param = 0.01f, dropout = false,
@@ -116,7 +120,7 @@ def main[T <: SolarImagesSource](
       tf.learn.MaxPool(
         "MaxPool_2",
         Seq(1, 2, 2, 1), 1, 1,
-        SameConvPadding)
+        SameConvPadding)*/
 
   val pre_upwind_ff_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
