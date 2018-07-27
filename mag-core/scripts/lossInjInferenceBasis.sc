@@ -20,17 +20,17 @@
 
   num_dummy_data = 20
 
-  lambda_params = (-1, 2.75, 0d, -0.2)
+  lambda_params = (-1, 0.5, 0d, -0.2)
 
-  q_params = (0d, 3.5d, 0.05, 0.45)
+  q_params = (0d, 0.5d, 0.05, 0.45)
 
   initialPSD = (l: Double) => {
     val c = utils.chebyshev(3, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
     4000d + 1000*c - 1000*utils.chebyshev(5, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
   }
 
-  nL = 300
-  nT = 200
+  nL = 200
+  nT = 50
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 

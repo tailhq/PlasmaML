@@ -3,11 +3,11 @@ import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion
 
 
-val (nL,nT) = (500, 50)
+val (nL,nT) = (200, 50)
 val lMax = 10
 val tMax = 5
 
-val lShellLimits = (1.0, 10.0)
+val lShellLimits = (1.0, 7.0)
 val timeLimits = (0.0, 5.0)
 val a = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val b = math.log(2d)/timeLimits._2
@@ -59,9 +59,15 @@ hold()
 
 unhold()
 
-legend(DenseVector.tabulate[Double](lMax+1)(i =>
-  if(i < nL) lShellLimits._1+(rds.deltaL*i*5)
-  else lShellLimits._2).toArray.map(s => "L = "+"%3f".format(s)))
+legend(
+  DenseVector.tabulate[Double](lMax+1)(
+    i =>
+      if(i < nL) lShellLimits._1+(rds.deltaL*i*5)
+      else lShellLimits._2)
+  .toArray
+  .map(s => "L = "+"%3f".format(s))
+)
+
 title("Evolution of Phase Space Density f(L,t)")
 xAxis("time")
 yAxis("f(L,t)")
