@@ -105,7 +105,11 @@ def main[T <: SolarImagesSource](
       dtflearn.inception_unit(4)(2) >>
       dtflearn.batch_norm("BN_2") >>
       dtflearn.inception_unit(4)(3) >>
-      dtflearn.batch_norm("BN_3")
+      dtflearn.batch_norm("BN_3") >>
+      dtflearn.inception_unit(4)(4) >>
+      dtflearn.batch_norm("BN_4") >>
+      dtflearn.inception_unit(4)(5) >>
+      dtflearn.batch_norm("BN_5")
 
     /*dtflearn.conv2d_pyramid(
       size = 4, num_channels*(image_hist_downsamp + 1))(
