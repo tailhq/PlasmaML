@@ -101,8 +101,11 @@ def main[T <: SolarImagesSource](
   * */
   val conv_section =
     dtflearn.inception_unit(num_channels*(image_hist_downsamp + 1))(1) >>
+      dtflearn.batch_norm("BN_1") >>
       dtflearn.inception_unit(4)(2) >>
-      dtflearn.inception_unit(4)(3)
+      dtflearn.batch_norm("BN_2") >>
+      dtflearn.inception_unit(4)(3) >>
+      dtflearn.batch_norm("BN_3")
 
     /*dtflearn.conv2d_pyramid(
       size = 4, num_channels*(image_hist_downsamp + 1))(
