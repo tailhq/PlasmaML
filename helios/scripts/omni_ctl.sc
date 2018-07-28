@@ -37,7 +37,8 @@ def main[T <: SolarImagesSource](
   stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
   miniBatch: Int                = 16,
   tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
-  path_to_images: Option[Path]  = None) = {
+  path_to_images: Option[Path]  = None,
+  existingModelDir: String      = "") = {
 
   //Data with MDI images
 
@@ -81,7 +82,7 @@ def main[T <: SolarImagesSource](
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
     else "_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-  val summary_dir         = summary_dir_prefix+summary_dir_postfix
+  val summary_dir         = if(existingModelDir.isEmpty) summary_dir_prefix+summary_dir_postfix else existingModelDir
 
 
   //Set some meta-information for the prediction architecture

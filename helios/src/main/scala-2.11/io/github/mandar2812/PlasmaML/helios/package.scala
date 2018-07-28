@@ -335,10 +335,11 @@ package object helios {
     mo_flag: Boolean = true,
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
-    miniBatchSize: Int = 16) = {
+    miniBatchSize: Int = 16,
+    reuseExistingModel: Boolean = false) = {
 
     //The directories to write model parameters and summaries.
-    val resDirName = "helios_omni_"+results_id
+    val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
 
     val tf_summary_dir = tempdir/resDirName
 
@@ -467,7 +468,7 @@ package object helios {
       dtfutils.toDoubleSeq(pred_targets).toSeq,
       actual_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
-      tf_summary_dir/"scatter_test.csv")
+      tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
 
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
