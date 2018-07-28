@@ -82,8 +82,11 @@ def main[T <: SolarImagesSource](
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
     else "_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-  val summary_dir         = if(existingModelDir.isEmpty) summary_dir_prefix+summary_dir_postfix else existingModelDir
+  val (summary_dir , reuse): (String, Boolean)  =
+    if(existingModelDir.isEmpty) (summary_dir_prefix+summary_dir_postfix, false)
+    else (existingModelDir, true)
 
+  if(reuse) println("\nReusing existing model in directory: "+existingModelDir+"\n")
 
   //Set some meta-information for the prediction architecture
   val num_pred_dims    = 2*dataset.data.head._2._2.length
@@ -182,6 +185,7 @@ def main[T <: SolarImagesSource](
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
-    optimizer = opt)
+    optimizer = opt,
+    reuseExistingModel = reuse)
 
 }
