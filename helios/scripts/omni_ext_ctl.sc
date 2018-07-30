@@ -6,6 +6,7 @@ import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.PlasmaML.helios
+import io.github.mandar2812.PlasmaML.helios.data
 import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImagesSource}
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
@@ -26,9 +27,11 @@ def main[T <: SolarImagesSource](
   buffer_size: Int              = 2000,
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
-  conv_ff_stack_sizes: Seq[Int] = Seq(256, 128, 64, 32, 8),
+  image_hist: Int               = 0,
+  image_hist_downsamp: Int      = 1,
+  conv_ff_stack_sizes: Seq[Int] = Seq(512, 256),
   hist_ff_stack_sizes: Seq[Int] = Seq(32, 16),
-  ff_stack: Seq[Int]            = Seq(80, 64),
+  ff_stack: Seq[Int]            = Seq(128, 64),
   opt: Optimizer                = tf.train.AdaDelta(0.01),
   reg: Double                   = 0.001,
   prior_wt: Double              = 0.85,
@@ -37,7 +40,8 @@ def main[T <: SolarImagesSource](
   stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
   miniBatch: Int                = 16,
   tmpdir: Path                  = root/"home"/System.getProperty("user.name")/"tmp",
-  resFile: String               = "mdi_rbfloss_results.csv") = {
+  path_to_images: Option[Path]  = None,
+  existingModelDir: String      = "") = {
 
 
   print("Running experiment with test split from year: ")
@@ -45,10 +49,11 @@ def main[T <: SolarImagesSource](
 
   helios.data.buffer_size_(buffer_size)
 
-  val data           = helios.data.generate_data_omni_ext[T](
+  val dataset = helios.data.generate_data_omni_ext[T](
     year_range, image_source,
     deltaT = time_horizon,
-    history = time_history)
+    history = time_history,
+    images_data_dir = path_to_images)
 
   println("Starting data set created.")
   println("Proceeding to load images & labels into Tensors ...")
@@ -62,58 +67,55 @@ def main[T <: SolarImagesSource](
     if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2._2.max >= sw_threshold) false
     else true
 
-  val dt = DateTime.now()
-
 
   val (image_sizes, magic_ratio) = image_source match {
     case SOHO(_, s) => (s, 268.0/512.0)
     case SDO(_, s)  => (s, 333.0/512.0)
   }
 
-  val image_preprocess =
-    helios.data.image_central_patch(magic_ratio, image_sizes) >
-      DataPipe((i: Image) => i.copy.scale(scaleFactor = 0.5))
+  val (image_filter, num_channels, image_to_byte) = data.image_process_metadata(image_source)
 
-  val (image_filter, num_channels, image_to_byte) = helios.data.image_process_metadata(image_source)
+  val patch_range = data.get_patch_range(magic_ratio, image_sizes/2)
 
-  val summary_dir_prefix = "swtl_"+image_source.toString
+  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
 
+  //Set the path of the summary directory
+  val summary_dir_prefix  = "swtl_"+image_source.toString
+  val dt                  = DateTime.now()
   val summary_dir_postfix =
     if(re) "_re_"+dt.toString("YYYY-MM-dd-HH-mm")
     else "_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-  val summary_dir = summary_dir_prefix+summary_dir_postfix
+  val (summary_dir , reuse): (String, Boolean)  =
+    if(existingModelDir.isEmpty) (summary_dir_prefix+summary_dir_postfix, false)
+    else (existingModelDir, true)
 
-  val num_pred_dims = 2*data.head._2._2._2.length
+  if(reuse) println("\nReusing existing model in directory: "+existingModelDir+"\n")
 
-  val output_mapping = helios.learn.cdt_loss.output_mapping(
-    "Output/CDT-SW",
-    data.head._2._2._2.length)
-
-
+  val causal_horizon = dataset.data.head._2._2._2.length
+  val num_pred_dims  = 2*causal_horizon
   val ff_stack_sizes = ff_stack ++ Seq(num_pred_dims)
-
   val ff_index_conv  = 1
-
   val ff_index_hist  = ff_index_conv + conv_ff_stack_sizes.length
   val ff_index_fc    = ff_index_hist + hist_ff_stack_sizes.length
 
   val image_neural_stack = {
     tf.learn.Cast("Input/Cast", FLOAT32) >>
-      dtflearn.conv2d_unit(Shape(4, 4, num_channels, 20), dropout = false)(0) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 20, 15), dropout = false)(1) >>
-      tf.learn.MaxPool("MaxPool_1", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 15, 10), dropout = false)(2) >>
-      dtflearn.conv2d_unit(Shape(2, 2, 10, 8), dropout = false)(3) >>
-      tf.learn.MaxPool("MaxPool_3", Seq(1, 2, 2, 1), 1, 1, SameConvPadding) >>
+      dtflearn.inception_unit(num_channels*(image_hist_downsamp + 1))(1) >>
+      dtflearn.batch_norm("BN_1") >>
+      dtflearn.inception_unit(4)(2) >>
+      dtflearn.batch_norm("BN_2") >>
+      dtflearn.inception_unit(4)(3) >>
+      dtflearn.batch_norm("BN_3") >>
+      dtflearn.inception_unit(4)(4) >>
+      dtflearn.batch_norm("BN_4") >>
+      dtflearn.inception_unit(4)(5) >>
+      dtflearn.batch_norm("BN_5") >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
         (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
         conv_ff_stack_sizes,
-        starting_index = ff_index_conv) >>
-      tf.learn.Cast("Cast/Float", FLOAT32) >>
-      helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 20) >>
-      tf.learn.Flatten("Flatten_4")
+        starting_index = ff_index_conv)
   }
 
   val omni_history_stack = {
@@ -131,6 +133,7 @@ def main[T <: SolarImagesSource](
     ff_stack_sizes,
     starting_index = ff_index_fc)
 
+  val output_mapping = helios.learn.cdt_loss.output_mapping("Output/CDT-SW", causal_horizon)
 
   val architecture = dtflearn.tuple2_layer("OmniCTLStack", image_neural_stack, omni_history_stack) >>
     dtflearn.concat_tuple2("StackFeatures", axis = 1) >>
@@ -148,7 +151,7 @@ def main[T <: SolarImagesSource](
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",
-    data.head._2._2._2.length,
+    causal_horizon,
     prior_wt = prior_wt,
     temperature = temp) >>
     L2Regularization(
@@ -158,10 +161,13 @@ def main[T <: SolarImagesSource](
       reg)
 
   helios.run_experiment_omni_ext(
-    data, tt_partition, resample = re,
+    dataset, tt_partition, resample = re,
     preprocess_image = image_preprocess > image_filter,
     image_to_bytearr = image_to_byte,
-    num_channels_image = num_channels)(
+    num_channels_image = num_channels,
+    image_history = image_hist,
+    image_history_downsampling = image_hist_downsamp,
+    processed_image_size = (patch_range.length, patch_range.length))(
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,

@@ -384,7 +384,7 @@ package object helios {
 
     val trainData = norm_tf_data.training_dataset.build[
         (Tensor, Tensor), (Output, Output),
-        (DataType, DataType), (DataType, DataType),
+        (DataType.Aux[UByte], DataType.Aux[Double]), (DataType, DataType),
         (Shape, Shape)](
       Left(identityPipe[Tensor]*identityPipe[Tensor]),
       dataType = (UINT8, FLOAT64), data_shapes)
@@ -522,7 +522,7 @@ package object helios {
     reuseExistingModel: Boolean = false) = {
 
     //The directories to write model parameters and summaries.
-    val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
+    val resDirName = if(reuseExistingModel) results_id else "helios_omni_hist_"+results_id
 
     val tf_summary_dir = tempdir/resDirName
 

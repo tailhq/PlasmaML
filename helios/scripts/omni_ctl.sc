@@ -115,27 +115,9 @@ def main[T <: SolarImagesSource](
       dtflearn.inception_unit(4)(5) >>
       dtflearn.batch_norm("BN_5")
 
-    /*dtflearn.conv2d_pyramid(
-      size = 4, num_channels*(image_hist_downsamp + 1))(
-      start_num_bits = 3, end_num_bits = 2)(
-      relu_param = 0.01f, dropout = false,
-      starting_index = 0) >>
-      tf.learn.MaxPool(
-        "MaxPool_1", Seq(1, 2, 2, 1),
-        1, 1, SameConvPadding) >>
-      dtflearn.conv2d_pyramid(
-        size = 2, num_channels_input = 4)(
-        start_num_bits = 3, end_num_bits = 2)(
-        relu_param = 0.01f, dropout = false,
-        starting_index = 3) >>
-      tf.learn.MaxPool(
-        "MaxPool_2",
-        Seq(1, 2, 2, 1), 1, 1,
-        SameConvPadding)*/
-
-  val pre_upwind_ff_stack = dtflearn.feedforward_stack(
+  /*val pre_upwind_ff_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
-    pre_upwind_ff_sizes, starting_index = pre_upwind_index)
+    pre_upwind_ff_sizes, starting_index = pre_upwind_index)*/
 
   val post_upwind_ff_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
@@ -160,8 +142,8 @@ def main[T <: SolarImagesSource](
   val (layer_shapes, layer_parameter_names, layer_datatypes) =
     dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index)
 
-  val (pre_upwind_layer_shapes, pre_upwind_layer_parameter_names, pre_upwind_layer_datatypes) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ pre_upwind_ff_sizes, pre_upwind_index)
+  /*val (pre_upwind_layer_shapes, pre_upwind_layer_parameter_names, pre_upwind_layer_datatypes) =
+    dtfutils.get_ffstack_properties(Seq(-1) ++ pre_upwind_ff_sizes, pre_upwind_index)*/
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",
