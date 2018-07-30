@@ -506,7 +506,10 @@ package object helios {
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
     image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
-    num_channels_image: Int = 4)(
+    processed_image_size: (Int, Int) = (-1, -1),
+    num_channels_image: Int = 4,
+    image_history: Int = 0,
+    image_history_downsampling: Int = 1)(
     results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home/"tmp",
@@ -515,34 +518,70 @@ package object helios {
     mo_flag: Boolean = true,
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
-    miniBatchSize: Int = 16) = {
+    miniBatchSize: Int = 16,
+    reuseExistingModel: Boolean = false) = {
 
-    val resDirName = "helios_omni_"+results_id
+    //The directories to write model parameters and summaries.
+    val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
 
     val tf_summary_dir = tempdir/resDirName
+
+    val num_outputs = collated_data.data.head._2._2._2.length
+
+    val causal_horizon = num_outputs
+
+    val size_history = collated_data.data.head._2._2._1.length
 
     /*
     * After data has been joined/collated,
     * start loading it into tensors
     *
     * */
+
+    val load_image_into_tensor = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
+      preprocess_image >
+      image_to_bytearr >
+      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+        dtype = "UINT8", processed_image_size._1,
+        processed_image_size._2,
+        num_channels_image)(arr))
+
+    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*))
+
+    val load_targets_hist_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f64(size_history)(arr:_*))
+
     val dataSet: TF_DATA_EXT = helios.data.create_helios_ts_data_set(
       collated_data,
+      load_image_into_tensor,
+      load_targets_into_tensor,
+      load_targets_hist_into_tensor,
       tt_partition,
-      image_process = preprocess_image,
-      image_to_bytearr,
-      num_channels_image,
-      resample)
+      resample,
+      image_history,
+      image_history_downsampling)
 
 
     val (norm_tf_data, scalers): SC_TF_DATA_EXT = scale_helios_dataset_ext(dataSet)
 
+    val data_shapes = (
+      (
+        Shape(processed_image_size._1, processed_image_size._2, num_channels_image*(image_history_downsampling + 1)),
+        Shape(size_history)
+      ),
+      Shape(causal_horizon)
+    )
+
     val trainData =
-      norm_tf_data.training_data[
-        (Output, Output), (DataType, DataType), (Shape, Shape),
-        Output, DataType, Shape]
+      norm_tf_data.training_dataset.build[
+        ((Tensor, Tensor), Tensor), ((Output, Output), Output),
+        ((DataType.Aux[UByte], DataType.Aux[Double]), DataType.Aux[Double]),
+        ((DataType, DataType), DataType),
+        ((Shape, Shape), Shape)](
+        Left(identityPipe[((Tensor, Tensor), Tensor)]),
+        ((UINT8, FLOAT64), FLOAT64),
+        data_shapes)
         .repeat()
-        .shuffle(10000)
+        .shuffle(1000)
         .batch(miniBatchSize)
         .prefetch(10)
 
@@ -557,25 +596,19 @@ package object helios {
       (DataType, DataType), (Shape, Shape)](
       (UINT8, FLOAT64),
       (
-        Shape(
-          -1,
-          dataSet.trainData._1.shape(1),
-          dataSet.trainData._1.shape(2),
-          dataSet.trainData._1.shape(3)),
-        Shape(
-          -1,
-          dataSet.trainData._2.shape(1))
+        Shape(-1) ++ data_shapes._1._1,
+        Shape(-1) ++ data_shapes._1._2
       )
     )
 
-    val causal_horizon = collated_data.head._2._2._2.length
 
-    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, causal_horizon))
+    val trainInput = tf.learn.Input[
+      Tensor, Output, DataType.Aux[Double],
+      DataType, Shape](FLOAT64, Shape(-1, causal_horizon))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
-    val loss = lossFunc >>
-      tf.learn.ScalarSummary("Loss", "ModelLoss")
+    val loss = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
 
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
@@ -583,15 +616,21 @@ package object helios {
     val (model, estimator) = dtflearn.build_tf_model(
       arch, input, trainInput, trainingInputLayer,
       loss, optimizer, summariesDir,
-      stop_criteria)(
-      trainData)
+      stop_criteria)(trainData)
 
 
-    val predictions: (Tensor, Tensor) = dtfutils.predict_data[
+    val nTest = norm_tf_data.test_dataset.size
+
+    val predictions: (Tensor, Tensor) = dtfutils.buffered_preds[
       (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape), (Output, Output),
       Tensor, Output, DataType, Shape, Output,
-      (Tensor, Tensor), (Tensor, Tensor)
-      ](estimator, dataSet, (false, true), _buffer_size)._2.get
+      (Tensor, Tensor), (Tensor, Tensor), (Tensor, Tensor)](
+      estimator,
+      (
+        tfi.stack(norm_tf_data.test_dataset.data.toSeq.map(_._1._1), axis = 0),
+        tfi.stack(norm_tf_data.test_dataset.data.toSeq.map(_._1._2), axis = 0)
+      ),
+      _buffer_size, nTest)
 
     val index_times = Tensor(
       (0 until causal_horizon).map(_.toDouble)
@@ -600,13 +639,12 @@ package object helios {
     )
 
 
-    val pred_time_lags_test = if(prob_timelags) {
+    val pred_time_lags_test: Tensor = if(prob_timelags) {
       val unsc_probs = predictions._2
 
-      unsc_probs.topK(1)._2.reshape(Shape(dataSet.nTest)).cast(FLOAT64)
+      unsc_probs.topK(1)._2.reshape(Shape(nTest)).cast(FLOAT64)
 
     } else predictions._2
-
 
     val pred_targets: Tensor = if (mo_flag) {
       val all_preds =
@@ -622,19 +660,24 @@ package object helios {
       scalers._2(0).i(predictions._1)
     }
 
-    val actual_targets = (0 until dataSet.nTest).map(n => {
-      val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
-      dataSet.testLabels(n, time_lag).scalar.asInstanceOf[Double]
+    val test_labels = dataSet.test_dataset.data.map(_._2).map(t => dtfutils.toDoubleSeq(t).toSeq).toSeq
+
+    val actual_targets = test_labels.zipWithIndex.map(zi => {
+      val (z, index) = zi
+      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
+
+      z(time_lag)
     })
 
-
     val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+    //write predictions and ground truth to a csv file
 
     write_predictions(
       dtfutils.toDoubleSeq(pred_targets).toSeq,
       actual_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
-      tf_summary_dir/"scatter_test.csv")
+      tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
 
 
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
@@ -696,7 +739,7 @@ package object helios {
     * start loading it into tensors
     *
     * */
-    val dataSet: TF_DATA_EXT = helios.data.create_mc_helios_ts_data_set(
+    val dataSet: TF_MC_DATA_EXT = helios.data.create_mc_helios_ts_data_set(
       image_sources,
       collated_data,
       tt_partition,
@@ -705,9 +748,8 @@ package object helios {
       resample)
 
 
-    val (norm_tf_data, scalers):
-      (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF)) =
-      scale_helios_dataset_ext(dataSet)
+    val (norm_tf_data, scalers): SC_TF_MC_DATA_EXT =
+      scale_helios_dataset_mc_ext(dataSet)
 
     val trainData =
       norm_tf_data.training_data[

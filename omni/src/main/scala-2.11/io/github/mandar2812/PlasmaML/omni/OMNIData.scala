@@ -179,7 +179,7 @@ object OMNILoader {
         val features_history: Seq[Double] = history.slice(0, past+1).map(_._2)
 
         (history(past)._1, (features_history, features))
-      }).toStream
+      }).toIterable
   )
 
   /**
@@ -246,7 +246,7 @@ object OMNILoader {
     past: Int, deltaT: Int,
     time_window: Int)(
     targetColumn: Int) =
-    StreamFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
       processWithDateTime >
       IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_and_backward_time_window(past, (deltaT, time_window))

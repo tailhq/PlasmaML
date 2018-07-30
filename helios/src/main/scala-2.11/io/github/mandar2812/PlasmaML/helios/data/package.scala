@@ -23,7 +23,8 @@ import org.platanios.tensorflow.api._
 /**
   * <h3>Helios Data Facility</h3>
   *
-  * Package enabling downloading and storage of heliospheric image data.
+  * Package enabling downloading and storage and processing
+  * of heliospheric image data.
   *
   * @author mandar2812
   * */
@@ -62,14 +63,18 @@ package object data {
 
   type HELIOS_OMNI_DATA        = DataSet[PATTERN]
   type HELIOS_MC_OMNI_DATA     = Iterable[MC_PATTERN]
-  type HELIOS_OMNI_DATA_EXT    = Iterable[PATTERN_EXT]
+  type HELIOS_OMNI_DATA_EXT    = DataSet[PATTERN_EXT]
   type HELIOS_MC_OMNI_DATA_EXT = Iterable[MC_PATTERN_EXT]
 
   type IMAGE_TS                = (Tensor, Tensor)
 
   type TF_DATA                 = TFDataSet[(Tensor, Tensor)]
 
-  type TF_DATA_EXT             = AbstractDataSet[(Tensor, Tensor), Tensor]
+  type TF_DATA_EXT             = TFDataSet[((Tensor, Tensor), Tensor)]
+
+  type TF_MC_DATA_EXT          = AbstractDataSet[(Tensor, Tensor), Tensor]
+
+  type SC_TF_MC_DATA_EXT       = (TF_MC_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF))
 
   type SC_TF_DATA_EXT          = (TF_DATA_EXT, (ReversibleScaler[(Tensor, Tensor)], MinMaxScalerTF))
 
@@ -239,6 +244,12 @@ package object data {
       (labels_scaled, labels_scaler)
     })
 
+  protected val id_scaler = new ReversibleScaler[Tensor] {
+    override val i: Scaler[Tensor] = Scaler((o: Tensor) => o)
+
+    override def run(data: Tensor): Tensor = data
+  }
+
   val scale_helios_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
     
     val concat_targets = tfi.stack(
@@ -247,23 +258,17 @@ package object data {
 
     val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
 
-    val image_scaler = new ReversibleScaler[Tensor] {
-      override val i: Scaler[Tensor] = Scaler((o: Tensor) => o)
-
-      override def run(data: Tensor): Tensor = data
-    }
-
     val targets_scaler = MinMaxScalerTF(min, max)
 
     (
       dataset.copy(
-        training_dataset = dataset.training_dataset.map(image_scaler * targets_scaler)
+        training_dataset = dataset.training_dataset.map(id_scaler * targets_scaler)
       ),
-      (image_scaler, targets_scaler)
+      (id_scaler, targets_scaler)
     )
   })
 
-  val scale_helios_dataset_ext = DataPipe[TF_DATA_EXT, SC_TF_DATA_EXT]((dataset: TF_DATA_EXT) => {
+  val scale_helios_dataset_mc_ext = DataPipe[TF_MC_DATA_EXT, SC_TF_MC_DATA_EXT]((dataset: TF_MC_DATA_EXT) => {
 
     val (norm_tr_images_and_labels, scalers) = std_images_and_outputs(dataset.trainData._1, dataset.trainLabels)
     val (norm_histories, history_scaler) = minmax_std(dataset.trainData._2)
@@ -277,6 +282,36 @@ package object data {
         testData = (dataset.testData._1, history_scaler(dataset.testData._2))),
       (features_scaler, scalers._2)
     )
+  })
+
+
+
+  val scale_helios_dataset_ext = DataPipe[TF_DATA_EXT, SC_TF_DATA_EXT](dataset => {
+
+    val concat_targets = tfi.stack(
+      dataset.training_dataset.map(DataPipe((p: ((Tensor, Tensor), Tensor)) => p._2)).data.toSeq
+    )
+
+    val concat_history = tfi.stack(
+      dataset.training_dataset.map(DataPipe((p: ((Tensor, Tensor), Tensor)) => p._1._2)).data.toSeq
+    )
+
+    val (min, max)     = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
+    val (min_h, max_h) = (concat_history.min(axes = 0), concat_history.max(axes = 0))
+
+    val targets_scaler = MinMaxScalerTF(min, max)
+
+    val history_scaler = MinMaxScalerTF(min_h, max_h)
+
+    val inputs_scaler  = id_scaler * history_scaler
+
+    (
+      dataset.copy(
+        training_dataset = dataset.training_dataset.map(inputs_scaler * targets_scaler)
+      ),
+      (inputs_scaler, targets_scaler)
+    )
+
   })
 
   /**
@@ -591,33 +626,41 @@ package object data {
 
     val omni_processing =
       OMNILoader.omniVarToSlidingTS(past_history, deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
-        StreamDataPipe[(DateTime, (Seq[Double], Seq[Double]))](
+        IterableDataPipe[(DateTime, (Seq[Double], Seq[Double]))](
           (p: (DateTime, (Seq[Double], Seq[Double]))) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
-    val years = (start_year_month.getYear to end_year_month.getYear).toStream
-
-    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
+    val omni_data = dtfdata.dataset(start_year_month.getYear to end_year_month.getYear)
+      .map(DataPipe((i: Int) => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
+      .transform(omni_processing)
+      .to_supervised(identityPipe[(DateTime, (Seq[Double], Seq[Double]))])
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) => {
-      new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay, 0, 0)
-    })
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) =>
+      new DateTime(
+        d.getYear, d.getMonthOfYear,
+        d.getDayOfMonth, d.getHourOfDay,
+        0, 0)
+    )
 
-    val image_processing =
-      StreamFlatMapPipe((year_month: YearMonth) =>
-        load_images[T](images_path, year_month, image_source, image_dir_tree).toStream) >
-        StreamDataPipe(image_dt_roundoff * identityPipe[Path])
 
-    val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream).toMap
+    val image_processing = IterableFlatMapPipe(
+      (year_month: YearMonth) => {
+        val images_for_month = load_images[T](images_path, year_month, image_source, image_dir_tree)
 
-    omni_data.map(o => {
-      val image_option = images.get(o._1)
-      (o._1, image_option, o._2)
-    }).filter(_._2.isDefined)
-      .map(d => (d._1, (d._2.get, d._3)))
+        val grouped_images = images_for_month.map(patt => (image_dt_roundoff(patt._1), patt._2)).groupBy(_._1)
 
+        grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
+      })
+
+    val images = dtfdata.dataset(0 to num_months)
+      .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
+      .transform(image_processing)
+      .to_supervised(identityPipe[(DateTime, Path)])
+
+
+    images.join(omni_data)
   }
 
   /**
@@ -658,7 +701,11 @@ package object data {
 
     val omni_processing =
       OMNILoader.omniVarToSlidingTS(past_history, deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
-        StreamDataPipe[(DateTime, (Seq[Double], Seq[Double]))](
+        DataPipe[
+          Iterable[(DateTime, (Seq[Double], Seq[Double]))],
+          Stream[(DateTime, (Seq[Double], Seq[Double]))]](_.toStream) >
+        StreamDataPipe[(DateTime, (Seq[Double], Seq[Double]
+          ))](
           (p: (DateTime, (Seq[Double], Seq[Double]))) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
@@ -864,48 +911,69 @@ package object data {
     * */
   def create_helios_ts_data_set(
     collated_data: HELIOS_OMNI_DATA_EXT,
+    read_image: DataPipe[Path, Tensor],
+    read_targets: DataPipe[Seq[Double], Tensor],
+    read_targets_history: DataPipe[Seq[Double], Tensor],
     tt_partition: PATTERN_EXT => Boolean,
-    image_process: DataPipe[Image, Image],
-    image_to_bytes: DataPipe[Image, Array[Byte]],
-    num_image_channels: Int,
-    resample: Boolean): TF_DATA_EXT = {
+    resample: Boolean = false,
+    image_history: Int = 0,
+    image_history_downsampling: Int = 1): TF_DATA_EXT = {
 
     println("Separating data into train and test.\n")
-    val (train_set, test_set) = collated_data.partition(tt_partition)
+    val experiment_data = collated_data.partition(DataPipe(tt_partition))
+
 
     print("Total data size: ")
-    val total_data_size = collated_data.toIterator.length
+    val total_data_size = collated_data.size
 
     pprint.pprintln(total_data_size)
 
-    val train_data_size = train_set.toIterator.length
-    val test_data_size  = test_set.toIterator.length
+    val train_data_size = experiment_data.training_dataset.size
 
     val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
 
     print_data_splits(train_fraction)
 
-    //Calculate the height, width and number of channels
-    //in the images
-    val (scaled_height, scaled_width, num_channels) = {
+    val trim_time_stamp = DataPipe((p: PATTERN_EXT) => p._2)
 
-      val scaled_image = image_process(Image.fromPath(train_set.head._2._1.toNIO))
+    val load_only_images = trim_time_stamp > (read_image * identityPipe[(Seq[Double], Seq[Double])])
 
-      (scaled_image.height, scaled_image.width, num_image_channels)
+    val load_hist_and_targets = identityPipe[Tensor] * (read_targets_history * read_targets)
 
+    val get_image_history = if(image_history > 0) {
+      val slices = utils.range(
+        min = 0d, image_history.toDouble,
+        image_history_downsampling).map(_.toInt)
+
+      val indices = slices :+ (image_history - 1)
+
+      DataPipe((data_stream: Iterable[(Tensor, (Seq[Double], Seq[Double]))]) =>
+        data_stream.sliding(image_history).map(group => {
+
+          val gr = group.toSeq
+
+          val images = tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
+
+          (images, gr(indices.last)._2)
+        }).toIterable)
+
+    } else {
+      identityPipe[Iterable[(Tensor, (Seq[Double], Seq[Double]))]]
     }
 
-    val working_set: TF_DATA_EXT = TF_DATA_EXT(
-      null, null, train_data_size,
-      null, null, test_data_size)
+
+    val processed_data = experiment_data.copy[(Tensor, (Seq[Double], Seq[Double]))](
+      training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
+      test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
+    )
 
     /*
     * If the `resample` flag is set to true,
-    * balance the occurence of high and low
+    * balance the occurrences of high and low
     * flux events through re-sampling.
     *
     * */
-    val processed_train_set = if(resample) {
+    val resample_op = DataPipe((d: Iterable[(Tensor, (Seq[Double], Seq[Double]))]) => if(resample) {
 
       /*
       * Resample training set with
@@ -913,71 +981,32 @@ package object data {
       * between max and min of a sliding
       * time window.
       * */
-      val un_prob = train_set.map(p => {
+      val un_prob: Array[Double] = d.map(p => {
 
-        math.abs(p._2._2._2.max - p._2._2._2.min)/math.abs(p._2._2._2.min)
-      }).map(math.exp)
+        math.abs(p._2._2.max - p._2._2.min)/math.abs(p._2._2.min)
+      }).map(math.exp).toArray
 
       val normalizer = un_prob.sum
 
-      val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
+      val selector = MultinomialRV(DenseVector(un_prob)/normalizer)
 
-      helios.data.resample(train_set.toStream, selector)
-    } else train_set
+      helios.data.resample[(Tensor, (Seq[Double], Seq[Double]))](d.toStream, selector)
 
-    def split_features_and_labels(coll: HELIOS_OMNI_DATA_EXT)
-    : (Iterable[(Path, Seq[Double])], Iterable[Seq[Double]]) = coll.map(entry => {
+    } else d)
 
-      val (_, (path, (data_history, data_label))) = entry
-
-      //val image_bytes = (image_process > image_to_bytes)(Image.fromPath(path.toNIO))
-
-      ((path, data_history), data_label)
-
-    }).unzip
-
-    println()
-    //Construct training features and labels
-    println("Processing Training Data Set")
-    val (features_train, labels_train) = split_features_and_labels(processed_train_set)
-
-    println("Loading \n\t1) image features \n\t2) time series history")
-    val features_tensor_train = (
-      dtfdata.create_image_tensor_buffered(size_buffer,
-        image_process > image_to_bytes,
-        scaled_height, scaled_width, num_channels)(
-        features_train.map(_._1), train_data_size),
-      create_double_tensor_buffered(size_buffer)(
-        features_train.map(_._2), train_data_size)
+    val pattern_rearrange = DataPipe(
+      (pattern: (Tensor, (Tensor, Tensor))) =>
+        ((pattern._1, pattern._2._1), pattern._2._2)
     )
 
-    println("Loading targets")
-    val labels_tensor_train   = create_double_tensor_buffered(size_buffer)(labels_train, train_data_size)
-
-    println()
-    //Construct test features and labels
-    println("Processing Test Data Set")
-    val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
-
-    println("Loading \n\t1) image features \n\t2) time series history")
-    val features_tensor_test = (
-      dtfdata.create_image_tensor_buffered(
-        size_buffer, image_process > image_to_bytes,
-        scaled_height, scaled_width, num_channels)(
-        features_test.map(_._1), test_data_size),
-      create_double_tensor_buffered(size_buffer)(
-        features_test.map(_._2), test_data_size)
-    )
-
-    println("Loading targets ")
-    val labels_tensor_test   = create_double_tensor_buffered(size_buffer)(labels_test, test_data_size)
-
-    println("Helios data set created\n")
-    working_set.copy(
-      trainData   = features_tensor_train,
-      trainLabels = labels_tensor_train,
-      testData    = features_tensor_test,
-      testLabels  = labels_tensor_test
+    processed_data.copy[((Tensor, Tensor), Tensor)](
+      training_dataset = processed_data.training_dataset
+        .transform(resample_op)
+        .map(load_hist_and_targets)
+        .map(pattern_rearrange),
+      test_dataset = processed_data.test_dataset
+        .map(load_hist_and_targets)
+        .map(pattern_rearrange)
     )
   }
 
@@ -988,7 +1017,7 @@ package object data {
     tt_partition: MC_PATTERN_EXT => Boolean,
     image_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
-    resample: Boolean): TF_DATA_EXT = {
+    resample: Boolean): TF_MC_DATA_EXT = {
 
     println()
     println("Filtering complete data patterns")
