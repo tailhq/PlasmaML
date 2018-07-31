@@ -121,7 +121,7 @@ def main[T <: SolarImagesSource](
       dtflearn.batch_norm("BatchNorm_3") >>
       dtflearn.inception_unit(filter_depths(2).sum, filter_depths(3))(layer_index = 4) >>
       dtflearn.batch_norm("BatchNorm_4") >>
-      dtflearn.inception_unit(filter_depths(3).length, filter_depths(4))(layer_index = 5) >>
+      dtflearn.inception_unit(filter_depths(3).sum, filter_depths(4))(layer_index = 5) >>
       dtflearn.batch_norm("BatchNorm_5")
 
   /*val pre_upwind_ff_stack = dtflearn.feedforward_stack(
