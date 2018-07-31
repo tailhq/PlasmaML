@@ -63,7 +63,10 @@ class KernelRadialDiffusionModel(
     BasisFuncRadialDiffusionModel.stateEncoder(baseInjNoiseID)
   )
 
-  val covariance = new SE1dExtRadDiffusionKernel(sigma, thetaS, thetaT, Kp)(dll_params, tau_params, "L2", "L1")
+  val covariance = new SE1dExtRadDiffusionKernel(
+    sigma, thetaS, thetaT, Kp)(
+    dll_params, tau_params,
+    normSpace = "L2", normTime = "L1")
 
   protected val operator_hyper_parameters: List[String] = {
 
