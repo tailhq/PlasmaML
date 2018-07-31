@@ -1,7 +1,5 @@
 import ammonite.ops._
 import org.joda.time._
-import com.sksamuel.scrimage._
-import com.sksamuel.scrimage.filter.GrayscaleFilter
 import io.github.mandar2812.dynaml.repl.Router.main
 import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.pipes._
@@ -11,9 +9,7 @@ import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImag
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
-import io.github.mandar2812.dynaml.DynaMLPipe
 import org.platanios.tensorflow.api.learn.StopCriteria
-import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
