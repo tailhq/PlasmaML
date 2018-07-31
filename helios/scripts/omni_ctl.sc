@@ -20,7 +20,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 def main[T <: SolarImagesSource](
   year_range: Range             = 2001 to 2004,
   test_year: Int                = 2003,
-  pre_upwind_ff_sizes: Seq[Int] = Seq(256, 128, 64, 32),
+  //pre_upwind_ff_sizes: Seq[Int] = Seq(256, 128, 64, 32),
   ff_stack_sizes: Seq[Int]      = Seq(256, 128, 64),
   image_source: T               = SOHO(MDIMAG, 512),
   buffer_size: Int              = 2000,
