@@ -247,7 +247,7 @@ object StochasticRadialDiffusion {
     lDomain: DomainLimits, nL: Int,
     timeDomain: DomainLimits, nT: Int)(
     num_samples: Int,
-    f0: TimeSlice) = {
+    f0: TimeSlice): MatrixNormalRV = {
 
     logger.info("Initializing radial diffusion forward solver")
 
