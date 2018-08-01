@@ -1,9 +1,8 @@
 import ammonite.ops._
 import org.joda.time._
 
-import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.repl.Router.main
-import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils, dtfpipe}
+import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils}
 
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.data
@@ -13,14 +12,13 @@ import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 
 import org.platanios.tensorflow.api.learn.StopCriteria
-import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Shape, tf}
+import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
 def main[T <: SolarImagesSource](
   year_range: Range             = 2001 to 2004,
   test_year: Int                = 2003,
-  //pre_upwind_ff_sizes: Seq[Int] = Seq(256, 128, 64, 32),
   ff_stack_sizes: Seq[Int]      = Seq(256, 128, 64),
   image_source: T               = SOHO(MDIMAG, 512),
   buffer_size: Int              = 2000,
@@ -89,8 +87,7 @@ def main[T <: SolarImagesSource](
 
   //Set some meta-information for the prediction architecture
   val num_pred_dims    = 2*dataset.data.head._2._2.length
-  val pre_upwind_index = 6
-  val ff_index         = pre_upwind_index + pre_upwind_ff_sizes.length
+  val ff_index         = 6
   val ff_stack         = ff_stack_sizes :+ num_pred_dims
 
   /*
@@ -123,11 +120,7 @@ def main[T <: SolarImagesSource](
       dtflearn.inception_unit(filter_depths(3).sum, filter_depths(4))(layer_index = 5) >>
       dtflearn.batch_norm("BatchNorm_5")
 
-  /*val pre_upwind_ff_stack = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
-    pre_upwind_ff_sizes, starting_index = pre_upwind_index)*/
-
-  val post_upwind_ff_stack = dtflearn.feedforward_stack(
+  val post_conv_ff_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     ff_stack, starting_index = ff_index)
 
@@ -139,19 +132,12 @@ def main[T <: SolarImagesSource](
   val architecture = tf.learn.Cast("Input/Cast", FLOAT32) >>
     conv_section >>
     tf.learn.Flatten("Flatten_1") >>
-    /*pre_upwind_ff_stack >>
-    tf.learn.Cast("Cast/Float", FLOAT32) >>
-    helios.learn.upwind_1d("Upwind1d", (30.0, 215.0), 50) >>
-    tf.learn.Flatten("Flatten_4") >>*/
-    post_upwind_ff_stack >>
+    post_conv_ff_stack >>
     output_mapping
 
 
   val (layer_shapes, layer_parameter_names, layer_datatypes) =
     dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index)
-
-  /*val (pre_upwind_layer_shapes, pre_upwind_layer_parameter_names, pre_upwind_layer_datatypes) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ pre_upwind_ff_sizes, pre_upwind_index)*/
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",
@@ -159,9 +145,9 @@ def main[T <: SolarImagesSource](
     prior_wt = prior_wt,
     temperature = temp) >>
     L2Regularization(
-      /*pre_upwind_layer_parameter_names ++ */layer_parameter_names,
-      /*pre_upwind_layer_datatypes ++ */layer_datatypes,
-      /*pre_upwind_layer_shapes ++ */layer_shapes,
+      layer_parameter_names,
+      layer_datatypes,
+      layer_shapes,
       reg)
 
   helios.run_experiment_omni(
