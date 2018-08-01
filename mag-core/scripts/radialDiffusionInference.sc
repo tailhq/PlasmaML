@@ -9,6 +9,7 @@ import io.github.mandar2812.dynaml.analysis.implicits._
 import io.github.mandar2812.dynaml.utils._
 import io.github.mandar2812.dynaml.analysis.VectorField
 import io.github.mandar2812.dynaml.utils.ConfigEncoding
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
 val (nL,nT) = (200, 50)
 
@@ -47,34 +48,34 @@ val mult = 0.8
 * */
 
 //Diffusion Field
-val (dll_alpha, dll_beta, dll_gamma, dll_a, dll_b)  = (0d, 10d, 0d, -9.325, 0.506)
-val dll_trend                                       = MagTrend(Kp, "dll")
+val (dll_alpha, dll_beta, dll_gamma, dll_b)  = dll_params
+val dll_trend                                = MagTrend(Kp, "dll")
 
 val dll_prior = new DiffusionPrior(
   dll_trend,
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
-  baseNoiseLevel*mult, (dll_alpha, dll_beta, dll_a, dll_b))
+  baseNoiseLevel*mult, (dll_alpha, dll_beta, dll_gamma, dll_b))
 
 //Injection process
-val (q_alpha, q_beta, q_gamma, q_a, q_b) = (0d, 0d, 0d, 0.002, 0.05)
-val q_trend                              = MagTrend(Kp, "Q")
+val (q_alpha, q_beta, q_gamma, q_b) = (0d, 2.5d, 0d, 0.05)
+val q_trend                         = MagTrend(Kp, "Q")
 
 val q_prior = new DiffusionPrior(
   q_trend,
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
-  baseNoiseLevel*mult, (q_alpha, q_beta, q_a, q_b))
+  baseNoiseLevel*mult, (q_alpha, q_beta, q_gamma, q_b))
 
 //Loss Process
-val (loss_alpha, loss_beta, loss_gamma, loss_a, loss_b) = (0d, 2d, 0d, 0.5, 1.0)
-val loss_trend                                          = MagTrend(Kp, "lambda")
+val (loss_alpha, loss_beta, loss_gamma, loss_b) = lambda_params
+val loss_trend                                  = MagTrend(Kp, "lambda")
 
 val loss_prior = new DiffusionPrior(
   loss_trend,
   new SECovFunc(rds.deltaL*mult, baseNoiseLevel),
   new SECovFunc(rds.deltaT*mult, baseNoiseLevel),
-  baseNoiseLevel*mult, (loss_alpha, loss_beta, loss_a, loss_b))
+  baseNoiseLevel*mult, (loss_alpha, loss_beta, loss_gamma, loss_b))
 
 //Create ground truth diffusion parameter functions
 val dll = (l: Double, t: Double) => dll_trend(
@@ -82,7 +83,6 @@ val dll = (l: Double, t: Double) => dll_trend(
     "dll_alpha"    -> dll_alpha,
     "dll_beta"     -> dll_beta,
     "dll_gamma"    -> dll_gamma,
-    "dll_a"        -> dll_a,
     "dll_b"        -> dll_b))((l, t))
 
 val q = (l: Double, t: Double) => q_trend(
@@ -90,7 +90,6 @@ val q = (l: Double, t: Double) => q_trend(
     "Q_alpha"      -> q_alpha,
     "Q_beta"       -> q_beta,
     "Q_gamma"      -> q_gamma,
-    "Q_a"          -> q_a,
     "Q_b"          -> q_b))((l, t))
 
 val lambda = (l: Double, t: Double) => loss_trend(
@@ -98,7 +97,6 @@ val lambda = (l: Double, t: Double) => loss_trend(
     "lambda_alpha" -> 1/(0.5*1.2*math.pow(10, 4)),
     "lambda_beta"  -> 1d,
     "lambda_gamma" -> loss_gamma,
-    "lambda_a"     -> 2.5,
     "lambda_b"     -> 0.18))((l, t))
 
 val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
@@ -171,7 +169,7 @@ val post = mcmc_sampler.posterior(data).iid(1000)
 val processed_samples: Seq[Map[String, Double]] = post.draw.map(mapEncoding.i(_))
 
 val alphaBeta = processed_samples.map(m => (m("lambda_alpha"), m("lambda_beta")))
-val ab = processed_samples.map(m => (m("lambda_a"), m("lambda_b")))
+val alpha_b = processed_samples.map(m => (m("lambda_alpha"), m("lambda_b")))
 
 scatter(alphaBeta)
 xAxis("Loss alpha")
@@ -179,7 +177,7 @@ yAxis("Loss beta")
 title("Samples from Posterior P(lambda_alpha, lambda_beta | PSD data)")
 
 
-scatter(ab)
+scatter(alpha_b)
 xAxis("Loss Parameter a")
 yAxis("Loss Parameter b")
 title("Samples from Posterior P(lambda_a, lambda_b | PSD data)")
