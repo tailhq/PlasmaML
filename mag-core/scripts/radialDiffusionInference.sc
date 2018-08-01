@@ -47,12 +47,8 @@ val mult = 0.8
 * */
 
 //Diffusion Field
-val dll_alpha = 1d
-val dll_beta = 10d
-val dll_a = -9.325
-val dll_b = 0.506
-
-val dll_trend = new MagTrend(Kp, "dll")
+val (dll_alpha, dll_beta, dll_gamma, dll_a, dll_b)  = (0d, 10d, 0d, -9.325, 0.506)
+val dll_trend                                       = MagTrend(Kp, "dll")
 
 val dll_prior = new DiffusionPrior(
   dll_trend,
@@ -61,13 +57,8 @@ val dll_prior = new DiffusionPrior(
   baseNoiseLevel*mult, (dll_alpha, dll_beta, dll_a, dll_b))
 
 //Injection process
-val q_alpha = 0d
-val q_beta = 0d
-val q_a = 0.002d
-val q_b = 0.05d
-
-val q_trend = new MagnetosphericProcessTrend[Map[String, Double]](Kp)(
-  MagnetosphericProcessTrend.getEncoder("Q"))
+val (q_alpha, q_beta, q_gamma, q_a, q_b) = (0d, 0d, 0d, 0.002, 0.05)
+val q_trend                              = MagTrend(Kp, "Q")
 
 val q_prior = new DiffusionPrior(
   q_trend,
@@ -76,13 +67,8 @@ val q_prior = new DiffusionPrior(
   baseNoiseLevel*mult, (q_alpha, q_beta, q_a, q_b))
 
 //Loss Process
-val loss_alpha = 1d
-val loss_beta = 0d
-val loss_a = 0d
-val loss_b = 0d
-
-val loss_trend = new MagnetosphericProcessTrend[Map[String, Double]](Kp)(
-  MagnetosphericProcessTrend.getEncoder("lambda"))
+val (loss_alpha, loss_beta, loss_gamma, loss_a, loss_b) = (0d, 2d, 0d, 0.5, 1.0)
+val loss_trend                                          = MagTrend(Kp, "lambda")
 
 val loss_prior = new DiffusionPrior(
   loss_trend,
@@ -92,23 +78,28 @@ val loss_prior = new DiffusionPrior(
 
 //Create ground truth diffusion parameter functions
 val dll = (l: Double, t: Double) => dll_trend(
-  Map("dll_alpha" -> dll_alpha, "dll_beta" -> dll_beta, "dll_a" -> dll_a, "dll_b" -> dll_b))(
-  (l, t)
-)
+  Map(
+    "dll_alpha"    -> dll_alpha,
+    "dll_beta"     -> dll_beta,
+    "dll_gamma"    -> dll_gamma,
+    "dll_a"        -> dll_a,
+    "dll_b"        -> dll_b))((l, t))
 
 val q = (l: Double, t: Double) => q_trend(
-  Map("Q_alpha" -> q_alpha, "Q_beta" -> q_beta, "Q_a" -> q_a, "Q_b" -> q_b))(
-  (l, t)
-)
+  Map(
+    "Q_alpha"      -> q_alpha,
+    "Q_beta"       -> q_beta,
+    "Q_gamma"      -> q_gamma,
+    "Q_a"          -> q_a,
+    "Q_b"          -> q_b))((l, t))
 
 val lambda = (l: Double, t: Double) => loss_trend(
   Map(
     "lambda_alpha" -> 1/(0.5*1.2*math.pow(10, 4)),
-    "lambda_beta" -> 1d,
-    "lambda_a" -> 2.5,
-    "lambda_b" -> 0.18))(
-  (l, t)
-)
+    "lambda_beta"  -> 1d,
+    "lambda_gamma" -> loss_gamma,
+    "lambda_a"     -> 2.5,
+    "lambda_b"     -> 0.18))((l, t))
 
 val omega = 2*math.Pi/(lShellLimits._2 - lShellLimits._1)
 val initialPSD = (l: Double) => math.sin(omega*(l - lShellLimits._1))

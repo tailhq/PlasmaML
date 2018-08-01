@@ -52,5 +52,9 @@ class MagTrend(override val Kp: DataPipe[Double, Double], val prefix: String) ex
 
 }
 
+object MagTrend {
+  def apply(Kp: DataPipe[Double, Double], prefix: String): MagTrend = new MagTrend(Kp, prefix)
+}
+
 
 class SimpleMagTrend(prefix: String) extends MagTrend(DataPipe((_: Double) => 0d), prefix)
