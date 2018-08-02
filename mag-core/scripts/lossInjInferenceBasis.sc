@@ -104,7 +104,7 @@
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 10000
+  val num_post_samples = 5000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
