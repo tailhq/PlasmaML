@@ -133,7 +133,6 @@ def main[T <: SolarImagesSource](
   val architecture = dtflearn.tuple2_layer("OmniCTLStack", image_neural_stack, omni_history_stack) >>
     dtflearn.concat_tuple2("StackFeatures", axis = 1) >>
     fc_stack >>
-    tf.learn.Cast("Output/Cast", FLOAT64) >>
     output_mapping
 
   val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =

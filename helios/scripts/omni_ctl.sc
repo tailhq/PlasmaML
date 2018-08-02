@@ -125,7 +125,6 @@ def main[T <: SolarImagesSource](
     conv_section >>
     tf.learn.Flatten("Flatten_1") >>
     post_conv_ff_stack >>
-    tf.learn.Cast("Output/Cast", FLOAT64) >>
     output_mapping
 
 

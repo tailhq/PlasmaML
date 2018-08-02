@@ -15,14 +15,14 @@
 
 
   measurement_noise = GaussianRV(0.0, 0.5)
-  num_bulk_data = 20
+  num_bulk_data = 50
   num_boundary_data = 20
 
-  num_dummy_data = 20
+  num_dummy_data = 100
 
-  lambda_params = (-1, 0.5, 0d, -0.2)
+  lambda_params = (-1, 1.5, 0d, -0.4)
 
-  q_params = (0d, 0.5d, 0.05, 0.45)
+  q_params = (-0.5, 1.0d, 0.5, 0.45)
 
   initialPSD = (l: Double) => {
     val c = utils.chebyshev(3, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
@@ -97,7 +97,7 @@
   }
 
   model.regCol = 0d
-  model.regObs = 1.0
+  model.regObs = 0.5
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[

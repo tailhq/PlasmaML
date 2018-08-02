@@ -362,7 +362,7 @@ package object helios {
         processed_image_size._2,
         num_channels_image)(arr))
 
-    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*))
+    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
 
     val dataSet: TF_DATA = helios.data.create_helios_data_set(
       collated_data,
@@ -384,10 +384,10 @@ package object helios {
 
     val trainData = norm_tf_data.training_dataset.build[
         (Tensor, Tensor), (Output, Output),
-        (DataType.Aux[UByte], DataType.Aux[Double]), (DataType, DataType),
+        (DataType.Aux[UByte], DataType.Aux[Float]), (DataType, DataType),
         (Shape, Shape)](
       Left(identityPipe[Tensor]*identityPipe[Tensor]),
-      dataType = (UINT8, FLOAT64), data_shapes)
+      dataType = (UINT8, FLOAT32), data_shapes)
       .repeat()
       .shuffle(1000)
       .batch(miniBatchSize)
@@ -401,9 +401,9 @@ package object helios {
       UINT8, Shape(-1) ++ data_shapes._1
     )
 
-    val trainInput = tf.learn.Input(FLOAT64, Shape(-1) ++ data_shapes._2)
+    val trainInput = tf.learn.Input(FLOAT32, Shape(-1) ++ data_shapes._2)
 
-    val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
+    val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
 
     val loss = lossFunc >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
@@ -455,7 +455,7 @@ package object helios {
 
     val actual_targets = test_labels.zipWithIndex.map(zi => {
       val (z, index) = zi
-      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
+      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Float].toInt
 
       z(time_lag)
     })
@@ -546,9 +546,9 @@ package object helios {
         processed_image_size._2,
         num_channels_image)(arr))
 
-    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr:_*))
+    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
 
-    val load_targets_hist_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f64(size_history)(arr:_*))
+    val load_targets_hist_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(size_history)(arr:_*))
 
     val dataSet: TF_DATA_EXT = helios.data.create_helios_ts_data_set(
       collated_data,
@@ -574,11 +574,11 @@ package object helios {
     val trainData =
       norm_tf_data.training_dataset.build[
         ((Tensor, Tensor), Tensor), ((Output, Output), Output),
-        ((DataType.Aux[UByte], DataType.Aux[Double]), DataType.Aux[Double]),
+        ((DataType.Aux[UByte], DataType.Aux[Float]), DataType.Aux[Float]),
         ((DataType, DataType), DataType),
         ((Shape, Shape), Shape)](
         Left(identityPipe[((Tensor, Tensor), Tensor)]),
-        ((UINT8, FLOAT64), FLOAT64),
+        ((UINT8, FLOAT32), FLOAT32),
         data_shapes)
         .repeat()
         .shuffle(1000)
@@ -592,9 +592,9 @@ package object helios {
 
     val input = tf.learn.Input[
       (Tensor, Tensor), (Output, Output),
-      (DataType.Aux[UByte], DataType.Aux[Double]),
+      (DataType.Aux[UByte], DataType.Aux[Float]),
       (DataType, DataType), (Shape, Shape)](
-      (UINT8, FLOAT64),
+      (UINT8, FLOAT32),
       (
         Shape(-1) ++ data_shapes._1._1,
         Shape(-1) ++ data_shapes._1._2
