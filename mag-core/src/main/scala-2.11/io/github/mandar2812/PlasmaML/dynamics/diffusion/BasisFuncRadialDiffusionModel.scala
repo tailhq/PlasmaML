@@ -65,6 +65,10 @@ class BasisFuncRadialDiffusionModel(
 
   val psd_mean: Double = psd_data.map(_._2).sum/num_observations
 
+  val psd_std: Double  = math.sqrt(
+    psd_data.map(p => p._2 - psd_mean).map(p => math.pow(p, 2d)).sum/(num_observations - 1)
+  )
+
   private lazy val targets = DenseVector(psd_data.map(_._2).toArray)
 
   private val (covStEncoder, noiseStEncoder) = (
@@ -245,7 +249,7 @@ class BasisFuncRadialDiffusionModel(
 
     val psi_basis = basis.operator_basis(dll, grad_dll, lambda)
 
-    val (psi_stream, f_stream) = ghost_points.map(p => (psi_basis(p), q(p))).unzip
+    val (psi_stream, f_stream) = ghost_points.map(p => (psi_basis(p), (q(p) - lambda(p)*psd_mean)/psd_std)).unzip
 
     val (psi,f) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix):_*),
@@ -263,7 +267,7 @@ class BasisFuncRadialDiffusionModel(
 
     val omega_psi = psi*psi.t
 
-    val responses = DenseVector.vertcat(DenseVector(0d), targets, f)
+    val responses = DenseVector.vertcat(DenseVector(0d), targets.map(psd => (psd - psd_mean)/psd_std), f)
 
     def I(n: Int) = DenseMatrix.eye[Double](n)
 
@@ -291,7 +295,7 @@ class BasisFuncRadialDiffusionModel(
     h: Map[String, Double],
     options: Map[String, String] = Map()): Double = try {
 
-    val mean = if(dualFlag) {
+    val surrogate = if(dualFlag) {
       val (params, psi) = getGalerkinParams(h)
 
       val dMat = DenseMatrix.vertcat(
@@ -307,7 +311,7 @@ class BasisFuncRadialDiffusionModel(
       phi * params
     }
 
-    val modelVariance = norm(targets - mean)/targets.length
+    val modelVariance = norm(targets.map(psd => (psd - psd_mean)/psd_std) - surrogate)/num_observations
     print("variance = ")
     pprint.pprintln(modelVariance)
 
@@ -328,7 +332,10 @@ class BasisFuncRadialDiffusionModel(
       num_observations).getKernelMatrix
 
 
-    AbstractGPRegressionModel.logLikelihood(targets - mean, noise_mat_psd + phi*phi.t)
+    AbstractGPRegressionModel.logLikelihood(
+      targets.map(psd => (psd - psd_mean)/psd_std) - surrogate,
+      k_uu + noise_mat_psd + phi*phi.t)
+
   } catch {
     case _: breeze.linalg.MatrixSingularException => Double.NaN
     case _: breeze.linalg.NotConvergedException => Double.PositiveInfinity
