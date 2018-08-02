@@ -97,9 +97,9 @@ def main[T <: SolarImagesSource](
 
 
   val filter_depths = Seq(
-    Seq.fill(4)(20),
-    Seq.fill(4)(15),
-    Seq.fill(4)(10)
+    Seq(5, 10, 10, 5),
+    Seq(2, 5, 5, 2),
+    Seq(1, 1, 1, 1)
   )
 
   val image_neural_stack = {
@@ -109,23 +109,22 @@ def main[T <: SolarImagesSource](
       dtflearn.inception_unit(filter_depths(1).sum, filter_depths(2))(layer_index = 3) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
-        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT32)(
         conv_ff_stack_sizes,
         starting_index = ff_index_conv)
   }
 
   val omni_history_stack = {
-    tf.learn.Cast("Input/Cast", FLOAT64) >>
       dtflearn.feedforward_stack(
         (i: Int) => dtflearn.Phi("Act_"+i),
-        FLOAT64)(
+        FLOAT32)(
         hist_ff_stack_sizes,
         starting_index = ff_index_hist)
   }
 
   val fc_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i),
-    FLOAT64)(
+    FLOAT32)(
     ff_stack_sizes,
     starting_index = ff_index_fc)
 
@@ -134,6 +133,7 @@ def main[T <: SolarImagesSource](
   val architecture = dtflearn.tuple2_layer("OmniCTLStack", image_neural_stack, omni_history_stack) >>
     dtflearn.concat_tuple2("StackFeatures", axis = 1) >>
     fc_stack >>
+    tf.learn.Cast("Output/Cast", FLOAT64) >>
     output_mapping
 
   val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =

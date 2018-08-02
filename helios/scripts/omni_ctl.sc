@@ -101,9 +101,9 @@ def main[T <: SolarImagesSource](
   * */
 
   val filter_depths = Seq(
-    Seq.fill(4)(20),
-    Seq.fill(4)(15),
-    Seq.fill(4)(10)
+    Seq(5, 10, 10, 5),
+    Seq(2, 5, 5, 2),
+    Seq(1, 1, 1, 1)
   )
 
   val conv_section =
@@ -113,7 +113,7 @@ def main[T <: SolarImagesSource](
 
 
   val post_conv_ff_stack = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT32)(
     ff_stack, starting_index = ff_index)
 
   val output_mapping = helios.learn.cdt_loss.output_mapping(
@@ -125,6 +125,7 @@ def main[T <: SolarImagesSource](
     conv_section >>
     tf.learn.Flatten("Flatten_1") >>
     post_conv_ff_stack >>
+    tf.learn.Cast("Output/Cast", FLOAT64) >>
     output_mapping
 
 
