@@ -97,7 +97,7 @@
   }
 
   model.regCol = 0d
-  model.regObs = 1E-5
+  model.regObs = 0.1
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
