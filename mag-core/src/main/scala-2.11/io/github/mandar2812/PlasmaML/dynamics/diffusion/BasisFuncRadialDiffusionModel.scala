@@ -295,7 +295,7 @@ class BasisFuncRadialDiffusionModel(
     h: Map[String, Double],
     options: Map[String, String] = Map()): Double = try {
 
-    val mean = if(dualFlag) {
+    val surrogate = if(dualFlag) {
       val (params, psi) = getGalerkinParams(h)
 
       val dMat = DenseMatrix.vertcat(
@@ -311,7 +311,7 @@ class BasisFuncRadialDiffusionModel(
       phi * params
     }
 
-    val modelVariance = norm(targets - mean)/targets.length
+    val modelVariance = norm(targets.map(psd => (psd - psd_mean)/psd_std) - surrogate)/num_observations
     print("variance = ")
     pprint.pprintln(modelVariance)
 
@@ -332,7 +332,7 @@ class BasisFuncRadialDiffusionModel(
       num_observations).getKernelMatrix
 
 
-    AbstractGPRegressionModel.logLikelihood(targets.map(psd => (psd - psd_mean)/psd_std) - mean, noise_mat_psd + phi*phi.t)
+    AbstractGPRegressionModel.logLikelihood(targets.map(psd => (psd - psd_mean)/psd_std) - surrogate, noise_mat_psd + phi*phi.t)
   } catch {
     case _: breeze.linalg.MatrixSingularException => Double.NaN
     case _: breeze.linalg.NotConvergedException => Double.PositiveInfinity
