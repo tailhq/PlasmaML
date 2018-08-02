@@ -46,7 +46,7 @@
   val burn = 2000
 
   val seKernel = new GenExpSpaceTimeKernel[Double](
-    10d, deltaL, deltaT)(
+    1d, deltaL, deltaT)(
     sqNormDouble, l1NormDouble)
 
   val noiseKernel = new DiracTuple2Kernel(1.5)
@@ -97,7 +97,7 @@
   }
 
   model.regCol = 0d
-  model.regObs = 0.1
+  model.regObs = 1.0
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
