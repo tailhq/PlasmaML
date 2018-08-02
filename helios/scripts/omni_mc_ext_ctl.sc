@@ -241,7 +241,7 @@ def main(
       layer_shapes_conv ++ layer_shapes_hist ++ layer_shapes_fc,
       reg)
 
-  helios.run_experiment_mc_omni_ext(
+  helios.run_cdt_experiment_mc_omni_ext(
     image_sources,
     data, tt_partition, resample = re,
     image_sources.map(s => (s, crop_solar_image)).toMap,

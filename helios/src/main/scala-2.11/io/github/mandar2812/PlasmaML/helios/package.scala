@@ -317,7 +317,7 @@ package object helios {
     * @param arch The neural architecture to train, for example see [[learn.cnn_sw_v1]]
     *
     * */
-  def run_experiment_omni(
+  def run_cdt_experiment_omni(
     collated_data: HELIOS_OMNI_DATA,
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false,
@@ -500,7 +500,7 @@ package object helios {
     * @param arch The neural architecture to train.
     *
     * */
-  def run_experiment_omni_ext(
+  def run_cdt_experiment_omni_ext(
     collated_data: HELIOS_OMNI_DATA_EXT,
     tt_partition: PATTERN_EXT => Boolean,
     resample: Boolean = false,
@@ -710,7 +710,7 @@ package object helios {
     * @param arch The neural architecture to train.
     *
     * */
-  def run_experiment_mc_omni_ext(
+  def run_cdt_experiment_mc_omni_ext(
     image_sources: Seq[SOHO],
     collated_data: HELIOS_MC_OMNI_DATA_EXT,
     tt_partition: MC_PATTERN_EXT => Boolean,

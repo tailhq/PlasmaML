@@ -24,7 +24,7 @@ def main[T <: SolarImagesSource](
   time_horizon: (Int, Int)      = (18, 56),
   time_history: Int             = 8,
   image_hist: Int               = 0,
-  image_hist_downsamp: Int      = 1,
+  image_hist_downsamp: Int      = 0,
   conv_ff_stack_sizes: Seq[Int] = Seq(512, 256),
   hist_ff_stack_sizes: Seq[Int] = Seq(32, 16),
   ff_stack: Seq[Int]            = Seq(128, 64),
@@ -99,9 +99,7 @@ def main[T <: SolarImagesSource](
   val filter_depths = Seq(
     Seq.fill(4)(20),
     Seq.fill(4)(15),
-    Seq.fill(4)(10),
-    Seq.fill(4)(5),
-    Seq.fill(4)(1)
+    Seq.fill(4)(10)
   )
 
   val image_neural_stack = {
@@ -109,8 +107,6 @@ def main[T <: SolarImagesSource](
       dtflearn.inception_unit(num_channels*(image_hist_downsamp + 1), filter_depths.head)(layer_index = 1) >>
       dtflearn.inception_unit(filter_depths.head.sum, filter_depths(1))(layer_index = 2) >>
       dtflearn.inception_unit(filter_depths(1).sum, filter_depths(2))(layer_index = 3) >>
-      dtflearn.inception_unit(filter_depths(2).sum, filter_depths(3))(layer_index = 4) >>
-      dtflearn.inception_unit(filter_depths(3).sum, filter_depths(4))(layer_index = 5) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
         (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
@@ -160,7 +156,7 @@ def main[T <: SolarImagesSource](
       layer_shapes_conv ++ layer_shapes_hist ++ layer_shapes_fc,
       reg)
 
-  helios.run_experiment_omni_ext(
+  helios.run_cdt_experiment_omni_ext(
     dataset, tt_partition, resample = re,
     preprocess_image = image_preprocess > image_filter,
     image_to_bytearr = image_to_byte,
