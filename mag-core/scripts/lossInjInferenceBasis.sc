@@ -30,11 +30,11 @@
   }
 
   nL = 200
-  nT = 50
+  nT = 100
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val basisSize = (5, 19)
+  val basisSize = (20, 19)
   val hybrid_basis = new HybridMQPSDBasis(0.75d)(
     lShellLimits, 14, timeLimits, 19, (false, false)
   )
@@ -66,7 +66,7 @@
     (0.01, 0.01d, 0.01, 0.01))(
     seKernel, noiseKernel,
     boundary_data ++ bulk_data, colocation_points,
-    chebyshev_hybrid_basis::hybrid_basis
+    chebyshev_hybrid_basis//::hybrid_basis
   )
 
   val blocked_hyp = {
@@ -104,7 +104,7 @@
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 2000
+  val num_post_samples = 10000
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
