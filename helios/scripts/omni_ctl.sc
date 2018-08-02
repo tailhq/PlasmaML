@@ -139,7 +139,7 @@ def main[T <: SolarImagesSource](
     temperature = temp) >>
     L2Regularization(
       layer_parameter_names,
-      layer_datatypes,
+      layer_datatypes.map(_ => "FLOAT32"),
       layer_shapes,
       reg)
 
