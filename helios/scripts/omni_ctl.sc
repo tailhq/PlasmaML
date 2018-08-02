@@ -129,7 +129,7 @@ def main[T <: SolarImagesSource](
 
 
   val (layer_shapes, layer_parameter_names, layer_datatypes) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index, "FLOAT32")
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",
@@ -138,7 +138,7 @@ def main[T <: SolarImagesSource](
     temperature = temp) >>
     L2Regularization(
       layer_parameter_names,
-      layer_datatypes.map(_ => "FLOAT32"),
+      layer_datatypes,
       layer_shapes,
       reg)
 

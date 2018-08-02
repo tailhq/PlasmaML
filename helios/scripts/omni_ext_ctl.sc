@@ -136,13 +136,13 @@ def main[T <: SolarImagesSource](
     output_mapping
 
   val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv, "FLOAT32")
 
   val (layer_shapes_hist, layer_parameter_names_hist, layer_datatypes_hist) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist, "FLOAT32")
 
   val (layer_shapes_fc, layer_parameter_names_fc, layer_datatypes_fc) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc)
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc, "FLOAT32")
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",
@@ -151,7 +151,7 @@ def main[T <: SolarImagesSource](
     temperature = temp) >>
     L2Regularization(
       layer_parameter_names_conv ++ layer_parameter_names_hist ++ layer_parameter_names_fc,
-      layer_datatypes_conv.map(_ => "FLOAT32") ++ layer_datatypes_hist.map(_ => "FLOAT32") ++ layer_datatypes_fc.map(_ => "FLOAT32"),
+      layer_datatypes_conv ++ layer_datatypes_hist ++ layer_datatypes_fc,
       layer_shapes_conv ++ layer_shapes_hist ++ layer_shapes_fc,
       reg)
 
