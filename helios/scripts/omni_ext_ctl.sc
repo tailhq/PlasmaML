@@ -109,22 +109,23 @@ def main[T <: SolarImagesSource](
       dtflearn.inception_unit(filter_depths(1).sum, filter_depths(2))(layer_index = 3) >>
       tf.learn.Flatten("Flatten_3") >>
       dtflearn.feedforward_stack(
-        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT32)(
+        (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
         conv_ff_stack_sizes,
         starting_index = ff_index_conv)
   }
 
   val omni_history_stack = {
-      dtflearn.feedforward_stack(
-        (i: Int) => dtflearn.Phi("Act_"+i),
-        FLOAT32)(
-        hist_ff_stack_sizes,
-        starting_index = ff_index_hist)
+      tf.learn.Cast("Cast_Hist", FLOAT64) >>
+        dtflearn.feedforward_stack(
+          (i: Int) => dtflearn.Phi("Act_"+i),
+          FLOAT32)(
+          hist_ff_stack_sizes,
+          starting_index = ff_index_hist)
   }
 
   val fc_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i),
-    FLOAT32)(
+    FLOAT64)(
     ff_stack_sizes,
     starting_index = ff_index_fc)
 

@@ -115,7 +115,7 @@ def main[T <: SolarImagesSource](
 
 
   val post_conv_ff_stack = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT32)(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     ff_stack, starting_index = ff_index)
 
   val output_mapping = helios.learn.cdt_loss.output_mapping(
@@ -131,7 +131,7 @@ def main[T <: SolarImagesSource](
 
 
   val (layer_shapes, layer_parameter_names, layer_datatypes) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index, "FLOAT32")
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index, "FLOAT64")
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",

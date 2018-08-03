@@ -403,7 +403,7 @@ package object helios {
 
     val trainInput = tf.learn.Input(FLOAT32, Shape(-1) ++ data_shapes._2)
 
-    val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT32)
+    val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
     val loss = lossFunc >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
@@ -455,7 +455,7 @@ package object helios {
 
     val actual_targets = test_labels.zipWithIndex.map(zi => {
       val (z, index) = zi
-      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Float].toInt
+      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
 
       z(time_lag)
     })
@@ -603,8 +603,8 @@ package object helios {
 
 
     val trainInput = tf.learn.Input[
-      Tensor, Output, DataType.Aux[Double],
-      DataType, Shape](FLOAT64, Shape(-1, causal_horizon))
+      Tensor, Output, DataType.Aux[Float],
+      DataType, Shape](FLOAT32, Shape(-1, causal_horizon))
 
     val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
