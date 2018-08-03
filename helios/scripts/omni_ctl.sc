@@ -103,13 +103,15 @@ def main[T <: SolarImagesSource](
   val filter_depths = Seq(
     Seq(5, 10, 10, 5),
     Seq(2, 5, 5, 2),
+    Seq(1, 3, 3, 1),
     Seq(1, 1, 1, 1)
   )
 
   val conv_section =
     dtflearn.inception_unit(num_channels*(image_hist_downsamp + 1), filter_depths.head)(layer_index = 1) >>
       dtflearn.inception_unit(filter_depths.head.sum, filter_depths(1))(layer_index = 2) >>
-      dtflearn.inception_unit(filter_depths(1).sum, filter_depths(2))(layer_index = 3)
+      dtflearn.inception_unit(filter_depths(1).sum, filter_depths(2))(layer_index = 3) >>
+      dtflearn.inception_unit(filter_depths(2).sum, filter_depths(3))(layer_index = 4)
 
 
   val post_conv_ff_stack = dtflearn.feedforward_stack(
