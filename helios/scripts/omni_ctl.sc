@@ -101,8 +101,8 @@ def main[T <: SolarImagesSource](
   * */
 
   val filter_depths = Seq(
-    Seq(5, 15, 15, 5),
-    Seq(5, 10, 10, 5),
+    Seq(15, 15, 15, 15),
+    Seq(10, 10, 10, 10),
     Seq(5, 5, 5, 5),
     Seq(1, 1, 1, 1)
   )
