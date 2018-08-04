@@ -107,7 +107,8 @@ def main[T <: SolarImagesSource](
     Seq(1, 1, 1, 1)
   )
 
-  val conv_section = dtflearn.inception_stack(num_channels*(image_hist_downsamp + 1), filter_depths)(1)
+  val conv_section = tf.learn.Cast("Input/Cast", FLOAT32) >>
+    dtflearn.inception_stack(num_channels*(image_hist_downsamp + 1), filter_depths)(1)
 
   val post_conv_ff_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
