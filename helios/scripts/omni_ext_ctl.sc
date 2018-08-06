@@ -138,13 +138,13 @@ def main[T <: SolarImagesSource](
     output_mapping
 
   val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv, "FLOAT32")
+    dtfutils.get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv, "FLOAT64")
 
   val (layer_shapes_hist, layer_parameter_names_hist, layer_datatypes_hist) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist, "FLOAT32")
+    dtfutils.get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist, "FLOAT64")
 
   val (layer_shapes_fc, layer_parameter_names_fc, layer_datatypes_fc) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc, "FLOAT32")
+    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc, "FLOAT64")
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",
