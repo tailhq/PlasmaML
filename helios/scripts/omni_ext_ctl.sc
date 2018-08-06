@@ -119,7 +119,7 @@ def main[T <: SolarImagesSource](
       tf.learn.Cast("Cast_Hist", FLOAT64) >>
         dtflearn.feedforward_stack(
           (i: Int) => dtflearn.Phi("Act_"+i),
-          FLOAT32)(
+          FLOAT64)(
           hist_ff_stack_sizes,
           starting_index = ff_index_hist)
   }
