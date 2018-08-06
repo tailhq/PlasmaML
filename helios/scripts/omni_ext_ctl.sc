@@ -103,9 +103,17 @@ def main[T <: SolarImagesSource](
     Seq(1, 1, 1, 1)
   )
 
+  val conv_ff_stack = dtflearn.feedforward_stack(
+    (i: Int) => dtflearn.Phi("Act_"+i),
+    FLOAT64)(
+    conv_ff_stack_sizes,
+    starting_index = ff_index_conv)
+
+
   val image_neural_stack = tf.learn.Cast("Input/Cast", FLOAT32) >>
     dtflearn.inception_stack(num_channels*(image_hist_downsamp + 1), filter_depths)(1) >>
-    tf.learn.Flatten("Flatten_1")
+    tf.learn.Flatten("Flatten_1") >>
+    conv_ff_stack
 
   val omni_history_stack = {
       tf.learn.Cast("Cast_Hist", FLOAT64) >>
