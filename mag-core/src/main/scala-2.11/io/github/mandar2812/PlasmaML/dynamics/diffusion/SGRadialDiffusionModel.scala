@@ -32,9 +32,6 @@ import org.apache.log4j.Logger
   *
   * @param psd_data A Stream of space time locations and measured PSD values.
   *
-  * @param ghost_points A collection of "ghost" points on which Particle diffusion is computed
-  *                     and its dependence on PSD is enforced with square loss.
-  *
   * @param basis A basis function expansion for the PSD, as an instance
   *              of [[PSDBasis]].
   * */

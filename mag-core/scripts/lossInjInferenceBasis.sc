@@ -15,7 +15,7 @@
 
 
   measurement_noise = GaussianRV(0.0, 0.5)
-  num_bulk_data = 50
+  num_bulk_data = 100
   num_boundary_data = 20
 
   num_dummy_data = 100
@@ -97,8 +97,8 @@
         hyp.contains)
   }
 
-  model.regCol = 0.05d
-  model.regObs = 0.5
+  model.regCol = 0.5d
+  model.regObs = 1d
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
