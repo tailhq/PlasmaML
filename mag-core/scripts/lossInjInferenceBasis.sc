@@ -10,7 +10,7 @@
   import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion.BasisFuncRadialDiffusionModel
+  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
   import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
 
@@ -60,13 +60,14 @@
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
-  val model = new BasisFuncRadialDiffusionModel(
+  val model = new SGRadialDiffusionModel(
     Kp, dll_params,
     (0d, 0.2, 0d, 0.0),
     (0.01, 0.01d, 0.01, 0.01))(
     seKernel, noiseKernel,
-    boundary_data ++ bulk_data, colocation_points,
-    chebyshev_hybrid_basis//::hybrid_basis
+    boundary_data ++ bulk_data,
+    chebyshev_hybrid_basis,
+    lShellLimits, timeLimits
   )
 
   val blocked_hyp = {
@@ -96,7 +97,7 @@
         hyp.contains)
   }
 
-  model.regCol = 0d
+  model.regCol = 0.05d
   model.regObs = 0.5
 
   //Create the MCMC sampler
