@@ -133,7 +133,7 @@ object RDExperiment {
       .toMap
 
     val gaussian_hyp_params = hyp
-      .filter(h => h.contains("_alpha") || h.contains("_b"))
+      .filter(h => h.contains("_alpha") || (h.contains("_b") && !h.contains("_beta")))
       .map(h => (h, new Gaussian(0d, 1d)))
       .toMap
 
