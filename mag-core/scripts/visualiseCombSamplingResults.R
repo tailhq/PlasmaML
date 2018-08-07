@@ -10,92 +10,92 @@ prior_samples <- read.csv("prior_samples.csv", header = TRUE)
 ground_truth <- read.csv("diffusion_params.csv", header = TRUE, na.strings = c("-Infinity"))
 
 qplot(
-  prior_samples$"tau_beta",  prior_samples$"tau_b",
+  prior_samples$"lambda_beta",  prior_samples$"lambda_b",
   xlab = expression(beta), ylab=expression(b))
 
-ggsave("scatter_tau_beta_b_prior.png")
+ggsave("scatter_lambda_beta_b_prior.png")
 
 qplot(
-  posterior_samples$"tau_beta", posterior_samples$"tau_b",
+  posterior_samples$"lambda_beta", posterior_samples$"lambda_b",
   xlab = expression(beta), ylab=expression(b))
-ggsave("scatter_tau_beta_b_posterior.png")
+ggsave("scatter_lambda_beta_b_posterior.png")
 
 qplot(
-  prior_samples$"tau_beta",  exp(prior_samples$"tau_alpha"),
+  prior_samples$"lambda_beta",  exp(prior_samples$"lambda_alpha"),
   xlab = expression(beta), ylab=expression(alpha))
-ggsave("scatter_tau_beta_alpha_prior.png")
+ggsave("scatter_lambda_beta_alpha_prior.png")
 
 qplot(
-  posterior_samples$"tau_beta", exp(posterior_samples$"tau_alpha"),
+  posterior_samples$"lambda_beta", exp(posterior_samples$"lambda_alpha"),
   xlab = expression(beta), ylab=expression(alpha))
-ggsave("scatter_tau_beta_alpha_posterior.png")
+ggsave("scatter_lambda_beta_alpha_posterior.png")
 
-ggplot(prior_samples, aes(x=tau_beta)) +
+ggplot(prior_samples, aes(x=lambda_beta)) +
   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
   theme_gray(base_size = 24) +
   xlab(expression(beta)) +
-  geom_vline(aes(xintercept=ground_truth$tau_beta),   # Ignore NA values for mean
+  geom_vline(aes(xintercept=ground_truth$lambda_beta),   # Ignore NA values for mean
              color="red", linetype="dashed", size=.75)
-ggsave("histogram_tau_beta_prior.png")
+ggsave("histogram_lambda_beta_prior.png")
 
-ggplot(posterior_samples, aes(x=tau_beta)) +
+ggplot(posterior_samples, aes(x=lambda_beta)) +
   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
   theme_gray(base_size = 24) +
   xlab(expression(beta)) +
-  geom_vline(aes(xintercept=ground_truth$tau_beta),   # Ignore NA values for mean
+  geom_vline(aes(xintercept=ground_truth$lambda_beta),   # Ignore NA values for mean
              color="red", linetype="dashed", size=.75)
-ggsave("histogram_tau_beta_posterior.png")
+ggsave("histogram_lambda_beta_posterior.png")
 
 
-ggplot(prior_samples, aes(x=tau_b)) +
+ggplot(prior_samples, aes(x=lambda_b)) +
   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
   theme_gray(base_size = 24) +
   xlab("b") +
-  geom_vline(aes(xintercept=ground_truth$tau_b),   # Ignore NA values for mean
+  geom_vline(aes(xintercept=ground_truth$lambda_b),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
-ggsave("histogram_tau_b_prior.png")
+ggsave("histogram_lambda_b_prior.png")
 
-ggplot(posterior_samples, aes(x=tau_b)) +
+ggplot(posterior_samples, aes(x=lambda_b)) +
   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
   theme_gray(base_size = 24) +
   xlab("b") +
-  geom_vline(aes(xintercept=ground_truth$tau_b),   # Ignore NA values for mean
+  geom_vline(aes(xintercept=ground_truth$lambda_b),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
-ggsave("histogram_tau_b_posterior.png")
+ggsave("histogram_lambda_b_posterior.png")
 
-ggplot(prior_samples, aes(x=exp(tau_alpha))) +
+ggplot(prior_samples, aes(x=exp(lambda_alpha))) +
   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
   theme_gray(base_size = 24) +
   xlab(expression(alpha)) +
-  geom_vline(aes(xintercept=exp(ground_truth$tau_alpha)),   # Ignore NA values for mean
+  geom_vline(aes(xintercept=exp(ground_truth$lambda_alpha)),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
-ggsave("histogram_tau_alpha_prior.png")
+ggsave("histogram_lambda_alpha_prior.png")
 
-ggplot(posterior_samples, aes(x=exp(tau_alpha))) +
+ggplot(posterior_samples, aes(x=exp(lambda_alpha))) +
   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                  binwidth=.5,
                  colour="black", fill="white") +
   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
   theme_gray(base_size = 24) +
   xlab(expression(alpha)) +
-  geom_vline(aes(xintercept=exp(ground_truth$tau_alpha)),   # Ignore NA values for mean
+  geom_vline(aes(xintercept=exp(ground_truth$lambda_alpha)),   # Ignore NA values for mean
              color="red", linetype="dashed", size=0.75)
-ggsave("histogram_tau_alpha_posterior.png")
+ggsave("histogram_lambda_alpha_posterior.png")
 
 #Injection
 

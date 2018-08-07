@@ -1,24 +1,31 @@
-{
-  import breeze.stats.distributions._
-  import io.github.mandar2812.dynaml.utils
-  import io.github.mandar2812.dynaml.kernels._
-  import io.github.mandar2812.dynaml.probability.mcmc._
-  import io.github.mandar2812.dynaml.probability.GaussianRV
-  import ammonite.ops._
-  import ammonite.ops.ImplicitWd._
+import io.github.mandar2812.dynaml.repl.Router.main
+import breeze.stats.distributions._
+import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.kernels._
+import io.github.mandar2812.dynaml.probability.mcmc._
+import io.github.mandar2812.dynaml.probability.GaussianRV
+import ammonite.ops._
+import ammonite.ops.ImplicitWd._
 
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-  import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
+import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion._
-  import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
+import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
+
+def apply(
+  bulk_data_size: Int = 50,
+  boundary_data_size: Int = 50,
+  basisSize: (Int, Int) = (20, 19),
+  reg_data: Double = 0.5,
+  reg_galerkin: Double = 1.0,
+  burn: Int = 2000,
+  num_post_samples: Int = 5000) = {
 
   measurement_noise = GaussianRV(0.0, 0.5)
-  num_bulk_data = 100
-  num_boundary_data = 20
-
-  num_dummy_data = 100
+  num_bulk_data = bulk_data_size
+  num_boundary_data = boundary_data_size
 
   lambda_params = (-1, 1.5, 0d, -0.4)
 
@@ -34,7 +41,6 @@
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val basisSize = (20, 19)
   val hybrid_basis = new HybridMQPSDBasis(0.75d)(
     lShellLimits, 14, timeLimits, 19, (false, false)
   )
@@ -43,7 +49,6 @@
     0.75, lShellLimits, basisSize._1,
     timeLimits, basisSize._2)
 
-  val burn = 10
 
   val seKernel = new GenExpSpaceTimeKernel[Double](
     1d, deltaL, deltaT)(
@@ -97,15 +102,14 @@
         hyp.contains)
   }
 
-  model.regCol = 0.5d
-  model.regObs = 1d
+  model.regCol = reg_galerkin
+  model.regObs = reg_data
 
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
     model, hyper_prior, burn)
 
-  val num_post_samples = 10
 
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
@@ -123,6 +127,9 @@
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
+  RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
+  RDExperiment.visualiseResultsInjection(samples, gt, hyper_prior)
+
   RDExperiment.samplingReport(
     samples.map(_.filterKeys(quantities_loss.contains)),
     hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
@@ -133,5 +140,20 @@
     hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate, "injection")
 
-  RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
+
+  (solution, (boundary_data, bulk_data), model, hyper_prior, mcmc_sampler, samples, resPath)
 }
+
+@main
+def main(
+  bulk_data_size: Int = 50,
+  boundary_data_size: Int = 50,
+  basisSize: (Int, Int) = (20, 19),
+  reg_data: Double = 0.5,
+  reg_galerkin: Double = 1.0,
+  burn: Int = 2000,
+  num_post_samples: Int = 5000) =
+  apply(
+    bulk_data_size, boundary_data_size,
+    basisSize, reg_data, reg_galerkin,
+    burn, num_post_samples)
