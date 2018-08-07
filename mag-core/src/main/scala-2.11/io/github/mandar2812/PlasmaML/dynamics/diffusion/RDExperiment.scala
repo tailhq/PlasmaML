@@ -120,13 +120,26 @@ object RDExperiment {
     * Defines a sensible default hyper-prior over diffusion
     * parameters.
     * */
-  def hyper_prior(hyp: List[String]) = {
-    hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
-      hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
-      Map(
-        "lambda_alpha" -> new Gaussian(0d, 1d),
-        "lambda_beta" -> new Gamma(2d, 2d),
-        "lambda_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains)
+  def hyper_prior(hyp: List[String]): Map[String, ContinuousDistr[Double]] = {
+
+    val kernel_hyp_prior = hyp
+      .filter(_.contains("base::"))
+      .map(h => (h, new LogNormal(0d, 1d)))
+      .toMap
+
+    val positive_params_hyp_prior = hyp
+      .filter(h => h.contains("_beta") || h.contains("_gamma"))
+      .map(h => (h, new LogNormal(0d, 1d)))
+      .toMap
+
+    val gaussian_hyp_params = hyp
+      .filter(h => h.contains("_alpha") || h.contains("_b"))
+      .map(h => (h, new Gaussian(0d, 1d)))
+      .toMap
+
+
+
+    kernel_hyp_prior ++ positive_params_hyp_prior ++ gaussian_hyp_params
   }
 
   /**

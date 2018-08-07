@@ -15,21 +15,23 @@ import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
 
 def apply(
-  bulk_data_size: Int = 50,
-  boundary_data_size: Int = 50,
-  basisSize: (Int, Int) = (20, 19),
-  reg_data: Double = 0.5,
-  reg_galerkin: Double = 1.0,
-  burn: Int = 2000,
-  num_post_samples: Int = 5000) = {
+  bulk_data_size: Int                         = 50,
+  boundary_data_size: Int                     = 50,
+  basisSize: (Int, Int)                       = (20, 19),
+  reg_data: Double                            = 0.5,
+  reg_galerkin: Double                        = 1.0,
+  burn: Int                                   = 2000,
+  num_post_samples: Int                       = 5000,
+  lambda_gt: (Double, Double, Double, Double) = (-1, 1.5, 0d, -0.4),
+  q_gt: (Double, Double, Double, Double)      = (-0.5, 1.0d, 0.5, 0.45)) = {
 
   measurement_noise = GaussianRV(0.0, 0.5)
   num_bulk_data = bulk_data_size
   num_boundary_data = boundary_data_size
 
-  lambda_params = (-1, 1.5, 0d, -0.4)
+  lambda_params = lambda_gt
 
-  q_params = (-0.5, 1.0d, 0.5, 0.45)
+  q_params = q_gt
 
   initialPSD = (l: Double) => {
     val c = utils.chebyshev(3, 2*(l-lShellLimits._1)/(lShellLimits._2 - lShellLimits._1) - 1)
@@ -88,19 +90,8 @@ def apply(
   model.block(blocked_hyp:_*)
 
   val hyp = model.effective_hyper_parameters
-  val hyper_prior = {
-    hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
-      hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
-      Map(
-        "lambda_alpha" -> new Gaussian(0d, 1d),
-        "lambda_beta" -> new LogNormal(0d, 2d),
-        "lambda_b" -> new Gaussian(0d, 2.0),
-        "Q_alpha" -> new Gaussian(0d, 2d),
-        "Q_beta" -> new LogNormal(0d, 2d),
-        "Q_gamma" -> new LogNormal(0d, 2d),
-        "Q_b" -> new Gaussian(0d, 2d)).filterKeys(
-        hyp.contains)
-  }
+
+  val h_prior = RDExperiment.hyper_prior(hyp)
 
   model.regCol = reg_galerkin
   model.regObs = reg_data
@@ -108,7 +99,7 @@ def apply(
   //Create the MCMC sampler
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
     model.type, ContinuousDistr[Double]](
-    model, hyper_prior, burn)
+    model, h_prior, burn)
 
 
   //Draw samples from the posterior
@@ -116,7 +107,7 @@ def apply(
 
   val resPath = RDExperiment.writeResults(
     solution, boundary_data, bulk_data, model.ghost_points,
-    hyper_prior, samples, basisSize, "HybridMQ",
+    h_prior, samples, basisSize, "HybridMQ",
     (model.regCol, model.regObs))
 
   val scriptPath = pwd / "mag-core" / 'scripts / "visualiseCombSamplingResults.R"
@@ -127,8 +118,8 @@ def apply(
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
-  RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
-  RDExperiment.visualiseResultsInjection(samples, gt, hyper_prior)
+  RDExperiment.visualiseResultsLoss(samples, gt, h_prior)
+  RDExperiment.visualiseResultsInjection(samples, gt, h_prior)
 
   RDExperiment.samplingReport(
     samples.map(_.filterKeys(quantities_loss.contains)),
@@ -141,7 +132,7 @@ def apply(
     gt, mcmc_sampler.sampleAcceptenceRate, "injection")
 
 
-  (solution, (boundary_data, bulk_data), model, hyper_prior, mcmc_sampler, samples, resPath)
+  (solution, (boundary_data, bulk_data), model, h_prior, mcmc_sampler, samples, resPath)
 }
 
 @main

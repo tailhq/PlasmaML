@@ -81,19 +81,8 @@
     model.block(blocked_hyp:_*)
 
     val hyp = model.effective_hyper_parameters
-    val hyper_prior = {
-      hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
-        hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
-        Map(
-          "lambda_alpha" -> new Gaussian(0d, 1d),
-          "lambda_beta" -> new Gamma(1d, 1d),
-          "lambda_b" -> new Gaussian(0d, 2.0),
-          "Q_alpha" -> new Gaussian(0d, 2d),
-          "Q_beta" -> new Gamma(1d, 1d),
-          "Q_gamma" -> new LogNormal(0d, 2d),
-          "Q_b" -> new Gaussian(0d, 2d)).filterKeys(
-          hyp.contains)
-    }
+
+    val h_prior = RDExperiment.hyper_prior(hyp)
 
     model.regCol = regColocation
     model.regObs = 1E-3
@@ -101,7 +90,7 @@
     //Create the MCMC sampler
     val mcmc_sampler = new AdaptiveHyperParameterMCMC[
       model.type, ContinuousDistr[Double]](
-      model, hyper_prior, burn)
+      model, h_prior, burn)
 
     val num_post_samples = 1000
 
@@ -110,7 +99,7 @@
 
     val resPath = RDExperiment.writeResults(
       solution, boundary_data, bulk_data, colocation_points,
-      hyper_prior, samples, basisSize, "HybridMQ",
+      h_prior, samples, basisSize, "HybridMQ",
       (model.regCol, model.regObs))
 
     val scriptPath = pwd / "mag-core" / 'scripts / "visualiseCombSamplingResults.R"
@@ -132,8 +121,8 @@
 
     RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
-    RDExperiment.visualiseResultsLoss(samples, gt, hyper_prior)
-    RDExperiment.visualiseResultsInjection(samples, gt, hyper_prior)
+    RDExperiment.visualiseResultsLoss(samples, gt, h_prior)
+    RDExperiment.visualiseResultsInjection(samples, gt, h_prior)
 
   })
 }
