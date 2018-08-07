@@ -124,9 +124,9 @@ object RDExperiment {
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
       hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
-        "tau_alpha" -> new Gaussian(0d, 1d),
-        "tau_beta" -> new Gamma(2d, 2d),
-        "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains)
+        "lambda_alpha" -> new Gaussian(0d, 1d),
+        "lambda_beta" -> new Gamma(2d, 2d),
+        "lambda_b" -> new Gaussian(0d, 2.0)).filterKeys(hyp.contains)
   }
 
   /**
@@ -258,47 +258,47 @@ object RDExperiment {
     gt: Map[String, Double],
     hyper_prior: Map[String, ContinuousDistr[Double]]): Unit = {
 
-    val (prior_alpha, prior_beta, prior_b) = (hyper_prior("tau_alpha"), hyper_prior("tau_beta"), hyper_prior("tau_b"))
+    val (prior_alpha, prior_beta, prior_b) = (hyper_prior("lambda_alpha"), hyper_prior("lambda_beta"), hyper_prior("lambda_b"))
 
-    scatter(samples.map(c => (c("tau_alpha"), c("tau_b"))))
+    scatter(samples.map(c => (c("lambda_alpha"), c("lambda_b"))))
     hold()
-    scatter(Seq((gt("tau_alpha"), gt("tau_b"))))
+    scatter(Seq((gt("lambda_alpha"), gt("lambda_b"))))
     legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples:- "+0x03B1.toChar+" vs b")
-    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
-    yAxis(0x03C4.toChar+": b")
+    title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs b")
+    xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
+    yAxis(diffusion_quantities("loss")+": b")
     unhold()
 
-    scatter(samples.map(c => (c("tau_alpha"), c("tau_beta"))))
+    scatter(samples.map(c => (c("lambda_alpha"), c("lambda_beta"))))
     hold()
-    scatter(Seq((gt("tau_alpha"), gt("tau_beta"))))
+    scatter(Seq((gt("lambda_alpha"), gt("lambda_beta"))))
     legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
-    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
-    yAxis(0x03C4.toChar+": "+0x03B2.toChar)
+    title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs "+0x03B2.toChar)
+    xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
+    yAxis(diffusion_quantities("loss")+": "+0x03B2.toChar)
     unhold()
 
 
     histogram((1 to samples.length).map(_ => prior_alpha.draw), 100)
     hold()
-    histogram(samples.map(_("tau_alpha")), 100)
+    histogram(samples.map(_("lambda_alpha")), 100)
     legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram: "+0x03B1.toChar)
+    title("Histogram "+diffusion_quantities("loss")+": "+0x03B1.toChar)
     unhold()
 
 
     histogram((1 to samples.length).map(_ => prior_beta.draw), 100)
     hold()
-    histogram(samples.map(_("tau_beta")), 100)
+    histogram(samples.map(_("lambda_beta")), 100)
     legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram: "+0x03B2.toChar)
+    title("Histogram "+diffusion_quantities("loss")+": "+0x03B2.toChar)
     unhold()
 
     histogram((1 to samples.length).map(_ => prior_b.draw), 100)
     hold()
-    histogram(samples.map(_("tau_b")), 100)
+    histogram(samples.map(_("lambda_b")), 100)
     legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram: b")
+    title("Histogram "+diffusion_quantities("loss")+": b")
     unhold()
 
   }
@@ -322,23 +322,19 @@ object RDExperiment {
     hold()
     scatter(Seq((gt("Q_gamma"), gt("Q_b"))))
     legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples:- "+0x03B3.toChar+" vs b")
+    title("Posterior Samples Q:- "+0x03B3.toChar+" vs b")
     xAxis("Q: "+0x03B3.toChar)
     yAxis("Q: b")
     unhold()
-
-
-/*
 
     scatter(samples.map(c => (c("Q_alpha"), c("Q_beta"))))
     hold()
     scatter(Seq((gt("Q_alpha"), gt("Q_beta"))))
     legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
-    xAxis(0x03C4.toChar+": "+0x03B1.toChar)
-    yAxis(0x03C4.toChar+": "+0x03B2.toChar)
+    title("Posterior Samples Q:- "+0x03B1.toChar+" vs "+0x03B2.toChar)
+    xAxis("Q : "+0x03B1.toChar)
+    yAxis("Q : "+0x03B2.toChar)
     unhold()
-*/
 
     val prior_b = hyper_prior("Q_b")
     val prior_gamma = hyper_prior("Q_gamma")
@@ -347,14 +343,14 @@ object RDExperiment {
     hold()
     histogram(samples.map(_("Q_b")), 100)
     legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram: "+"b")
+    title("Histogram Q: "+"b")
     unhold()
 
     histogram((1 to samples.length).map(_ => prior_gamma.draw), 100)
     hold()
     histogram(samples.map(_("Q_gamma")), 100)
     legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram: "+0x03B3.toChar)
+    title("Histogram Q: "+0x03B3.toChar)
     unhold()
 
 
@@ -520,7 +516,7 @@ object RDExperiment {
 
     q_params      = (groundTruth("Q_alpha"), groundTruth("Q_beta"), groundTruth("Q_gamma"), groundTruth("Q_b"))
 
-    lambda_params = (groundTruth("tau_alpha"), groundTruth("tau_beta"), groundTruth("tau_gamma"), groundTruth("tau_b"))
+    lambda_params = (groundTruth("lambda_alpha"), groundTruth("lambda_beta"), groundTruth("lambda_gamma"), groundTruth("lambda_b"))
 
     nL = domainInfo("nL").toInt
 
@@ -569,9 +565,9 @@ object RDSettings {
   var q_params: (Double, Double, Double, Double) = (Double.NegativeInfinity, 0d, 0d, 0d)
 
   val quantities_loss = Map(
-    "tau_alpha" -> 0x03B1.toChar,
-    "tau_beta" -> 0x03B2.toChar,
-    "tau_b" -> 'b')
+    "lambda_alpha" -> 0x03B1.toChar,
+    "lambda_beta" -> 0x03B2.toChar,
+    "lambda_b" -> 'b')
 
   val quantities_injection = Map(
     "Q_alpha" -> 0x03B1.toChar,
@@ -591,10 +587,10 @@ object RDSettings {
     "dll_beta" -> dll_params._2,
     "dll_gamma" -> dll_params._3,
     "dll_b" -> dll_params._4,
-    "tau_alpha" -> lambda_params._1,
-    "tau_beta" -> lambda_params._2,
-    "tau_gamma" -> lambda_params._3,
-    "tau_b" -> lambda_params._4,
+    "lambda_alpha" -> lambda_params._1,
+    "lambda_beta" -> lambda_params._2,
+    "lambda_gamma" -> lambda_params._3,
+    "lambda_b" -> lambda_params._4,
     "Q_alpha" -> q_params._1,
     "Q_beta" -> q_params._2,
     "Q_gamma" -> q_params._3,

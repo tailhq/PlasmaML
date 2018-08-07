@@ -149,7 +149,7 @@
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
       model.hyper_parameters.filter(
-        c => c.contains("dll") || c.contains("base::") || c.contains("tau_gamma") || c.contains("Q_")
+        c => c.contains("dll") || c.contains("base::") || c.contains("lambda_gamma") || c.contains("Q_")
       )
   }
 
@@ -162,9 +162,9 @@
     hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
       hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
-        "tau_alpha" -> new Gaussian(0d, 1d),
-        "tau_beta" -> new Gamma(2d, 2d),
-        "tau_b" -> new Gaussian(0d, 2.0))
+        "lambda_alpha" -> new Gaussian(0d, 1d),
+        "lambda_beta" -> new Gamma(2d, 2d),
+        "lambda_b" -> new Gaussian(0d, 2.0))
   }
 
   val mcmc_sampler = new AdaptiveHyperParameterMCMC[
@@ -176,15 +176,15 @@
   //Draw samples from the posterior
   val samples = mcmc_sampler.iid(num_post_samples).draw
 
-  val post_vecs = samples.map(c => DenseVector(c("tau_alpha"), c("tau_beta"), c("tau_b")))
+  val post_vecs = samples.map(c => DenseVector(c("lambda_alpha"), c("lambda_beta"), c("lambda_b")))
   val post_moments = getStats(post_vecs.toList)
 
-  val quantities = Map("tau_alpha" -> 0x03B1.toChar, "tau_beta" -> 0x03B2.toChar, "tau_b" -> 'b')
+  val quantities = Map("lambda_alpha" -> 0x03B1.toChar, "lambda_beta" -> 0x03B2.toChar, "lambda_b" -> 'b')
 
   val gt = Map(
-    "tau_alpha" -> math.log(math.exp(lambda_alpha)*math.pow(10d, lambda_a)),
-    "tau_beta" -> lambda_beta,
-    "tau_b" -> lambda_b,
+    "lambda_alpha" -> math.log(math.exp(lambda_alpha)*math.pow(10d, lambda_a)),
+    "lambda_beta" -> lambda_beta,
+    "lambda_b" -> lambda_b,
     "Q_alpha" -> math.log(math.exp(q_alpha)),
     "Q_beta" -> q_beta,
     "Q_gamma" -> q_gamma,
@@ -268,9 +268,9 @@
   yAxis("f(L,t)")
 
 
-  scatter(samples.map(c => (c("tau_alpha"), c("tau_b"))))
+  scatter(samples.map(c => (c("lambda_alpha"), c("lambda_b"))))
   hold()
-  scatter(Seq((gt("tau_alpha"), gt("tau_b"))))
+  scatter(Seq((gt("lambda_alpha"), gt("lambda_b"))))
   legend(Seq("Posterior Samples", "Ground Truth"))
   title("Posterior Samples:- "+0x03B1.toChar+" vs b")
   xAxis(0x03C4.toChar+": "+0x03B1.toChar)
@@ -279,18 +279,18 @@
 
 
 
-  scatter(samples.map(c => (c("tau_alpha"), c("tau_beta"))))
+  scatter(samples.map(c => (c("lambda_alpha"), c("lambda_beta"))))
   hold()
-  scatter(Seq((gt("tau_alpha"), gt("tau_beta"))))
+  scatter(Seq((gt("lambda_alpha"), gt("lambda_beta"))))
   legend(Seq("Posterior Samples", "Ground Truth"))
   title("Posterior Samples "+0x03B1.toChar+" vs "+0x03B2.toChar)
   xAxis(0x03C4.toChar+": "+0x03B1.toChar)
   yAxis(0x03C4.toChar+": "+0x03B2.toChar)
   unhold()
 
-  histogram(samples.map(_("tau_beta")), 50)
+  histogram(samples.map(_("lambda_beta")), 50)
   hold()
-  histogram((1 to num_post_samples).map(_ => hyper_prior("tau_beta").draw), 100)
+  histogram((1 to num_post_samples).map(_ => hyper_prior("lambda_beta").draw), 100)
   legend(Seq("Posterior Samples", "Prior Samples"))
   unhold()
   title("Histogram: "+0x03B2.toChar)

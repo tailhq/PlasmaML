@@ -73,7 +73,7 @@
         model.hyper_parameters.filter(c =>
           c.contains("dll") ||
             c.contains("base::") ||
-            c.contains("tau_gamma")
+            c.contains("lambda_gamma")
         )
     }
 
@@ -85,9 +85,9 @@
       hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
         hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
         Map(
-          "tau_alpha" -> new Gaussian(0d, 1d),
-          "tau_beta" -> new Gamma(1d, 1d),
-          "tau_b" -> new Gaussian(0d, 2.0),
+          "lambda_alpha" -> new Gaussian(0d, 1d),
+          "lambda_beta" -> new Gamma(1d, 1d),
+          "lambda_b" -> new Gaussian(0d, 2.0),
           "Q_alpha" -> new Gaussian(0d, 2d),
           "Q_beta" -> new Gamma(1d, 1d),
           "Q_gamma" -> new LogNormal(0d, 2d),

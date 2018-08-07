@@ -75,7 +75,7 @@ def main(
       model.hyper_parameters.filter(c =>
         c.contains("dll") ||
         c.contains("base::") ||
-        c.contains("tau_gamma") ||
+        c.contains("lambda_gamma") ||
         c.contains("Q_")
       )
   }
@@ -88,9 +88,9 @@ def main(
     eff_hyp.filter(_.contains("base::")).map(h => (h, new LogNormal(0d, 2d))).toMap ++
       eff_hyp.filterNot(h => h.contains("base::") || h.contains("tau")).map(h => (h, new Gaussian(0d, 2.5d))).toMap ++
       Map(
-        "tau_alpha" -> new Gaussian(0d, 2d),
-        "tau_beta" -> new LogNormal(0d, 2d),
-        "tau_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
+        "lambda_alpha" -> new Gaussian(0d, 2d),
+        "lambda_beta" -> new LogNormal(0d, 2d),
+        "lambda_b" -> new Gaussian(0d, 2.0)).filterKeys(eff_hyp.contains)
   }
 
   model.regCol = 0.05
