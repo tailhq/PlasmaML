@@ -91,6 +91,8 @@ class SGRadialDiffusionModel(
 
   private lazy val targets = DenseVector(psd_data.map(_._2).toArray)
 
+  private lazy val std_targets = targets.map(psd => (psd - psd_mean)/psd_std)
+
   private val (covStEncoder, noiseStEncoder) = (
     BasisFuncRadialDiffusionModel.stateEncoder(baseCovID),
     BasisFuncRadialDiffusionModel.stateEncoder(baseNoiseID)
@@ -310,7 +312,7 @@ class SGRadialDiffusionModel(
 
 
     AbstractGPRegressionModel.logLikelihood(
-      targets.map(psd => (psd - psd_mean)/psd_std) - surrogate,
+      std_targets - surrogate,
       k_uu + noise_mat_psd + phi*phi.t)
 
   } catch {
