@@ -21,6 +21,10 @@ abstract class HybridPSDBasis(
   phiT_t: Basis[Double]) extends PSDBasis {
 
 
+  val dimension_l: Int
+
+  val dimension_t: Int
+
   override protected val f: ((Double, Double)) => DenseVector[Double] =
     (x: (Double, Double)) => (phiL(x._1)*phiT(x._2).t).toDenseVector
 
@@ -116,7 +120,12 @@ object HybridPSDBasis {
     }
 
     new HybridPSDBasis(basis_space, basis_time, basis_space_l, basis_space_ll, basis_time_t) {
-      override val dimension: Int = nL*(nT+1)
+
+      override val dimension_l: Int = if(biasFlag) nL + 1 else nL
+
+      override val dimension_t: Int = if (biasFlag) nT + 2 else nT + 1
+
+      override val dimension: Int   = dimension_l*dimension_t
     }
   }
 

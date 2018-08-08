@@ -18,11 +18,11 @@ import org.apache.log4j.Logger
   * @param Kp A function which returns the Kp value for a given
   *           time coordinate. Must be cast as a [[DataPipe]]
   *
-  * @param dll_params A [[Tuple4]] containing the diffusion field
+  * @param init_dll_params A [[Tuple4]] containing the diffusion field
   *                   parameters. See [[io.github.mandar2812.PlasmaML.utils.MagConfigEncoding]] and
   *                   [[MagnetosphericProcessTrend]].
   *
-  * @param tau_params A [[Tuple4]] containing the loss process parameters.
+  * @param init_tau_params A [[Tuple4]] containing the loss process parameters.
   *
   * @param covariance A kernel function representing the covariance of
   *                   the Phase Space Density at a pair of space time locations.
@@ -34,12 +34,19 @@ import org.apache.log4j.Logger
   *
   * @param basis A basis function expansion for the PSD, as an instance
   *              of [[PSDBasis]].
+  *
+  * @param lShellDomain A tuple specifying the limits of the spatial domain (L*)
+  *
+  * @param timeDomain A tuple specifying the limits of the temporal domain (t)
+  *
+  * @param quadrature A Gaussian quadrature method, used for computing an approximation
+  *                   to the weak form PDE.
   * */
 class SGRadialDiffusionModel(
   val Kp: DataPipe[Double, Double],
-  dll_params: (Double, Double, Double, Double),
-  tau_params: (Double, Double, Double, Double),
-  q_params: (Double, Double, Double, Double))(
+  init_dll_params: (Double, Double, Double, Double),
+  init_tau_params: (Double, Double, Double, Double),
+  init_q_params: (Double, Double, Double, Double))(
   val covariance: LocalScalarKernel[(Double, Double)],
   val noise_psd: DiracTuple2Kernel,
   val psd_data: Stream[((Double, Double), Double)],
@@ -51,19 +58,19 @@ class SGRadialDiffusionModel(
 
   protected val logger: Logger = Logger.getLogger(this.getClass)
 
-  val baseCovID: String = "base::"+covariance.toString.split("\\.").last
+  private val baseCovID: String   = "base::"+covariance.toString.split("\\.").last
 
-  val baseNoiseID: String = "base_noise::"+noise_psd.toString.split("\\.").last
+  private val baseNoiseID: String = "base_noise::"+noise_psd.toString.split("\\.").last
 
-  val diffusionField: MagTrend = new MagTrend(Kp, "dll")
 
-  val lossTimeScale: MagTrend = new MagTrend(Kp, "lambda")
+  val diffusionField: MagTrend    = new MagTrend(Kp, "dll")
+
+  val lossTimeScale: MagTrend     = new MagTrend(Kp, "lambda")
 
   val injection_process: MagTrend = new MagTrend(Kp, "Q")
 
-  val num_observations: Int = psd_data.length
 
-  val (ghost_points, quadrature_weights): (Stream[(Double, Double)], DenseMatrix[Double]) = {
+  val (ghost_points, quadrature_weight_matrix): (Stream[(Double, Double)], DenseMatrix[Double]) = {
 
     val (l_nodes, l_weights) = quadrature.scale(lShellDomain._1, lShellDomain._2)
 
@@ -81,6 +88,7 @@ class SGRadialDiffusionModel(
     (points.toStream, diag(DenseVector(weights.toArray)))
   }
 
+  val num_observations: Int      = psd_data.length
   val num_colocation_points: Int = ghost_points.length
 
   val psd_mean: Double = psd_data.map(_._2).sum/num_observations
@@ -89,16 +97,16 @@ class SGRadialDiffusionModel(
     psd_data.map(p => p._2 - psd_mean).map(p => math.pow(p, 2d)).sum/(num_observations - 1)
   )
 
-  private lazy val targets = DenseVector(psd_data.map(_._2).toArray)
+  private lazy val targets     = DenseVector(psd_data.map(_._2).toArray)
 
   private lazy val std_targets = targets.map(psd => (psd - psd_mean)/psd_std)
 
   private val (covStEncoder, noiseStEncoder) = (
-    BasisFuncRadialDiffusionModel.stateEncoder(baseCovID),
-    BasisFuncRadialDiffusionModel.stateEncoder(baseNoiseID)
+    SGRadialDiffusionModel.stateEncoder(baseCovID),
+    SGRadialDiffusionModel.stateEncoder(baseNoiseID)
   )
 
-  private val designMatrixFlow = BasisFuncRadialDiffusionModel.metaDesignMatFlow(basis)
+  private val designMatrixFlow = SGRadialDiffusionModel.metaDesignMatFlow(basis)
 
   lazy val phi = designMatrixFlow(psd_data.map(_._1))
 
@@ -107,8 +115,6 @@ class SGRadialDiffusionModel(
     val y = p._2
     (ph*ph.t, ph*y)
   }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
-
-  private val I = DenseMatrix.eye[Double](aMat.rows)
 
   def _operator_hyper_parameters: List[String] = operator_hyper_parameters
 
@@ -126,7 +132,7 @@ class SGRadialDiffusionModel(
   }
 
   /**
-    * Stores the value of the operator parameters
+    * Stores the value of the PDE operator parameters
     * as a [[Map]].
     * */
   protected var operator_state: Map[String, Double] = {
@@ -135,12 +141,12 @@ class SGRadialDiffusionModel(
     val q_hyp = injection_process.transform.keys
 
     Map(
-      dll_hyp._1 -> dll_params._1, dll_hyp._2 -> dll_params._2,
-      dll_hyp._3 -> dll_params._3, dll_hyp._4 -> dll_params._4,
-      tau_hyp._1 -> tau_params._1, tau_hyp._2 -> tau_params._2,
-      tau_hyp._3 -> tau_params._3, tau_hyp._4 -> tau_params._4,
-      q_hyp._1 -> q_params._1, q_hyp._2 -> q_params._2,
-      q_hyp._3 -> q_params._3, q_hyp._4 -> q_params._4
+      dll_hyp._1 -> init_dll_params._1, dll_hyp._2 -> init_dll_params._2,
+      dll_hyp._3 -> init_dll_params._3, dll_hyp._4 -> init_dll_params._4,
+      tau_hyp._1 -> init_tau_params._1, tau_hyp._2 -> init_tau_params._2,
+      tau_hyp._3 -> init_tau_params._3, tau_hyp._4 -> init_tau_params._4,
+      q_hyp._1 -> init_q_params._1, q_hyp._2 -> init_q_params._2,
+      q_hyp._3 -> init_q_params._3, q_hyp._4 -> init_q_params._4
     )
   }
 
@@ -212,7 +218,7 @@ class SGRadialDiffusionModel(
 
     val op_state = h.filterNot(c => c._1.contains(baseCovID) || c._1.contains(baseNoiseID))
 
-    op_state.foreach((keyval) => operator_state += (keyval._1 -> keyval._2))
+    op_state.foreach(keyval => operator_state += (keyval._1 -> keyval._2))
 
     current_state = operator_state ++
       covStEncoder(covariance.state) ++
@@ -259,18 +265,15 @@ class SGRadialDiffusionModel(
     val A = DenseMatrix.vertcat(
       DenseMatrix.horzcat(DenseMatrix(0d), ones_obs.toDenseMatrix, zeros_col.toDenseMatrix),
       DenseMatrix.horzcat(ones_obs.toDenseMatrix.t, omega_phi+I(no)*regObs, omega_cross),
-      DenseMatrix.horzcat(zeros_col.toDenseMatrix.t, omega_cross.t, omega_psi+(quadrature_weights*regCol))
+      DenseMatrix.horzcat(zeros_col.toDenseMatrix.t, omega_cross.t, omega_psi+(quadrature_weight_matrix*regCol))
     )
 
     (A\responses, psi)
   }
 
   /**
-    * Calculates the energy of the configuration,
-    * in most global optimization algorithms
-    * we aim to find an approximate value of
-    * the hyper-parameters such that this function
-    * is minimized.
+    * Computes the log-likelihood of the observational data,
+    * given the hyper-parameter configuration.
     *
     * @param h The value of the hyper-parameters in the configuration space
     * @param options Optional parameters about configuration
@@ -344,7 +347,7 @@ object SGRadialDiffusionModel {
       (sc_nodes, sc_weights)
     }
 
-    def integrate(f: (Double) => Double)(lower: Double, upper: Double): Double = {
+    def integrate(f: Double => Double)(lower: Double, upper: Double): Double = {
 
       val (sc_nodes, sc_weights) = scale(lower, upper)
 
@@ -392,6 +395,34 @@ object SGRadialDiffusionModel {
       0.1012285363,  0.2223810345,  0.3137066459,  0.3626837834, 0.3626837834, 0.3137066459, 0.2223810345, 0.1012285363
     )
   )
+
+  /**
+    * Compute the colocation points (quadrature nodes) and weights.
+    *
+    * @param quadrature A [[GaussianQuadrature]] rule
+    * @param lShellDomain L-shell domain limits
+    * @param timeDomain Temporal domain limits.
+    * */
+  def quadrature_primitives(
+    quadrature: GaussianQuadrature)(
+    lShellDomain: (Double, Double),
+    timeDomain: (Double, Double)): (Stream[(Double, Double)], DenseMatrix[Double]) = {
+
+    val (l_nodes, l_weights) = quadrature.scale(lShellDomain._1, lShellDomain._2)
+
+    val (t_nodes, t_weights) = quadrature.scale(timeDomain._1, timeDomain._2)
+
+    val (points, weights) = utils.combine(Seq(l_nodes.zip(l_weights), t_nodes.zip(t_weights))).map(s => {
+
+      val point = (s.head._1, s.last._1)
+      val weight = s.head._2*s.last._2
+
+      (point, weight)
+    }).unzip
+
+
+    (points.toStream, diag(DenseVector(weights.toArray)))
+  }
 
   def stateEncoder(prefix: String): Encoder[Map[String, Double], Map[String, Double]] = Encoder(
     (s: Map[String, Double]) => s.map(h => (prefix+"/"+h._1, h._2)),
