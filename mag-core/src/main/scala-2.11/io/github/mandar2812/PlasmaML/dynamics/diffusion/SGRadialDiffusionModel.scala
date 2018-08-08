@@ -69,24 +69,9 @@ class SGRadialDiffusionModel(
 
   val injection_process: MagTrend = new MagTrend(Kp, "Q")
 
-
-  val (ghost_points, quadrature_weight_matrix): (Stream[(Double, Double)], DenseMatrix[Double]) = {
-
-    val (l_nodes, l_weights) = quadrature.scale(lShellDomain._1, lShellDomain._2)
-
-    val (t_nodes, t_weights) = quadrature.scale(timeDomain._1, timeDomain._2)
-
-    val (points, weights) = utils.combine(Seq(l_nodes.zip(l_weights), t_nodes.zip(t_weights))).map(s => {
-
-      val point = (s.head._1, s.last._1)
-      val weight = s.head._2*s.last._2
-
-      (point, weight)
-    }).unzip
-
-
-    (points.toStream, diag(DenseVector(weights.toArray)))
-  }
+  //Compute the integration nodes and weights for the domain.
+  val (ghost_points, quadrature_weight_matrix): (Stream[(Double, Double)], DenseMatrix[Double]) =
+    SGRadialDiffusionModel.quadrature_primitives(quadrature)(lShellDomain, timeDomain)
 
   val num_observations: Int      = psd_data.length
   val num_colocation_points: Int = ghost_points.length
