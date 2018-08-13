@@ -2,6 +2,7 @@ import ammonite.ops._
 import org.joda.time._
 
 import io.github.mandar2812.dynaml.repl.Router.main
+import io.github.mandar2812.dynaml.pipes.DataPipe
 import io.github.mandar2812.dynaml.tensorflow.{dtflearn, dtfutils}
 
 import _root_.io.github.mandar2812.PlasmaML.helios
@@ -11,7 +12,9 @@ import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.utils.L2Regularization
 
+import org.platanios.tensorflow.api.Output
 import org.platanios.tensorflow.api.learn.StopCriteria
+import org.platanios.tensorflow.api.learn.layers.Layer
 import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
@@ -100,15 +103,31 @@ def main[T <: SolarImagesSource](
   * 5) A post processing output mapping.
   * */
 
-  val filter_depths = Seq(
+  val filter_depths_stack1 = Seq(
     Seq(15, 15, 15, 15),
-    Seq(10, 10, 10, 10),
+    Seq(10, 10, 10, 10)
+  )
+
+  val filter_depths_stack2 = Seq(
     Seq(5, 5, 5, 5),
     Seq(1, 1, 1, 1)
   )
 
+  val identity_act = DataPipe[String, Layer[Output, Output]](dtflearn.identity(_))
+
   val conv_section = tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.inception_stack(num_channels*(image_hist_downsamp + 1), filter_depths)(1)
+    dtflearn.inception_stack(
+      num_channels*(image_hist_downsamp + 1),
+      filter_depths_stack1, identity_act,
+      use_batch_norm = false)(1) >>
+    dtflearn.batch_norm("BatchNorm_1") >>
+    tf.learn.ReLU("ReLU_1", 0.01f) >>
+    dtflearn.inception_stack(
+      4, filter_depths_stack2,
+      identity_act, use_batch_norm = false)(5) >>
+    dtflearn.batch_norm("BatchNorm_2") >>
+    tf.learn.ReLU("ReLU_2", 0.01f)
+
 
   val post_conv_ff_stack = dtflearn.feedforward_stack(
     (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
