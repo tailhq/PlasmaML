@@ -123,7 +123,7 @@ def main[T <: SolarImagesSource](
     dtflearn.batch_norm("BatchNorm_1") >>
     tf.learn.ReLU("ReLU_1", 0.01f) >>
     dtflearn.inception_stack(
-      4, filter_depths_stack2,
+      filter_depths_stack1.last.sum, filter_depths_stack2,
       identity_act, use_batch_norm = false)(5) >>
     dtflearn.batch_norm("BatchNorm_2") >>
     tf.learn.ReLU("ReLU_2", 0.01f)
