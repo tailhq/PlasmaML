@@ -8,6 +8,8 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.probability.{GaussianRV, MultinomialRV, RandomVariable}
 import io.github.mandar2812.dynaml.utils.{combine, getStats}
+import io.github.mandar2812.dynaml.utils
+import io.github.mandar2812.dynaml.analysis.implicits._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import ammonite.ops._
@@ -209,7 +211,12 @@ object RDExperiment {
     val lMax = 10
     val tMax = 10
 
+
     val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
+
+    val lSlices = utils.range[Double](0d, lShellVec.length, lMax).map(_.toInt)
+
+    val tSlices = utils.range[Double](0d, timeVec.length, tMax).map(_.toInt)
 
     line(timeVec.map(t => (t, Kp(t))).toSeq)
     xAxis("time")
@@ -227,18 +234,16 @@ object RDExperiment {
      *
      * */
 
-    spline(timeVec.zip(solution.map(_(0))))
+    spline(timeVec.zip(solution.map(_(lSlices.head))))
     hold()
 
-    (0 until lMax).foreach(l => {
-      spline(timeVec.zip(solution.map(_(l*20))))
+    lSlices.tail.foreach(l => {
+      spline(timeVec.zip(solution.map(_(l))))
     })
 
     unhold()
 
-    legend(DenseVector.tabulate[Double](lMax+1)(i =>
-      if(i < nL) lShellLimits._1+(deltaL*i*20)
-      else lShellLimits._2).toArray.map(s => "L = "+"%3f".format(s)))
+    legend(lSlices.map(lShellVec(_)).toArray.map(s => "L = "+"%3f".format(s)))
     title("Evolution of Phase Space Density f(L,t)")
     xAxis("time")
     yAxis("f(L,t)")
@@ -248,18 +253,15 @@ object RDExperiment {
     *  Second set of plots
     *
     * */
-    spline(lShellVec.toArray.toSeq.zip(solution.head.toArray.toSeq))
+    spline(lShellVec.zip(solution.head.toArray.toSeq))
     hold()
 
-    (0 until tMax).foreach(t => {
-      spline(lShellVec.toArray.toSeq.zip(solution(t*5).toArray.toSeq))
+    tSlices.tail.foreach(t => {
+      spline(lShellVec.zip(solution(t).toArray.toSeq))
     })
     unhold()
 
-    legend(DenseVector.tabulate[Double](tMax+1)(i =>
-      if(i < nL) timeLimits._1+(deltaT*i*5)
-      else timeLimits._2).toArray
-      .toSeq.map(s => "t = "+"%3f".format(s)))
+    legend(tSlices.map(timeVec(_)).toArray.toSeq.map(s => "t = "+"%3f".format(s)))
 
     title("Variation of Phase Space Density f(L,t)")
     xAxis("L")

@@ -15,6 +15,7 @@ class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
   val transform: Encoder[T, (Double, Double, Double, Double)])
   extends MetaPipe[T, (Double, Double), Double] {
 
+  import MagnetosphericProcessTrend.MAGProcess
 
   override def run(data: T) = {
     val (alpha, beta, gamma, b) = transform(data)
@@ -28,16 +29,56 @@ class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
 
   }
 
-  def gradL: MetaPipe[T, (Double, Double), Double] = MetaPipe(
+  def gradL: MAGProcess[T] = MetaPipe(
     (p: T) => (lt: (Double, Double)) => {
       val (l, t) = lt
       val (alpha, beta, _, b) = transform(p)
       val kp = Kp(t)
       math.exp(alpha)*beta*math.pow(l, beta-1d)*math.pow(10d, b*kp)
     })
+
+  def grad: Seq[MAGProcess[T]] = {
+
+    val grad_alpha = MetaPipe(
+      (p: T) => (lt: (Double, Double)) => {
+        val (l, t) = lt
+        val (alpha, beta, _, b) = transform(p)
+        val kp = Kp(t)
+        math.exp(alpha)*math.pow(l, beta)*math.pow(10d, b*kp)
+      })
+
+    val grad_beta = MetaPipe(
+      (p: T) => (lt: (Double, Double)) => {
+        val (l, t) = lt
+        val (alpha, beta, _, b) = transform(p)
+        val kp = Kp(t)
+        math.exp(alpha)*beta*math.pow(l, beta-1d)*math.pow(10d, b*kp)
+      })
+
+    val grad_gamma = MetaPipe(
+      (p: T) => (lt: (Double, Double)) => {
+        val (l, t) = lt
+        val (_, _, _, b) = transform(p)
+        val kp = Kp(t)
+        math.pow(10d, b*kp)
+      })
+
+    val grad_b = MetaPipe(
+      (p: T) => (lt: (Double, Double)) => {
+        val (l, t) = lt
+        val (alpha, beta, _, b) = transform(p)
+        val kp = Kp(t)
+        math.log(10.0)*kp*math.exp(alpha)*math.pow(l, beta)*math.pow(10d, b*kp)
+      })
+
+    Seq(grad_alpha, grad_beta, grad_gamma, grad_b)
+  }
+
 }
 
 object MagnetosphericProcessTrend {
+
+  type MAGProcess[T] = MetaPipe[T, (Double, Double), Double]
 
   def getEncoder(prefix: String): MagConfigEncoding = MagConfigEncoding(
     (prefix+"_alpha", prefix+"_beta", prefix+"_gamma", prefix+"_b")

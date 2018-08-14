@@ -19,4 +19,6 @@ case class MagConfigEncoding(keys: (String, String, String, String)) extends
   override def run(data: Map[String, Double]) = (
     data(keys._1), data(keys._2),
     data(keys._3), data(keys._4))
+
+  def _keys: Seq[String] = Seq(keys._1, keys._2, keys._3, keys._4)
 }

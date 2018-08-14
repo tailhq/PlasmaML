@@ -34,12 +34,12 @@ case class RadialDiffusion(
 
   private val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
 
-  def stencil = (lShellVec, timeVec)
+  def stencil: (Seq[Double], Seq[Double]) = (lShellVec, timeVec)
 
   val stackFactory = DataPipe(
     (params: Stream[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double])]) =>
       new LazyNeuralStack[(Seq[Seq[Double]], Seq[Seq[Double]], DenseVector[Double]), DenseVector[Double]](
-        params.map((layer) => RadialDiffusionLayer(layer._1, layer._2, layer._3)))
+        params.map(layer => RadialDiffusionLayer(layer._1, layer._2, layer._3)))
   )
 
   val computeStackParameters = DataPipe3(
@@ -84,7 +84,7 @@ case class RadialDiffusion(
     injection: (Double, Double) => Double,
     diffusionField: (Double, Double) => Double,
     loss: (Double, Double) => Double)(
-    f0: (Double) => Double): Stream[DenseVector[Double]] = {
+    f0: Double => Double): Stream[DenseVector[Double]] = {
 
     val initialPSD: DenseVector[Double] = DenseVector(lShellVec.map(l => f0(l)).toArray)
 
@@ -256,7 +256,7 @@ object RadialDiffusion {
 
     val injectionForward = filterInjectionL*injectionProfile*filterMatT
 
-    val paramsTMat: (Int) => (Seq[Seq[Double]], Seq[Seq[Double]]) = (n) => {
+    val paramsTMat: Int => (Seq[Seq[Double]], Seq[Seq[Double]]) = n => {
 
       val (alph, bet) = (1 until nL).map(j => {
         val b = diffFPlusBack(j-1,n)
@@ -276,8 +276,8 @@ object RadialDiffusion {
     /*
     * Injection Term
     * */
-    val delta: (Int) => DenseVector[Double] = (n) =>
-      DenseVector(Array(0.0) ++ injectionForward(::,n).toArray ++ Array(0.0))
+    val delta: Int => DenseVector[Double] = n =>
+      DenseVector(Array(0.0) ++ injectionForward(::, n).toArray ++ Array(0.0))
 
     /*
     * Instantiate layer transformations

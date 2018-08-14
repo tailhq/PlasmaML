@@ -7,7 +7,6 @@ import io.github.mandar2812.dynaml.probability.GaussianRV
 import ammonite.ops._
 import ammonite.ops.ImplicitWd._
 
-import io.github.mandar2812.PlasmaML.dynamics.diffusion._
 import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 
 import io.github.mandar2812.PlasmaML.dynamics.diffusion._

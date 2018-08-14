@@ -65,11 +65,11 @@ class SGRadialDiffusionModel(
   private val baseNoiseID: String = "base_noise::"+noise_psd.toString.split("\\.").last
 
 
-  val diffusionField: MagTrend    = new MagTrend(Kp, "dll")
+  val diffusionField: MagTrend    = MagTrend(Kp, "dll")
 
-  val lossRate: MagTrend     = new MagTrend(Kp, "lambda")
+  val lossRate: MagTrend          = MagTrend(Kp, "lambda")
 
-  val injection_process: MagTrend = new MagTrend(Kp, "Q")
+  val injection_process: MagTrend = MagTrend(Kp, "Q")
 
   //Compute the integration nodes and weights for the domain.
   val (ghost_points, quadrature_weight_matrix): (Stream[(Double, Double)], DenseMatrix[Double]) =
