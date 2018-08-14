@@ -163,7 +163,8 @@ object RDExperiment {
     val post_moments = getStats(post_vecs.toList)
 
 
-    println("\n:::::: MCMC Sampling Report ::::::\n")
+    println("\n      M.C.M.C Sampling Report      \n")
+    println("\n=====================================")
 
     println(
       "Quantity: "+diffusion_quantities(inferred_quantity)+
@@ -175,8 +176,17 @@ object RDExperiment {
       val ((key, char), index) = ((c._1, quantities(c._1)), c._2)
       println("\n------------------------------")
       println("Parameter: "+char)
-      println("Ground Truth:- "+gt(key))
-      println("Posterior Moments: mean = "+post_moments._1(index)+" variance = "+post_moments._2(index))
+
+      print("Ground Truth = ")
+      pprint.pprintln(gt(key))
+
+      println("Posterior Moments: ")
+
+      print("mean = ")
+      pprint.pprintln(post_moments._1(index))
+
+      print("variance = ")
+      pprint.pprintln(post_moments._2(index))
     })
   }
 
