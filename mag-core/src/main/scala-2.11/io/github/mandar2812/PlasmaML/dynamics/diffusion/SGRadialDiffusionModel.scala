@@ -22,7 +22,7 @@ import org.apache.log4j.Logger
   *                   parameters. See [[io.github.mandar2812.PlasmaML.utils.MagConfigEncoding]] and
   *                   [[MagnetosphericProcessTrend]].
   *
-  * @param init_tau_params A [[Tuple4]] containing the loss process parameters.
+  * @param init_lambda_params A [[Tuple4]] containing the loss process parameters.
   *
   * @param covariance A kernel function representing the covariance of
   *                   the Phase Space Density at a pair of space time locations.
@@ -45,7 +45,7 @@ import org.apache.log4j.Logger
 class SGRadialDiffusionModel(
   val Kp: DataPipe[Double, Double],
   init_dll_params: (Double, Double, Double, Double),
-  init_tau_params: (Double, Double, Double, Double),
+  init_lambda_params: (Double, Double, Double, Double),
   init_q_params: (Double, Double, Double, Double))(
   val covariance: LocalScalarKernel[(Double, Double)],
   val noise_psd: DiracTuple2Kernel,
@@ -65,7 +65,7 @@ class SGRadialDiffusionModel(
 
   val diffusionField: MagTrend    = new MagTrend(Kp, "dll")
 
-  val lossTimeScale: MagTrend     = new MagTrend(Kp, "lambda")
+  val lossRate: MagTrend     = new MagTrend(Kp, "lambda")
 
   val injection_process: MagTrend = new MagTrend(Kp, "Q")
 
@@ -106,7 +106,7 @@ class SGRadialDiffusionModel(
   protected val operator_hyper_parameters: List[String] = {
 
     val dll_hyp = diffusionField.transform.keys
-    val tau_hyp = lossTimeScale.transform.keys
+    val tau_hyp = lossRate.transform.keys
     val q_hyp = injection_process.transform.keys
 
     List(
@@ -122,14 +122,14 @@ class SGRadialDiffusionModel(
     * */
   protected var operator_state: Map[String, Double] = {
     val dll_hyp = diffusionField.transform.keys
-    val tau_hyp = lossTimeScale.transform.keys
+    val lambda_hyp = lossRate.transform.keys
     val q_hyp = injection_process.transform.keys
 
     Map(
       dll_hyp._1 -> init_dll_params._1, dll_hyp._2 -> init_dll_params._2,
       dll_hyp._3 -> init_dll_params._3, dll_hyp._4 -> init_dll_params._4,
-      tau_hyp._1 -> init_tau_params._1, tau_hyp._2 -> init_tau_params._2,
-      tau_hyp._3 -> init_tau_params._3, tau_hyp._4 -> init_tau_params._4,
+      lambda_hyp._1 -> init_lambda_params._1, lambda_hyp._2 -> init_lambda_params._2,
+      lambda_hyp._3 -> init_lambda_params._3, lambda_hyp._4 -> init_lambda_params._4,
       q_hyp._1 -> init_q_params._1, q_hyp._2 -> init_q_params._2,
       q_hyp._3 -> init_q_params._3, q_hyp._4 -> init_q_params._4
     )
@@ -220,7 +220,7 @@ class SGRadialDiffusionModel(
 
     val dll = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)
-    val lambda = lossTimeScale(operator_state)
+    val lambda = lossRate(operator_state)
     val q = injection_process(operator_state)
 
     val psi_basis = basis.operator_basis(dll, grad_dll, lambda)
