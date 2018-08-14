@@ -24,6 +24,8 @@ import org.apache.log4j.Logger
   *
   * @param init_lambda_params A [[Tuple4]] containing the loss process parameters.
   *
+  * @param init_q_params A [[Tuple4]] containing the injection process parameters.
+  *
   * @param covariance A kernel function representing the covariance of
   *                   the Phase Space Density at a pair of space time locations.
   *
