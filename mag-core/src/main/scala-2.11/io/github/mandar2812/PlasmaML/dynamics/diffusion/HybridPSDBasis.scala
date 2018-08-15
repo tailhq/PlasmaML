@@ -161,14 +161,14 @@ object HybridPSDBasis {
       (l_adj > l_domain_adjust) %>
         ChebyshevBasisGenerator(nL, 1) >
         DataPipe[DenseVector[Double], DenseVector[Double]](
-          (v: DenseVector[Double]) => if(biasFlag) v else v.slice(1, v.length)
+          v => if(biasFlag) v else v.slice(1, v.length)
         )
 
     val basis_time =
       (l_adj > l_domain_adjust) %>
         ChebyshevBasisGenerator(nT, 1) >
         DataPipe[DenseVector[Double], DenseVector[Double]](
-          (v: DenseVector[Double]) => if(biasFlag) v else v.slice(1, v.length)
+          v => if(biasFlag) v else v.slice(1, v.length)
         )
 
     def T(n: Int, x: Double) = utils.chebyshev(n, x, kind = 1)
