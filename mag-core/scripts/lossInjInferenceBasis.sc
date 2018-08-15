@@ -47,8 +47,8 @@ def apply(
     lShellLimits, 14, timeLimits, 19, (false, false)
   )
 
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
-    0.75, lShellLimits, basisSize._1,
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_space_time_basis(
+    lShellLimits, basisSize._1,
     timeLimits, basisSize._2)
 
 

@@ -129,6 +129,95 @@ object HybridPSDBasis {
     }
   }
 
+  def chebyshev_space_time_basis(
+    lShellLimits: (Double, Double), nL: Int,
+    timeLimits: (Double, Double), nT: Int,
+    logScale: Boolean = false,
+    biasFlag: Boolean = false): HybridPSDBasis = {
+
+    val (_, tSeq) = RadialDiffusion.buildStencil(
+      lShellLimits, nL,
+      timeLimits, nT,
+      (false, logScale))
+
+    val deltaT: Double =
+      if(logScale) math.log(timeLimits._2 - timeLimits._1)/nT
+      else (timeLimits._2 - timeLimits._1)/nT
+
+    val scalesT: Seq[Double] =
+      if(logScale) Seq.tabulate(tSeq.length)(i =>
+        if(i == 0) math.exp(deltaT)
+        else if(i < nL) math.exp((i+1)*deltaT) - math.exp(i*deltaT)
+        else math.exp((nL+1)*deltaT) - math.exp(nL*deltaT))
+      else Seq.fill(tSeq.length)(deltaT)
+
+
+
+    val l_adj = DataPipe((l_shell: Double) => (l_shell - lShellLimits._1)/(lShellLimits._2 - lShellLimits._1))
+
+    val l_domain_adjust = DataPipe((l: Double) => 2*l - 1d)
+
+    val basis_space =
+      (l_adj > l_domain_adjust) %>
+        ChebyshevBasisGenerator(nL, 1) >
+        DataPipe[DenseVector[Double], DenseVector[Double]](
+          (v: DenseVector[Double]) => if(biasFlag) v else v.slice(1, v.length)
+        )
+
+    val basis_time =
+      (l_adj > l_domain_adjust) %>
+        ChebyshevBasisGenerator(nT, 1) >
+        DataPipe[DenseVector[Double], DenseVector[Double]](
+          (v: DenseVector[Double]) => if(biasFlag) v else v.slice(1, v.length)
+        )
+
+    def T(n: Int, x: Double) = utils.chebyshev(n, x, kind = 1)
+
+    def U(n: Int, x: Double) = utils.chebyshev(n, x, kind = 2)
+
+    val basis_time_t = if(biasFlag) {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) => DenseVector(Array(0d) ++ Array.tabulate(nT)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d)))
+    } else {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) => DenseVector.tabulate(nT)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d))
+    }
+
+    val basis_space_l = if(biasFlag) {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) => DenseVector(Array(0d) ++ Array.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d)))
+    } else {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) => DenseVector.tabulate(nL)(i => if(i+1 > 0) (i+1)*U(i, l) else 0d))
+    }
+
+    val basis_space_ll = if(biasFlag) {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) =>
+          DenseVector(Array(0d) ++ Array.tabulate(nL)(i =>
+            if(i+1 > 1) (i+1)*((i+1)*T(i+1, l) - l*U(i, l))/(l*l - 1)
+            else 0d))
+        )
+    } else {
+      (l_adj > l_domain_adjust) %>
+        Basis((l: Double) =>
+          DenseVector.tabulate(nL)(i =>
+            if(i+1 > 1) (i+1)*((i+1)*T(i+1, l) - l*U(i, l))/(l*l - 1)
+            else 0d)
+        )
+    }
+
+    new HybridPSDBasis(basis_space, basis_time, basis_space_l, basis_space_ll, basis_time_t) {
+
+      override val dimension_l: Int = if(biasFlag) nL + 1 else nL
+
+      override val dimension_t: Int = if (biasFlag) nT + 2 else nT + 1
+
+      override val dimension: Int   = dimension_l*dimension_t
+    }
+  }
+
+
   /**
     * Return a [[HybridPSDBasis]] consisting
     * of a Legendre basis in the spatial domain
