@@ -1,7 +1,6 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.{DenseMatrix, DenseVector}
-import io.github.mandar2812.PlasmaML.dynamics.diffusion.RadialDiffusion.StackParameters
 
 /**
   * Implementation of a discrete radial diffusion system,
@@ -36,7 +35,7 @@ class MagRadialDiffusion[T](
     new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
 
-  lazy val stencil = diffusion_solver.stencil
+  lazy val stencil: (Seq[Double], Seq[Double]) = diffusion_solver.stencil
 
   private lazy val (lShellVec, timeVec) = stencil
 
@@ -184,7 +183,7 @@ class MagRadialDiffusion[T](
 
               val alpha_mat_adj = alpha_mat - invT
 
-              val beta_mat_adj  = beta_mat   - invT
+              val beta_mat_adj  = beta_mat  - invT
 
               alpha_mat_adj*psd_hist.head - beta_mat_adj*psd_hist.last
             }).map(_.toDenseMatrix.t):_*
@@ -218,7 +217,7 @@ class MagRadialDiffusion[T](
 
 object MagRadialDiffusion {
 
-  abstract class Parameter
+  sealed trait Parameter
 
   case class Injection(keys: Seq[String]) extends Parameter
 

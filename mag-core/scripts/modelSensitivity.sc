@@ -1,13 +1,7 @@
 import io.github.mandar2812.dynaml.repl.Router.main
-import breeze.stats.distributions._
 import io.github.mandar2812.dynaml.utils
-import io.github.mandar2812.dynaml.kernels._
-import io.github.mandar2812.dynaml.probability.mcmc._
-import io.github.mandar2812.dynaml.probability.GaussianRV
-import ammonite.ops._
-import ammonite.ops.ImplicitWd._
+import io.github.mandar2812.dynaml.graphics.plot3d
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.MagRadialDiffusion.{DiffusionField, Injection, LossRate}
-import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
 import io.github.mandar2812.PlasmaML.dynamics.diffusion._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
@@ -43,23 +37,40 @@ def apply(
     lShellLimits, timeLimits,
     nL, nT)
 
-  val solution = forward_model.solve(
+  val (diff_params_map, loss_params_map, inj_params_map) = (
     gt.filterKeys(_.contains("dll_")),
     gt.filterKeys(_.contains("lambda_")),
-    gt.filterKeys(_.contains("Q_")))(initialPSD)
+    gt.filterKeys(_.contains("Q_"))
+  )
+
+  val solution = forward_model.solve(diff_params_map, loss_params_map, inj_params_map)(initialPSD)
 
 
-  RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
-
-  val sensitivity = forward_model.sensitivity(
+  val sensitivity_diff = forward_model.sensitivity(
     DiffusionField(diff_process.transform._keys))(
-    gt.filterKeys(_.contains("dll_")),
-    gt.filterKeys(_.contains("lambda_")),
-    gt.filterKeys(_.contains("Q_")))(_ => 0d)
+    diff_params_map, loss_params_map, inj_params_map)(
+    _ => 0d)
 
-  RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(_ => 0d, sensitivity(param), Kp)
+  val sensitivity_loss = forward_model.sensitivity(
+    LossRate(loss_process.transform._keys))(
+    diff_params_map, loss_params_map, inj_params_map)(
+    _ => 0d)
 
-  (forward_model, solution, sensitivity)
+  val sensitivity_inj = forward_model.sensitivity(
+    Injection(injection_process.transform._keys))(
+    diff_params_map, loss_params_map, inj_params_map)(
+    _ => 0d)
+
+
+  val sensitivity = sensitivity_diff ++ sensitivity_loss ++ sensitivity_inj
+
+  val to_pairs = RadialDiffusion.to_input_output_pairs(lShellLimits, timeLimits, nL, nT) _
+
+  val plots =
+    Map("psd" -> plot3d.draw(to_pairs(solution))) ++
+      sensitivity.map(kv => ("sensitivity_"+kv._1, plot3d.draw(to_pairs(kv._2))))
+
+  (forward_model, solution, sensitivity, plots)
 
 }
 

@@ -304,5 +304,19 @@ object RadialDiffusion {
       DenseMatrix.horzcat(referenceSolution.map(_.toDenseMatrix.t):_*))(
       DenseMatrix.horzcat(computedSolution.map(_.toDenseMatrix.t):_*))
 
+  def to_input_output_pairs(
+    lShellLimits: (Double, Double),
+    timeLimits: (Double, Double),
+    nL: Int, nT: Int)(
+    solution: Stream[DenseVector[Double]]): Seq[((Double, Double), Double)] = {
+
+    val stencil = buildStencil(lShellLimits, nL, timeLimits, nT)
+
+    stencil._2.zip(solution).flatMap(
+      tS => stencil._1
+        .zip(tS._2.toArray)
+        .map(lS => ((lS._1, tS._1), lS._2))
+      )
+  }
 
 }

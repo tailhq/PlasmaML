@@ -40,7 +40,7 @@ object RDExperiment {
     lShellLimits: (Double, Double),
     timeLimits: (Double, Double),
     nL: Int, nT: Int): RadialDiffusion =
-    new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
+    RadialDiffusion(lShellLimits, timeLimits, nL, nT)
 
   /**
     * Generate synthetic PSD data for an inference experiment.
