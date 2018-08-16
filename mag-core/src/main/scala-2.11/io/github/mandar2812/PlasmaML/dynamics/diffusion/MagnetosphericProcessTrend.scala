@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
 import breeze.linalg.DenseVector
 import io.github.mandar2812.dynaml.{analysis, utils}
-import io.github.mandar2812.PlasmaML.utils.MagConfigEncoding
+import io.github.mandar2812.PlasmaML.utils._
 import io.github.mandar2812.dynaml.analysis.DifferentiableMap
 import io.github.mandar2812.dynaml.pipes._
 
@@ -136,6 +136,11 @@ object MagParamBasis {
   val hermite_basis: Int => MagParamBasis = n => apply(
     analysis.HermiteBasisGenerator(n).run _,
     x => DenseVector(Array(0d) ++ (1 to n).toArray.map(i => i*utils.hermite(i - 1, x)))
+  )
+
+  val laguerre_basis: (Int, Double) => MagParamBasis = (n, alpha) => apply(
+    (x: Double) => DenseVector((0 to n).toArray.map(i => laguerre(i, alpha, x))),
+    (x: Double) => DenseVector((0 to n).toArray.map(i => grad_laguerre(1)(i, alpha, x)))
   )
 
 }

@@ -42,11 +42,7 @@ def apply(
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val hybrid_basis = new HybridMQPSDBasis(0.75d)(
-    lShellLimits, 14, timeLimits, 19, (false, false)
-  )
-
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_space_time_basis(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_laguerre_basis(
     lShellLimits, basisSize._1,
     timeLimits, basisSize._2)
 
