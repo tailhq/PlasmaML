@@ -11,9 +11,11 @@ import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder, MetaPipe}
   *
   * @author mandar2812 date 27/06/2017.
   * */
-class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
+case class MagnetosphericProcessTrend[T](Kp: DataPipe[Double, Double])(
   val transform: Encoder[T, (Double, Double, Double, Double)])
   extends MetaPipe[T, (Double, Double), Double] {
+
+  self =>
 
   import MagnetosphericProcessTrend.MAGProcess
 
@@ -52,7 +54,7 @@ class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
         val (l, t) = lt
         val (alpha, beta, _, b) = transform(p)
         val kp = Kp(t)
-        math.exp(alpha)*beta*math.pow(l, beta-1d)*math.pow(10d, b*kp)
+        math.exp(alpha)*math.log(l)*math.pow(l, beta)*math.pow(10d, b*kp)
       })
 
     val grad_gamma = MetaPipe(
@@ -79,6 +81,8 @@ class MagnetosphericProcessTrend[T](val Kp: DataPipe[Double, Double])(
 object MagnetosphericProcessTrend {
 
   type MAGProcess[T] = MetaPipe[T, (Double, Double), Double]
+
+  type MAGParams = (Double, Double, Double, Double)
 
   def getEncoder(prefix: String): MagConfigEncoding = MagConfigEncoding(
     (prefix+"_alpha", prefix+"_beta", prefix+"_gamma", prefix+"_b")
