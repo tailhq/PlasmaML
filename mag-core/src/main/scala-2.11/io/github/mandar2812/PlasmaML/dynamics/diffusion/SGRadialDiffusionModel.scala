@@ -243,11 +243,11 @@ class SGRadialDiffusionModel(
 
     val zeros_col = DenseVector.zeros[Double](nc)
 
-    val omega_phi = phi*phi.t
+    val omega_phi = phi * phi.t
 
-    val omega_cross = phi*psi.t
+    val omega_cross = phi * psi.t
 
-    val omega_cross_t = psi_data*phi_ghost.t
+    val omega_cross_t = phi_ghost * psi_data.t
 
     val omega_psi = psi*psi.t
 
