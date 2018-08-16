@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.dynamics.diffusion
 
-import breeze.linalg.{DenseMatrix, DenseVector, diag, norm}
+import breeze.linalg.{DenseMatrix, DenseVector, diag, kron, norm}
 import com.quantifind.charts.Highcharts._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.SGRadialDiffusionModel.GaussianQuadrature
 import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
@@ -55,7 +55,8 @@ class SGRadialDiffusionModel(
   val basis: PSDBasis,
   val lShellDomain: (Double, Double),
   val timeDomain: (Double, Double),
-  val quadrature: GaussianQuadrature = SGRadialDiffusionModel.eightPointGaussLegendre)
+  val quadrature: GaussianQuadrature = SGRadialDiffusionModel.eightPointGaussLegendre,
+  val hyper_param_basis: Map[String, MagParamBasis] = Map())
   extends GloballyOptimizable {
 
   protected val logger: Logger = Logger.getLogger(this.getClass)
@@ -229,13 +230,17 @@ class SGRadialDiffusionModel(
 
     val (psi_stream, f_stream) = ghost_points.map(p => (psi_basis(p), (q(p) - lambda(p)*psd_mean)/psd_std)).unzip
 
+    val g_basis_mat =
+      if(hyper_param_basis.isEmpty) DenseMatrix(1.0)
+      else hyper_param_basis.map(kv => kv._2(_current_state(kv._1)).toDenseMatrix).reduceLeft(kron(_, _))
+
     val (psi,f) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix):_*),
       DenseVector(f_stream.toArray))
 
-    val psi_data = DenseMatrix.vertcat(psd_data.map(_._1).map(psi_basis(_).toDenseMatrix):_*)
+    val phi_ext = kron(g_basis_mat, phi)
 
-    val phi_ghost = DenseMatrix.vertcat(ghost_points.map(basis(_).toDenseMatrix):_*)
+    val psi_ext = kron(g_basis_mat, psi)
 
     val (no, nc) = (num_observations, num_colocation_points)
 
@@ -243,22 +248,20 @@ class SGRadialDiffusionModel(
 
     val zeros_col = DenseVector.zeros[Double](nc)
 
-    val omega_phi = phi * phi.t
+    val omega_phi = phi_ext * phi_ext.t
 
-    val omega_cross = phi * psi.t
+    val omega_cross = phi_ext * psi_ext.t
 
-    val omega_cross_t = phi_ghost * psi_data.t
-
-    val omega_psi = psi*psi.t
+    val omega_psi = psi_ext*psi_ext.t
 
     val responses = DenseVector.vertcat(DenseVector(0d), targets.map(psd => (psd - psd_mean)/psd_std), f)
 
-    def I(n: Int) = DenseMatrix.eye[Double](n)
+    def I(n: Int): DenseMatrix[Double] = DenseMatrix.eye[Double](n)
 
     val A = DenseMatrix.vertcat(
       DenseMatrix.horzcat(DenseMatrix(0d), ones_obs.toDenseMatrix, zeros_col.toDenseMatrix),
       DenseMatrix.horzcat(ones_obs.toDenseMatrix.t, omega_phi+I(no)*regObs, omega_cross),
-      DenseMatrix.horzcat(zeros_col.toDenseMatrix.t, omega_cross_t, omega_psi+(quadrature_weight_matrix*regCol))
+      DenseMatrix.horzcat(zeros_col.toDenseMatrix.t, omega_cross.t, omega_psi+(quadrature_weight_matrix*regCol))
     )
 
     (A\responses, psi)
