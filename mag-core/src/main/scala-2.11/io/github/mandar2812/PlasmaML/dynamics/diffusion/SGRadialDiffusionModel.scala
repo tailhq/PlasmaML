@@ -98,12 +98,6 @@ class SGRadialDiffusionModel(
 
   lazy val phi = designMatrixFlow(psd_data.map(_._1))
 
-  private lazy val (aMat, b) = psd_data.map(p => {
-    val ph = basis(p._1)
-    val y = p._2
-    (ph*ph.t, ph*y)
-  }).reduceLeft((x, y) => (x._1+y._1, x._2+y._2))
-
   def _operator_hyper_parameters: List[String] = operator_hyper_parameters
 
   protected val operator_hyper_parameters: List[String] = {
@@ -232,9 +226,13 @@ class SGRadialDiffusionModel(
 
     val g_basis_mat =
       if(hyper_param_basis.isEmpty) DenseMatrix(1.0)
-      else hyper_param_basis.map(kv => kv._2(_current_state(kv._1)).toDenseMatrix).reduceLeft(kron(_, _))
+      else hyper_param_basis
+        .filterKeys(effective_hyper_parameters.contains(_))
+        .map(kv => kv._2(_current_state(kv._1)).toDenseMatrix)
+        .reduceLeft((u, v) => kron(u, v))
+        .toDenseMatrix
 
-    val (psi,f) = (
+    val (psi, f) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix):_*),
       DenseVector(f_stream.toArray))
 

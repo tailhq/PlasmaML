@@ -6,18 +6,16 @@ import io.github.mandar2812.dynaml.probability.mcmc._
 import io.github.mandar2812.dynaml.probability.GaussianRV
 import ammonite.ops._
 import ammonite.ops.ImplicitWd._
-
-import io.github.mandar2812.PlasmaML.dynamics.diffusion._
 import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
-
 import io.github.mandar2812.PlasmaML.dynamics.diffusion._
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.MagParamBasis._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
 
 def apply(
   bulk_data_size: Int                         = 50,
   boundary_data_size: Int                     = 50,
-  basisSize: (Int, Int)                       = (20, 19),
+  basisSize: (Int, Int)                       = (4, 4),
   reg_data: Double                            = 0.5,
   reg_galerkin: Double                        = 1.0,
   burn: Int                                   = 2000,
@@ -43,10 +41,6 @@ def apply(
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val hybrid_basis = new HybridMQPSDBasis(0.75d)(
-    lShellLimits, 14, timeLimits, 19, (false, false)
-  )
-
   val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_laguerre_basis(
     lShellLimits, basisSize._1,
     timeLimits, basisSize._2)
@@ -67,6 +61,15 @@ def apply(
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
+  val hyp_basis = Seq("Q_b", "lambda_b").map(
+    h => (
+      h,
+      if(h.contains("_alpha") || h.contains("_b")) hermite_basis(4)
+      else if(h.contains("_beta") || h.contains("_gamma")) laguerre_basis(4, 0d)
+      else hermite_basis(4)
+    )
+  ).toMap
+
   val model = new SGRadialDiffusionModel(
     Kp, dll_params,
     (0d, 0.2, 0d, 0.0),
@@ -74,7 +77,8 @@ def apply(
     seKernel, noiseKernel,
     boundary_data ++ bulk_data,
     chebyshev_hybrid_basis,
-    lShellLimits, timeLimits
+    lShellLimits, timeLimits,
+    hyper_param_basis = hyp_basis
   )
 
   val blocked_hyp = {

@@ -6,9 +6,8 @@ import io.github.mandar2812.dynaml.probability.mcmc._
 import io.github.mandar2812.dynaml.probability.GaussianRV
 import ammonite.ops._
 import ammonite.ops.ImplicitWd._
-
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.MagParamBasis.{hermite_basis, laguerre_basis}
 import io.github.mandar2812.PlasmaML.utils.DiracTuple2Kernel
-
 import io.github.mandar2812.PlasmaML.dynamics.diffusion._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
@@ -62,14 +61,24 @@ def apply(
 
   RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(initialPSD, solution, Kp)
 
+  val hyp_basis = Seq("Q_b", "lambda_b").map(
+    h => (
+      h,
+      if(h.contains("_alpha") || h.contains("_b")) hermite_basis(4)
+      else if(h.contains("_beta") || h.contains("_gamma")) laguerre_basis(4, 0d)
+      else hermite_basis(4)
+    )
+  ).toMap
+
   val model = new SGRadialDiffusionModel(
     Kp, dll_params,
     (0d, 0.2, 0d, 0.0),
-    q_params)(
+    (0.01, 0.01d, 0.01, 0.01))(
     seKernel, noiseKernel,
     boundary_data ++ bulk_data,
     chebyshev_hybrid_basis,
-    lShellLimits, timeLimits
+    lShellLimits, timeLimits,
+    hyper_param_basis = hyp_basis
   )
 
   val blocked_hyp = {
