@@ -212,8 +212,6 @@ class SGRadialDiffusionModel(
     setState(h)
 
     println("Constructing Model for PSD")
-    print("Dimension  = ")
-    pprint.pprintln(basis.dimension)
 
     val dll = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)
@@ -231,6 +229,9 @@ class SGRadialDiffusionModel(
         .map(kv => kv._2(_current_state(kv._1)).toDenseMatrix)
         .reduceLeft((u, v) => kron(u, v))
         .toDenseMatrix
+
+    print("Dimension  = ")
+    pprint.pprintln(basis.dimension*g_basis_mat.cols)
 
     val (psi, f) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix):_*),
