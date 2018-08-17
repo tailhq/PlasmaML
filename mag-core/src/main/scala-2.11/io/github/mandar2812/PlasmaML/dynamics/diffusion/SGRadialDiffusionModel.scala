@@ -220,7 +220,9 @@ class SGRadialDiffusionModel(
 
     val psi_basis = basis.operator_basis(dll, grad_dll, lambda)
 
-    val (psi_stream, f_stream) = ghost_points.map(p => (psi_basis(p), (q(p) - lambda(p)*psd_mean)/psd_std)).unzip
+    val (psi_stream, f_stream, lambda_stream) = ghost_points.map(
+      p => (psi_basis(p), (q(p) - lambda(p)*psd_mean)/psd_std, lambda(p))
+    ).unzip3
 
     val g_basis_mat =
       if(hyper_param_basis.isEmpty) DenseMatrix(1.0)
@@ -233,9 +235,10 @@ class SGRadialDiffusionModel(
     print("Dimension  = ")
     pprint.pprintln(basis.dimension*g_basis_mat.cols)
 
-    val (psi, f) = (
+    val (psi, f, lambda_vec) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix):_*),
-      DenseVector(f_stream.toArray))
+      DenseVector(f_stream.toArray),
+      DenseVector(lambda_stream.toArray))
 
     val phi_ext = kron(g_basis_mat, phi)
 
@@ -245,7 +248,7 @@ class SGRadialDiffusionModel(
 
     val ones_obs = DenseVector.fill[Double](no)(1d)
 
-    val zeros_col = DenseVector.zeros[Double](nc)
+
 
     val omega_phi = phi_ext * phi_ext.t
 
@@ -258,9 +261,9 @@ class SGRadialDiffusionModel(
     def I(n: Int): DenseMatrix[Double] = DenseMatrix.eye[Double](n)
 
     val A = DenseMatrix.vertcat(
-      DenseMatrix.horzcat(DenseMatrix(0d), ones_obs.toDenseMatrix, zeros_col.toDenseMatrix),
+      DenseMatrix.horzcat(DenseMatrix(0d), ones_obs.toDenseMatrix, lambda_vec.toDenseMatrix),
       DenseMatrix.horzcat(ones_obs.toDenseMatrix.t, omega_phi+I(no)*regObs, omega_cross),
-      DenseMatrix.horzcat(zeros_col.toDenseMatrix.t, omega_cross.t, omega_psi+(quadrature_weight_matrix*regCol))
+      DenseMatrix.horzcat(lambda_vec.toDenseMatrix.t, omega_cross.t, omega_psi+(quadrature_weight_matrix*regCol))
     )
 
     (A\responses, psi)

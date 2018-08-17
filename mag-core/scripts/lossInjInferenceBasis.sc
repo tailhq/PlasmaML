@@ -77,8 +77,8 @@ def apply(
     seKernel, noiseKernel,
     boundary_data ++ bulk_data,
     chebyshev_hybrid_basis,
-    lShellLimits, timeLimits,
-    hyper_param_basis = hyp_basis
+    lShellLimits, timeLimits/*,
+    hyper_param_basis = hyp_basis*/
   )
 
   val blocked_hyp = {

@@ -741,17 +741,6 @@ package object data {
     * Resample data according to a provided
     * bounded discrete random variable
     * */
-  /*def resample[T, V](
-    data: Stream[(DateTime, (V, T))],
-    selector: DiscreteDistrRV[Int]): Stream[(DateTime, (V, T))] = {
-
-    //Resample training set ot
-    //emphasize extreme events.
-    println("\nResampling data instances\n")
-
-    selector.iid(data.length).draw.map(data(_))
-  }*/
-
   def resample[T](
     data: Stream[T],
     selector: DiscreteDistrRV[Int]): Stream[T] = {
@@ -813,7 +802,7 @@ package object data {
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false,
     image_history: Int = 0,
-    image_history_downsampling: Int = 1): TF_DATA = {
+    image_history_downsampling: Int = 0): TF_DATA = {
 
     println("Separating data into train and test.\n")
     val experiment_data = collated_data.partition(DataPipe(tt_partition))
@@ -917,7 +906,7 @@ package object data {
     tt_partition: PATTERN_EXT => Boolean,
     resample: Boolean = false,
     image_history: Int = 0,
-    image_history_downsampling: Int = 1): TF_DATA_EXT = {
+    image_history_downsampling: Int = 0): TF_DATA_EXT = {
 
     println("Separating data into train and test.\n")
     val experiment_data = collated_data.partition(DataPipe(tt_partition))
