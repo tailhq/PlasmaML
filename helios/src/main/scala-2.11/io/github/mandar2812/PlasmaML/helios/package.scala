@@ -13,7 +13,7 @@ import io.github.mandar2812.PlasmaML.helios.core._
 import io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.learn.StopCriteria
+import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
@@ -291,6 +291,113 @@ package object helios {
 
   }
 
+  def run_unsupervised_experiment(
+    collated_data: HELIOS_IMAGE_DATA,
+    tt_partition: IMAGE_PATTERN => Boolean,
+    resample: Boolean = false,
+    preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
+    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+    processed_image_size: (Int, Int) = (-1, -1),
+    num_channels_image: Int = 4,
+    image_history: Int = 0,
+    image_history_downsampling: Int = 1)(
+    results_id: String,
+    stop_criteria: StopCriteria,
+    tempdir: Path = home/"tmp",
+    arch: Layer[Output, (Output, Output)],
+    lossFunc: Layer[(Output, (Output, Output)), Output],
+    optimizer: Optimizer = tf.train.AdaDelta(0.001),
+    miniBatchSize: Int = 16,
+    reuseExistingModel: Boolean = false) = {
+
+    //The directories to write model parameters and summaries.
+    val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
+
+    val tf_summary_dir = tempdir/resDirName
+
+    val load_image_into_tensor = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
+      preprocess_image >
+      image_to_bytearr >
+      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+        dtype = "UINT8", processed_image_size._1,
+        processed_image_size._2,
+        num_channels_image)(arr))
+
+
+    val dataSet: TF_IMAGE_DATA = helios.data.create_helios_data_set(
+      collated_data,
+      load_image_into_tensor,
+      tt_partition,
+      image_history,
+      image_history_downsampling)
+
+    val data_shape = Shape(
+      processed_image_size._1,
+      processed_image_size._2,
+      num_channels_image*(image_history_downsampling + 1)
+    )
+
+    val train_data = dataSet.training_dataset.build[Tensor, Output, DataType.Aux[UByte], DataType, Shape](
+      Left(identityPipe[Tensor]),
+      dataType = UINT8, data_shape)
+      .repeat()
+      .shuffle(1000)
+      .batch(miniBatchSize)
+      .prefetch(10)
+
+
+    /*
+    * Start building tensorflow network/graph
+    * */
+    println("Building the unsupervised model.")
+    val input = tf.learn.Input(
+      UINT8, Shape(-1) ++ data_shape
+    )
+
+
+    val unstack_images = new Layer[Output, Seq[Output]]("UnstackImages") {
+      override val layerType: String = "UnstackImage"
+
+      override protected def _forward(input: Output)(implicit mode: Mode): Seq[Output] = {
+
+        (1 to image_history_downsampling + 1).map(image_index => {
+          input(::, ::, ::, image_index*num_channels_image :: (image_index + 1)*num_channels_image)
+        })
+      }
+    }
+
+    val write_images = (image_name: String) => dtflearn.seq_layer(
+      "WriteImagesTS",
+      Seq.tabulate(
+        image_history_downsampling + 1)(
+        i => tf.learn.ImageSummary("ImageSummary", s"${image_name}_$i", maxOutputs = miniBatchSize)
+      )
+    ) >> dtflearn.concat_outputs("Concat_Images")
+
+
+
+    val loss = dtflearn.tuple2_layer(
+      "Tup2",
+      unstack_images >> write_images("ActualImage"),
+      dtflearn.tuple2_layer(
+        "Tup_1",
+        dtflearn.identity[Output]("Id"),
+        unstack_images >> write_images("Reconstruction"))) >>
+      lossFunc >>
+      tf.learn.ScalarSummary("Loss", "ReconstructionLoss")
+
+    //Now train the model
+    val (model, estimator) = dtflearn.build_tf_model(
+      arch, input, loss,
+      optimizer, java.nio.file.Paths.get(tf_summary_dir.toString()),
+      stop_criteria, stepRateFreq = 5000, summarySaveFreq = 5000, checkPointFreq = 5000)(
+      train_data, inMemory = false)
+
+
+    (model, estimator, tf_summary_dir, collated_data)
+
+  }
+
   /**
     * Train and test a CNN based solar wind prediction architecture.
     *
@@ -386,7 +493,7 @@ package object helios {
         (Tensor, Tensor), (Output, Output),
         (DataType.Aux[UByte], DataType.Aux[Float]), (DataType, DataType),
         (Shape, Shape)](
-      Left(identityPipe[Tensor]*identityPipe[Tensor]),
+      Left(identityPipe[(Tensor, Tensor)]),
       dataType = (UINT8, FLOAT32), data_shapes)
       .repeat()
       .shuffle(1000)

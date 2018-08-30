@@ -35,6 +35,8 @@ package object data {
     override def compare(x: DateTime, y: DateTime): Int = if(x.isBefore(y)) -1 else 1
   }
 
+  type IMAGE_PATTERN           = (DateTime, Path)
+
   /**
     * A simple data pattern, consisting of
     * a time stamp, path to an image, and a sequence of numbers
@@ -61,12 +63,15 @@ package object data {
     * */
   type MC_PATTERN_EXT          = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
 
+  type HELIOS_IMAGE_DATA       = DataSet[IMAGE_PATTERN]
   type HELIOS_OMNI_DATA        = DataSet[PATTERN]
   type HELIOS_MC_OMNI_DATA     = Iterable[MC_PATTERN]
   type HELIOS_OMNI_DATA_EXT    = DataSet[PATTERN_EXT]
   type HELIOS_MC_OMNI_DATA_EXT = Iterable[MC_PATTERN_EXT]
 
   type IMAGE_TS                = (Tensor, Tensor)
+
+  type TF_IMAGE_DATA           = TFDataSet[Tensor]
 
   type TF_DATA                 = TFDataSet[(Tensor, Tensor)]
 
@@ -562,7 +567,7 @@ package object data {
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) => 
+    val image_dt_roundoff = DataPipe[DateTime, DateTime]((d: DateTime) =>
       new DateTime(
         d.getYear, d.getMonthOfYear,
         d.getDayOfMonth, d.getHourOfDay,
@@ -786,8 +791,62 @@ package object data {
     dtf.concatenate(tensor_splits.toSeq, axis = 0)
   }
 
+  def create_helios_data_set(
+    collated_data: HELIOS_IMAGE_DATA,
+    read_image: DataPipe[Path, Tensor],
+    tt_partition: IMAGE_PATTERN => Boolean,
+    image_history: Int,
+    image_history_downsampling: Int): TF_IMAGE_DATA = {
+
+
+    println("Separating data into train and test.\n")
+    val experiment_data = collated_data.partition(DataPipe(tt_partition))
+
+
+    print("Total data size: ")
+    val total_data_size = collated_data.size
+
+    pprint.pprintln(total_data_size)
+
+    val train_data_size = experiment_data.training_dataset.size
+
+    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
+
+    print_data_splits(train_fraction)
+
+    val trim_time_stamp = DataPipe((p: IMAGE_PATTERN) => p._2)
+
+    val load_only_images = trim_time_stamp > read_image
+
+
+    val get_image_history = if(image_history > 0) {
+      val slices = utils.range(
+        min = 0d, image_history.toDouble,
+        image_history_downsampling).map(_.toInt)
+
+      val indices = slices :+ (image_history - 1)
+
+      DataPipe((data_stream: Iterable[Tensor]) => data_stream.sliding(image_history).map(group => {
+
+        val gr = group.toSeq
+
+        val images = tfi.concatenate(indices.map(gr(_)), axis = -1)
+
+        images
+      }).toIterable)
+
+    } else {
+      identityPipe[Iterable[Tensor]]
+    }
+
+    experiment_data.copy[Tensor](
+      training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
+      test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
+    )
+  }
+
   /**
-    * Create a processed tensor data set as a [[HeliosDataSet]] instance.
+    * Create a processed tensor data set as a [[TF_DATA]] instance.
     *
     * @param collated_data A Stream of date times, image paths and outputs.
     *
@@ -1318,6 +1377,100 @@ package object data {
       dt_round_off = round_date)
 
   }
+
+  /**
+    * Generate a starting data set for unsupervised tasks.
+    * This method makes the assumption that the data is stored
+    * in a directory ~/data_repo/helios in a standard directory tree
+    * generated after executing the [[data.SOHOLoader.bulk_download()]]
+    * or [[data.SDOLoader.bulk_download()]] methods.
+    *
+    * @param image_source The image data source to extract from
+    * @param year_range The range of years, for constructing the data,
+    *                   ex: (2000 to 2002)
+    * */
+  def generate_image_data[T <: SolarImagesSource](
+    year_range: Range,
+    image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
+    images_data_dir: Option[Path] = None): HELIOS_IMAGE_DATA = {
+
+    /*
+     * Mind your surroundings!
+     * */
+    val os_name = System.getProperty("os.name")
+
+    println("OS: "+os_name)
+
+    val user_name = System.getProperty("user.name")
+
+    println("Running as user: "+user_name)
+
+    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+
+    print("Looking for data in directory ")
+    val data_dir = images_data_dir match {
+      case None       =>  home_dir_prefix/user_name/"data_repo"/'helios
+      case Some(path) =>  path
+    }
+
+    pprint.pprintln(data_dir)
+
+    val images_dir = image_source match {
+      case _: SOHO => data_dir/'soho
+      case _: SDO  => data_dir/'sdo
+      case _       => data_dir
+    }
+
+    println("Preparing data-set as a Stream ")
+    print("Start: ")
+    pprint.pprintln(year_range.min)
+    print("End: ")
+    pprint.pprintln(year_range.max)
+    println()
+
+    val (start_year_month, end_year_month) = (
+      new YearMonth(year_range.min, 1),
+      new YearMonth(year_range.max, 12)
+    )
+
+    val (start_instant, end_instant) = (
+      start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
+      end_year_month.toLocalDate(31).toDateTimeAtStartOfDay
+    )
+
+    val period = new Period(start_instant, end_instant)
+
+
+    print("Time period considered (in months): ")
+
+    val num_months = (12*period.getYears) + period.getMonths
+
+    pprint.pprintln(num_months)
+
+    //Extract paths to images, along with a time-stamp
+
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) =>
+      new DateTime(
+        d.getYear, d.getMonthOfYear,
+        d.getDayOfMonth, d.getHourOfDay,
+        0, 0)
+    )
+
+
+    val image_processing = IterableFlatMapPipe(
+      (year_month: YearMonth) => {
+        val images_for_month = load_images[T](images_dir, year_month, image_source, true)
+
+        val grouped_images = images_for_month.map(patt => (image_dt_roundoff(patt._1), patt._2)).groupBy(_._1)
+
+        grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
+      })
+
+    dtfdata.dataset(0 to num_months)
+      .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
+      .transform(image_processing)
+  }
+
 
   /**
     * Generate a starting data set for OMNI/L1 prediction tasks.
