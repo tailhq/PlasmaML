@@ -126,11 +126,6 @@ def apply(
   RDExperiment.visualiseResultsInjection(samples, gt, h_prior)
 
   RDExperiment.samplingReport(
-    samples.map(_.filterKeys(quantities_loss.contains)),
-    hyp.filter(quantities_loss.contains).map(c => (c, quantities_loss(c))).toMap,
-    gt, mcmc_sampler.sampleAcceptenceRate)
-
-  RDExperiment.samplingReport(
     samples.map(_.filterKeys(quantities_injection.contains)),
     hyp.filter(quantities_injection.contains).map(c => (c, quantities_injection(c))).toMap,
     gt, mcmc_sampler.sampleAcceptenceRate, "injection")
