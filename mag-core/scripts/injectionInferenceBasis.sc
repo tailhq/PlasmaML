@@ -135,13 +135,13 @@ def apply(
 
 @main
 def main(
-          bulk_data_size: Int = 50,
-          boundary_data_size: Int = 50,
-          basisSize: (Int, Int) = (20, 19),
-          reg_data: Double = 0.5,
-          reg_galerkin: Double = 1.0,
-          burn: Int = 2000,
-          num_post_samples: Int = 5000) =
+  bulk_data_size: Int = 50,
+  boundary_data_size: Int = 50,
+  basisSize: (Int, Int) = (20, 19),
+  reg_data: Double = 0.5,
+  reg_galerkin: Double = 1.0,
+  burn: Int = 2000,
+  num_post_samples: Int = 5000) =
   apply(
     bulk_data_size, boundary_data_size,
     basisSize, reg_data, reg_galerkin,

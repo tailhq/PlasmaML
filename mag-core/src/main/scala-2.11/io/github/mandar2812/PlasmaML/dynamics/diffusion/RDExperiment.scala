@@ -283,48 +283,42 @@ object RDExperiment {
     gt: Map[String, Double],
     hyper_prior: Map[String, ContinuousDistr[Double]]): Unit = {
 
-    val (prior_alpha, prior_beta, prior_b) = (hyper_prior("lambda_alpha"), hyper_prior("lambda_beta"), hyper_prior("lambda_b"))
+    val params_loss = hyper_prior.keys.filter(_.contains("lambda_")).toSeq
 
-    scatter(samples.map(c => (c("lambda_alpha"), c("lambda_b"))))
-    hold()
-    scatter(Seq((gt("lambda_alpha"), gt("lambda_b"))))
-    legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs b")
-    xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
-    yAxis(diffusion_quantities("loss")+": b")
-    unhold()
+    if(params_loss.contains("lambda_alpha") && params_loss.contains("lambda_b")) {
 
-    scatter(samples.map(c => (c("lambda_alpha"), c("lambda_beta"))))
-    hold()
-    scatter(Seq((gt("lambda_alpha"), gt("lambda_beta"))))
-    legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs "+0x03B2.toChar)
-    xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
-    yAxis(diffusion_quantities("loss")+": "+0x03B2.toChar)
-    unhold()
+      scatter(samples.map(c => (c("lambda_alpha"), c("lambda_b"))))
+      hold()
+      scatter(Seq((gt("lambda_alpha"), gt("lambda_b"))))
+      legend(Seq("Posterior Samples", "Ground Truth"))
+      title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs b")
+      xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
+      yAxis(diffusion_quantities("loss")+": b")
+      unhold()
+    }
 
 
-    histogram((1 to samples.length).map(_ => prior_alpha.draw), 100)
-    hold()
-    histogram(samples.map(_("lambda_alpha")), 100)
-    legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram "+diffusion_quantities("loss")+": "+0x03B1.toChar)
-    unhold()
+    if(params_loss.contains("lambda_alpha") && params_loss.contains("lambda_beta")) {
+
+      scatter(samples.map(c => (c("lambda_alpha"), c("lambda_beta"))))
+      hold()
+      scatter(Seq((gt("lambda_alpha"), gt("lambda_beta"))))
+      legend(Seq("Posterior Samples", "Ground Truth"))
+      title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs "+0x03B2.toChar)
+      xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
+      yAxis(diffusion_quantities("loss")+": "+0x03B2.toChar)
+      unhold()
+    }
 
 
-    histogram((1 to samples.length).map(_ => prior_beta.draw), 100)
-    hold()
-    histogram(samples.map(_("lambda_beta")), 100)
-    legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram "+diffusion_quantities("loss")+": "+0x03B2.toChar)
-    unhold()
-
-    histogram((1 to samples.length).map(_ => prior_b.draw), 100)
-    hold()
-    histogram(samples.map(_("lambda_b")), 100)
-    legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram "+diffusion_quantities("loss")+": b")
-    unhold()
+    params_loss.foreach(param => {
+      histogram(RandomVariable(hyper_prior(param)).iid(samples.length).draw, 100)
+      hold()
+      histogram(samples.map(_(param)), 100)
+      legend(Seq("Prior Samples", "Posterior Samples"))
+      title("Histogram "+diffusion_quantities("loss")+": "+quantities_loss(param))
+      unhold()
+    })
 
   }
 
@@ -342,42 +336,42 @@ object RDExperiment {
     gt: Map[String, Double],
     hyper_prior: Map[String, ContinuousDistr[Double]]): Unit = {
 
+    val params_injection = hyper_prior.keys.filter(_.contains("Q_")).toSeq
 
-    scatter(samples.map(c => (c("Q_gamma"), c("Q_b"))))
-    hold()
-    scatter(Seq((gt("Q_gamma"), gt("Q_b"))))
-    legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples Q:- "+0x03B3.toChar+" vs b")
-    xAxis("Q: "+0x03B3.toChar)
-    yAxis("Q: b")
-    unhold()
+    if(params_injection.contains("Q_gamma") && params_injection.contains("Q_b")) {
 
-    scatter(samples.map(c => (c("Q_alpha"), c("Q_beta"))))
-    hold()
-    scatter(Seq((gt("Q_alpha"), gt("Q_beta"))))
-    legend(Seq("Posterior Samples", "Ground Truth"))
-    title("Posterior Samples Q:- "+0x03B1.toChar+" vs "+0x03B2.toChar)
-    xAxis("Q : "+0x03B1.toChar)
-    yAxis("Q : "+0x03B2.toChar)
-    unhold()
+      scatter(samples.map(c => (c("Q_gamma"), c("Q_b"))))
+      hold()
+      scatter(Seq((gt("Q_gamma"), gt("Q_b"))))
+      legend(Seq("Posterior Samples", "Ground Truth"))
+      title("Posterior Samples Q:- "+0x03B3.toChar+" vs b")
+      xAxis("Q: "+0x03B3.toChar)
+      yAxis("Q: b")
+      unhold()
 
-    val prior_b = hyper_prior("Q_b")
-    val prior_gamma = hyper_prior("Q_gamma")
+    }
 
-    histogram((1 to samples.length).map(_ => prior_b.draw), 100)
-    hold()
-    histogram(samples.map(_("Q_b")), 100)
-    legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram Q: "+"b")
-    unhold()
+    if(params_injection.contains("Q_alpha") && params_injection.contains("Q_beta")) {
 
-    histogram((1 to samples.length).map(_ => prior_gamma.draw), 100)
-    hold()
-    histogram(samples.map(_("Q_gamma")), 100)
-    legend(Seq("Prior Samples", "Posterior Samples"))
-    title("Histogram Q: "+0x03B3.toChar)
-    unhold()
+      scatter(samples.map(c => (c("Q_alpha"), c("Q_beta"))))
+      hold()
+      scatter(Seq((gt("Q_alpha"), gt("Q_beta"))))
+      legend(Seq("Posterior Samples", "Ground Truth"))
+      title("Posterior Samples Q:- "+0x03B1.toChar+" vs "+0x03B2.toChar)
+      xAxis("Q : "+0x03B1.toChar)
+      yAxis("Q : "+0x03B2.toChar)
+      unhold()
 
+    }
+
+    params_injection.foreach(param => {
+      histogram(RandomVariable(hyper_prior(param)).iid(samples.length).draw, 100)
+      hold()
+      histogram(samples.map(_(param)), 100)
+      legend(Seq("Prior Samples", "Posterior Samples"))
+      title("Histogram Q: "+quantities_injection(param))
+      unhold()
+    })
 
   }
 

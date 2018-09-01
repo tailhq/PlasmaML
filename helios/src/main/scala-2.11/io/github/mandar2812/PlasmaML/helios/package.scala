@@ -318,10 +318,12 @@ package object helios {
     val load_image_into_tensor = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
       preprocess_image >
       image_to_bytearr >
-      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
-        dtype = "UINT8", processed_image_size._1,
-        processed_image_size._2,
-        num_channels_image)(arr))
+      DataPipe(
+        dtf.tensor_from_buffer(
+          dtype = "UINT8", processed_image_size._1,
+          processed_image_size._2,
+          num_channels_image) _
+      )
 
 
     val dataSet: TF_IMAGE_DATA = helios.data.create_helios_data_set(
@@ -370,14 +372,14 @@ package object helios {
       dtflearn.seq_layer(
         "WriteImagesTS",
         Seq.tabulate(image_history_downsampling + 1)(
-          i => tf.learn.ImageSummary("ImageSummary", s"${image_name}_$i", maxOutputs = miniBatchSize))
+          i => tf.learn.ImageSummary(s"ImageSummary_$i", s"${image_name}_$i", maxOutputs = miniBatchSize/2))
       ) >> dtflearn.concat_outputs("Concat_Images")
 
 
 
     val loss = dtflearn.tuple2_layer(
       "Tup2",
-      unstack_images >> write_images("Actual Image"),
+      unstack_images >> write_images("Actual_Image"),
       dtflearn.tuple2_layer(
         "Tup_1",
         dtflearn.identity[Output]("Id"),

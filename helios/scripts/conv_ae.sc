@@ -23,7 +23,7 @@ def main[T <: SolarImagesSource](
   image_source: T               = SOHO(MDIMAG, 512),
   buffer_size: Int              = 2000,
   image_hist: Int               = 0,
-  image_hist_downsamp: Int      = 1,
+  image_hist_downsamp: Int      = 0,
   opt: Optimizer                = tf.train.AdaDelta(0.01),
   reg: Double                   = 0.001,
   stop_criteria: StopCriteria   = dtflearn.max_iter_stop(5000),
