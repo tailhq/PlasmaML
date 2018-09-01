@@ -122,7 +122,6 @@ def apply(
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
-  RDExperiment.visualiseResultsLoss(samples, gt, h_prior)
   RDExperiment.visualiseResultsInjection(samples, gt, h_prior)
 
   RDExperiment.samplingReport(
