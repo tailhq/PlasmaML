@@ -311,7 +311,7 @@ package object helios {
     reuseExistingModel: Boolean = false) = {
 
     //The directories to write model parameters and summaries.
-    val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
+    val resDirName = if(reuseExistingModel) results_id else "helios_"+results_id
 
     val tf_summary_dir = tempdir/resDirName
 
@@ -366,19 +366,18 @@ package object helios {
       }
     }
 
-    val write_images = (image_name: String) => dtflearn.seq_layer(
-      "WriteImagesTS",
-      Seq.tabulate(
-        image_history_downsampling + 1)(
-        i => tf.learn.ImageSummary("ImageSummary", s"${image_name}_$i", maxOutputs = miniBatchSize)
-      )
-    ) >> dtflearn.concat_outputs("Concat_Images")
+    val write_images = (image_name: String) =>
+      dtflearn.seq_layer(
+        "WriteImagesTS",
+        Seq.tabulate(image_history_downsampling + 1)(
+          i => tf.learn.ImageSummary("ImageSummary", s"${image_name}_$i", maxOutputs = miniBatchSize))
+      ) >> dtflearn.concat_outputs("Concat_Images")
 
 
 
     val loss = dtflearn.tuple2_layer(
       "Tup2",
-      unstack_images >> write_images("ActualImage"),
+      unstack_images >> write_images("Actual Image"),
       dtflearn.tuple2_layer(
         "Tup_1",
         dtflearn.identity[Output]("Id"),

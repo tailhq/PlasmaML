@@ -63,7 +63,7 @@ def main[T <: SolarImagesSource](
 
   val patch_range = data.get_patch_range(magic_ratio, image_sizes/2)
 
-  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
+  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) //> data.image_scale(0.5)
 
   //Set the path of the summary directory
   val summary_dir_prefix  = "ae_"+image_source.toString
