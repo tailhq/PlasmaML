@@ -122,7 +122,9 @@ def apply(
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
-  RDExperiment.visualiseResultsInjection(samples, gt, h_prior)
+  RDExperiment.visualiseResultsInjection(
+    if(num_post_samples > 5000) samples.takeRight(5000) else samples,
+    gt, h_prior)
 
   RDExperiment.samplingReport(
     samples.map(_.filterKeys(quantities_injection.contains)),
