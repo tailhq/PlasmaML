@@ -419,14 +419,16 @@ package object data {
     sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Iterable[(DateTime, (SDO, Path))] =
     SDOLoader.load_images(sdo_files_path, year_month, sdo_sources, dirTreeCreated)
 
-  def load_mc[T <: SolarImagesSource](
+  def load_mc(
     files_path: Path, year_month: YearMonth,
-    sources: Seq[T], dirTreeCreated: Boolean): Iterable[(DateTime, (SolarImagesSource, Path))] = sources match {
+    sources: Seq[SolarImagesSource], dirTreeCreated: Boolean): Iterable[(DateTime, (SolarImagesSource, Path))] = {
 
-    case s: Seq[SDO]  => SDOLoader.load_images(files_path, year_month, s, dirTreeCreated)
+    sources.flatMap(s => s match {
 
-    case s: Seq[SOHO] => SOHOLoader.load_images(files_path, year_month, s, dirTreeCreated)
+      case _: SDO => load_images(files_path/'sdo, year_month, s, dirTreeCreated).map(p => (p._1, (s, p._2)))
 
+      case _: SOHO => load_images(files_path/'soho, year_month, s, dirTreeCreated).map(p => (p._1, (s, p._2)))
+    })
   }
 
   /**
@@ -616,11 +618,11 @@ package object data {
     images.join(omni_data)
   }
 
-  def join_omni[T <: SolarImagesSource](
+  def join_omni(
     start_year_month: YearMonth,
     end_year_month: YearMonth,
     omni_source: OMNI, omni_data_path: Path,
-    deltaT: (Int, Int), image_sources: Seq[T],
+    deltaT: (Int, Int), image_sources: Seq[SolarImagesSource],
     images_path: Path, image_dir_tree: Boolean): HELIOS_MC_OMNI_DATA = {
 
     val (start_instant, end_instant) = (
@@ -664,7 +666,7 @@ package object data {
 
 
     val image_processing = IterableFlatMapPipe((year_month: YearMonth) =>
-      load_mc[T](images_path, year_month, image_sources, image_dir_tree)) >
+      load_mc(images_path, year_month, image_sources, image_dir_tree)) >
       IterableDataPipe(image_dt_roundoff * identityPipe[(SolarImagesSource, Path)]) >
       DataPipe((d: Iterable[(DateTime, (SolarImagesSource, Path))]) => {
 
@@ -1696,9 +1698,9 @@ package object data {
       image_source, images_dir)
   }
 
-  def generate_data_mc_omni[T <: SolarImagesSource](
+  def generate_data_mc_omni(
     year_range: Range,
-    image_sources: Seq[T],
+    image_sources: Seq[SolarImagesSource],
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     deltaT: (Int, Int) = (18, 56),
     images_data_dir: Option[Path] = None): HELIOS_MC_OMNI_DATA = {
@@ -1737,11 +1739,11 @@ package object data {
     pprint.pprintln(year_range.max)
     println()
 
-    join_omni[T](
+    join_omni(
       new YearMonth(year_range.min, 1),
       new YearMonth(year_range.max, 12),
       omni_source, pwd/"data", deltaT,
-      image_sources, images_dir, true)
+      image_sources, images_dir, image_dir_tree = true)
   }
 
 
