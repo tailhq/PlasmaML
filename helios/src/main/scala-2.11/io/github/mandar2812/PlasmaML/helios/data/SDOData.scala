@@ -260,7 +260,7 @@ object SDOLoader {
 
       val (day, time, source_str) = (matchStr.group(1), matchStr.group(2), matchStr.group(3))
 
-      val source = SDO(source_str.split("_").head, source_str.split("_").last.toInt)
+      val source = SDO(source_str.split("_").last, source_str.split("_").head.toInt)
 
       (
         new DateTime(
