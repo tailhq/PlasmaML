@@ -1737,12 +1737,6 @@ package object data {
 
     pprint.pprintln(data_dir)
 
-    val images_dir = image_sources.head match {
-      case _: SOHO => data_dir/'soho
-      case _: SDO  => data_dir/'sdo
-      case _       => data_dir
-    }
-
     println("Preparing data-set as a Stream ")
     print("Start: ")
     pprint.pprintln(year_range.min)
@@ -1754,7 +1748,7 @@ package object data {
       new YearMonth(year_range.min, 1),
       new YearMonth(year_range.max, 12),
       omni_source, pwd/"data", deltaT,
-      image_sources, images_dir, image_dir_tree = true)
+      image_sources, data_dir, image_dir_tree = true)
   }
 
 
