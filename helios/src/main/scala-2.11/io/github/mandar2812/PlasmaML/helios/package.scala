@@ -791,6 +791,203 @@ package object helios {
     (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
   }
 
+  /**
+    * Train and test a CNN based solar wind prediction architecture.
+    *
+    * @param collated_data Data set of temporally joined
+    *                      image paths and GOES X-Ray fluxes.
+    *                      This is generally the output after
+    *                      executing [[collate_goes_data_range()]]
+    *                      with the relevant parameters.
+    * @param tt_partition A function which splits the data set
+    *                     into train and test sections, based on
+    *                     any Boolean function. If the function
+    *                     returns true then the instance falls into
+    *                     the training set else the test set
+    * @param resample If set to true, the training data is resampled
+    *                 to balance the occurrence of high flux and low
+    *                 flux events.
+    *
+    * @param tempdir A working directory where the results will be
+    *                archived, defaults to user_home_dir/tmp. The model
+    *                checkpoints and other results will be stored inside
+    *                another directory created in tempdir.
+    * @param results_id The suffix added the results/checkpoints directory name.
+    * @param stop_criteria When to stop training, an instance of [[StopCriteria]]
+    * @param arch The neural architecture to train, for example see [[learn.cnn_sw_v1]]
+    *
+    * */
+  def run_cdt_experiment_mc_omni(
+    image_sources: Seq[SolarImagesSource],
+    collated_data: HELIOS_MC_OMNI_DATA,
+    tt_partition: MC_PATTERN => Boolean,
+    resample: Boolean = false,
+    preprocess_image: Map[SolarImagesSource, DataPipe[Image, Image]],
+    images_to_bytes: Map[SolarImagesSource, DataPipe[Image, Array[Byte]]],
+    processed_image_size: (Int, Int) = (-1, -1),
+    num_channels_image: Int = 4,
+    image_history: Int = 0,
+    image_history_downsampling: Int = 1)(
+    results_id: String,
+    stop_criteria: StopCriteria,
+    tempdir: Path = home/"tmp",
+    arch: Layer[Output, (Output, Output)],
+    lossFunc: Layer[((Output, Output), Output), Output],
+    mo_flag: Boolean = true,
+    prob_timelags: Boolean = true,
+    optimizer: Optimizer = tf.train.AdaDelta(0.001),
+    miniBatchSize: Int = 16,
+    reuseExistingModel: Boolean = false) = {
+
+    //The directories to write model parameters and summaries.
+    val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
+
+    val tf_summary_dir = tempdir/resDirName
+
+    val num_outputs = collated_data.data.head._2._2.length
+
+    /*
+    * Create the data processing pipe for processing each image.
+    *
+    * 1. Load the image into a scrimage object
+    * 2. Apply pre-processing filters on the image
+    * 3. Convert the processed image into a byte array
+    * 4. Load the byte array into a tensor
+    * */
+
+    val path_to_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
+
+    val bytes_to_tensor = DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+        dtype = "UINT8", processed_image_size._1,
+        processed_image_size._2,
+        num_channels_image)(arr))
+
+
+    val load_image_into_tensor: DataPipe[Map[SolarImagesSource, Path], Tensor] = DataPipe(mc_image => {
+
+      val bytes = mc_image.toSeq.sortBy(_._1.toString).map(kv => {
+        val processing_for_channel = path_to_image > preprocess_image(kv._1) > images_to_bytes(kv._1)
+        processing_for_channel(kv._2)
+
+      }).toArray.flatten
+
+      bytes_to_tensor(bytes)
+
+    })
+
+    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
+
+    val dataSet: TF_DATA = helios.data.create_mc_helios_data_set(
+      image_sources,
+      collated_data,
+      load_image_into_tensor,
+      load_targets_into_tensor,
+      tt_partition,
+      resample,
+      image_history,
+      image_history_downsampling)
+
+    val (norm_tf_data, scalers): SC_TF_DATA = scale_helios_dataset(dataSet)
+
+    val causal_horizon = collated_data.data.head._2._2.length
+
+    val data_shapes = (
+      Shape(processed_image_size._1, processed_image_size._2, num_channels_image*(image_history_downsampling + 1)),
+      Shape(causal_horizon)
+    )
+
+    val trainData = norm_tf_data.training_dataset.build[
+      (Tensor, Tensor), (Output, Output),
+      (DataType.Aux[UByte], DataType.Aux[Float]), (DataType, DataType),
+      (Shape, Shape)](
+      Left(identityPipe[(Tensor, Tensor)]),
+      dataType = (UINT8, FLOAT32), data_shapes)
+      .repeat()
+      .shuffle(1000)
+      .batch(miniBatchSize)
+      .prefetch(10)
+
+    /*
+    * Start building tensorflow network/graph
+    * */
+    println("Building the regression model.")
+    val input = tf.learn.Input(
+      UINT8, Shape(-1) ++ data_shapes._1
+    )
+
+    val trainInput = tf.learn.Input(FLOAT32, Shape(-1) ++ data_shapes._2)
+
+    val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
+
+    val loss = lossFunc >>
+      tf.learn.ScalarSummary("Loss", "ModelLoss")
+
+    //Now create the model
+    val (model, estimator) = dtflearn.build_tf_model(
+      arch, input, trainInput, trainingInputLayer,
+      loss, optimizer, java.nio.file.Paths.get(tf_summary_dir.toString()),
+      stop_criteria)(
+      trainData)
+
+    val nTest = norm_tf_data.test_dataset.size
+
+    val predictions: (Tensor, Tensor) = dtfutils.buffered_preds[
+      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, Output,
+      Tensor, (Tensor, Tensor), (Tensor, Tensor)](
+      estimator, tfi.stack(norm_tf_data.test_dataset.data.toSeq.map(_._1), axis = 0),
+      _buffer_size, nTest)
+
+    val index_times = Tensor(
+      (0 until causal_horizon).map(_.toDouble)
+    ).reshape(
+      Shape(causal_horizon)
+    )
+
+    val pred_time_lags_test: Tensor = if(prob_timelags) {
+      val unsc_probs = predictions._2
+
+      unsc_probs.topK(1)._2.reshape(Shape(nTest)).cast(FLOAT64)
+
+    } else predictions._2
+
+    val pred_targets: Tensor = if (mo_flag) {
+      val all_preds =
+        if (prob_timelags) scalers._2.i(predictions._1)
+        else scalers._2.i(predictions._1)
+
+      val repeated_times = tfi.stack(Seq.fill(causal_horizon)(pred_time_lags_test.floor), axis = -1)
+
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
+
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
+    } else {
+      scalers._2(0).i(predictions._1)
+    }
+
+    val test_labels = dataSet.test_dataset.data.map(_._2).map(t => dtfutils.toDoubleSeq(t).toSeq).toSeq
+
+    val actual_targets = test_labels.zipWithIndex.map(zi => {
+      val (z, index) = zi
+      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
+
+      z(time_lag)
+    })
+
+    val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+
+    //write predictions and ground truth to a csv file
+
+    write_predictions(
+      dtfutils.toDoubleSeq(pred_targets).toSeq,
+      actual_targets,
+      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+      tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
+
+    (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
+  }
+
+
 
   /**
     * Train and test a CNN based solar wind prediction architecture.
