@@ -54,7 +54,7 @@ package object data {
     * a time stamp, a collection of images from multiple sources,
     * and a sequence of numbers
     * */
-  type MC_PATTERN              = (DateTime, (Map[SOHO, Stream[Path]], Seq[Double]))
+  type MC_PATTERN              = (DateTime, (Map[SolarImagesSource, Seq[Path]], Seq[Double]))
 
   /**
     * A pattern, consisting of
@@ -65,7 +65,7 @@ package object data {
 
   type HELIOS_IMAGE_DATA       = DataSet[IMAGE_PATTERN]
   type HELIOS_OMNI_DATA        = DataSet[PATTERN]
-  type HELIOS_MC_OMNI_DATA     = Iterable[MC_PATTERN]
+  type HELIOS_MC_OMNI_DATA     = DataSet[MC_PATTERN]
   type HELIOS_OMNI_DATA_EXT    = DataSet[PATTERN_EXT]
   type HELIOS_MC_OMNI_DATA_EXT = Iterable[MC_PATTERN_EXT]
 
@@ -406,6 +406,16 @@ package object data {
     sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Iterable[(DateTime, (SDO, Path))] =
     SDOLoader.load_images(sdo_files_path, year_month, sdo_sources, dirTreeCreated)
 
+  def load_mc[T <: SolarImagesSource](
+    files_path: Path, year_month: YearMonth,
+    sources: Seq[T], dirTreeCreated: Boolean): Iterable[(DateTime, (SolarImagesSource, Path))] = sources match {
+
+    case s: Seq[SDO]  => SDOLoader.load_images(files_path, year_month, s, dirTreeCreated)
+
+    case s: Seq[SOHO] => SOHOLoader.load_images(files_path, year_month, s, dirTreeCreated)
+
+  }
+
   /**
     * Load X-Ray fluxes averaged over all GOES missions
     *
@@ -589,6 +599,69 @@ package object data {
       .transform(image_processing)
       .to_supervised(identityPipe[(DateTime, Path)])
 
+
+    images.join(omni_data)
+  }
+
+  def join_omni[T <: SolarImagesSource](
+    start_year_month: YearMonth,
+    end_year_month: YearMonth,
+    omni_source: OMNI, omni_data_path: Path,
+    deltaT: (Int, Int), image_sources: Seq[T],
+    images_path: Path, image_dir_tree: Boolean): HELIOS_MC_OMNI_DATA = {
+
+    val (start_instant, end_instant) = (
+      start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
+      end_year_month.toLocalDate(31).toDateTimeAtStartOfDay
+    )
+
+    val period = new Period(start_instant, end_instant)
+
+
+    print("Time period considered (in months): ")
+
+    val num_months = (12*period.getYears) + period.getMonths
+
+    pprint.pprintln(num_months)
+
+
+    //Extract OMNI data as stream
+
+    //First create the transformation pipe
+    val omni_processing =
+      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+        IterableDataPipe[(DateTime, Seq[Double])](
+          (p: (DateTime, Seq[Double])) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
+        )
+
+
+    val omni_data = dtfdata.dataset(start_year_month.getYear to end_year_month.getYear)
+      .map(DataPipe((i: Int) => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
+      .transform(omni_processing)
+      .to_supervised(identityPipe[(DateTime, Seq[Double])])
+
+    //Extract paths to images, along with a time-stamp
+
+    val image_dt_roundoff = DataPipe[DateTime, DateTime]((d: DateTime) =>
+      new DateTime(
+        d.getYear, d.getMonthOfYear,
+        d.getDayOfMonth, d.getHourOfDay,
+        0, 0)
+    )
+
+
+    val image_processing = IterableFlatMapPipe((year_month: YearMonth) =>
+      load_mc(images_path, year_month, image_sources, image_dir_tree).toStream) >
+      IterableDataPipe(image_dt_roundoff * identityPipe[(SolarImagesSource, Path)]) >
+      DataPipe((d: Iterable[(DateTime, (SolarImagesSource, Path))]) =>
+        d.groupBy(_._1).mapValues(_.map(_._2).groupBy(_._1).mapValues(_.map(_._2).toSeq))
+      )
+
+
+    val images = dtfdata.dataset(0 to num_months)
+      .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
+      .transform(image_processing)
+      .to_supervised(identityPipe[(DateTime, Map[SolarImagesSource, Seq[Path]])])
 
     images.join(omni_data)
   }
