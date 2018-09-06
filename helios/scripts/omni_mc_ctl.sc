@@ -17,11 +17,11 @@ import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
-def main[T <: SolarImagesSource](
+def main(
   year_range: Range                     = 2001 to 2004,
   test_year: Int                        = 2003,
   ff_stack_sizes: Seq[Int]              = Seq(256, 128, 64),
-  image_sources: Seq[T],
+  image_sources: Seq[SolarImagesSource] = Seq(SDO(AIA193, 512), SDO(HMIB, 512)),
   buffer_size: Int                      = 2000,
   re: Boolean                           = true,
   time_horizon: (Int, Int)              = (18, 56),
@@ -45,7 +45,7 @@ def main[T <: SolarImagesSource](
 
   data.buffer_size_(buffer_size)
 
-  val dataset = data.generate_data_mc_omni[T](
+  val dataset = data.generate_data_mc_omni(
     year_range, image_sources,
     deltaT = time_horizon,
     images_data_dir = path_to_images)

@@ -1698,6 +1698,17 @@ package object data {
       image_source, images_dir)
   }
 
+  /**
+    * Generate a starting data set for OMNI/L1 prediction tasks.
+    * This method makes the assumption that the data is stored
+    * in a directory ~/data_repo/helios in a standard directory tree
+    * generated after executing the [[data.SOHOLoader.bulk_download()]]
+    * or [[data.SDOLoader.bulk_download()]] methods.
+    *
+    * @param image_sources The image data sources to extract from
+    * @param year_range The range of years, for constructing the data,
+    *                   ex: (2000 to 2002)
+    * */
   def generate_data_mc_omni(
     year_range: Range,
     image_sources: Seq[SolarImagesSource],
