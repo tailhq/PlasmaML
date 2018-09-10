@@ -864,11 +864,11 @@ package object helios {
         num_channels_image)(arr))
 
 
-    val load_image_into_tensor: DataPipe[Map[SolarImagesSource, Seq[Path]], Tensor] = DataPipe(mc_image => {
+    val load_image_into_tensor: DataPipe[Map[SolarImagesSource, Seq[Path]], Option[Tensor]] = DataPipe(mc_image => {
 
       val bytes = mc_image.toSeq.sortBy(_._1.toString).map(kv => {
 
-        val first_non_corrupted_file: Path = kv._2.map(p => {
+        val first_non_corrupted_file: (Int, Path) = kv._2.map(p => {
 
           val in = Files.newInputStream(p.toNIO)
 
@@ -880,15 +880,16 @@ package object helios {
           in.close()
 
           (available_bytes, p)
-        }).sortBy(_._1).reverse.head._2
+        }).sortBy(_._1).reverse.head
 
         val processing_for_channel = data.read_image > preprocess_image(kv._1) > images_to_bytes(kv._1)
 
-        processing_for_channel(first_non_corrupted_file)
+        if (first_non_corrupted_file._1 > 0) Some(processing_for_channel(first_non_corrupted_file._2)) else None
 
-      }).toArray.flatten
+      }).toArray
 
-      bytes_to_tensor(bytes)
+
+      if(bytes.forall(_.isDefined)) Some(bytes_to_tensor(bytes.flatMap(_.get))) else None
 
     })
 

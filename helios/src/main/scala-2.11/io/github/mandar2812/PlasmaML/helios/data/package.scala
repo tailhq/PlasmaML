@@ -1164,7 +1164,7 @@ package object data {
   def prepare_mc_helios_data_set(
     image_sources: Seq[SolarImagesSource],
     collated_data: HELIOS_MC_OMNI_DATA,
-    read_mc_image: DataPipe[Map[SolarImagesSource, Seq[Path]], Tensor],
+    read_mc_image: DataPipe[Map[SolarImagesSource, Seq[Path]], Option[Tensor]],
     read_targets: DataPipe[Seq[Double], Tensor],
     tt_partition: MC_PATTERN => Boolean,
     resample: Boolean = false,
@@ -1192,6 +1192,10 @@ package object data {
 
     val load_only_targets = identityPipe[Tensor] * read_targets
 
+    val non_corrupted_images = DataPipe[(Option[Tensor], Seq[Double]), Boolean](_._1.isDefined)
+
+
+
     val get_image_history = if(image_history > 0) {
       val slices = utils.range(
         min = 0d, image_history.toDouble,
@@ -1214,8 +1218,16 @@ package object data {
 
 
     val processed_data = experiment_data.copy[(Tensor, Seq[Double])](
-      training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
-      test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
+      training_dataset = experiment_data.training_dataset
+        .map(load_only_images)
+        .filter(non_corrupted_images)
+        .map((c: (Option[Tensor], Seq[Double])) => (c._1.get, c._2))
+        .transform(get_image_history),
+      test_dataset = experiment_data.test_dataset
+        .map(load_only_images)
+        .filter(non_corrupted_images)
+        .map((c: (Option[Tensor], Seq[Double])) => (c._1.get, c._2))
+        .transform(get_image_history)
     )
 
     processed_data.copy[(Tensor, Tensor)](
