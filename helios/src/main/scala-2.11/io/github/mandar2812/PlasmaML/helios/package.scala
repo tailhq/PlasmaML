@@ -1,5 +1,8 @@
 package io.github.mandar2812.PlasmaML
 
+import java.io.IOException
+import java.nio.file.Files
+
 import ammonite.ops.{Path, exists, home, ls}
 import org.joda.time._
 import com.sksamuel.scrimage.Image
@@ -151,7 +154,7 @@ package object helios {
     *
     * */
 
-    val dataSet = helios.data.create_helios_goes_data_set(
+    val dataSet = helios.data.prepare_helios_goes_data_set(
       collated_data,
       tt_partition,
       scaleDownFactor = 2,
@@ -315,7 +318,7 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
-    val load_image_into_tensor = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
+    val load_image_into_tensor = data.read_image >
       preprocess_image >
       image_to_bytearr >
       DataPipe(
@@ -326,7 +329,7 @@ package object helios {
       )
 
 
-    val dataSet: TF_IMAGE_DATA = helios.data.create_helios_data_set(
+    val dataSet: TF_IMAGE_DATA = helios.data.prepare_helios_data_set(
       collated_data,
       load_image_into_tensor,
       tt_partition,
@@ -462,7 +465,7 @@ package object helios {
     * 4. Load the byte array into a tensor
     * */
 
-    val load_image_into_tensor = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
+    val load_image_into_tensor = data.read_image >
       preprocess_image >
       image_to_bytearr >
       DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
@@ -472,7 +475,7 @@ package object helios {
 
     val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
 
-    val dataSet: TF_DATA = helios.data.create_helios_data_set(
+    val dataSet: TF_DATA = helios.data.prepare_helios_data_set(
       collated_data,
       load_image_into_tensor,
       load_targets_into_tensor,
@@ -646,7 +649,7 @@ package object helios {
     *
     * */
 
-    val load_image_into_tensor = DataPipe((p: Path) => Image.fromPath(p.toNIO)) >
+    val load_image_into_tensor = data.read_image >
       preprocess_image >
       image_to_bytearr >
       DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
@@ -658,7 +661,7 @@ package object helios {
 
     val load_targets_hist_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(size_history)(arr:_*))
 
-    val dataSet: TF_DATA_EXT = helios.data.create_helios_ts_data_set(
+    val dataSet: TF_DATA_EXT = helios.data.prepare_helios_ts_data_set(
       collated_data,
       load_image_into_tensor,
       load_targets_into_tensor,
@@ -855,19 +858,33 @@ package object helios {
     * 4. Load the byte array into a tensor
     * */
 
-    val path_to_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
-
     val bytes_to_tensor = DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
         dtype = "UINT8", processed_image_size._1,
         processed_image_size._2,
         num_channels_image)(arr))
 
 
-    val load_image_into_tensor: DataPipe[Map[SolarImagesSource, Path], Tensor] = DataPipe(mc_image => {
+    val load_image_into_tensor: DataPipe[Map[SolarImagesSource, Seq[Path]], Tensor] = DataPipe(mc_image => {
 
       val bytes = mc_image.toSeq.sortBy(_._1.toString).map(kv => {
-        val processing_for_channel = path_to_image > preprocess_image(kv._1) > images_to_bytes(kv._1)
-        processing_for_channel(kv._2)
+
+        val first_non_corrupted_file: Path = kv._2.map(p => {
+
+          val in = Files.newInputStream(p.toNIO)
+
+          val available_bytes: Int = try in.available() catch {
+            case _: IOException => -1
+            case _: Exception => -1
+          }
+
+          in.close()
+
+          (available_bytes, p)
+        }).sortBy(_._1).reverse.head._2
+
+        val processing_for_channel = data.read_image > preprocess_image(kv._1) > images_to_bytes(kv._1)
+
+        processing_for_channel(first_non_corrupted_file)
 
       }).toArray.flatten
 
@@ -877,7 +894,7 @@ package object helios {
 
     val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
 
-    val dataSet: TF_DATA = helios.data.create_mc_helios_data_set(
+    val dataSet: TF_DATA = helios.data.prepare_mc_helios_data_set(
       image_sources,
       collated_data,
       load_image_into_tensor,
@@ -1044,7 +1061,7 @@ package object helios {
     * start loading it into tensors
     *
     * */
-    val dataSet: TF_MC_DATA_EXT = helios.data.create_mc_helios_ts_data_set(
+    val dataSet: TF_MC_DATA_EXT = helios.data.prepare_mc_helios_ts_data_set(
       image_sources,
       collated_data,
       tt_partition,

@@ -96,7 +96,7 @@ def run_experiment(
   *
   * */
 
-  val dataSet = helios.data.create_helios_goes_data_set(
+  val dataSet = helios.data.prepare_helios_goes_data_set(
     collated_data,
     tt_partition,
     scaleDownFactor = 2)

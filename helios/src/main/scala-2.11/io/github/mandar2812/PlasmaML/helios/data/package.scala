@@ -54,7 +54,7 @@ package object data {
     * a time stamp, a collection of images from multiple sources,
     * and a sequence of numbers
     * */
-  type MC_PATTERN              = (DateTime, (Map[SolarImagesSource, Path], Seq[Double]))
+  type MC_PATTERN              = (DateTime, (Map[SolarImagesSource, Seq[Path]], Seq[Double]))
 
   /**
     * A pattern, consisting of
@@ -181,6 +181,8 @@ package object data {
   def buffer_size_(s: Int) = size_buffer = s
 
   def _buffer_size: Int = size_buffer
+
+  val read_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
 
   val image_scale: MetaPipe[Double, Image, Image] = MetaPipe(
     (factor: Double) => (image: Image) => image.copy.scale(factor)
@@ -674,8 +676,8 @@ package object data {
 
         //For each hour, select the first image for each channel
 
-        val chosen_images_by_hour: Iterable[(DateTime, Map[SolarImagesSource, Path])] = images_by_hour.mapValues(
-          _.groupBy(_._2._1).map(kv => (kv._1, kv._2.toSeq.minBy(_._1)._2._2))
+        val chosen_images_by_hour: Iterable[(DateTime, Map[SolarImagesSource, Seq[Path]])] = images_by_hour.mapValues(
+          _.groupBy(_._2._1).map(kv => (kv._1, kv._2.toSeq.sortBy(_._1).map(_._2._2)))
         )
 
         chosen_images_by_hour
@@ -685,7 +687,7 @@ package object data {
     val images = dtfdata.dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
-      .to_supervised(identityPipe[(DateTime, Map[SolarImagesSource, Path])])
+      .to_supervised(identityPipe[(DateTime, Map[SolarImagesSource, Seq[Path]])])
 
     images.join(omni_data)
   }
@@ -909,7 +911,7 @@ package object data {
     dtf.concatenate(tensor_splits.toSeq, axis = 0)
   }
 
-  def create_helios_data_set(
+  def prepare_helios_data_set(
     collated_data: HELIOS_IMAGE_DATA,
     read_image: DataPipe[Path, Tensor],
     tt_partition: IMAGE_PATTERN => Boolean,
@@ -972,7 +974,7 @@ package object data {
     *                     determines if it goes into the train or test split.
     *
     * */
-  def create_helios_data_set(
+  def prepare_helios_data_set(
     collated_data: HELIOS_OMNI_DATA,
     read_image: DataPipe[Path, Tensor],
     read_targets: DataPipe[Seq[Double], Tensor],
@@ -1046,10 +1048,10 @@ package object data {
     *                     determines if it goes into the train or test split.
     *
     * @param image_process The exponent of 2 which determines how much the
-    *                        image will be scaled down. i.e. scaleDownFactor = 4
-    *                        corresponds to a 16 fold decrease in image size.
+    *                      image will be scaled down. i.e. scaleDownFactor = 4
+    *                      corresponds to a 16 fold decrease in image size.
     * */
-  def create_helios_ts_data_set(
+  def prepare_helios_ts_data_set(
     collated_data: HELIOS_OMNI_DATA_EXT,
     read_image: DataPipe[Path, Tensor],
     read_targets: DataPipe[Seq[Double], Tensor],
@@ -1159,10 +1161,10 @@ package object data {
     *                     determines if it goes into the train or test split.
     *
     * */
-  def create_mc_helios_data_set(
+  def prepare_mc_helios_data_set(
     image_sources: Seq[SolarImagesSource],
     collated_data: HELIOS_MC_OMNI_DATA,
-    read_mc_image: DataPipe[Map[SolarImagesSource, Path], Tensor],
+    read_mc_image: DataPipe[Map[SolarImagesSource, Seq[Path]], Tensor],
     read_targets: DataPipe[Seq[Double], Tensor],
     tt_partition: MC_PATTERN => Boolean,
     resample: Boolean = false,
@@ -1226,7 +1228,7 @@ package object data {
   }
 
 
-  def create_mc_helios_ts_data_set(
+  def prepare_mc_helios_ts_data_set(
     image_sources: Seq[SOHO],
     collated_data: HELIOS_MC_OMNI_DATA_EXT,
     tt_partition: MC_PATTERN_EXT => Boolean,
@@ -1375,7 +1377,7 @@ package object data {
     *                        image will be scaled down. i.e. scaleDownFactor = 4
     *                        corresponds to a 16 fold decrease in image size.
     * */
-  def create_helios_goes_data_set(
+  def prepare_helios_goes_data_set(
     collated_data: Stream[(DateTime, (Path, (Double, Double)))],
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
     scaleDownFactor: Int = 4, resample: Boolean = false): HeliosDataSet = {
