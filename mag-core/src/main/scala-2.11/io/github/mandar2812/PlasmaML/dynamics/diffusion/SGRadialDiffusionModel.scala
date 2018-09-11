@@ -335,7 +335,7 @@ object SGRadialDiffusionModel {
       val sc_nodes = nodes.map(n => {
         val mid_point = (lower + upper) / 2d
 
-        val mid_diff  = (lower + upper) / 2d
+        val mid_diff  = (upper - lower) / 2d
 
         mid_point + mid_diff*n
       })
