@@ -73,7 +73,7 @@ def apply(
   val model = new SGRadialDiffusionModel(
     Kp, dll_params,
     (0d, 0.2, 0d, 0.0),
-    (0.01, 0.01d, 0.01, 0.01))(
+    q_params)(
     seKernel, noiseKernel,
     boundary_data ++ bulk_data,
     chebyshev_hybrid_basis,

@@ -113,7 +113,7 @@ object OMNILoader {
     * reads an OMNI file cleans it and extracts the columns specified
     * by targetColumn and exogenousInputs.
     * */
-  def omniFileToStream(targetColumn: Int, exogenousInputs: Seq[Int]) =
+  def omniFileToStream(targetColumn: Int, exogenousInputs: Seq[Int]): DataPipe[String, Stream[String]] =
     fileToStream >
     replaceWhiteSpaces >
     extractTrainingFeatures(
