@@ -115,10 +115,10 @@ def apply(
     h_prior, samples, basisSize, "HybridMQ",
     (model.regCol, model.regObs))
 
-  val scriptPath = pwd / "mag-core" / 'scripts / "visualiseCombSamplingResults.R"
+  val scriptPath = pwd / "mag-core" / 'scripts / "visualiseSamplingResults.R"
 
   try {
-    %%('Rscript, scriptPath.toString, resPath.toString)
+    %%('Rscript, scriptPath.toString, resPath.toString, "loss")
   } catch {
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
