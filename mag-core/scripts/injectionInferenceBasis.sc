@@ -20,7 +20,7 @@ def apply(
   reg_galerkin: Double                        = 1.0,
   burn: Int                                   = 2000,
   num_post_samples: Int                       = 5000,
-  lambda_gt: (Double, Double, Double, Double) = (-1, 1.5, 0d, -0.4),
+  lambda_gt: (Double, Double, Double, Double) = lambda_params,
   q_gt: (Double, Double, Double, Double)      = (-0.5, 1.0d, 0.5, 0.45)) = {
 
   measurement_noise = GaussianRV(0.0, 0.5)
