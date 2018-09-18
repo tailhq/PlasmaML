@@ -179,8 +179,10 @@ object RDExperiment {
       println("\n------------------------------")
       println("Parameter: "+char)
 
-      print("Ground Truth = ")
-      pprint.pprintln(gt(key))
+      if(gt.contains(key)) {
+        print("Ground Truth = ")
+        pprint.pprintln(gt(key))
+      }
 
       println("Posterior Moments: ")
 
@@ -288,26 +290,37 @@ object RDExperiment {
     if(params_loss.contains("lambda_alpha") && params_loss.contains("lambda_b")) {
 
       scatter(samples.map(c => (c("lambda_alpha"), c("lambda_b"))))
-      hold()
-      scatter(Seq((gt("lambda_alpha"), gt("lambda_b"))))
-      legend(Seq("Posterior Samples", "Ground Truth"))
+
+      if(gt.nonEmpty) {
+        hold()
+        scatter(Seq((gt("lambda_alpha"), gt("lambda_b"))))
+        legend(Seq("Posterior Samples", "Ground Truth"))
+      } else legend(Seq("Posterior Samples"))
+
       title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs b")
       xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
       yAxis(diffusion_quantities("loss")+": b")
-      unhold()
+
+      if(gt.nonEmpty) unhold()
     }
 
 
     if(params_loss.contains("lambda_alpha") && params_loss.contains("lambda_beta")) {
 
       scatter(samples.map(c => (c("lambda_alpha"), c("lambda_beta"))))
-      hold()
-      scatter(Seq((gt("lambda_alpha"), gt("lambda_beta"))))
-      legend(Seq("Posterior Samples", "Ground Truth"))
+
+      if(gt.nonEmpty) {
+        hold()
+        scatter(Seq((gt("lambda_alpha"), gt("lambda_beta"))))
+        legend(Seq("Posterior Samples", "Ground Truth"))
+      } else legend(Seq("Posterior Samples"))
+
       title("Posterior Samples "+diffusion_quantities("loss")+":- "+0x03B1.toChar+" vs "+0x03B2.toChar)
       xAxis(diffusion_quantities("loss")+": "+0x03B1.toChar)
       yAxis(diffusion_quantities("loss")+": "+0x03B2.toChar)
-      unhold()
+
+      if(gt.nonEmpty) unhold()
+
     }
 
 
@@ -341,26 +354,35 @@ object RDExperiment {
     if(params_injection.contains("Q_gamma") && params_injection.contains("Q_b")) {
 
       scatter(samples.map(c => (c("Q_gamma"), c("Q_b"))))
-      hold()
-      scatter(Seq((gt("Q_gamma"), gt("Q_b"))))
-      legend(Seq("Posterior Samples", "Ground Truth"))
+      if(gt.nonEmpty) {
+        hold()
+        scatter(Seq((gt("Q_gamma"), gt("Q_b"))))
+        legend(Seq("Posterior Samples", "Ground Truth"))
+      } else legend(Seq("Posterior Samples"))
+
       title("Posterior Samples Q:- "+0x03B3.toChar+" vs b")
       xAxis("Q: "+0x03B3.toChar)
       yAxis("Q: b")
-      unhold()
+
+      if(gt.nonEmpty) unhold()
 
     }
 
     if(params_injection.contains("Q_alpha") && params_injection.contains("Q_beta")) {
 
       scatter(samples.map(c => (c("Q_alpha"), c("Q_beta"))))
-      hold()
-      scatter(Seq((gt("Q_alpha"), gt("Q_beta"))))
-      legend(Seq("Posterior Samples", "Ground Truth"))
+
+      if(gt.nonEmpty) {
+        hold()
+        scatter(Seq((gt("Q_alpha"), gt("Q_beta"))))
+        legend(Seq("Posterior Samples", "Ground Truth"))
+      } else legend(Seq("Posterior Samples"))
+
       title("Posterior Samples Q:- "+0x03B1.toChar+" vs "+0x03B2.toChar)
       xAxis("Q : "+0x03B1.toChar)
       yAxis("Q : "+0x03B2.toChar)
-      unhold()
+
+      if(gt.nonEmpty) unhold()
 
     }
 
@@ -478,6 +500,81 @@ object RDExperiment {
     logger.info("Done writing results for experiment")
     resultsPath
   }
+
+  def writeResults(
+    bulk_data: Stream[((Double, Double), Double)],
+    colocation_points: Stream[(Double, Double)],
+    hyper_prior: Map[String, ContinuousDistr[Double]],
+    samples: Stream[Map[String, Double]],
+    basisSize: (Int, Int), basisType: String,
+    reg: (Double, Double)): Path = {
+
+    val dateTime = new DateTime()
+
+    val dtString = dateTime.toString(DateTimeFormat.forPattern("yyyy_MM_dd_H_mm"))
+
+    val resultsPath = pwd/".cache"/("radial-diffusion-exp_"+dtString)
+
+    logger.info("Writing results of radial diffusion experiment in directory: "+resultsPath.toString())
+
+    logger.info("Writing domain information in "+"diffusion_domain.csv")
+
+    write(resultsPath/"diffusion_domain.csv", domainSpec.keys.mkString(",")+"\n"+domainSpec.values.mkString(","))
+
+    val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
+
+    val initial_condition = lShellVec.map(l => Seq(l, initialPSD(l)))
+    val kp = timeVec.map(t => Seq(t, Kp(t)))
+
+    logger.info("Writing initial PSD in "+"initial_psd.csv")
+    write(resultsPath/"initial_psd.csv", initial_condition.map(_.mkString(",")).mkString("\n"))
+
+    logger.info("Writing Kp profile in "+"kp_profile.csv")
+    write(resultsPath/"kp_profile.csv", kp.map(_.mkString(",")).mkString("\n"))
+
+    val (m, v) = (measurement_noise.mu, measurement_noise.sigma)
+    write(
+      resultsPath/"measurement_noise.csv",
+      "mean,sigma\n"+m+","+v+"\n"
+    )
+
+    logger.info("Writing observed bulk data in "+"bulk_data.csv")
+    write(
+      resultsPath/"bulk_data.csv",
+      bulk_data.map(t => List(t._1._1, t._1._2, t._2).mkString(",")).mkString("\n"))
+
+    logger.info("Writing coordinates of colocation points in "+"colocation_points.csv")
+    write(
+      resultsPath/"colocation_points.csv",
+      colocation_points.map(t => List(t._1, t._2).mkString(",")).mkString("\n"))
+
+
+    val prior_samples = (1 to samples.length).map(_ => hyper_prior.mapValues(_.draw()))
+
+    val prior_samples_file_content =
+      prior_samples.head.keys.mkString(",") + "\n" + prior_samples.map(_.values.mkString(",")).mkString("\n")
+
+    logger.info("Writing model info")
+
+    val modelInfo = Map(
+      "type" -> basisType, "nL" -> basisSize._1.toString, "nT" -> basisSize._2.toString,
+      "regCol" -> reg._1.toString, "regData" -> reg._2.toString)
+
+    write(resultsPath/"model_info.csv", modelInfo.keys.mkString(",")+"\n"+modelInfo.values.mkString(","))
+
+    logger.info("Writing samples generated from prior distribution in "+"prior_samples.csv")
+    write(resultsPath/"prior_samples.csv", prior_samples_file_content)
+
+    val samples_file_content =
+      samples.head.keys.mkString(",") + "\n" + samples.map(_.values.mkString(",")).mkString("\n")
+
+    logger.info("Writing samples generated from posterior distribution in "+"posterior_samples.csv")
+    write(resultsPath/"posterior_samples.csv", samples_file_content)
+
+    logger.info("Done writing results for experiment")
+    resultsPath
+  }
+
 
   val readFile         = DataPipe((p: Path) => (read.lines! p).toStream)
 
