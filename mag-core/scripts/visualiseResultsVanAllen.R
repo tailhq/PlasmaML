@@ -146,6 +146,44 @@ if(lossFlag == "loss") {
 
     ggsave("histogram_b_posterior.png")
 
+    ggplot(prior_samples, aes(x=Q_beta)) +
+        geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+        binwidth=.5,
+        colour="black", fill="white") +
+        geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+        xlab(expression(beta))
+
+    ggsave("histogram_beta_prior.png")
+
+
+    ggplot(posterior_samples, aes(x=Q_beta)) +
+        geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+        binwidth=.5,
+        colour="black", fill="white") +
+        geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+        xlab(expression(beta))
+
+    ggsave("histogram_beta_posterior.png")
+
+    ggplot(prior_samples, aes(x=Q_alpha)) +
+        geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+        binwidth=.5,
+        colour="black", fill="white") +
+        geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+        xlab(expression(alpha))
+
+    ggsave("histogram_alpha_prior.png")
+
+
+    ggplot(posterior_samples, aes(x=Q_alpha)) +
+        geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+        binwidth=.5,
+        colour="black", fill="white") +
+        geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+        xlab(expression((alpha)))
+
+    ggsave("histogram_alpha_posterior.png")
+
 }
 
 

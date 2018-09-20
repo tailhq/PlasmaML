@@ -130,8 +130,8 @@ def apply(
 
 
   val seKernel = new GenExpSpaceTimeKernel[Double](
-    0d, deltaL, deltaT)(
-    sqNormDouble, sqNormDouble)
+    1d, deltaL, deltaT)(
+    sqNormDouble, l1NormDouble)
 
   val noiseKernel = new DiracTuple2Kernel(1.5)
 
