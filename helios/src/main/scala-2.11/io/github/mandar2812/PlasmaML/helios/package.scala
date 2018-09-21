@@ -365,9 +365,10 @@ package object helios {
 
       override protected def _forward(input: Output)(implicit mode: Mode): Seq[Output] = {
 
-        Seq.tabulate(image_history_downsampling + 1)(image_index => {
+        tf.splitEvenly(input, image_history_downsampling + 1, -1)
+        /*Seq.tabulate(image_history_downsampling + 1)(image_index => {
           input(---, image_index*num_channels_image :: (image_index + 1)*num_channels_image)
-        })
+        })*/
       }
     }
 
