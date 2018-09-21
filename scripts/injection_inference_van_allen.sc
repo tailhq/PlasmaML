@@ -116,11 +116,6 @@ def apply(
 
   lShellLimits = (1d, 7d)
 
-  /*(
-    van_allen_data.data.minBy(_._2._1)._2._1,
-    van_allen_data.data.maxBy(_._2._1)._2._1
-  )*/
-
   nL = num_bins_l
   nT = num_bins_t
 
@@ -147,9 +142,11 @@ def apply(
     lShellLimits, timeLimits
   )
 
-  model.covariance.setHyperParameters(Map("sigma" -> model.psd_std) ++ model.covariance.state.filterNot(_._1 == "sigma"))
+  /*model.covariance.setHyperParameters(
+    Map("sigma" -> model.psd_std) ++
+      model.covariance.state.filterNot(_._1 == "sigma"))
 
-
+*/
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
       model.hyper_parameters.filter(c =>
