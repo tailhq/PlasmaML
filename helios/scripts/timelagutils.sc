@@ -1,7 +1,7 @@
 import breeze.linalg.{DenseMatrix, qr}
 import breeze.stats.distributions.Gaussian
 import com.quantifind.charts.Highcharts._
-import ammonite.ops.home
+import ammonite.ops.{home, write}
 import org.joda.time.DateTime
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.types.DataType
@@ -537,41 +537,75 @@ def run_exp(
   val err_train     = train_signal_predicted.subtract(training_signal_actual)
   val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
 
-  scatter(dtfutils.toDoubleSeq(err_train).zip(dtfutils.toDoubleSeq(err_lag_train)).toSeq)
+  val train_err_scatter = dtfutils.toDoubleSeq(err_train).zip(dtfutils.toDoubleSeq(err_lag_train)).toSeq
+  write(
+    tf_summary_dir/"train_errors.csv",
+    "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+  scatter(train_err_scatter)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Training Set Errors; Scatter")
 
-  scatter(dtfutils.toDoubleSeq(train_signal_predicted).zip(dtfutils.toDoubleSeq(pred_time_lags_train)).toSeq)
+  val train_scatter = dtfutils.toDoubleSeq(train_signal_predicted).zip(dtfutils.toDoubleSeq(pred_time_lags_train)).toSeq
+  scatter(train_scatter)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Training Set; Scatter")
 
   hold()
 
-  scatter(training_signal_actual.zip(dtfutils.toDoubleSeq(train_time_lags).toSeq))
+  val train_actual_scatter = training_signal_actual.zip(dtfutils.toDoubleSeq(train_time_lags).toSeq)
+  scatter(train_actual_scatter)
   legend(Seq("Predictions", "Actual Data"))
   unhold()
+
+  write(
+    tf_summary_dir/"train_scatter.csv",
+    "predv,predlag,actualv,actuallag\n"+
+      train_scatter.zip(train_actual_scatter).map(
+        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
+      ).mkString("\n")
+  )
+
 
 
   val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
   val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
 
-  scatter(dtfutils.toDoubleSeq(err_test).zip(dtfutils.toDoubleSeq(err_lag_test)).toSeq)
+  val test_err_scatter = dtfutils.toDoubleSeq(err_test).zip(dtfutils.toDoubleSeq(err_lag_test)).toSeq
+  scatter(test_err_scatter)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Test Set Errors; Scatter")
 
-  scatter(dtfutils.toDoubleSeq(reg_metrics.preds).zip(dtfutils.toDoubleSeq(reg_time_lag.preds)).toSeq)
+  write(
+    tf_summary_dir/"test_errors.csv",
+    "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+
+  val test_scatter = dtfutils.toDoubleSeq(reg_metrics.preds).zip(dtfutils.toDoubleSeq(reg_time_lag.preds)).toSeq
+  scatter(test_scatter)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Test Set; Scatter")
 
   hold()
 
-  scatter(dtfutils.toDoubleSeq(reg_metrics.targets).zip(dtfutils.toDoubleSeq(reg_time_lag.targets)).toSeq)
+  val test_actual_scatter =
+    dtfutils.toDoubleSeq(reg_metrics.targets).zip(dtfutils.toDoubleSeq(reg_time_lag.targets)).toSeq
+  scatter(test_actual_scatter)
   legend(Seq("Predictions", "Actual Data"))
   unhold()
+
+  write(
+    tf_summary_dir/"test_scatter.csv",
+    "predv,predlag,actualv,actuallag\n"+
+      test_scatter.zip(test_actual_scatter).map(
+        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
+      ).mkString("\n")
+  )
+
 
   (
     (data, collated_data, tf_dataset),
@@ -781,41 +815,72 @@ def run_exp2(
   val err_train     = train_signal_predicted.subtract(training_signal_actual)
   val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
 
-  scatter(dtfutils.toDoubleSeq(err_train).zip(dtfutils.toDoubleSeq(err_lag_train)).toSeq)
+  val train_err_scatter = dtfutils.toDoubleSeq(err_train).zip(dtfutils.toDoubleSeq(err_lag_train)).toSeq
+  write(
+    tf_summary_dir/"train_errors.csv",
+    "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+  scatter(train_err_scatter)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Training Set Errors; Scatter")
 
-  scatter(dtfutils.toDoubleSeq(train_signal_predicted).zip(dtfutils.toDoubleSeq(pred_time_lags_train)).toSeq)
+  val train_scatter = dtfutils.toDoubleSeq(train_signal_predicted).zip(dtfutils.toDoubleSeq(pred_time_lags_train)).toSeq
+  scatter(train_scatter)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Training Set; Scatter")
 
   hold()
 
-  scatter(training_signal_actual.zip(dtfutils.toDoubleSeq(train_time_lags).toSeq))
+  val train_actual_scatter = training_signal_actual.zip(dtfutils.toDoubleSeq(train_time_lags).toSeq)
+  scatter(train_actual_scatter)
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 
+  write(
+    tf_summary_dir/"train_scatter.csv",
+    "predv,predlag,actualv,actuallag\n"+
+      train_scatter.zip(train_actual_scatter).map(
+        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
+      ).mkString("\n")
+  )
 
   val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
   val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
 
-  scatter(dtfutils.toDoubleSeq(err_test).zip(dtfutils.toDoubleSeq(err_lag_test)).toSeq)
+  val test_err_scatter = dtfutils.toDoubleSeq(err_test).zip(dtfutils.toDoubleSeq(err_lag_test)).toSeq
+  scatter(test_err_scatter)
   xAxis("Error in Velocity")
   yAxis("Error in Time Lag")
   title("Test Set Errors; Scatter")
 
-  scatter(dtfutils.toDoubleSeq(reg_metrics.preds).zip(dtfutils.toDoubleSeq(reg_time_lag.preds)).toSeq)
+  write(
+    tf_summary_dir/"test_errors.csv",
+    "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+
+  val test_scatter = dtfutils.toDoubleSeq(reg_metrics.preds).zip(dtfutils.toDoubleSeq(reg_time_lag.preds)).toSeq
+  scatter(test_scatter)
   xAxis("Velocity")
   yAxis("Time Lag")
   title("Test Set; Scatter")
 
   hold()
 
-  scatter(dtfutils.toDoubleSeq(reg_metrics.targets).zip(dtfutils.toDoubleSeq(reg_time_lag.targets)).toSeq)
+  val test_actual_scatter =
+    dtfutils.toDoubleSeq(reg_metrics.targets).zip(dtfutils.toDoubleSeq(reg_time_lag.targets)).toSeq
+  scatter(test_actual_scatter)
   legend(Seq("Predictions", "Actual Data"))
   unhold()
+
+  write(
+    tf_summary_dir/"test_scatter.csv",
+    "predv,predlag,actualv,actuallag\n"+
+      test_scatter.zip(test_actual_scatter).map(
+        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
+      ).mkString("\n")
+  )
 
   (
     ((data, collated_data), (data_test, collated_data_test), tf_dataset),

@@ -360,7 +360,7 @@ package object helios {
     )
 
 
-    val unstack_images = new Layer[Output, Seq[Output]]("UnstackImages") {
+    val split_stacked_images = new Layer[Output, Seq[Output]]("UnstackImages") {
       override val layerType: String = "UnstackImage"
 
       override protected def _forward(input: Output)(implicit mode: Mode): Seq[Output] = {
@@ -383,11 +383,11 @@ package object helios {
 
     val loss = dtflearn.tuple2_layer(
       "Tup2",
-      unstack_images >> write_images("Actual_Image"),
+      split_stacked_images >> write_images("Actual_Image"),
       dtflearn.tuple2_layer(
         "Tup_1",
         dtflearn.identity[Output]("Id"),
-        unstack_images >> write_images("Reconstruction"))) >>
+        split_stacked_images >> write_images("Reconstruction"))) >>
       lossFunc >>
       tf.learn.ScalarSummary("Loss", "ReconstructionLoss")
 
@@ -399,7 +399,7 @@ package object helios {
       train_data, inMemory = false)
 
 
-    (model, estimator, tf_summary_dir, collated_data)
+    (model, estimator, collated_data, dataSet, tf_summary_dir)
 
   }
 

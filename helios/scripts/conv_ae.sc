@@ -18,8 +18,8 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 
 @main
 def main[T <: SolarImagesSource](
-  year_range: Range             = 2001 to 2004,
-  test_year: Int                = 2003,
+  year_range: Range             = 2011 to 2017,
+  test_year: Int                = 2015,
   image_source: T               = SOHO(MDIMAG, 512),
   buffer_size: Int              = 2000,
   image_hist: Int               = 0,

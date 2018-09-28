@@ -21,7 +21,7 @@ def main(
   iterations: Int               = 150000,
   miniBatch: Int                = 32,
   optimizer: Optimizer          = tf.train.AdaDelta(0.01),
-  sum_dir_prefix: String        = "const_v",
+  sum_dir_prefix: String        = "softplus",
   reg: Double                   = 0.01,
   p: Double                     = 1.0,
   time_scale: Double            = 1.0,
