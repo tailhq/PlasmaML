@@ -525,13 +525,13 @@ def run_exp2(
 
   scatter(
     collated_data_test
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Double])
+      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
       .zip(dtfutils.toDoubleSeq(reg_metrics.preds).toSeq))
 
   hold()
   scatter(
     collated_data_test
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Double])
+      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
       .zip(dtfutils.toDoubleSeq(reg_metrics.targets).toSeq))
   xAxis("||x(t)||_1")
   yAxis("f(x(t))")
@@ -589,12 +589,12 @@ def run_exp2(
 
   scatter(
     collated_data.slice(0, num_training)
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Double])
+      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
       .zip(dtfutils.toDoubleSeq(train_signal_predicted).toSeq))
   hold()
   scatter(
     collated_data.slice(0, num_training)
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Double])
+      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
       .zip(dtfutils.toDoubleSeq(training_signal_actual).toSeq))
   xAxis("||x(t)||_1")
   yAxis("f(x(t))")
