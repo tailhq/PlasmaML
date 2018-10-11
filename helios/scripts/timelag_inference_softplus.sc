@@ -28,6 +28,7 @@ def main(
   corr_sc: Double               = 2.5,
   c_cutoff: Double              = 0.0,
   prior_wt: Double              = 1d,
+  c: Double                     = 1d,
   prior_type: String            = "Hellinger",
   temp: Double                  = 1.0,
   error_wt: Double              = 1.0,
@@ -60,8 +61,7 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Phi("Act_"+i),
-    FLOAT64)(
+    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
     net_layer_sizes.tail) >> output_mapping
 
 
@@ -70,7 +70,7 @@ def main(
     prob_timelags, p, time_scale,
     corr_sc, c_cutoff,
     prior_wt, prior_type,
-    temp, error_wt)
+    temp, error_wt, c)
 
   val loss = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>

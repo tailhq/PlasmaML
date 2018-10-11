@@ -1,13 +1,14 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
 import io.github.mandar2812.dynaml.utils.annotation.Experimental
+import io.github.mandar2812.dynaml.tensorflow._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
 import org.platanios.tensorflow.api.ops.Output
 
 /**
-  * <h3>Dynamic time-lag Inference: Weighted Loss.</h3>
+  * <h3>Causal Dynamic time-lag Inference: Weighted Loss</h3>
   *
   * The loss functions assumes the prediction architecture
   * returns 2 &times; h number of outputs, where h = [[size_causal_window]].
@@ -22,7 +23,7 @@ import org.platanios.tensorflow.api.ops.Output
   * The loss term for each data sample in the mini-batch is computed
   * independently as follows.
   *
-  * L = &Sigma; <sub>i</sub> (|f<sub>i</sub> - y<sub>i</sub>|<sup>2</sup> &times; (1 + p<sub>i</sub>)
+  * L = &Sigma; <sub>i</sub> (|f<sub>i</sub> - y<sub>i</sub>|<sup>2</sup> &times; (1 + c &times; p<sub>i</sub>)
   * + &gamma; (&sqrt; p<sup>*</sup><sub>i</sub> - &sqrt; p<sub>i</sub>)<sup>2</sup>)
   *
   * @param name A string identifier for the loss instance.
@@ -36,7 +37,12 @@ import org.platanios.tensorflow.api.ops.Output
   * @param temperature The Gibbs temperature which scales the softmax probability
   *                    transformation while computing the target probability distribution.
   *
-  * @param prior_type The kind of divergence term to be used as a prior over the probability
+  * @param specificity Refers to the weight `c` in loss expression, a higher value of c
+  *                    encourages the model to focus more on the learning input-output
+  *                    relationships for the time steps which it perceives as more probable
+  *                    to contain the causal time lag.
+  *
+  * @param divergence The kind of divergence term to be used as a prior over the probability
   *                   distribution predicted for the time lag. Available options include.
   *                   <ul>
   *                     <li>
@@ -63,7 +69,8 @@ case class CausalDynamicTimeLag(
   prior_wt: Double = 1.5,
   error_wt: Double = 1.0,
   temperature: Double = 1.0,
-  prior_type: String = "Hellinger") extends
+  specificity: Double = 1.0,
+  divergence: String = "Hellinger") extends
   Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
@@ -76,14 +83,17 @@ case class CausalDynamicTimeLag(
 
     val model_errors = preds.subtract(targets)
 
-    val target_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
+    val target_prob =
+      if(divergence == "Hellinger") model_errors.square.multiply(-1.0).divide(temperature).softmax()
+      else dtf.tensor_f64(
+        1, size_causal_window)(
+        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
 
-    def kl(prior: Output, p: Output): Output =
-      prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
+    def kl(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
 
     val m = target_prob.add(prob).divide(2.0)
 
-    val prior_term = prior_type match {
+    val prior_term = divergence match {
       case "L2" =>
         target_prob.subtract(prob).square.sum(axes = 1).divide(2.0).mean()
       case "Hellinger" =>
@@ -93,14 +103,14 @@ case class CausalDynamicTimeLag(
       case "Cross-Entropy" =>
         target_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
       case "Kullback-Leibler" =>
-        kl(target_prob, prob)
+        kl(prob, target_prob)
       case _ =>
         Tensor(0.0).toOutput
 
     }
 
     model_errors.square
-      .multiply(prob.add(1.0))
+      .multiply(prob.multiply(specificity).add(1))
       .sum(axes = 1).mean()
       .multiply(error_wt)
       .add(prior_term.multiply(prior_wt))
@@ -117,6 +127,50 @@ object CausalDynamicTimeLag {
       }
     }
 }
+
+@Experimental
+case class CausalDynamicTimeLagSO(
+  override val name: String,
+  size_causal_window: Int,
+  prior_wt: Double = 1.5,
+  temperature: Double = 1.0,
+  specificity: Double = 1.0,
+  divergence: String = "Hellinger") extends
+  Loss[((Output, Output), Output)](name) {
+
+  override val layerType: String = s"WTSLossSO[horizon:$size_causal_window]"
+
+  override protected def _forward(input: ((Output, Output), Output))(implicit mode: Mode): Output = {
+
+    val preds               = input._1._1
+    val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
+    val prob                = input._1._2
+    val targets             = input._2
+
+    val model_errors = repeated_preds.subtract(targets)
+
+    val prior_prob =
+      if(divergence == "Hellinger") model_errors.square.multiply(-1.0).divide(temperature).softmax()
+      else dtf.tensor_f64(
+        1, size_causal_window)(
+        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
+
+    def kl(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
+
+    val m = prior_prob.add(prob).divide(2.0)
+
+    val prior_term =
+      if(divergence == "Jensen-Shannon") kl(prior_prob, m).add(kl(prob, m)).multiply(0.5)
+      else if(divergence == "Hellinger") prior_prob.sqrt.subtract(prob.sqrt).square.sum(axes = 1).sqrt.divide(math.sqrt(2.0)).mean()
+      else if(divergence == "Cross-Entropy") prior_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
+      else if(divergence == "Kullback-Leibler") kl(prob, prior_prob)
+      else Tensor(0.0).toOutput
+
+    model_errors.square.multiply(prob.multiply(specificity).add(1)).sum(axes = 1).mean()
+      .add(prior_term.multiply(prior_wt))
+  }
+}
+
 
 @Experimental
 object WeightedTimeSeriesLossBeta {
@@ -218,45 +272,7 @@ object WeightedTimeSeriesLossGaussian {
 }
 
 
-@Experimental
-case class WeightedTimeSeriesLossSO(
-  override val name: String,
-  size_causal_window: Int,
-  prior_wt: Double = 1.5,
-  temperature: Double = 1.0,
-  prior_type: String = "Hellinger") extends
-  Loss[((Output, Output), Output)](name) {
-
-  override val layerType: String = s"WTSLossSO[horizon:$size_causal_window]"
-
-  override protected def _forward(input: ((Output, Output), Output))(implicit mode: Mode): Output = {
-
-    val preds               = input._1._1
-    val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
-    val prob                = input._1._2
-    val targets             = input._2
-
-    val model_errors = repeated_preds.subtract(targets)
-
-    val prior_prob = model_errors.square.multiply(-1.0).divide(temperature).softmax()
-
-    def kl(prior: Output, p: Output): Output =
-      prior.divide(p).log.multiply(prior).sum(axes = 1).mean()
-
-    val m = prior_prob.add(prob).divide(2.0)
-
-    val prior_term =
-      if(prior_type == "Jensen-Shannon") kl(prior_prob, m).add(kl(prob, m)).multiply(0.5)
-      else if(prior_type == "Hellinger") prior_prob.sqrt.subtract(prob.sqrt).square.sum().sqrt.divide(math.sqrt(2.0))
-      else if(prior_type == "Cross-Entropy") prior_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
-      else if(prior_type == "Kullback-Leibler") kl(prior_prob, prob)
-      else Tensor(0.0).toOutput
-
-    model_errors.square.multiply(prob.add(1.0)).sum(axes = 1).mean().add(prior_term.multiply(prior_wt))
-  }
-}
-
-object WeightedTimeSeriesLossSO {
+object CausalDynamicTimeLagSO {
   def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
     new Layer[Output, (Output, Output)](name) {
       override val layerType: String = s"OutputWTSLossSO[horizon:$size_causal_window]"
