@@ -32,6 +32,8 @@ def main(
   reg: Double                           = 0.001,
   prior_wt: Double                      = 0.85,
   error_wt: Double                      = 1.0,
+  prior_type: String                    = "Hellinger",
+  c: Double                             = 1.0,
   temp: Double                          = 0.75,
   stop_criteria: StopCriteria           = dtflearn.max_iter_stop(5000),
   miniBatch: Int                        = 16,
@@ -162,7 +164,9 @@ def main(
     "Loss/CDT-SW",
     dataset.data.head._2._2.length,
     prior_wt = prior_wt,
-    temperature = temp) >>
+    temperature = temp,
+    specificity = c,
+    divergence = prior_type) >>
     L2Regularization(
       layer_parameter_names,
       layer_datatypes,
