@@ -15,6 +15,7 @@ import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.Layer
 import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 
 @main
 def main(
@@ -120,20 +121,22 @@ def main(
     Seq(1, 1, 1, 1)
   )
 
-  val identity_act = DataPipe[String, Layer[Output, Output]](dtflearn.identity(_))
+  val activation = DataPipe[String, Layer[Output, Output]]((s: String) => tf.learn.ReLU(s, 0.01f))
 
   val conv_section = tf.learn.Cast("Input/Cast", FLOAT32) >>
     dtflearn.inception_stack(
       total_channels*(image_hist_downsamp + 1),
-      filter_depths_stack1, identity_act,
-      use_batch_norm = false)(1) >>
-    dtflearn.batch_norm("BatchNorm_1") >>
-    tf.learn.ReLU("ReLU_1", 0.01f) >>
+      filter_depths_stack1, activation,
+      use_batch_norm = true)(1) >>
+    //dtflearn.batch_norm("BatchNorm_1") >>
+    //tf.learn.ReLU("ReLU_1", 0.01f) >>
+    tf.learn.MaxPool(s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
     dtflearn.inception_stack(
       filter_depths_stack1.last.sum, filter_depths_stack2,
-      identity_act, use_batch_norm = false)(5) >>
-    dtflearn.batch_norm("BatchNorm_2") >>
-    tf.learn.ReLU("ReLU_2", 0.01f)
+      activation, use_batch_norm = true)(5) >>
+    //dtflearn.batch_norm("BatchNorm_2") >>
+    //tf.learn.ReLU("ReLU_2", 0.01f) >>
+    tf.learn.MaxPool(s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding)
 
 
   val post_conv_ff_stack = dtflearn.feedforward_stack(
