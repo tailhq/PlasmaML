@@ -19,6 +19,7 @@ import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
+import org.platanios.tensorflow.api.learn.Mode
 
 //Define some types for convenience.
 type DATA        = Stream[((Int, Tensor), (Float, Float))]
@@ -27,6 +28,22 @@ type TLDATA      = (DATA, SLIDINGDATA)
 
 //Alias for the identity pipe/mapping
 def id[T]: DataPipe[T, T] = Pipe.identityPipe[T]
+
+//A Polynomial layer builder
+val layer_poly = (power: Int) => (n: String) => new Activation(n) {
+  override val layerType = "Poly"
+
+  override protected def _forward(input: Output)(implicit mode: Mode): Output = {
+    //val power = dtf.tensor_i32(input.shape(1))((1 to input.shape(1)):_*)
+
+    input.pow(power)
+
+  }
+}
+
+val getAct = (s: Int) => (i: Int) =>
+  if(i - s == 0) layer_poly(2)(s"Act_$i")
+  else tf.learn.Sigmoid(s"Act_$i")
 
 //subroutine to calculate sliding autocorrelation of a time series.
 def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {

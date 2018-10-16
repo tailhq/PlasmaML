@@ -1217,16 +1217,18 @@ package object data {
     }
 
 
+    val load_images_into_tensor = DataPipe((c: (Option[Tensor], Seq[Double])) => (c._1.get, c._2))
+
     val processed_data = experiment_data.copy[(Tensor, Seq[Double])](
       training_dataset = experiment_data.training_dataset
         .map(load_only_images)
         .filter(non_corrupted_images)
-        .map((c: (Option[Tensor], Seq[Double])) => (c._1.get, c._2))
+        .map(load_images_into_tensor)
         .transform(get_image_history),
       test_dataset = experiment_data.test_dataset
         .map(load_only_images)
         .filter(non_corrupted_images)
-        .map((c: (Option[Tensor], Seq[Double])) => (c._1.get, c._2))
+        .map(load_images_into_tensor)
         .transform(get_image_history)
     )
 
