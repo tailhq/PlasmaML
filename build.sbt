@@ -14,6 +14,7 @@ lazy val commonSettings = Seq(
     "jzy3d-releases" at "http://maven.jzy3d.org/releases",
     "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
     "BeDataDriven" at "https://nexus.bedatadriven.com/content/groups/public",
+    "atlassian-maven" at "https://maven.atlassian.com/maven-external",
     Resolver.sonatypeRepo("public"),
     Resolver.sonatypeRepo("snapshots")
   )
