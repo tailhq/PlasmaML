@@ -174,7 +174,7 @@ def main[T <: SolarImagesSource](
     num_channels_image = num_channels,
     image_history = image_hist,
     image_history_downsampling = image_hist_downsamp,
-    processed_image_size = (patch_range.length, patch_range.length))(
+    processed_image_size = (patch_range.length/2, patch_range.length/2))(
     summary_dir, stop_criteria, tmpdir,
     arch = architecture,
     lossFunc = loss_func,
