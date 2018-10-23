@@ -28,7 +28,7 @@ def main[T <: SolarImagesSource](
   image_source: T               = SOHO(MDIMAG, 512),
   buffer_size: Int              = 2000,
   re: Boolean                   = true,
-  time_horizon: (Int, Int)      = (18, 56),
+  time_horizon: (Int, Int)      = (36, 96),
   image_hist: Int               = 0,
   image_hist_downsamp: Int      = 1,
   opt: Optimizer                = tf.train.AdaDelta(0.01),
@@ -75,9 +75,9 @@ def main[T <: SolarImagesSource](
 
   val (image_filter, num_channels, image_to_byte) = data.image_process_metadata(image_source)
 
-  val patch_range = data.get_patch_range(/*magic_ratio*/1.0, image_sizes/2)
+  val patch_range = data.get_patch_range(magic_ratio/*1.0*/, image_sizes)
 
-  val image_preprocess = /*data.image_central_patch(magic_ratio, image_sizes) >*/ data.image_scale(0.5)
+  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
 
   //Set the path of the summary directory
   val summary_dir_prefix  = "swtl_"+image_source.toString

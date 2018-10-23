@@ -25,7 +25,7 @@ def main(
   image_sources: Seq[SolarImagesSource] = Seq(SDO(AIA193, 512), SDO(HMIB, 512)),
   buffer_size: Int                      = 2000,
   re: Boolean                           = true,
-  time_horizon: (Int, Int)              = (18, 56),
+  time_horizon: (Int, Int)              = (36, 96),
   image_hist: Int                       = 0,
   image_hist_downsamp: Int              = 1,
   opt: Optimizer                        = tf.train.AdaDelta(0.01),
@@ -72,7 +72,7 @@ def main(
 
 
 
-  val patch_range = data.get_patch_range(magic_ratio, image_sizes/2)
+  val patch_range = data.get_patch_range(magic_ratio, image_sizes)
 
   val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
 
