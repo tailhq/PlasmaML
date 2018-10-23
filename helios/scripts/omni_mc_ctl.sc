@@ -72,7 +72,7 @@ def main(
 
 
 
-  val patch_range = data.get_patch_range(magic_ratio, image_sizes)
+  val patch_range = data.get_patch_range(magic_ratio, image_sizes/2)
 
   val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
 
