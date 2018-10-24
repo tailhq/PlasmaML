@@ -34,7 +34,7 @@ def main(
   mo_flag: Boolean              = true,
   prob_timelags: Boolean        = true,
   dist_type: String             = "default",
-  timelag_pred_strategy: String = "mode") = {
+  timelag_pred_strategy: String = "mode"): timelagutils.ExperimentResult = {
 
   //Output computation
   val beta = 100f
@@ -78,7 +78,7 @@ def main(
     prior_wt, prior_type,
     temp, error_wt, c)
 
-  val loss     = lossFunc >>
+  val loss = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
@@ -94,20 +94,20 @@ def main(
       compute_output > compute_time_lag)
 
     timelagutils.run_exp2(
-      (dataset, dataset_test), iterations, optimizer,
+      (dataset, dataset_test),
+      architecture, loss,
+      iterations, optimizer,
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,
-      timelag_pred_strategy,
-      architecture, loss)
+      timelag_pred_strategy)
   } else {
 
     timelagutils.run_exp(
-      dataset,
+      dataset, architecture, loss,
       iterations, optimizer,
       miniBatch,
       sum_dir_prefix,
       mo_flag, prob_timelags,
-      timelag_pred_strategy,
-      architecture, loss)
+      timelag_pred_strategy)
   }
 }

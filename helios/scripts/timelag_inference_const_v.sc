@@ -35,7 +35,7 @@ def main(
   mo_flag: Boolean              = true,
   prob_timelags: Boolean        = true,
   dist_type: String             = "default",
-  timelag_pred_strategy: String = "mode") = {
+  timelag_pred_strategy: String = "mode"): timelagutils.ExperimentResult = {
 
   //Output computation
   val beta = 100f
@@ -88,20 +88,21 @@ def main(
       compute_output)
 
     timelagutils.run_exp2(
-      (dataset, dataset_test), iterations, optimizer,
+      (dataset, dataset_test),
+      architecture, loss,
+      iterations, optimizer,
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,
-      timelag_pred_strategy,
-      architecture, loss)
+      timelag_pred_strategy)
   } else {
 
     timelagutils.run_exp(
       dataset,
+      architecture, loss,
       iterations, optimizer,
       miniBatch,
       sum_dir_prefix,
       mo_flag, prob_timelags,
-      timelag_pred_strategy,
-      architecture, loss)
+      timelag_pred_strategy)
   }
 }

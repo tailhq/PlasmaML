@@ -19,7 +19,8 @@ import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
-import org.platanios.tensorflow.api.learn.Mode
+import org.platanios.tensorflow.api.learn.estimators.Estimator
+import org.platanios.tensorflow.api.learn.{Mode, SupervisedTrainableModel}
 
 //Define some types for convenience.
 type DATA        = Stream[((Int, Tensor), (Float, Float))]
@@ -358,24 +359,374 @@ def get_loss(
       specificity = c)
   }
 
+def process_predictions(
+  predictions: (Tensor, Tensor),
+  time_window: Int,
+  multi_output: Boolean = true,
+  probabilistic_time_lags: Boolean = true,
+  timelag_pred_strategy: String = "mode",
+  scale_outputs: Option[GaussianScalerTF] = None): (Tensor, Tensor) = {
+
+  val index_times = Tensor(
+    (0 until time_window).map(_.toDouble)
+  ).reshape(
+    Shape(time_window)
+  )
+
+  val pred_time_lags = if(probabilistic_time_lags) {
+    val unsc_probs = predictions._2
+
+    if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(predictions._1.shape(0))).cast(FLOAT64)
+    else unsc_probs.multiply(index_times).sum(axes = 1)
+
+  } else predictions._2
+
+  val pred_targets: Tensor = if (multi_output) {
+
+    val all_preds =
+      if (scale_outputs.isDefined) scale_outputs.get.i(predictions._1)
+      else predictions._1
+
+    val repeated_times = tfi.stack(Seq.fill(time_window)(pred_time_lags.floor), axis = -1)
+
+    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
+
+    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
+
+  } else {
+
+    if (scale_outputs.isDefined) {
+      val scaler = scale_outputs.get
+      scaler(0).i(predictions._1)
+    } else predictions._1
+
+  }
+
+  (pred_targets, pred_time_lags)
+
+}
+
+def plot_time_series(targets: Tensor, predictions: Tensor, plot_title: String): Unit = {
+  line(dtfutils.toDoubleSeq(targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  hold()
+  line(dtfutils.toDoubleSeq(predictions).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
+  title(plot_title)
+  unhold()
+}
+
+def plot_time_series(targets: Stream[(Int, Double)], predictions: Tensor, plot_title: String): Unit = {
+  line(targets.toSeq)
+  hold()
+  line(dtfutils.toDoubleSeq(predictions).zipWithIndex.map(c => (c._2, c._1)).toSeq)
+  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
+  title(plot_title)
+  unhold()
+}
+
+@throws[java.util.NoSuchElementException]
+@throws[Exception]
+def plot_histogram(data: Tensor, plot_title: String): Unit = {
+  try {
+
+    histogram(dtfutils.toDoubleSeq(data).toSeq)
+    title(plot_title)
+
+  } catch {
+    case _: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
+    case _ => println("Can't plot histogram due to exception")
+  }
+}
+
+def plot_input_output(
+  input: Stream[Tensor],
+  input_to_scalar: Tensor => Double,
+  targets: Tensor,
+  predictions: Tensor,
+  xlab: String,
+  ylab: String,
+  plot_title: String): Unit = {
+
+  val processed_inputs = input.map(input_to_scalar)
+
+  scatter(processed_inputs.zip(dtfutils.toDoubleSeq(predictions).toSeq))
+
+  hold()
+  scatter(processed_inputs.zip(dtfutils.toDoubleSeq(targets).toSeq))
+  xAxis(xlab)
+  yAxis(ylab)
+  title(plot_title)
+  legend(Seq("Model", "Data"))
+  unhold()
+}
+
+def plot_scatter(
+  x: Tensor,
+  y: Tensor,
+  xlab: Option[String] = None,
+  ylab: Option[String] = None,
+  plot_title: Option[String] = None): Seq[(Double, Double)] = {
+  val xy = dtfutils.toDoubleSeq(x).zip(dtfutils.toDoubleSeq(y)).toSeq
+  scatter(xy)
+  if(xlab.isDefined) xAxis(xlab.get)
+  if(ylab.isDefined) yAxis(ylab.get)
+  if(plot_title.isDefined) title(plot_title.get)
+  xy
+}
+
+sealed trait ModelRun {
+
+  type MODEL
+  type ESTIMATOR
+
+  val summary_dir: Path
+  val timelags_gt: (Tensor, Tensor)
+  val data_and_scales: (HeliosDataSet, (GaussianScalerTF, GaussianScalerTF))
+  val metrics: (RegressionMetricsTF, RegressionMetricsTF)
+  val model: MODEL
+  val estimator: ESTIMATOR
+
+}
+
+case class JointModelRun(
+  data_and_scales: (HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)),
+  model: SupervisedTrainableModel[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output],
+  estimator: Estimator[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+    ((Output, Output), Output)],
+  metrics: (RegressionMetricsTF, RegressionMetricsTF),
+  summary_dir: Path,
+  timelags_gt: (Tensor, Tensor)) extends ModelRun {
+
+  override type MODEL = SupervisedTrainableModel[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output]
+
+  override type ESTIMATOR = Estimator[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+    ((Output, Output), Output)]
+}
+
+case class StageWiseModelRun(
+  data_and_scales: (HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)),
+  model: SupervisedTrainableModel[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output],
+  estimator: Estimator[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+    ((Output, Output), Output)],
+  metrics: (RegressionMetricsTF, RegressionMetricsTF),
+  summary_dir: Path,
+  timelags_gt: (Tensor, Tensor)) extends ModelRun {
+
+  override type MODEL = SupervisedTrainableModel[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output]
+
+  override type ESTIMATOR = Estimator[
+    Tensor, Output, DataType, Shape, (Output, Output),
+    (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+    ((Output, Output), Output)]
+}
+
+
+case class ExperimentType(
+  multi_output: Boolean,
+  probabilistic_time_lags: Boolean,
+  timelag_prediction: String)
+
+case class ExperimentResult(
+  config: ExperimentType,
+  train_data: TLDATA,
+  test_data: TLDATA,
+  results: JointModelRun
+)
+
+def plot_and_write_results(results: ExperimentResult): Unit = {
+
+  val ExperimentResult(
+  ExperimentType(mo_flag, prob_timelags, timelag_pred_strategy),
+  (_, collated_data),
+  (_, collated_data_test),
+  JointModelRun(
+  (tf_dataset, scalers),
+  _, estimator,
+  (reg_metrics, reg_time_lag),
+  tf_summary_dir,
+  (train_time_lags, _))) = results
+
+  val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
+
+  val mae_lag = err_time_lag_test
+    .abs.mean()
+    .scalar
+    .asInstanceOf[Double]
+
+  val pred_time_lags_test = reg_time_lag.preds
+
+  print("Mean Absolute Error in time lag = ")
+  pprint.pprintln(mae_lag)
+
+  plot_histogram(pred_time_lags_test, plot_title = "Predicted Time Lags")
+  plot_histogram(err_time_lag_test, plot_title = "Time Lag prediction errors")
+
+  plot_time_series(reg_metrics.targets, reg_metrics.preds, plot_title = "Test Set Predictions")
+
+  plot_input_output(
+    input = collated_data_test.map(_._2._1),
+    input_to_scalar = (t: Tensor) => t.abs.sum().scalar.asInstanceOf[Float].toDouble,
+    targets = reg_metrics.targets,
+    predictions = reg_metrics.preds,
+    xlab = "||x(t)||_1",
+    ylab = "f(x(t))",
+    plot_title = "Input-Output Relationship: Test Data"
+  )
+
+  //Perform same visualisation for training set
+  val training_preds: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
+
+  val (train_signal_predicted, pred_time_lags_train) = process_predictions(
+    training_preds,
+    collated_data.head._2._2.length,
+    mo_flag,
+    prob_timelags,
+    timelag_pred_strategy,
+    Some(scalers._2))
+
+
+  val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
+
+  val training_signal_actual = (0 until tf_dataset.nTrain).map(n => {
+    val time_lag = pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
+    unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
+  })
+
+  plot_time_series(
+    collated_data.map(c => (c._1+c._2._3.toInt, c._2._2(c._2._3.toInt))),
+    train_signal_predicted,
+    plot_title = "Training Set Predictions")
+
+  plot_input_output(
+    input = collated_data.map(_._2._1),
+    input_to_scalar = (t: Tensor) => t.abs.sum().scalar.asInstanceOf[Float].toDouble,
+    targets = training_signal_actual,
+    predictions = train_signal_predicted,
+    xlab = "||x(t)||_1",
+    ylab = "f(x(t))",
+    plot_title = "Input-Output Relationship: Training Data"
+  )
+
+
+  val err_train     = train_signal_predicted.subtract(training_signal_actual)
+  val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
+
+  val train_err_scatter = plot_scatter(
+    err_train,
+    err_lag_train,
+    xlab = Some("Error in Velocity"),
+    ylab = Some("Error in Time Lag"),
+    plot_title = Some("Training Set Errors; Scatter")
+  )
+
+  write(
+    tf_summary_dir/"train_errors.csv",
+    "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+
+  val train_scatter = plot_scatter(
+    train_signal_predicted,
+    pred_time_lags_train,
+    xlab = Some("Velocity"),
+    ylab = Some("Time Lag"),
+    plot_title = Some("Training Set; Scatter"))
+
+  hold()
+
+  val train_actual_scatter = plot_scatter(
+    training_signal_actual,
+    train_time_lags)
+  legend(Seq("Predictions", "Actual Data"))
+  unhold()
+
+  write(
+    tf_summary_dir/"train_scatter.csv",
+    "predv,predlag,actualv,actuallag\n"+
+      train_scatter.zip(train_actual_scatter).map(
+        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
+      ).mkString("\n")
+  )
+
+  val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
+  val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
+
+  val test_err_scatter = plot_scatter(
+    err_test, err_lag_test,
+    xlab = Some("Error in Velocity"),
+    ylab = Some("Error in Time Lag"),
+    plot_title = Some("Test Set Errors; Scatter")
+  )
+
+  write(
+    tf_summary_dir/"test_errors.csv",
+    "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+
+  val test_scatter = plot_scatter(
+    reg_metrics.preds,
+    reg_time_lag.preds,
+    xlab = Some("Velocity"),
+    ylab = Some("Time Lag"),
+    plot_title = Some("Training Set; Scatter"))
+
+  hold()
+
+  val test_actual_scatter = plot_scatter(
+    reg_metrics.targets,
+    reg_time_lag.targets)
+
+  legend(Seq("Predictions", "Actual Data"))
+  unhold()
+
+  write(
+    tf_summary_dir/"test_scatter.csv",
+    "predv,predlag,actualv,actuallag\n"+
+      test_scatter.zip(test_actual_scatter).map(
+        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
+      ).mkString("\n")
+  )
+
+  val script = pwd/'helios/'scripts/"visualise_tl_results.R"
+
+  try {
+    %%('Rscript, script, tf_summary_dir)
+  } catch {
+    case e: Exception => e.printStackTrace()
+  }
+
+}
+
+
 //Runs an experiment given some architecture, loss and training parameters.
 def run_exp(
   dataset: TLDATA,
+  architecture: Layer[Output, (Output, Output)],
+  loss: Layer[((Output, Output), Output), Output],
   iterations: Int             = 150000,
   optimizer: Optimizer        = tf.train.AdaDelta(0.01),
   miniBatch: Int              = 512,
   sum_dir_prefix: String      = "",
   mo_flag: Boolean            = false,
   prob_timelags: Boolean      = false,
-  timelag_pred_strategy: String = "mode",
-  architecture: Layer[Output, (Output, Output)],
-  loss: Layer[((Output, Output), Output), Output]) = {
+  timelag_pred_strategy: String = "mode"): ExperimentResult = {
 
   val train_fraction = 0.7
 
   val (data, collated_data): TLDATA = dataset
-
-  val sliding_window = collated_data.head._2._2.length
 
   val num_training = (collated_data.length*train_fraction).toInt
   val num_test = collated_data.length - num_training
@@ -386,29 +737,29 @@ def run_exp(
       (data.take(num_training), collated_data.take(num_training)),
       (data.takeRight(num_test), collated_data.takeRight(num_test))
     ),
+    architecture, loss,
     iterations, optimizer, miniBatch, sum_dir_prefix,
-    mo_flag, prob_timelags, timelag_pred_strategy,
-    architecture, loss
+    mo_flag, prob_timelags, timelag_pred_strategy
   )
 }
 
 
 def run_exp2(
   dataset: (TLDATA, TLDATA),
-  iterations: Int             = 150000,
-  optimizer: Optimizer        = tf.train.AdaDelta(0.01),
-  miniBatch: Int              = 512,
-  sum_dir_prefix: String      = "",
-  mo_flag: Boolean            = false,
-  prob_timelags: Boolean      = false,
-  timelag_pred_strategy: String = "mode",
   architecture: Layer[Output, (Output, Output)],
-  loss: Layer[((Output, Output), Output), Output]) = {
+  loss: Layer[((Output, Output), Output), Output],
+  iterations: Int               = 150000,
+  optimizer: Optimizer          = tf.train.AdaDelta(0.01),
+  miniBatch: Int                = 512,
+  sum_dir_prefix: String        = "",
+  mo_flag: Boolean              = false,
+  prob_timelags: Boolean        = false,
+  timelag_pred_strategy: String = "mode"): ExperimentResult = {
 
   val (data, collated_data): TLDATA           = dataset._1
   val (data_test, collated_data_test): TLDATA = dataset._2
 
-  val sliding_window = collated_data.head._2._2.length
+  val causal_window  = collated_data.head._2._2.length
   val num_training   = collated_data.length
   val num_test       = collated_data_test.length
 
@@ -433,9 +784,7 @@ def run_exp2(
 
       val input              = tf.learn.Input(FLOAT64, Shape(-1, tf_dataset.trainData.shape(1)))
 
-      val num_outputs        = sliding_window
-
-      val trainInput         = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
+      val trainInput         = tf.learn.Input(FLOAT64, Shape(-1, causal_window))
 
       val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
 
@@ -447,265 +796,53 @@ def run_exp2(
         dtflearn.max_iter_stop(iterations))(
         training_data)
 
-      val predictions: (Tensor, Tensor)        = estimator.infer(() => tf_dataset.testData)
+      val predictions: (Tensor, Tensor) = estimator.infer(() => tf_dataset.testData)
 
-      val index_times = Tensor(
-        (0 until num_outputs).map(_.toDouble)
-      ).reshape(
-        Shape(num_outputs)
-      )
 
-      val pred_time_lags_test = if(prob_timelags) {
-        val unsc_probs = predictions._2
+      val (pred_outputs_test, pred_time_lags_test) = process_predictions(
+        predictions,
+        causal_window,
+        mo_flag,
+        prob_timelags,
+        timelag_pred_strategy,
+        Some(scalers._2))
 
-        unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTest)).cast(FLOAT64)
-
-      } else predictions._2
-
-      val reg_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
-
-      val pred_targets: Tensor = if (mo_flag) {
-        val all_preds =
-          if (prob_timelags) scalers._2.i(predictions._1)
-          else scalers._2.i(predictions._1)
-
-        val repeated_times = tfi.stack(Seq.fill(num_outputs)(pred_time_lags_test.floor), axis = -1)
-
-        val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
-
-        all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
-      } else {
-        scalers._2(0).i(predictions._1)
-      }
-
-      val actual_targets = (0 until num_test).map(n => {
+      val actual_outputs_test = (0 until num_test).map(n => {
         val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
         tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Double]
       })
 
-      val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+      val reg_metrics_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
+      val reg_metrics_output   = new RegressionMetricsTF(pred_outputs_test, actual_outputs_test)
 
-      ((tf_dataset, scalers), (model, estimator), reg_metrics, reg_time_lag, tf_summary_dir, train_time_lags)
+
+      JointModelRun(
+        (tf_dataset, scalers),
+        model,
+        estimator,
+        (reg_metrics_output, reg_metrics_time_lag),
+        tf_summary_dir,
+        (train_time_lags, test_time_lags)
+      )
+
     })
 
   //The processing pipeline
-  val process_data =
-    data_splits_to_tensors(sliding_window) >
+  val train_and_evaluate =
+    data_splits_to_tensors(causal_window) >
       scale_data >
       model_train_eval
 
-  val (
-    (tf_dataset, scalers),
-    (model, estimator),
-    reg_metrics, reg_time_lag,
-    tf_summary_dir,
-    train_time_lags) = process_data(collated_data, collated_data_test)
+  val results_model_eval = train_and_evaluate(collated_data, collated_data_test)
 
-  val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
-
-  val mae_lag = err_time_lag_test
-    .abs.mean()
-    .scalar
-    .asInstanceOf[Double]
-
-  val pred_time_lags_test = reg_time_lag.preds
-
-  print("Mean Absolute Error in time lag = ")
-  pprint.pprintln(mae_lag)
-
-  try {
-
-    histogram(dtfutils.toDoubleSeq(pred_time_lags_test).toSeq)
-    title("Predicted Time Lags")
-
-  } catch {
-    case _: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
-    case _ => println("Can't plot histogram due to exception")
-  }
-
-  try {
-
-    histogram(dtfutils.toDoubleSeq(err_time_lag_test).toSeq)
-    title("Histogram of Time Lag prediction errors")
-
-  } catch {
-    case _: java.util.NoSuchElementException => println("Can't plot histogram due to `No Such Element` exception")
-    case _ => println("Can't plot histogram due to exception")
-  }
-
-  line(dtfutils.toDoubleSeq(reg_metrics.targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
-  hold()
-  line(dtfutils.toDoubleSeq(reg_metrics.preds).zipWithIndex.map(c => (c._2, c._1)).toSeq)
-  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
-  title("Test Set Predictions")
-  unhold()
-
-  scatter(
-    collated_data_test
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
-      .zip(dtfutils.toDoubleSeq(reg_metrics.preds).toSeq))
-
-  hold()
-  scatter(
-    collated_data_test
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
-      .zip(dtfutils.toDoubleSeq(reg_metrics.targets).toSeq))
-  xAxis("||x(t)||_1")
-  yAxis("f(x(t))")
-  title("Input-Output Relationship: Test Data")
-  legend(Seq("Model", "Data"))
-  unhold()
-
-
-  //Perform same visualisation for training set
-  val training_preds: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
-
-  val index_times = Tensor(
-    (0 until sliding_window).map(_.toDouble)
-  ).reshape(
-    Shape(sliding_window)
+  val exp_results = ExperimentResult(
+    ExperimentType(mo_flag, prob_timelags, timelag_pred_strategy),
+    (data, collated_data), (data_test, collated_data_test),
+    results_model_eval
   )
 
-  val pred_time_lags_train = if(prob_timelags) {
-    val unsc_probs = training_preds._2
+  plot_and_write_results(exp_results)
 
-    if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(tf_dataset.nTrain)).cast(FLOAT64)
-    else unsc_probs.multiply(index_times).sum(axes = 1)
-
-  } else training_preds._2
-
-
-  val train_signal_predicted = if (mo_flag) {
-    val all_preds =
-      if (prob_timelags) scalers._2.i(training_preds._1)
-      else scalers._2.i(training_preds._1)
-
-    val repeated_times      = tfi.stack(Seq.fill(sliding_window)(pred_time_lags_train.floor), axis = -1)
-
-    val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
-
-    all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
-  } else {
-    scalers._2(0).i(training_preds._1)
-  }
-
-
-  val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
-
-  val training_signal_actual = (0 until num_training).map(n => {
-    val time_lag = pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
-    unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
-  })
-
-  line(collated_data.slice(0, num_training).map(c => (c._1+c._2._3.toInt, c._2._2(c._2._3.toInt))))
-  hold()
-  line(dtfutils.toDoubleSeq(train_signal_predicted).toSeq)
-  legend(Seq("Actual Output Signal", "Predicted Output Signal"))
-  title("Training Set Predictions")
-  unhold()
-
-  scatter(
-    collated_data.slice(0, num_training)
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
-      .zip(dtfutils.toDoubleSeq(train_signal_predicted).toSeq))
-  hold()
-  scatter(
-    collated_data.slice(0, num_training)
-      .map(_._2._1.abs.sum().scalar.asInstanceOf[Float].toDouble)
-      .zip(dtfutils.toDoubleSeq(training_signal_actual).toSeq))
-  xAxis("||x(t)||_1")
-  yAxis("f(x(t))")
-  title("Input-Output Relationship: Training Data")
-  legend(Seq("Model", "Data"))
-  unhold()
-
-
-  val err_train     = train_signal_predicted.subtract(training_signal_actual)
-  val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
-
-  val train_err_scatter = dtfutils.toDoubleSeq(err_train).zip(dtfutils.toDoubleSeq(err_lag_train)).toSeq
-  write(
-    tf_summary_dir/"train_errors.csv",
-    "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
-
-  scatter(train_err_scatter)
-  xAxis("Error in Velocity")
-  yAxis("Error in Time Lag")
-  title("Training Set Errors; Scatter")
-
-  val train_scatter = dtfutils.toDoubleSeq(train_signal_predicted).zip(dtfutils.toDoubleSeq(pred_time_lags_train)).toSeq
-  scatter(train_scatter)
-  xAxis("Velocity")
-  yAxis("Time Lag")
-  title("Training Set; Scatter")
-
-  hold()
-
-  val train_actual_scatter = training_signal_actual.zip(dtfutils.toDoubleSeq(train_time_lags).toSeq)
-  scatter(train_actual_scatter)
-  legend(Seq("Predictions", "Actual Data"))
-  unhold()
-
-  write(
-    tf_summary_dir/"train_scatter.csv",
-    "predv,predlag,actualv,actuallag\n"+
-      train_scatter.zip(train_actual_scatter).map(
-        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
-      ).mkString("\n")
-  )
-
-  val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
-  val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
-
-  val test_err_scatter = dtfutils.toDoubleSeq(err_test).zip(dtfutils.toDoubleSeq(err_lag_test)).toSeq
-  scatter(test_err_scatter)
-  xAxis("Error in Velocity")
-  yAxis("Error in Time Lag")
-  title("Test Set Errors; Scatter")
-
-  write(
-    tf_summary_dir/"test_errors.csv",
-    "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
-
-
-  val test_scatter = dtfutils.toDoubleSeq(reg_metrics.preds).zip(dtfutils.toDoubleSeq(reg_time_lag.preds)).toSeq
-  scatter(test_scatter)
-  xAxis("Velocity")
-  yAxis("Time Lag")
-  title("Test Set; Scatter")
-
-  hold()
-
-  val test_actual_scatter = 
-    dtfutils.toDoubleSeq(reg_metrics.targets).zip(dtfutils.toDoubleSeq(reg_time_lag.targets)).toSeq
-
-
-  scatter(test_actual_scatter)
-  legend(Seq("Predictions", "Actual Data"))
-  unhold()
-
-  write(
-    tf_summary_dir/"test_scatter.csv",
-    "predv,predlag,actualv,actuallag\n"+
-      test_scatter.zip(test_actual_scatter).map(
-        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
-      ).mkString("\n")
-  )
-
-  val script = pwd/'helios/'scripts/"visualise_tl_results.R"
-
-  try {
-    %%('Rscript, script, tf_summary_dir)
-  } catch {
-    case e: Exception => e.printStackTrace()
-  }
-
-
-  (
-    ((data, collated_data), (data_test, collated_data_test), tf_dataset),
-    (model, estimator, tf_summary_dir),
-    (reg_metrics, reg_time_lag),
-    scalers
-  )
+  exp_results
 
 }
