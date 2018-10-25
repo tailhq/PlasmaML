@@ -8,9 +8,7 @@ import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.types.DataType
 import org.platanios.tensorflow.api.learn.layers.{Activation, Input, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
-import org.platanios.tensorflow.api.ops.io.data.Dataset
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
-import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.pipes._
@@ -155,8 +153,8 @@ def generate_data(
 
   val energies = data.map(_._2._2)
 
-  spline(energies)
-  title("Output Time Series")
+  /*spline(energies)
+  title("Output Time Series")*/
 
   val effect_times = data.map(_._2._1)
 
@@ -424,6 +422,9 @@ def plot_time_series(targets: Stream[(Int, Double)], predictions: Tensor, plot_t
   unhold()
 }
 
+/**
+  * Takes a tensor of rank 1 (Shape(n)) and plots a histogram.
+  * */
 @throws[java.util.NoSuchElementException]
 @throws[Exception]
 def plot_histogram(data: Tensor, plot_title: String): Unit = {
@@ -438,6 +439,19 @@ def plot_histogram(data: Tensor, plot_title: String): Unit = {
   }
 }
 
+/**
+  * Plot input-output pairs as a scatter plot.
+  *
+  * @param input A Stream of input patterns.
+  * @param input_to_scalar A function which processes each multi-dimensional
+  *                        pattern to a scalar value.
+  * @param targets A tensor containing the ground truth values of the target
+  *                function.
+  * @param predictions A tensor containing the model predictions.
+  * @param xlab x-axis label
+  * @param ylab y-axis label
+  * @param plot_title The plot title, as a string.
+  * */
 def plot_input_output(
   input: Stream[Tensor],
   input_to_scalar: Tensor => Double,
@@ -460,6 +474,56 @@ def plot_input_output(
   unhold()
 }
 
+/**
+  * Plot multiple input-output pairs on a scatter plot.
+  *
+  * @param input A Stream of input patterns.
+  * @param input_to_scalar A function which processes each multi-dimensional
+  *                        pattern to a scalar value.
+  * @param targets A tensor containing the ground truth values of the target
+  *                function.
+  * @param predictions A sequence of tensors containing the predictions for each model/predictor.
+  * @param xlab x-axis label
+  * @param ylab y-axis label
+  * @param plot_legend A sequence of labels for each model/predictor,
+  *                    to be displayed as the plot legend.
+  * @param plot_title The plot title, as a string.
+  * */
+def plot_input_output(
+  input: Stream[Tensor],
+  input_to_scalar: Tensor => Double,
+  targets: Tensor,
+  predictions: Seq[Tensor],
+  xlab: String,
+  ylab: String,
+  plot_legend: Seq[String],
+  plot_title: String): Unit = {
+
+  val processed_inputs = input.map(input_to_scalar)
+
+  scatter(processed_inputs.zip(dtfutils.toDoubleSeq(predictions.head).toSeq))
+  hold()
+  predictions.tail.foreach(pred => {
+    scatter(processed_inputs.zip(dtfutils.toDoubleSeq(pred).toSeq))
+  })
+
+  scatter(processed_inputs.zip(dtfutils.toDoubleSeq(targets).toSeq))
+  xAxis(xlab)
+  yAxis(ylab)
+  title(plot_title)
+  legend(plot_legend :+ "Data")
+  unhold()
+}
+
+/**
+  * Plot input-output pairs as a scatter plot.
+  *
+  * @param x The x axis data, a tensor of rank 1
+  * @param y The y axis data, a tensor of rank 1
+  * @param xlab x-axis label
+  * @param ylab y-axis label
+  * @param plot_title The plot title, as a string.
+  * */
 def plot_scatter(
   x: Tensor,
   y: Tensor,
@@ -474,16 +538,28 @@ def plot_scatter(
   xy
 }
 
+
+/**
+  * A model run contains a tensorflow model/estimator as
+  * well as its training/test data set and meta data regarding
+  * the training/evaluation process.
+  *
+  * */
 sealed trait ModelRun {
 
   type MODEL
   type ESTIMATOR
 
   val summary_dir: Path
-  val timelags_gt: (Tensor, Tensor)
+
   val data_and_scales: (HeliosDataSet, (GaussianScalerTF, GaussianScalerTF))
-  val metrics: (RegressionMetricsTF, RegressionMetricsTF)
+
+  val metrics_train: (RegressionMetricsTF, RegressionMetricsTF)
+
+  val metrics_test: (RegressionMetricsTF, RegressionMetricsTF)
+
   val model: MODEL
+
   val estimator: ESTIMATOR
 
 }
@@ -497,9 +573,11 @@ case class JointModelRun(
     Tensor, Output, DataType, Shape, (Output, Output),
     (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
     ((Output, Output), Output)],
-  metrics: (RegressionMetricsTF, RegressionMetricsTF),
+  metrics_train: (RegressionMetricsTF, RegressionMetricsTF),
+  metrics_test: (RegressionMetricsTF, RegressionMetricsTF),
   summary_dir: Path,
-  timelags_gt: (Tensor, Tensor)) extends ModelRun {
+  training_preds: (Tensor, Tensor),
+  test_preds: (Tensor, Tensor)) extends ModelRun {
 
   override type MODEL = SupervisedTrainableModel[
     Tensor, Output, DataType, Shape, (Output, Output),
@@ -514,24 +592,26 @@ case class JointModelRun(
 case class StageWiseModelRun(
   data_and_scales: (HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)),
   model: SupervisedTrainableModel[
-    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output,
     Tensor, Output, DataType, Shape, Output],
   estimator: Estimator[
-    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output,
     (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
-    ((Output, Output), Output)],
-  metrics: (RegressionMetricsTF, RegressionMetricsTF),
+    (Output, Output)],
+  metrics_train: (RegressionMetricsTF, RegressionMetricsTF),
+  metrics_test: (RegressionMetricsTF, RegressionMetricsTF),
   summary_dir: Path,
-  timelags_gt: (Tensor, Tensor)) extends ModelRun {
+  training_preds: (Tensor, Tensor),
+  test_preds: (Tensor, Tensor)) extends ModelRun {
 
   override type MODEL = SupervisedTrainableModel[
-    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output,
     Tensor, Output, DataType, Shape, Output]
 
   override type ESTIMATOR = Estimator[
-    Tensor, Output, DataType, Shape, (Output, Output),
+    Tensor, Output, DataType, Shape, Output,
     (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
-    ((Output, Output), Output)]
+    (Output, Output)]
 }
 
 
@@ -550,24 +630,25 @@ case class ExperimentResult(
 def plot_and_write_results(results: ExperimentResult): Unit = {
 
   val ExperimentResult(
-  ExperimentType(mo_flag, prob_timelags, timelag_pred_strategy),
+  _,
   (_, collated_data),
   (_, collated_data_test),
   JointModelRun(
-  (tf_dataset, scalers),
-  _, estimator,
-  (reg_metrics, reg_time_lag),
+  (tf_data, (_, scales_y)), _, _,
+  (metrics_train, metrics_time_lag_train),
+  (metrics_test, metrics_time_lag_test),
   tf_summary_dir,
-  (train_time_lags, _))) = results
+  _,
+  test_preds)) = results
 
-  val err_time_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
+  val err_time_lag_test = metrics_time_lag_test.preds.subtract(metrics_time_lag_test.targets)
 
   val mae_lag = err_time_lag_test
     .abs.mean()
     .scalar
     .asInstanceOf[Double]
 
-  val pred_time_lags_test = reg_time_lag.preds
+  val pred_time_lags_test = metrics_time_lag_test.preds
 
   print("Mean Absolute Error in time lag = ")
   pprint.pprintln(mae_lag)
@@ -575,55 +656,80 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   plot_histogram(pred_time_lags_test, plot_title = "Predicted Time Lags")
   plot_histogram(err_time_lag_test, plot_title = "Time Lag prediction errors")
 
-  plot_time_series(reg_metrics.targets, reg_metrics.preds, plot_title = "Test Set Predictions")
+  plot_time_series(metrics_test.targets, metrics_test.preds, plot_title = "Test Set Predictions")
 
   plot_input_output(
     input = collated_data_test.map(_._2._1),
-    input_to_scalar = (t: Tensor) => t.abs.sum().scalar.asInstanceOf[Float].toDouble,
-    targets = reg_metrics.targets,
-    predictions = reg_metrics.preds,
-    xlab = "||x(t)||_1",
+    input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+    targets = metrics_test.targets,
+    predictions = metrics_test.preds,
+    xlab = "||x(t)||_2",
     ylab = "f(x(t))",
     plot_title = "Input-Output Relationship: Test Data"
   )
 
+  /*
+  * Now we compare the errors of the individual predictions
+  * e_i = (t_i - y_i)^2
+  *
+  * */
+  val num_models = collated_data.head._2._2.length
+
+  val time_lag_max = collated_data_test.map(_._2._3).max.toInt
+
+  val selected_indices = (0 to time_lag_max).filter(_ % 2 == 0)
+
+  val model_preds = test_preds._1.unstack(num_models, axis = 1)
+  val targets     = tf_data.testLabels.unstack(num_models, axis = 1)
+
+  val selected_errors = selected_indices.map(i => model_preds(i).squaredDifference(targets(i)).sqrt)
+
+  val probabilities = test_preds._2.unstack(num_models, axis = 1)
+
+  val selected_probabilities = selected_indices.map(probabilities(_))
+
+  plot_input_output(
+    input = collated_data_test.map(_._2._1),
+    input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+    targets = metrics_test.targets,
+    predictions = selected_errors,
+    xlab = "||x||_2",
+    ylab = "Error e_i",
+    plot_legend = selected_indices.map(i => s"Predictor_$i"),
+    plot_title = "Input-Output Relationships: Test Data"
+  )
+
+  plot_input_output(
+    input = collated_data_test.map(_._2._1),
+    input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+    targets = metrics_test.targets,
+    predictions = selected_probabilities,
+    xlab = "||x||_2",
+    ylab = "p_i / y",
+    plot_legend = selected_indices.map(i => s"Predictor_$i"),
+    plot_title = "Input-Output/Probability Relationships: Test Data"
+  )
+
   //Perform same visualisation for training set
-  val training_preds: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
-
-  val (train_signal_predicted, pred_time_lags_train) = process_predictions(
-    training_preds,
-    collated_data.head._2._2.length,
-    mo_flag,
-    prob_timelags,
-    timelag_pred_strategy,
-    Some(scalers._2))
-
-
-  val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
-
-  val training_signal_actual = (0 until tf_dataset.nTrain).map(n => {
-    val time_lag = pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
-    unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
-  })
 
   plot_time_series(
-    collated_data.map(c => (c._1+c._2._3.toInt, c._2._2(c._2._3.toInt))),
-    train_signal_predicted,
-    plot_title = "Training Set Predictions")
+    metrics_train.targets,
+    metrics_train.preds, plot_title =
+      "Training Set Predictions")
 
   plot_input_output(
     input = collated_data.map(_._2._1),
-    input_to_scalar = (t: Tensor) => t.abs.sum().scalar.asInstanceOf[Float].toDouble,
-    targets = training_signal_actual,
-    predictions = train_signal_predicted,
-    xlab = "||x(t)||_1",
+    input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+    targets = metrics_train.targets,
+    predictions = metrics_train.preds,
+    xlab = "||x||_2",
     ylab = "f(x(t))",
     plot_title = "Input-Output Relationship: Training Data"
   )
 
 
-  val err_train     = train_signal_predicted.subtract(training_signal_actual)
-  val err_lag_train = pred_time_lags_train.subtract(train_time_lags)
+  val err_train     = metrics_train.preds.subtract(metrics_train.targets)
+  val err_lag_train = metrics_time_lag_train.preds.subtract(metrics_time_lag_train.targets)
 
   val train_err_scatter = plot_scatter(
     err_train,
@@ -639,8 +745,8 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
 
   val train_scatter = plot_scatter(
-    train_signal_predicted,
-    pred_time_lags_train,
+    metrics_train.preds,
+    metrics_time_lag_train.preds,
     xlab = Some("Velocity"),
     ylab = Some("Time Lag"),
     plot_title = Some("Training Set; Scatter"))
@@ -648,8 +754,8 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   hold()
 
   val train_actual_scatter = plot_scatter(
-    training_signal_actual,
-    train_time_lags)
+    metrics_train.targets,
+    metrics_time_lag_train.targets)
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 
@@ -661,8 +767,8 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
       ).mkString("\n")
   )
 
-  val err_test     = reg_metrics.preds.subtract(reg_metrics.targets)
-  val err_lag_test = reg_time_lag.preds.subtract(reg_time_lag.targets)
+  val err_test     = metrics_test.preds.subtract(metrics_test.targets)
+  val err_lag_test = metrics_time_lag_test.preds.subtract(metrics_time_lag_test.targets)
 
   val test_err_scatter = plot_scatter(
     err_test, err_lag_test,
@@ -677,8 +783,8 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
 
   val test_scatter = plot_scatter(
-    reg_metrics.preds,
-    reg_time_lag.preds,
+    metrics_test.preds,
+    metrics_time_lag_test.preds,
     xlab = Some("Velocity"),
     ylab = Some("Time Lag"),
     plot_title = Some("Training Set; Scatter"))
@@ -686,8 +792,8 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   hold()
 
   val test_actual_scatter = plot_scatter(
-    reg_metrics.targets,
-    reg_time_lag.targets)
+    metrics_test.targets,
+    metrics_time_lag_test.targets)
 
   legend(Seq("Predictions", "Actual Data"))
   unhold()
@@ -760,7 +866,6 @@ def run_exp2(
   val (data_test, collated_data_test): TLDATA = dataset._2
 
   val causal_window  = collated_data.head._2._2.length
-  val num_training   = collated_data.length
   val num_test       = collated_data_test.length
 
   val model_train_eval = DataPipe(
@@ -796,11 +901,37 @@ def run_exp2(
         dtflearn.max_iter_stop(iterations))(
         training_data)
 
-      val predictions: (Tensor, Tensor) = estimator.infer(() => tf_dataset.testData)
 
+
+      val predictions_training: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
+
+      val (pred_outputs_train, pred_time_lags_train) = process_predictions(
+        predictions_training,
+        collated_data.head._2._2.length,
+        mo_flag,
+        prob_timelags,
+        timelag_pred_strategy,
+        Some(scalers._2))
+
+
+      val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
+
+      val actual_outputs_train = (0 until tf_dataset.nTrain).map(n => {
+        val time_lag = pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
+        unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
+      })
+
+      val metrics_time_lag_train = new RegressionMetricsTF(pred_time_lags_train, train_time_lags)
+      metrics_time_lag_train.target_quantity_("Time Lag: Train Data Set")
+
+      val metrics_output_train   = new RegressionMetricsTF(pred_outputs_train, actual_outputs_train)
+      metrics_output_train.target_quantity_("Output: Train Data Set")
+
+
+      val predictions_test: (Tensor, Tensor) = estimator.infer(() => tf_dataset.testData)
 
       val (pred_outputs_test, pred_time_lags_test) = process_predictions(
-        predictions,
+        predictions_test,
         causal_window,
         mo_flag,
         prob_timelags,
@@ -812,17 +943,21 @@ def run_exp2(
         tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Double]
       })
 
-      val reg_metrics_time_lag = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
-      val reg_metrics_output   = new RegressionMetricsTF(pred_outputs_test, actual_outputs_test)
+      val metrics_time_lag_test = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
+      metrics_time_lag_test.target_quantity_("Time Lag: Test Data Set")
 
+      val metrics_output_test   = new RegressionMetricsTF(pred_outputs_test, actual_outputs_test)
+      metrics_output_test.target_quantity_("Output: Test Data Set")
 
       JointModelRun(
         (tf_dataset, scalers),
         model,
         estimator,
-        (reg_metrics_output, reg_metrics_time_lag),
+        (metrics_output_train, metrics_time_lag_train),
+        (metrics_output_test, metrics_time_lag_test),
         tf_summary_dir,
-        (train_time_lags, test_time_lags)
+        (scalers._2.i(predictions_training._1), predictions_training._2),
+        (scalers._2.i(predictions_test._1), predictions_test._2)
       )
 
     })
