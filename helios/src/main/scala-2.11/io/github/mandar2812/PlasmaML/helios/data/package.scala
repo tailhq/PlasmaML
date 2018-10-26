@@ -198,7 +198,7 @@ package object data {
 
   def get_patch_range(magic_ratio: Double, image_sizes: Int) = {
     val start = (1.0 - magic_ratio)*image_sizes/2
-    val patch_size = image_sizes*magic_ratio/2
+    val patch_size = image_sizes*magic_ratio
 
     start.toInt to (start.toInt + patch_size.toInt)
   }
