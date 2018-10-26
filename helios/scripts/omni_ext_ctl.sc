@@ -71,7 +71,7 @@ def main[T <: SolarImagesSource](
 
   val (image_filter, num_channels, image_to_byte) = data.image_process_metadata(image_source)
 
-  val patch_range = data.get_patch_range(magic_ratio, image_sizes/2)
+  val patch_range = data.get_patch_range(magic_ratio, image_sizes)
 
   val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
 

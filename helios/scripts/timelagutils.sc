@@ -688,7 +688,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
   val selected_probabilities = selected_indices.map(probabilities(_))
 
-  plot_input_output(
+  /*plot_input_output(
     input = collated_data_test.map(_._2._1),
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
     targets = metrics_test.targets,
@@ -697,7 +697,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     ylab = "Error e_i",
     plot_legend = selected_indices.map(i => s"Predictor_$i"),
     plot_title = "Input-Output Relationships: Test Data"
-  )
+  )*/
 
   plot_input_output(
     input = collated_data_test.map(_._2._1),

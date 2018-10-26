@@ -470,7 +470,7 @@ package object helios {
     val load_image_into_tensor = data.read_image >
       preprocess_image >
       image_to_bytearr >
-      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+      DataPipe((arr: Array[Byte]) => dtf.tensor_from(
         dtype = "UINT8", processed_image_size._1,
         processed_image_size._2,
         num_channels_image)(arr))
