@@ -197,8 +197,8 @@ package object data {
       //Construct an image for each sector
       //Concatenate in column then row wise fashion
       tfi.concatenate(
-        data.grouped(channels).toIterable.grouped(size).map(arr =>
-          dtf.tensor_from_buffer("UINT8", 1, size, channels)(arr.flatten.toArray)
+        data.toIterable.grouped(channels).grouped(size).grouped(_image_buffer_size).map(arr =>
+          dtf.tensor_from_buffer("UINT8", _image_buffer_size, size, channels)(arr.flatten.flatten.toArray)
         ).toSeq,
         axis = 0
       )
