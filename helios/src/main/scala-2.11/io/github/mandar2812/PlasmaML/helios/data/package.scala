@@ -178,7 +178,7 @@ package object data {
 
   private var size_buffer = 500
 
-  private var image_byte_buffer = 80
+  private var image_byte_buffer = 40
 
   def buffer_size_(s: Int) = size_buffer = s
 
@@ -190,7 +190,7 @@ package object data {
 
   val read_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
 
-  val image_to_tensor = MetaPipe21[Int, Int, Array[Byte], Tensor](
+  def image_to_tensor = MetaPipe21[Int, Int, Array[Byte], Tensor](
     (size: Int, channels: Int) => (data: Array[Byte]) => {
 
       //Divide the image into sectors
