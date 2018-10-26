@@ -178,11 +178,31 @@ package object data {
 
   private var size_buffer = 500
 
+  private var image_byte_buffer = 80
+
   def buffer_size_(s: Int) = size_buffer = s
 
   def _buffer_size: Int = size_buffer
 
+  def image_buffer_size_(s: Int) = image_byte_buffer = s
+
+  def _image_buffer_size = image_byte_buffer
+
   val read_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
+
+  val image_to_tensor = MetaPipe21[Int, Int, Array[Byte], Tensor](
+    (size: Int, channels: Int) => (data: Array[Byte]) => {
+
+      //Divide the image into sectors
+      //Construct an image for each sector
+      //Concatenate in column then row wise fashion
+      tfi.concatenate(
+        data.grouped(channels).toIterable.grouped(size).map(arr =>
+          dtf.tensor_from_buffer("UINT8", 1, size, channels)(arr.flatten.toArray)
+        ).toSeq,
+        axis = 0
+      )
+    })
 
   val image_scale: MetaPipe[Double, Image, Image] = MetaPipe(
     (factor: Double) => (image: Image) => image.copy.scale(factor)
