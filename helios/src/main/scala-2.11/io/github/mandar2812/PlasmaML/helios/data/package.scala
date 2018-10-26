@@ -178,7 +178,7 @@ package object data {
 
   private var size_buffer = 500
 
-  private var image_byte_buffer = 40
+  private var image_byte_buffer = 20
 
   def buffer_size_(s: Int) = size_buffer = s
 
