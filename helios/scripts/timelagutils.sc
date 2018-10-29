@@ -687,10 +687,10 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   plot_input_output(
     input = collated_data_test.map(_._2._1),
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
-    predictions = selected_errors/* :+ metrics_test.targets*/,
+    predictions = selected_errors :+ metrics_test.targets,
     xlab = "||x||_2",
     ylab = "Predictor f_i",
-    plot_legend = selected_indices.map(i => s"Predictor_$i")/* :+ "Data"*/,
+    plot_legend = selected_indices.map(i => s"Predictor_$i") :+ "Data",
     plot_title = "Input-Output Errors: Test Data"
   )
 
