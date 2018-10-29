@@ -678,7 +678,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   val model_preds = test_preds._1.unstack(num_models, axis = 1)
   val targets     = tf_data.testLabels.unstack(num_models, axis = 1)
 
-  val selected_errors = selected_indices.map(i => model_preds(i).squaredDifference(targets(i)).sqrt)
+  val selected_errors = selected_indices.map(i => model_preds(i)/*.squaredDifference(targets(i)).sqrt*/)
 
   val probabilities = test_preds._2.unstack(num_models, axis = 1)
 
