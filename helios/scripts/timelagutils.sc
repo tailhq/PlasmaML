@@ -781,7 +781,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     metrics_time_lag_test.preds,
     xlab = Some("Velocity"),
     ylab = Some("Time Lag"),
-    plot_title = Some("Training Set; Scatter"))
+    plot_title = Some("Test Set; Scatter"))
 
   hold()
 
