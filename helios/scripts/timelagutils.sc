@@ -689,7 +689,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
     predictions = selected_errors/* :+ metrics_test.targets*/,
     xlab = "||x||_2",
-    ylab = "Error e_i",
+    ylab = "Predictor f_i",
     plot_legend = selected_indices.map(i => s"Predictor_$i")/* :+ "Data"*/,
     plot_title = "Input-Output Errors: Test Data"
   )
