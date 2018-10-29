@@ -190,7 +190,7 @@ package object data {
 
   val read_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
 
-  def image_to_tensor = MetaPipe21[Int, Int, Array[Byte], Tensor](
+  def image_to_tensor: MetaPipe21[Int, Int, Array[Byte], Tensor] = MetaPipe21[Int, Int, Array[Byte], Tensor](
     (size: Int, channels: Int) => (data: Array[Byte]) => {
 
       //Divide the image into sectors

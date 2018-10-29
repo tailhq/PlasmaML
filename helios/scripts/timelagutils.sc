@@ -480,8 +480,6 @@ def plot_input_output(
   * @param input A Stream of input patterns.
   * @param input_to_scalar A function which processes each multi-dimensional
   *                        pattern to a scalar value.
-  * @param targets A tensor containing the ground truth values of the target
-  *                function.
   * @param predictions A sequence of tensors containing the predictions for each model/predictor.
   * @param xlab x-axis label
   * @param ylab y-axis label
@@ -492,7 +490,6 @@ def plot_input_output(
 def plot_input_output(
   input: Stream[Tensor],
   input_to_scalar: Tensor => Double,
-  targets: Tensor,
   predictions: Seq[Tensor],
   xlab: String,
   ylab: String,
@@ -507,11 +504,10 @@ def plot_input_output(
     scatter(processed_inputs.zip(dtfutils.toDoubleSeq(pred).toSeq))
   })
 
-  scatter(processed_inputs.zip(dtfutils.toDoubleSeq(targets).toSeq))
   xAxis(xlab)
   yAxis(ylab)
   title(plot_title)
-  legend(plot_legend :+ "Data")
+  legend(plot_legend)
   unhold()
 }
 
@@ -688,24 +684,22 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
   val selected_probabilities = selected_indices.map(probabilities(_))
 
-  /*plot_input_output(
+  plot_input_output(
     input = collated_data_test.map(_._2._1),
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
-    targets = metrics_test.targets,
-    predictions = selected_errors,
+    predictions = selected_errors/* :+ metrics_test.targets*/,
     xlab = "||x||_2",
     ylab = "Error e_i",
-    plot_legend = selected_indices.map(i => s"Predictor_$i"),
-    plot_title = "Input-Output Relationships: Test Data"
-  )*/
+    plot_legend = selected_indices.map(i => s"Predictor_$i")/* :+ "Data"*/,
+    plot_title = "Input-Output Errors: Test Data"
+  )
 
   plot_input_output(
     input = collated_data_test.map(_._2._1),
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
-    targets = metrics_test.targets,
     predictions = selected_probabilities,
     xlab = "||x||_2",
-    ylab = "p_i / y",
+    ylab = "p_i",
     plot_legend = selected_indices.map(i => s"Predictor_$i"),
     plot_title = "Input-Output/Probability Relationships: Test Data"
   )
