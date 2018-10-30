@@ -18,6 +18,7 @@ def main(
   alpha: Double                 = 0.0,
   train_test_separate: Boolean  = false,
   num_neurons: Seq[Int]         = Seq(40),
+  max_degree: Int               = 2,
   iterations: Int               = 150000,
   miniBatch: Int                = 32,
   optimizer: Optimizer          = tf.train.AdaDelta(0.01),
@@ -61,7 +62,7 @@ def main(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    timelagutils.getAct(1), FLOAT64)(
+    timelagutils.getAct(max_degree, 1), FLOAT64)(
     net_layer_sizes.tail) >> output_mapping
 
 

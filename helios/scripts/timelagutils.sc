@@ -40,8 +40,8 @@ val layer_poly = (power: Int) => (n: String) => new Activation(n) {
   }
 }
 
-val getAct = (s: Int) => (i: Int) =>
-  if(i - s == 0) layer_poly(2)(s"Act_$i")
+val getAct = (degree: Int, s: Int) => (i: Int) =>
+  if(i - s == 0) layer_poly(degree)(s"Act_$i")
   else tf.learn.Sigmoid(s"Act_$i")
 
 //subroutine to calculate sliding autocorrelation of a time series.
@@ -534,6 +534,62 @@ def plot_scatter(
   xy
 }
 
+def write_data_set(
+  data: SLIDINGDATA,
+  summary_dir: Path,
+  identifier: String): Unit = {
+
+  //Write the features.
+  write(
+    summary_dir/s"${identifier}_features.csv",
+    data.map(_._2._1)
+      .map(x => dtfutils.toDoubleSeq(x).mkString(","))
+      .mkString("\n")
+  )
+
+  //Write the slided outputs.
+  write(
+    summary_dir/s"${identifier}_targets.csv",
+    data.map(_._2._2)
+      .map(_.mkString(","))
+      .mkString("\n")
+  )
+
+}
+
+def write_model_outputs(
+  outputs: (Tensor, Tensor),
+  summary_dir: Path,
+  identifier: String): Unit = {
+
+  val h = outputs._1.shape(1)
+
+  write(
+    summary_dir/s"$identifier-predictions.csv",
+    dtfutils.toDoubleSeq(outputs._1).grouped(h).map(_.mkString(",")).mkString("\n")
+  )
+
+  write(
+    summary_dir/s"$identifier-probabilities.csv",
+    dtfutils.toDoubleSeq(outputs._2).grouped(h).map(_.mkString(",")).mkString("\n")
+  )
+
+}
+
+def write_predictions_and_gt(
+  predictions: Seq[(Double, Double)],
+  ground_truth: Seq[(Double, Double)],
+  summary_dir: Path, identifier: String): Unit = {
+
+  write(
+    summary_dir/s"${identifier}_scatter.csv",
+    "predv,predlag,actualv,actuallag\n"+
+      predictions.zip(ground_truth).map(
+        c => s"${c._1._1},${c._1._2},${c._2._1},${c._2._2}"
+      ).mkString("\n")
+  )
+}
+
 
 /**
   * A model run contains a tensorflow model/estimator as
@@ -630,11 +686,11 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   (_, collated_data),
   (_, collated_data_test),
   JointModelRun(
-  (tf_data, (_, scales_y)), _, _,
+  _, _, _,
   (metrics_train, metrics_time_lag_train),
   (metrics_test, metrics_time_lag_test),
   tf_summary_dir,
-  _,
+  train_preds,
   test_preds)) = results
 
   val err_time_lag_test = metrics_time_lag_test.preds.subtract(metrics_time_lag_test.targets)
@@ -665,9 +721,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   )
 
   /*
-  * Now we compare the errors of the individual predictions
-  * e_i = (t_i - y_i)^2
-  *
+  * Now we compare the predictions of the individual predictions
   * */
   val num_models = collated_data.head._2._2.length
 
@@ -675,8 +729,13 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
   val selected_indices = (0 to time_lag_max).filter(_ % 2 == 0)
 
+  //Write the model outputs to disk
+
+  write_model_outputs(train_preds, tf_summary_dir, "train")
+  write_model_outputs(test_preds,  tf_summary_dir, "test")
+
   val model_preds = test_preds._1.unstack(num_models, axis = 1)
-  val targets     = tf_data.testLabels.unstack(num_models, axis = 1)
+  //val targets     = tf_data.testLabels.unstack(num_models, axis = 1)
 
   val selected_errors = selected_indices.map(i => model_preds(i)/*.squaredDifference(targets(i)).sqrt*/)
 
@@ -691,7 +750,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     xlab = "||x||_2",
     ylab = "Predictor f_i",
     plot_legend = selected_indices.map(i => s"Predictor_$i") :+ "Data",
-    plot_title = "Input-Output Errors: Test Data"
+    plot_title = "Input-Output Relationships: Test Data"
   )
 
   plot_input_output(
@@ -704,7 +763,6 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     plot_title = "Input-Output/Probability Relationships: Test Data"
   )
 
-  //Perform same visualisation for training set
 
   plot_time_series(
     metrics_train.targets,
@@ -733,6 +791,10 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     plot_title = Some("Training Set Errors; Scatter")
   )
 
+
+  write_data_set(collated_data, tf_summary_dir, "train")
+
+  //Write errors in target vs errors in time lag for the training data.
   write(
     tf_summary_dir/"train_errors.csv",
     "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
@@ -753,13 +815,8 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 
-  write(
-    tf_summary_dir/"train_scatter.csv",
-    "predv,predlag,actualv,actuallag\n"+
-      train_scatter.zip(train_actual_scatter).map(
-        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
-      ).mkString("\n")
-  )
+
+  write_predictions_and_gt(train_scatter, train_actual_scatter, tf_summary_dir, "train")
 
   val err_test     = metrics_test.preds.subtract(metrics_test.targets)
   val err_lag_test = metrics_time_lag_test.preds.subtract(metrics_time_lag_test.targets)
@@ -771,10 +828,12 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     plot_title = Some("Test Set Errors; Scatter")
   )
 
+  //Write errors in target vs errors in time lag for the test data.
   write(
     tf_summary_dir/"test_errors.csv",
     "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
 
+  write_data_set(collated_data_test, tf_summary_dir, "test")
 
   val test_scatter = plot_scatter(
     metrics_test.preds,
@@ -792,13 +851,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   legend(Seq("Predictions", "Actual Data"))
   unhold()
 
-  write(
-    tf_summary_dir/"test_scatter.csv",
-    "predv,predlag,actualv,actuallag\n"+
-      test_scatter.zip(test_actual_scatter).map(
-        c => c._1._1.toString + "," + c._1._2.toString + "," + c._2._1.toString + "," + c._2._2.toString
-      ).mkString("\n")
-  )
+  write_predictions_and_gt(test_scatter, test_actual_scatter, tf_summary_dir, "test")
 
   val script = pwd/'helios/'scripts/"visualise_tl_results.R"
 

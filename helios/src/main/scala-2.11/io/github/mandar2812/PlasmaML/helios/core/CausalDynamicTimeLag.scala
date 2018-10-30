@@ -221,7 +221,7 @@ object WeightedTimeSeriesLossPoisson {
 
         val preds = input(::, 0::size_causal_window)
 
-        val lambda = input(::, size_causal_window).square
+        val lambda = input(::, size_causal_window).softplus
 
         val stacked_lambda = tf.stack(Seq.fill(size_causal_window)(lambda), axis = 1)
 
@@ -229,7 +229,8 @@ object WeightedTimeSeriesLossPoisson {
 
         val unsc_prob      = index_times.multiply(stacked_lambda.logGamma)
           .subtract(index_times.add(1.0).logGamma)
-          .subtract(stacked_lambda).exp
+          .subtract(stacked_lambda)
+          .exp
 
         val norm_const     = unsc_prob.sum(axes = 1)
 
