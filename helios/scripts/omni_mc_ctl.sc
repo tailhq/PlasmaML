@@ -25,7 +25,7 @@ def main(
   image_sources: Seq[SolarImagesSource] = Seq(SDO(AIA193, 512), SDO(HMIB, 512)),
   buffer_size: Int                      = 2000,
   re: Boolean                           = true,
-  scaleDown: Int                        = 4,
+  scaleDown: Double                     = 4.0,
   time_horizon: (Int, Int)              = (48, 96),
   image_hist: Int                       = 0,
   image_hist_downsamp: Int              = 1,
