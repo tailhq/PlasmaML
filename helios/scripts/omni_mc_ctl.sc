@@ -25,7 +25,7 @@ def main(
   image_sources: Seq[SolarImagesSource] = Seq(SDO(AIA193, 512), SDO(HMIB, 512)),
   buffer_size: Int                      = 2000,
   re: Boolean                           = true,
-  scaleDown: Double                     = 4.0,
+  scaleDown: Int                        = 4,
   time_horizon: (Int, Int)              = (48, 96),
   image_hist: Int                       = 0,
   image_hist_downsamp: Int              = 1,
@@ -75,7 +75,7 @@ def main(
 
   val patch_range = data.get_patch_range(magic_ratio, image_sizes/scaleDown)
 
-  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(1/scaleDown)
+  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(1.0/scaleDown)
 
   val (image_filters, num_channels, image_to_bytes) = image_sources.map(image_source => {
 
