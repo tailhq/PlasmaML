@@ -75,9 +75,9 @@ def main[T <: SolarImagesSource](
 
   val (image_filter, num_channels, image_to_byte) = data.image_process_metadata(image_source)
 
-  val patch_range = data.get_patch_range(magic_ratio/*1.0*/, image_sizes/2)
+  val patch_range = data.get_patch_range(magic_ratio/*1.0*/, image_sizes/scaleDown)
 
-  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
+  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(1/scaleDown)
 
   //Set the path of the summary directory
   val summary_dir_prefix  = "swtl_"+image_source.toString

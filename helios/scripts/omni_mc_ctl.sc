@@ -72,9 +72,9 @@ def main(
 
 
 
-  val patch_range = data.get_patch_range(magic_ratio, image_sizes)
+  val patch_range = data.get_patch_range(magic_ratio, image_sizes/scaleDown)
 
-  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(0.5)
+  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(1/scaleDown)
 
   val (image_filters, num_channels, image_to_bytes) = image_sources.map(image_source => {
 

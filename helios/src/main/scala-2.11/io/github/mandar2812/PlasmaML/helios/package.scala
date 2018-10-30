@@ -470,13 +470,13 @@ package object helios {
     val load_image_into_tensor = data.read_image >
       preprocess_image >
       image_to_bytearr >
-      data.image_to_tensor(
+      /*data.image_to_tensor(
         processed_image_size._1,
-        num_channels_image)
-      /*DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+        num_channels_image)*/
+      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
         dtype = "UINT8", processed_image_size._1,
         processed_image_size._2,
-        num_channels_image)(arr))*/
+        num_channels_image)(arr))
 
     val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
 
@@ -657,13 +657,13 @@ package object helios {
     val load_image_into_tensor = data.read_image >
       preprocess_image >
       image_to_bytearr >
-      data.image_to_tensor(
+      /*data.image_to_tensor(
         processed_image_size._1,
-        num_channels_image)
-      /*DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+        num_channels_image)*/
+      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
         dtype = "UINT8", processed_image_size._1,
         processed_image_size._2,
-        num_channels_image)(arr))*/
+        num_channels_image)(arr))
 
     val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
 
@@ -866,12 +866,12 @@ package object helios {
     * 4. Load the byte array into a tensor
     * */
 
-    val bytes_to_tensor = data.image_to_tensor(processed_image_size._1, num_channels_image)
+    val bytes_to_tensor = DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+      dtype = "UINT8", processed_image_size._1,
+      processed_image_size._2,
+      num_channels_image)(arr))//data.image_to_tensor(processed_image_size._1, num_channels_image)
 
-    /*DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
-        dtype = "UINT8", processed_image_size._1,
-        processed_image_size._2,
-        num_channels_image)(arr))*/
+    /**/
 
 
     val load_image_into_tensor: DataPipe[Map[SolarImagesSource, Seq[Path]], Option[Tensor]] = DataPipe(mc_image => {
