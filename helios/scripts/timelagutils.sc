@@ -565,12 +565,12 @@ def write_model_outputs(
   val h = outputs._1.shape(1)
 
   write(
-    summary_dir/s"$identifier-predictions.csv",
+    summary_dir/s"${identifier}_predictions.csv",
     dtfutils.toDoubleSeq(outputs._1).grouped(h).map(_.mkString(",")).mkString("\n")
   )
 
   write(
-    summary_dir/s"$identifier-probabilities.csv",
+    summary_dir/s"${identifier}_probabilities.csv",
     dtfutils.toDoubleSeq(outputs._2).grouped(h).map(_.mkString(",")).mkString("\n")
   )
 
@@ -650,6 +650,13 @@ case class StageWiseModelRun(
     Tensor, Output, DataType, Shape, Output,
     (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
     (Output, Output)],
+  model_prob: SupervisedTrainableModel[
+    Tensor, Output, DataType, Shape, Output,
+    Tensor, Output, DataType, Shape, Output],
+  estimator_prob: Estimator[
+    Tensor, Output, DataType, Shape, Output,
+    (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+    (Output, Output)],
   metrics_train: (RegressionMetricsTF, RegressionMetricsTF),
   metrics_test: (RegressionMetricsTF, RegressionMetricsTF),
   summary_dir: Path,
@@ -686,7 +693,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   (_, collated_data),
   (_, collated_data_test),
   JointModelRun(
-  _, _, _,
+  (tf_data, _), _, _,
   (metrics_train, metrics_time_lag_train),
   (metrics_test, metrics_time_lag_test),
   tf_summary_dir,
@@ -725,7 +732,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   * */
   val num_models = collated_data.head._2._2.length
 
-  val time_lag_max = collated_data_test.map(_._2._3).max.toInt
+  val time_lag_max = math.min(num_models, collated_data_test.map(_._2._3).max.toInt)
 
   val selected_indices = (0 to time_lag_max).filter(_ % 2 == 0)
 
@@ -735,7 +742,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   write_model_outputs(test_preds,  tf_summary_dir, "test")
 
   val model_preds = test_preds._1.unstack(num_models, axis = 1)
-  //val targets     = tf_data.testLabels.unstack(num_models, axis = 1)
+  val targets     = tf_data.testLabels.unstack(num_models, axis = 1)
 
   val selected_errors = selected_indices.map(i => model_preds(i)/*.squaredDifference(targets(i)).sqrt*/)
 
@@ -743,7 +750,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
   val selected_probabilities = selected_indices.map(probabilities(_))
 
-  plot_input_output(
+  /*plot_input_output(
     input = collated_data_test.map(_._2._1),
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
     predictions = selected_errors :+ metrics_test.targets,
@@ -751,7 +758,19 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     ylab = "Predictor f_i",
     plot_legend = selected_indices.map(i => s"Predictor_$i") :+ "Data",
     plot_title = "Input-Output Relationships: Test Data"
-  )
+  )*/
+
+  selected_indices.foreach(i => {
+    plot_input_output(
+      input = collated_data_test.map(_._2._1),
+      input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+      predictions = Seq(model_preds(i), targets(i)),
+      xlab = "||x||_2",
+      ylab = "Predictor f_i",
+      plot_legend = Seq(s"Predictor_$i", s"Target_$i"),
+      plot_title = "Input-Output Relationships: Test Data"
+    )
+  })
 
   plot_input_output(
     input = collated_data_test.map(_._2._1),
@@ -792,7 +811,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   )
 
 
-  write_data_set(collated_data, tf_summary_dir, "train")
+  write_data_set(collated_data, tf_summary_dir, "train_data")
 
   //Write errors in target vs errors in time lag for the training data.
   write(
@@ -833,7 +852,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     tf_summary_dir/"test_errors.csv",
     "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
 
-  write_data_set(collated_data_test, tf_summary_dir, "test")
+  write_data_set(collated_data_test, tf_summary_dir, "test_data")
 
   val test_scatter = plot_scatter(
     metrics_test.preds,
@@ -853,10 +872,17 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
   write_predictions_and_gt(test_scatter, test_actual_scatter, tf_summary_dir, "test")
 
-  val script = pwd/'helios/'scripts/"visualise_tl_results.R"
+  val script1 = pwd/'helios/'scripts/"visualise_tl_results.R"
+  val script2 = pwd/'helios/'scripts/"visualise_tl_preds.R"
 
   try {
-    %%('Rscript, script, tf_summary_dir)
+    %%('Rscript, script1, tf_summary_dir)
+  } catch {
+    case e: Exception => e.printStackTrace()
+  }
+
+  try {
+    %%('Rscript, script2, tf_summary_dir)
   } catch {
     case e: Exception => e.printStackTrace()
   }
@@ -898,6 +924,138 @@ def run_exp(
 
 
 def run_exp2(
+  dataset: (TLDATA, TLDATA),
+  architecture: Layer[Output, (Output, Output)],
+  loss: Layer[((Output, Output), Output), Output],
+  iterations: Int               = 150000,
+  optimizer: Optimizer          = tf.train.AdaDelta(0.01),
+  miniBatch: Int                = 512,
+  sum_dir_prefix: String        = "",
+  mo_flag: Boolean              = false,
+  prob_timelags: Boolean        = false,
+  timelag_pred_strategy: String = "mode"): ExperimentResult = {
+
+  val (data, collated_data): TLDATA           = dataset._1
+  val (data_test, collated_data_test): TLDATA = dataset._2
+
+  val causal_window  = collated_data.head._2._2.length
+  val num_test       = collated_data_test.length
+
+  val model_train_eval = DataPipe(
+    (dataTuple: ((HeliosDataSet, (GaussianScalerTF, GaussianScalerTF)), (Tensor, Tensor))) => {
+
+      val ((tf_dataset, scalers), (train_time_lags, test_time_lags)) = dataTuple
+
+      val training_data = tf.data.TensorSlicesDataset(tf_dataset.trainData)
+        .zip(tf.data.TensorSlicesDataset(tf_dataset.trainLabels)).repeat()
+        .shuffle(10)
+        .batch(miniBatch)
+        .prefetch(10)
+
+      val dt = DateTime.now()
+
+      val summary_dir_index  =
+        if(mo_flag) sum_dir_prefix+"_timelag_inference_mo_"+dt.toString("YYYY-MM-dd-HH-mm")
+        else sum_dir_prefix+"_timelag_inference_"+dt.toString("YYYY-MM-dd-HH-mm")
+
+      val tf_summary_dir     = home/'tmp/summary_dir_index
+
+      val input              = tf.learn.Input(FLOAT64, Shape(-1, tf_dataset.trainData.shape(1)))
+
+      val trainInput         = tf.learn.Input(FLOAT64, Shape(-1, causal_window))
+
+      val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
+
+      val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
+
+      val (model, estimator) = dtflearn.build_tf_model(
+        architecture, input, trainInput, trainingInputLayer,
+        loss, optimizer, summariesDir,
+        dtflearn.max_iter_stop(iterations))(
+        training_data)
+
+
+
+      val predictions_training: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
+
+      val (pred_outputs_train, pred_time_lags_train) = process_predictions(
+        predictions_training,
+        collated_data.head._2._2.length,
+        mo_flag,
+        prob_timelags,
+        timelag_pred_strategy,
+        Some(scalers._2))
+
+
+      val unscaled_train_labels = scalers._2.i(tf_dataset.trainLabels)
+
+      val actual_outputs_train = (0 until tf_dataset.nTrain).map(n => {
+        val time_lag = pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
+        unscaled_train_labels(n, time_lag).scalar.asInstanceOf[Double]
+      })
+
+      val metrics_time_lag_train = new RegressionMetricsTF(pred_time_lags_train, train_time_lags)
+      metrics_time_lag_train.target_quantity_("Time Lag: Train Data Set")
+
+      val metrics_output_train   = new RegressionMetricsTF(pred_outputs_train, actual_outputs_train)
+      metrics_output_train.target_quantity_("Output: Train Data Set")
+
+
+      val predictions_test: (Tensor, Tensor) = estimator.infer(() => tf_dataset.testData)
+
+      val (pred_outputs_test, pred_time_lags_test) = process_predictions(
+        predictions_test,
+        causal_window,
+        mo_flag,
+        prob_timelags,
+        timelag_pred_strategy,
+        Some(scalers._2))
+
+      val actual_outputs_test = (0 until num_test).map(n => {
+        val time_lag = pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+        tf_dataset.testLabels(n, time_lag).scalar.asInstanceOf[Double]
+      })
+
+      val metrics_time_lag_test = new RegressionMetricsTF(pred_time_lags_test, test_time_lags)
+      metrics_time_lag_test.target_quantity_("Time Lag: Test Data Set")
+
+      val metrics_output_test   = new RegressionMetricsTF(pred_outputs_test, actual_outputs_test)
+      metrics_output_test.target_quantity_("Output: Test Data Set")
+
+      JointModelRun(
+        (tf_dataset, scalers),
+        model,
+        estimator,
+        (metrics_output_train, metrics_time_lag_train),
+        (metrics_output_test, metrics_time_lag_test),
+        tf_summary_dir,
+        (scalers._2.i(predictions_training._1), predictions_training._2),
+        (scalers._2.i(predictions_test._1), predictions_test._2)
+      )
+
+    })
+
+  //The processing pipeline
+  val train_and_evaluate =
+    data_splits_to_tensors(causal_window) >
+      scale_data >
+      model_train_eval
+
+  val results_model_eval = train_and_evaluate(collated_data, collated_data_test)
+
+  val exp_results = ExperimentResult(
+    ExperimentType(mo_flag, prob_timelags, timelag_pred_strategy),
+    (data, collated_data), (data_test, collated_data_test),
+    results_model_eval
+  )
+
+  plot_and_write_results(exp_results)
+
+  exp_results
+
+}
+
+def run_exp3(
   dataset: (TLDATA, TLDATA),
   architecture: Layer[Output, (Output, Output)],
   loss: Layer[((Output, Output), Output), Output],
