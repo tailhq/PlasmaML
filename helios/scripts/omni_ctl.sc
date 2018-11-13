@@ -64,7 +64,7 @@ def main[T <: SolarImagesSource](
   val test_start     = new DateTime(test_year, 1, 1, 0, 0)
   val test_end       = new DateTime(test_year, 12, 31, 23, 59)
 
-  val tt_partition   = (p: (DateTime, (Path, Seq[Double]))) =>
+  val tt_partition   = (p: (DateTime, (Seq[Path], Seq[Double]))) =>
     if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max >= sw_threshold) false
     else true
 

@@ -20,7 +20,7 @@ p1 <- ggplot(meltDF, aes(x=time, y=value, color=variable)) +
   scale_colour_manual(labels = c("Prediction", "Actual"), values=palette1) +
   theme_gray(base_size = 22)
 
-ggsave("timeseries_pred.png", p1, scale = 1.25)
+ggsave("timeseries_pred.png", p1, scale = 1.0)
 
 scatter_df_pred <- data.frame(
   scatter_test$predv, 
@@ -65,7 +65,7 @@ ggplot(scatter_df, aes(x = Velocity, y = floor(TimeLag), color = Type)) +
   labs(y="Time Lag", x="Output") + 
   theme(legend.position="top")
 
-ggsave("scatter_v_tl.png", scale = 1.25)
+ggsave("scatter_v_tl.png", scale = 1.0)
 
 ggplot(errors_test, aes(x=error_v, y=floor(error_lag))) + 
   scale_alpha_continuous(limits = c(0, 0.2), breaks = seq(0, 0.2, by=0.025)) +
@@ -78,7 +78,7 @@ ggplot(errors_test, aes(x=error_v, y=floor(error_lag))) +
   ylab("Error in Time Lag") + 
   theme(legend.position="top")
 
-ggsave("scatter_errors_test.png", scale = 1.25)
+ggsave("scatter_errors_test.png", scale = 1.0)
 
 
 sample_df <- scatter_test[scatter_test$predlag - scatter_test$actuallag <= -2,]
@@ -89,7 +89,7 @@ p <- ggplot(sample_df, aes(x = predv, y = actualv)) +
   theme_gray(base_size = 23) + 
   labs(y = "Actual Output", x = "Predicted Output", alpha = "Error: Time Lag")
 
-ggsave("lag_error_jus.png", p, scale = 1.25)
+ggsave("lag_error_jus.png", p, scale = 1.0)
 
 ggplot(errors, aes(x=error_lag)) +
   geom_histogram(
@@ -100,7 +100,7 @@ ggplot(errors, aes(x=error_lag)) +
   theme_gray(base_size = 23) +
   xlab("Error: Time Lag") + facet_grid(data ~ .)
 
-ggsave("hist_errors_timelag.png", scale = 1.25)
+ggsave("hist_errors_timelag.png", scale = 1.0)
 
 #Construct loess/lm model
 
@@ -108,14 +108,14 @@ invVModel <- 1/scatter_df_pred$Velocity
 vModel <- scatter_df_pred$Velocity
 lag_model <- scatter_df_pred$TimeLag
 
-model <- loess(lag_model ~ invVModel)
+model <- loess(lag_model ~ invVModel, family = "symmetric")
 
 
 invVActual <- 1/scatter_df_actual$Velocity
 vActual <- scatter_df_actual$Velocity
 lag_actual <- scatter_df_actual$TimeLag
 
-actual <- loess(lag_actual ~ invVActual)
+actual <- loess(lag_actual ~ invVActual, family = "symmetric")
 
 model_preds <- predict(model)
 actual_preds <- predict(actual)
@@ -129,10 +129,10 @@ colnames(actual_df) <- c("Velocity", "TimeLag", "Type")
 df <- as.data.frame(rbind(model_df, actual_df))
 
 ggplot(df, aes(x = Velocity, y = TimeLag, color = Type)) + 
-  geom_line(size=1.25) +
+  geom_smooth(size=1.25) +
   theme_gray(base_size = 23) + 
   scale_colour_manual(values=palette1) + 
   labs(y="Time Lag", x="Output") + 
   theme(legend.position="top")
 
-ggsave("predictive_curves.png", scale = 1.25)
+ggsave("predictive_curves.png", scale = 1.0)

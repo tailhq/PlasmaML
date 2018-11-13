@@ -9,19 +9,20 @@ import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
-import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfpipe, dtfutils}
+import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfutils}
+import io.github.mandar2812.dynaml.tensorflow.data.{TFDataSet, DataSet}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
-import io.github.mandar2812.dynaml.tensorflow.utils._
 import io.github.mandar2812.PlasmaML.helios.core._
 import io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import org.platanios.tensorflow.api._
-import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
+import org.platanios.tensorflow.api.learn.{Mode, StopCriteria, SupervisedTrainableModel}
 import org.platanios.tensorflow.api.learn.layers.{Compose, Layer, Loss}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
 import spire.math.UByte
 import com.quantifind.charts.Highcharts._
+import org.platanios.tensorflow.api.learn.estimators.Estimator
 
 /**
   * <h3>Helios</h3>
@@ -92,7 +93,75 @@ package object helios {
     val cdt_gaussian_loss: WeightedTimeSeriesLossGaussian.type = WeightedTimeSeriesLossGaussian
     val cdt_beta_loss: WeightedTimeSeriesLossGaussian.type     = WeightedTimeSeriesLossGaussian
   }
-  
+
+  /**
+    * A model run contains a tensorflow model/estimator as
+    * well as its training/test data set and meta data regarding
+    * the training/evaluation process.
+    *
+    * */
+  sealed trait ModelRun {
+
+    type DATA_PATTERN
+    type SCALERS
+    type MODEL
+    type ESTIMATOR
+
+    val summary_dir: Path
+
+    val data_and_scales: (TFDataSet[DATA_PATTERN], SCALERS)
+
+    val metrics_train: Option[RegressionMetricsTF]
+
+    val metrics_test: Option[RegressionMetricsTF]
+
+    val model: MODEL
+
+    val estimator: ESTIMATOR
+
+  }
+
+  case class SupervisedModelRun[X, T](
+    data_and_scales: (TFDataSet[(X, T)], (ReversibleScaler[X], ReversibleScaler[T])),
+    model: SupervisedTrainableModel[
+      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, Output],
+    estimator: Estimator[
+      Tensor, Output, DataType, Shape, (Output, Output),
+      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+      ((Output, Output), Output)],
+    metrics_train: Option[RegressionMetricsTF],
+    metrics_test: Option[RegressionMetricsTF],
+    summary_dir: Path,
+    training_preds: Option[(Tensor, Tensor)],
+    test_preds: Option[(Tensor, Tensor)]) extends ModelRun {
+
+    override type DATA_PATTERN = (X, T)
+
+    override type SCALERS = (ReversibleScaler[X], ReversibleScaler[T])
+
+    override type MODEL = SupervisedTrainableModel[
+      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, Output]
+
+    override type ESTIMATOR = Estimator[
+      Tensor, Output, DataType, Shape, (Output, Output),
+      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+      ((Output, Output), Output)]
+  }
+
+  case class ExperimentType(
+    multi_output: Boolean,
+    probabilistic_time_lags: Boolean,
+    timelag_prediction: String)
+
+  case class ExperimentResult[DATA, X, Y](
+    config: ExperimentType,
+    train_data: DATA,
+    test_data: DATA,
+    results: SupervisedModelRun[X, Y])
+
+
   /**
     * Train a Neural architecture on a
     * processed data set.
@@ -367,9 +436,6 @@ package object helios {
       override protected def _forward(input: Output)(implicit mode: Mode): Seq[Output] = {
 
         tf.splitEvenly(input, image_history_downsampling + 1, -1)
-        /*Seq.tabulate(image_history_downsampling + 1)(image_index => {
-          input(---, image_index*num_channels_image :: (image_index + 1)*num_channels_image)
-        })*/
       }
     }
 
@@ -449,7 +515,7 @@ package object helios {
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
     miniBatchSize: Int = 16,
-    reuseExistingModel: Boolean = false) = {
+    reuseExistingModel: Boolean = false): ExperimentResult[DataSet[PATTERN], Tensor, Tensor] = {
 
     //The directories to write model parameters and summaries.
     val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
@@ -467,22 +533,34 @@ package object helios {
     * 4. Load the byte array into a tensor
     * */
 
-    val load_image_into_tensor = data.read_image >
+
+    val image_into_tensor = data.read_image >
       preprocess_image >
       image_to_bytearr >
-      /*data.image_to_tensor(
-        processed_image_size._1,
-        num_channels_image)*/
       DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
         dtype = "UINT8", processed_image_size._1,
         processed_image_size._2,
         num_channels_image)(arr))
 
+
+    val load_image: DataPipe[Seq[Path], Option[Tensor]] = DataPipe((images: Seq[Path]) => {
+
+      val first_non_corrupted_file: (Int, Path) =
+        images
+          .map(p => (available_bytes(p), p))
+          .sortBy(_._1)
+          .reverse
+          .head
+
+      if (first_non_corrupted_file._1 > 0) Some(image_into_tensor(first_non_corrupted_file._2)) else None
+
+    })
+
     val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
 
     val dataSet: TF_DATA = helios.data.prepare_helios_data_set(
       collated_data,
-      load_image_into_tensor,
+      load_image,
       load_targets_into_tensor,
       tt_partition,
       resample,
@@ -586,7 +664,24 @@ package object helios {
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
       tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
 
-    (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
+    val experiment_config = ExperimentType(mo_flag, prob_timelags, "mode")
+
+    val results = SupervisedModelRun(
+      (norm_tf_data, scalers),
+      model, estimator, None,
+      Some(reg_metrics),
+      tf_summary_dir, None,
+      Some((pred_targets, pred_time_lags_test))
+    )
+
+    val partitioned_data = collated_data.partition(DataPipe(tt_partition))
+
+    ExperimentResult(
+      experiment_config,
+      partitioned_data.training_dataset,
+      partitioned_data.test_dataset,
+      results
+    )
   }
 
 
@@ -848,7 +943,7 @@ package object helios {
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
     miniBatchSize: Int = 16,
-    reuseExistingModel: Boolean = false) = {
+    reuseExistingModel: Boolean = false): ExperimentResult[DataSet[MC_PATTERN], Tensor, Tensor] = {
 
     //The directories to write model parameters and summaries.
     val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
@@ -878,19 +973,12 @@ package object helios {
 
       val bytes = mc_image.toSeq.sortBy(_._1.toString).map(kv => {
 
-        val first_non_corrupted_file: (Int, Path) = kv._2.map(p => {
-
-          val in = Files.newInputStream(p.toNIO)
-
-          val available_bytes: Int = try in.available() catch {
-            case _: IOException => -1
-            case _: Exception => -1
-          }
-
-          in.close()
-
-          (available_bytes, p)
-        }).sortBy(_._1).reverse.head
+        val first_non_corrupted_file: (Int, Path) =
+          kv._2
+            .map(p => (available_bytes(p), p))
+            .sortBy(_._1)
+            .reverse
+            .head
 
         val processing_for_channel = data.read_image > preprocess_image(kv._1) > images_to_bytes(kv._1)
 
@@ -1012,7 +1100,24 @@ package object helios {
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
       tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
 
-    (model, estimator, reg_metrics, tf_summary_dir, scalers, collated_data, norm_tf_data)
+    val experiment_config = ExperimentType(mo_flag, prob_timelags, "mode")
+
+    val results = SupervisedModelRun(
+      (norm_tf_data, scalers),
+      model, estimator, None,
+      Some(reg_metrics),
+      tf_summary_dir, None,
+      Some((pred_targets, pred_time_lags_test))
+    )
+
+    val partitioned_data = collated_data.partition(DataPipe(tt_partition))
+
+    ExperimentResult(
+      experiment_config,
+      partitioned_data.training_dataset,
+      partitioned_data.test_dataset,
+      results
+    )
   }
 
 

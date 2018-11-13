@@ -535,22 +535,28 @@ def plot_scatter(
 }
 
 def write_data_set(
-  data: SLIDINGDATA,
+  data: TLDATA,
   summary_dir: Path,
   identifier: String): Unit = {
 
   //Write the features.
   write(
     summary_dir/s"${identifier}_features.csv",
-    data.map(_._2._1)
+    data._2.map(_._2._1)
       .map(x => dtfutils.toDoubleSeq(x).mkString(","))
       .mkString("\n")
   )
 
+  write(
+    summary_dir/s"${identifier}_output_lag.csv",
+    data._1.map(_._2)
+      .map(x => s"${x._1},${x._2}")
+      .mkString("\n"))
+
   //Write the slided outputs.
   write(
     summary_dir/s"${identifier}_targets.csv",
-    data.map(_._2._2)
+    data._2.map(_._2._2)
       .map(_.mkString(","))
       .mkString("\n")
   )
@@ -690,8 +696,8 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
 
   val ExperimentResult(
   _,
-  (_, collated_data),
-  (_, collated_data_test),
+  (data, collated_data),
+  (data_test, collated_data_test),
   JointModelRun(
   (tf_data, _), _, _,
   (metrics_train, metrics_time_lag_train),
@@ -811,7 +817,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
   )
 
 
-  write_data_set(collated_data, tf_summary_dir, "train_data")
+  write_data_set((data, collated_data), tf_summary_dir, "train_data")
 
   //Write errors in target vs errors in time lag for the training data.
   write(
@@ -852,7 +858,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     tf_summary_dir/"test_errors.csv",
     "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
 
-  write_data_set(collated_data_test, tf_summary_dir, "test_data")
+  write_data_set((data_test, collated_data_test), tf_summary_dir, "test_data")
 
   val test_scatter = plot_scatter(
     metrics_test.preds,

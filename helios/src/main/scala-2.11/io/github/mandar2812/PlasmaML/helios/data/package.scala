@@ -1,5 +1,8 @@
 package io.github.mandar2812.PlasmaML.helios
 
+import java.io.IOException
+import java.nio.file.Files
+
 import ammonite.ops.{Path, pwd, root}
 import breeze.linalg.DenseVector
 import com.sksamuel.scrimage.Image
@@ -41,7 +44,7 @@ package object data {
     * A simple data pattern, consisting of
     * a time stamp, path to an image, and a sequence of numbers
     * */
-  type PATTERN                 = (DateTime, (Path, Seq[Double]))
+  type PATTERN                 = (DateTime, (Seq[Path], Seq[Double]))
 
   /**
     * A pattern, consisting of
@@ -190,6 +193,23 @@ package object data {
 
   val read_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
 
+  val non_corrupted_pattern = DataPipe[(Option[Tensor], Seq[Double]), Boolean](_._1.isDefined)
+
+  val load_images_into_tensor = DataPipe((c: Option[Tensor]) => c.get)
+
+  def available_bytes(p: Path): Int = {
+    val in = Files.newInputStream(p.toNIO)
+
+    val available_bytes: Int = try in.available() catch {
+      case _: IOException => -1
+      case _: Exception => -1
+    }
+
+    in.close()
+
+    available_bytes
+  }
+
   def image_to_tensor: MetaPipe21[Int, Int, Array[Byte], Tensor] = MetaPipe21[Int, Int, Array[Byte], Tensor](
     (size: Int, channels: Int) => (data: Array[Byte]) => {
 
@@ -291,7 +311,7 @@ package object data {
   }
 
   val scale_helios_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
-    
+
     val concat_targets = tfi.stack(
       dataset.training_dataset.map(DataPipe((p: (Tensor, Tensor)) => p._2)).data.toSeq
     )
@@ -628,13 +648,13 @@ package object data {
 
         val grouped_images = images_for_month.map(patt => (image_dt_roundoff(patt._1), patt._2)).groupBy(_._1)
 
-        grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
+        grouped_images.map(patt => (patt._1, patt._2.toSeq.sortBy(_._1).map(_._2)))
       })
 
     val images = dtfdata.dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
-      .to_supervised(identityPipe[(DateTime, Path)])
+      .to_supervised(identityPipe[(DateTime, Seq[Path])])
 
 
     images.join(omni_data)
@@ -996,7 +1016,7 @@ package object data {
     * */
   def prepare_helios_data_set(
     collated_data: HELIOS_OMNI_DATA,
-    read_image: DataPipe[Path, Tensor],
+    read_image: DataPipe[Seq[Path], Option[Tensor]],
     read_targets: DataPipe[Seq[Double], Tensor],
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false,
@@ -1046,8 +1066,16 @@ package object data {
 
 
     val processed_data = experiment_data.copy[(Tensor, Seq[Double])](
-      training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
-      test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
+      training_dataset = experiment_data.training_dataset
+        .map(load_only_images)
+        .filter(non_corrupted_pattern)
+        .map(load_images_into_tensor * identityPipe[Seq[Double]])
+        .transform(get_image_history),
+      test_dataset = experiment_data.test_dataset
+        .map(load_only_images)
+        .filter(non_corrupted_pattern)
+        .map(load_images_into_tensor * identityPipe[Seq[Double]])
+        .transform(get_image_history)
     )
 
     processed_data.copy[(Tensor, Tensor)](
@@ -1067,9 +1095,6 @@ package object data {
     * @param tt_partition A function which takes each data element and
     *                     determines if it goes into the train or test split.
     *
-    * @param image_process The exponent of 2 which determines how much the
-    *                      image will be scaled down. i.e. scaleDownFactor = 4
-    *                      corresponds to a 16 fold decrease in image size.
     * */
   def prepare_helios_ts_data_set(
     collated_data: HELIOS_OMNI_DATA_EXT,
@@ -1212,10 +1237,6 @@ package object data {
 
     val load_only_targets = identityPipe[Tensor] * read_targets
 
-    val non_corrupted_images = DataPipe[(Option[Tensor], Seq[Double]), Boolean](_._1.isDefined)
-
-
-
     val get_image_history = if(image_history > 0) {
       val slices = utils.range(
         min = 0d, image_history.toDouble,
@@ -1237,18 +1258,18 @@ package object data {
     }
 
 
-    val load_images_into_tensor = DataPipe((c: (Option[Tensor], Seq[Double])) => (c._1.get, c._2))
+
 
     val processed_data = experiment_data.copy[(Tensor, Seq[Double])](
       training_dataset = experiment_data.training_dataset
         .map(load_only_images)
-        .filter(non_corrupted_images)
-        .map(load_images_into_tensor)
+        .filter(non_corrupted_pattern)
+        .map(load_images_into_tensor * identityPipe[Seq[Double]])
         .transform(get_image_history),
       test_dataset = experiment_data.test_dataset
         .map(load_only_images)
-        .filter(non_corrupted_images)
-        .map(load_images_into_tensor)
+        .filter(non_corrupted_pattern)
+        .map(load_images_into_tensor * identityPipe[Seq[Double]])
         .transform(get_image_history)
     )
 
