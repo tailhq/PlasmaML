@@ -191,7 +191,7 @@ object OMNILoader {
     (deltaT: Int, timelag: Int) => (lines: Iterable[(DateTime, Seq[Double])]) => {
       val num_quantities = lines.head._2.length
 
-      lines.toList.sliding(deltaT+timelag+1).map((history) => {
+      lines.toList.sliding(deltaT+timelag+1).map(history => {
 
         val features: Seq[Seq[Double]] = history.slice(deltaT, deltaT+timelag).map(_._2)
 
