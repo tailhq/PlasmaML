@@ -325,7 +325,7 @@ package object helios {
     (model, estimator, metrics, metrics_class, tf_summary_dir, labels_mean, labels_stddev, collated_data)
   }
 
-  private def write_predictions(
+  def write_predictions(
     preds: Seq[Double],
     targets: Seq[Double],
     timelags: Seq[Double],

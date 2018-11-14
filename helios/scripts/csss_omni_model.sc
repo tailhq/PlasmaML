@@ -212,6 +212,7 @@ val scale_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
 @main
 def apply(
   num_neurons: Seq[Int] = Seq(120, 90),
+  max_degree: Int = 2,
   optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
   year_range: Range = 2011 to 2017,
   test_year: Int = 2015,
@@ -281,8 +282,7 @@ def apply(
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
-    /*timelagutils.getAct(2, 1)*/
-    (i: Int) => dtflearn.Phi(s"Act_${i}"), FLOAT64)(
+    timelagutils.getAct(max_degree, 1), FLOAT64)(
     net_layer_sizes.tail) >> output_mapping
 
 
@@ -299,7 +299,7 @@ def apply(
 
 
   println("Scaling data attributes")
-  val (scaled_data, scalers) = scale_dataset(
+  val (scaled_data, scalers): helios.data.SC_TF_DATA = scale_dataset(
     dataset.copy(
       training_dataset = dataset.training_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2),
       test_dataset = dataset.test_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2)
@@ -374,6 +374,28 @@ def apply(
   val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
 
-  (model, estimator, reg_metrics)
+  val experiment_config = helios.ExperimentType(mo_flag, prob_timelags, "mode")
+
+  val results = helios.SupervisedModelRun(
+    (scaled_data, scalers),
+    model, estimator, None,
+    Some(reg_metrics),
+    tf_summary_dir, None,
+    Some((pred_targets, pred_time_lags_test))
+  )
+
+  helios.write_predictions(
+    dtfutils.toDoubleSeq(pred_targets).toSeq,
+    actual_targets,
+    dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+    tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
+
+
+  helios.ExperimentResult(
+    experiment_config,
+    dataset.training_dataset,
+    dataset.test_dataset,
+    results
+  )
 
 }
