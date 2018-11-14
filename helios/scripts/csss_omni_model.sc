@@ -223,6 +223,7 @@ def apply(
   prob_timelags: Boolean = true,
   log_scale_fte: Boolean = false,
   iterations: Int = 10000,
+  miniBatch: Int = 1000,
   fte_data_path: Path = home/'Downloads/'fte) = {
 
 
@@ -315,7 +316,7 @@ def apply(
       (Shape(input_dim), Shape(causal_window)))
       .repeat()
       .shuffle(10)
-      .batch(500)
+      .batch(miniBatch)
       .prefetch(10)
   }
 
