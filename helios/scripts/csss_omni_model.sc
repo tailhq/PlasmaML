@@ -126,6 +126,12 @@ def load_fte_data(
 
   val fte_data = carrington_rotation_table.join(fte)
 
+  val log_transformation =
+    (x: Double) => if(log_flag) {
+      if(math.abs(x) < 1d) 0d
+      else math.log10(math.abs(x))
+    } else x
+
   val processed_fte_data = {
     fte_data.flatMap(process_rotation)
       .transform(
@@ -137,7 +143,7 @@ def load_fte_data(
       .to_zip(
         identityPipe[DateTime] *
           DataPipe((s: Seq[FTEPattern]) =>
-            Tensor(s.map(_.fte.get).map(x => if(log_flag) math.log10(math.abs(x)) else x)).reshape(Shape(s.length))
+            Tensor(s.map(_.fte.get).map(log_transformation)).reshape(Shape(s.length))
           )
       )
   }
