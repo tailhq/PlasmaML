@@ -13,6 +13,7 @@ import _root_.io.github.mandar2812.PlasmaML.utils.L2Regularization
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api.learn.layers.Activation
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import $file.timelagutils
 
 //Set time zone to UTC
@@ -116,7 +117,8 @@ def load_fte_data(
   log_flag: Boolean,
   start: DateTime, end: DateTime)(
   deltaTFTE: Int, 
-  latitude_limit: Double): ZipDataSet[DateTime, Tensor] = {
+  latitude_limit: Double,
+  conv_flag: Boolean): ZipDataSet[DateTime, Tensor] = {
 
   val start_rotation = carrington_rotation_table.filter(_._2.contains(start)).data.head._1
 
@@ -134,6 +136,15 @@ def load_fte_data(
       else math.log10(math.abs(x))
     } else x
 
+  val crop_data_by_latitude = (pattern: (DateTime, Seq[FTEPattern])) =>
+    (pattern._1, pattern._2.filter(ftep => math.abs(ftep.latitude) <= latitude_limit))
+
+  val load_slice_to_tensor = DataPipe(
+    (s: Seq[FTEPattern]) => Tensor(s.map(_.fte.get).map(log_transformation)).reshape(Shape(s.length))
+  )
+
+  val sort_by_date = (s: Iterable[(DateTime, Seq[FTEPattern])]) => s.toSeq.sortBy(_._1)
+
   val processed_fte_data = {
     fte_data.flatMap(process_rotation)
       .transform(
@@ -143,19 +154,10 @@ def load_fte_data(
             p._1, 
             p._2.map(_._2).toSeq.sortBy(_.latitude))))
       .filter(_._2.length == 180)
-      .map((pattern: (DateTime, Seq[FTEPattern])) => (pattern._1, pattern._2.filter(ftep => math.abs(ftep.latitude) <= latitude_limit)))
+      .map(crop_data_by_latitude)
       .map(image_dt_roundoff * identityPipe[Seq[FTEPattern]])
-      .transform((s: Iterable[(DateTime, Seq[FTEPattern])]) => s.toSeq.sortBy(_._1))
-      .map(
-        identityPipe[DateTime] *
-          DataPipe((s: Seq[FTEPattern]) =>
-            Tensor(s.map(_.fte.get).map(log_transformation)).reshape(Shape(s.length))))
-      .transform((s: Iterable[(DateTime, Tensor)]) =>
-        if (deltaTFTE > 0)
-          s.sliding(deltaTFTE + 1)
-            .map(history => (history.last._1, tfi.concatenate(history.map(_._2).toSeq, axis = -1)))
-            .toIterable
-        else s)
+      .transform(sort_by_date)
+      .map(identityPipe[DateTime] * load_slice_to_tensor)
       .to_zip(identityPipe)
   }
 
@@ -171,10 +173,29 @@ def load_fte_data(
       }).toIterable
   )
 
+  val load_history = (history: Iterable[(DateTime, Tensor)]) => {
+
+    val history_size = history.toSeq.length
+
+    (
+      history.last._1,
+      if(conv_flag)
+        tfi.stack(history.map(_._2).toSeq, axis = -1).reshape(history.head._2.shape ++ Shape(history_size, 1))
+      else
+        tfi.concatenate(history.map(_._2).toSeq, axis = -1)
+    )
+  }
+
+  val generate_history = (s: Iterable[(DateTime, Tensor)]) =>
+    if (deltaTFTE > 0) s.sliding(deltaTFTE + 1).map(load_history).toIterable
+    else if(conv_flag) s.map(c => (c._1, c._2.reshape(Shape(c._2.shape(0), 1, 1))))
+    else s
+
 
   processed_fte_data
     .concatenate(interpolated_fte)
     .transform((data: Iterable[(DateTime, Tensor)]) => data.toSeq.sortBy(_._1))
+    .transform(generate_history)
     .to_zip(identityPipe[(DateTime, Tensor)])
 
 }
@@ -277,6 +298,7 @@ def apply(
   mo_flag: Boolean = true,
   prob_timelags: Boolean = true,
   log_scale_fte: Boolean = false,
+  conv_flag: Boolean = false,
   iterations: Int = 10000,
   miniBatch: Int = 1000,
   fte_data_path: Path = home/'Downloads/'fte) = {
@@ -313,7 +335,7 @@ def apply(
     println("\nProcessing FTE Data")
     FTExperiment.fte_data = load_fte_data(
       fte_data_path, carrington_rotations, 
-      log_scale_fte, start, end)(deltaTFTE, latitude_limit)
+      log_scale_fte, start, end)(deltaTFTE, latitude_limit, conv_flag)
     
     FTExperiment.config = FTExperiment.Config(
       (year_range.min, year_range.max), 
@@ -340,9 +362,9 @@ def apply(
 
   val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
 
-  val input_dim = dataset.training_dataset.data.head._2._1.shape(0)
+  val input_dim = dataset.training_dataset.data.head._2._1.shape
 
-  val input = tf.learn.Input(FLOAT64, Shape(-1, input_dim))
+  val input = tf.learn.Input(FLOAT64, Shape(-1) ++ input_dim)
 
   val trainInput = tf.learn.Input(FLOAT64, Shape(-1, causal_window))
 
@@ -354,12 +376,24 @@ def apply(
   val num_pred_dims = timelagutils.get_num_output_dims(causal_window, mo_flag, prob_timelags, "default")
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelagutils.get_ffnet_properties(input_dim, num_pred_dims, num_neurons)
+    timelagutils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
   val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default", 1.0)
 
   //Prediction architecture
-  val architecture = dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >> output_mapping
+  val architecture = if (conv_flag) {
+    tf.learn.Cast("Cast/Input", FLOAT32) >>
+      dtflearn.conv2d_unit(Shape(3, 3, 1, 4), (1, 1), 0.01f, true, 0.4f)(1) >>
+      tf.learn.MaxPool(s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
+      dtflearn.conv2d_unit(Shape(3, 3, 4, 2), (2, 2), 0.01f, true, 0.4f)(2) >>
+      tf.learn.Flatten("FlattenFeatures") >>
+      dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
+      output_mapping
+  } else {
+    dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
+      output_mapping
+  }
+
 
 
   val lossFunc = timelagutils.get_loss(
@@ -393,7 +427,7 @@ def apply(
          (Shape, Shape)](
       Left(identityPipe[(Tensor, Tensor)]),
       (FLOAT64, FLOAT64),
-      (Shape(input_dim), Shape(causal_window)))
+      (input_dim, Shape(causal_window)))
       .repeat()
       .shuffle(10)
       .batch(miniBatch)
