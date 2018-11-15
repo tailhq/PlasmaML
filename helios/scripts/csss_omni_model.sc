@@ -113,8 +113,10 @@ implicit val dateOrdering: Ordering[DateTime] = new Ordering[DateTime] {
 def load_fte_data(
   data_path: Path,
   carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
-  log_flag: Boolean)(
-  start: DateTime, end: DateTime): ZipDataSet[DateTime, Tensor] = {
+  log_flag: Boolean,
+  start: DateTime, end: DateTime)(
+  deltaTFTE: Int, 
+  latitude_limit: Double): ZipDataSet[DateTime, Tensor] = {
 
   val start_rotation = carrington_rotation_table.filter(_._2.contains(start)).data.head._1
 
@@ -135,17 +137,26 @@ def load_fte_data(
   val processed_fte_data = {
     fte_data.flatMap(process_rotation)
       .transform(
-        (data: Iterable[(DateTime, FTEPattern)]) =>
-          data.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_.latitude))))
+        (data: Iterable[(DateTime, FTEPattern)]) => data
+          .groupBy(_._1)
+          .map(p => (
+            p._1, 
+            p._2.map(_._2).toSeq.sortBy(_.latitude))))
       .filter(_._2.length == 180)
+      .map((pattern: (DateTime, Seq[FTEPattern])) => (pattern._1, pattern._2.filter(ftep => math.abs(ftep.latitude) <= latitude_limit)))
       .map(image_dt_roundoff * identityPipe[Seq[FTEPattern]])
       .transform((s: Iterable[(DateTime, Seq[FTEPattern])]) => s.toSeq.sortBy(_._1))
-      .to_zip(
+      .map(
         identityPipe[DateTime] *
           DataPipe((s: Seq[FTEPattern]) =>
-            Tensor(s.map(_.fte.get).map(log_transformation)).reshape(Shape(s.length))
-          )
-      )
+            Tensor(s.map(_.fte.get).map(log_transformation)).reshape(Shape(s.length))))
+      .transform((s: Iterable[(DateTime, Tensor)]) =>
+        if (deltaTFTE > 0)
+          s.sliding(deltaTFTE + 1)
+            .map(history => (history.last._1, tfi.concatenate(history.map(_._2).toSeq, axis = -1)))
+            .toIterable
+        else s)
+      .to_zip(identityPipe)
   }
 
   println("Interpolating FTE values to fill hourly cadence requirement")
@@ -223,13 +234,17 @@ object FTExperiment {
   case class Config(
     data_limits: (Int, Int),
     deltaT: (Int, Int),
+    deltaTFTE: Int,
+    latitude_limit: Double,
     log_scale_fte: Boolean
   )
 
 
   var config = Config(
     (0, 0),
-    (0, 0), 
+    (0, 0),
+    0,
+    90d,
     false
   )
 
@@ -240,7 +255,7 @@ object FTExperiment {
   def clear_cache(): Unit = {
     fte_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
     omni_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
-    config = Config((0, 0), (0, 0), false)
+    config = Config((0, 0), (0, 0), 0, 90d, false)
   }
 
 }
@@ -256,6 +271,8 @@ def apply(
   test_year: Int = 2015,
   sw_threshold: Double = 700d,
   deltaT: (Int, Int) = (48, 108),
+  deltaTFTE: Int = 5,
+  latitude_limit: Double = 40d,
   reg: Double = 0.0001,
   mo_flag: Boolean = true,
   prob_timelags: Boolean = true,
@@ -289,11 +306,19 @@ def apply(
   if(
     FTExperiment.fte_data.size == 0 || 
     FTExperiment.omni_data.size == 0 ||
-    FTExperiment.config != FTExperiment.Config((year_range.min, year_range.max), deltaT, log_scale_fte)) {
+    FTExperiment.config != FTExperiment.Config(
+      (year_range.min, year_range.max), deltaT, 
+      deltaTFTE, latitude_limit, log_scale_fte)) {
     
     println("\nProcessing FTE Data")
-    FTExperiment.fte_data = load_fte_data(fte_data_path, carrington_rotations, log_scale_fte)(start, end)
-    FTExperiment.config = FTExperiment.Config((year_range.min, year_range.max), deltaT, log_scale_fte)
+    FTExperiment.fte_data = load_fte_data(
+      fte_data_path, carrington_rotations, 
+      log_scale_fte, start, end)(deltaTFTE, latitude_limit)
+    
+    FTExperiment.config = FTExperiment.Config(
+      (year_range.min, year_range.max), 
+      deltaT, deltaTFTE, latitude_limit, 
+      log_scale_fte)
 
     println("Processing OMNI solar wind data")
     FTExperiment.omni_data = load_solar_wind_data(start, end)(deltaT)
@@ -304,8 +329,11 @@ def apply(
 
   
   val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
-    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold) false
-    else true)
+    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold) 
+      false
+    else 
+      true
+  )
 
   println("Constructing joined data set")
   val dataset = FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
