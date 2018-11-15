@@ -12,8 +12,8 @@ import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.utils.L2Regularization
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
+import org.platanios.tensorflow.api.learn.layers.Activation
 import $file.timelagutils
-
 
 //Set time zone to UTC
 DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -137,8 +137,7 @@ def load_fte_data(
       .to_zip(
         identityPipe[DateTime] *
           DataPipe((s: Seq[FTEPattern]) =>
-            Tensor(
-              s.map(_.fte.get).map(x => if(log_flag) math.log(math.abs(x)) else x)).reshape(Shape(s.length))
+            Tensor(s.map(_.fte.get).map(x => if(log_flag) math.log10(math.abs(x)) else x)).reshape(Shape(s.length))
           )
       )
   }
@@ -193,15 +192,19 @@ val scale_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
 
   val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
 
-  val (min_f, max_f) = (concat_features.min(axes = 0), concat_features.max(axes = 0))
+  val n = concat_features.shape(0)
+
+  val mean_f = concat_features.mean(axes = 0)
+  val std_f  = concat_features.subtract(mean_f).square.mean(axes = 0).multiply(n/(n-1)).sqrt
   
   val targets_scaler = MinMaxScalerTF(min, max)
 
-  val features_scaler = MinMaxScalerTF(min_f, max_f)
+  val features_scaler = GaussianScalerTF(mean_f, std_f)
   
   (
     dataset.copy(
-      training_dataset = dataset.training_dataset.map(features_scaler * targets_scaler)
+      training_dataset = dataset.training_dataset.map(features_scaler * targets_scaler),
+      test_dataset     = dataset.test_dataset.map(features_scaler * identityPipe[Tensor])
     ),
     (features_scaler, targets_scaler)
   )
@@ -209,10 +212,39 @@ val scale_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
 })
 
 
+object FTExperiment {
+  
+  case class Config(
+    data_limits: (Int, Int),
+    deltaT: (Int, Int),
+    log_scale_fte: Boolean
+  )
+
+
+  var config = Config(
+    (0, 0),
+    (0, 0), 
+    false
+  )
+
+  var fte_data: ZipDataSet[DateTime, Tensor] = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
+
+  var omni_data: ZipDataSet[DateTime, Tensor] = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
+
+  def clear_cache(): Unit = {
+    fte_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
+    omni_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
+    config = Config((0, 0), (0, 0), false)
+  }
+
+}
+
+val hybrid_poly = (max_degree: Int) => timelagutils.getAct(max_degree, 1)
+
 @main
 def apply(
   num_neurons: Seq[Int] = Seq(120, 90),
-  max_degree: Int = 2,
+  activation_func: Int => Activation = hybrid_poly(2),
   optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
   year_range: Range = 2011 to 2017,
   test_year: Int = 2015,
@@ -248,18 +280,29 @@ def apply(
     new DateTime(year_range.max, 12, 31, 23, 59))
 
 
-  println("\nProcessing FTE Data")
-  val fte_data = load_fte_data(fte_data_path, carrington_rotations, log_scale_fte)(start, end)
+  if(
+    FTExperiment.fte_data.size == 0 || 
+    FTExperiment.omni_data.size == 0 ||
+    FTExperiment.config != FTExperiment.Config((year_range.min, year_range.max), deltaT, log_scale_fte)) {
+    
+    println("\nProcessing FTE Data")
+    FTExperiment.fte_data = load_fte_data(fte_data_path, carrington_rotations, log_scale_fte)(start, end)
+    FTExperiment.config = FTExperiment.Config((year_range.min, year_range.max), deltaT, log_scale_fte)
 
-  println("Processing OMNI solar wind data")
-  val omni_data = load_solar_wind_data(start, end)(deltaT)
+    println("Processing OMNI solar wind data")
+    FTExperiment.omni_data = load_solar_wind_data(start, end)(deltaT)
 
+  } else {
+    println("\nUsing cached data sets")
+  }
+
+  
   val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
     if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold) false
     else true)
 
   println("Constructing joined data set")
-  val dataset = fte_data.join(omni_data).partition(tt_partition)
+  val dataset = FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
 
   val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
 
@@ -282,9 +325,7 @@ def apply(
   val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default", 1.0)
 
   //Prediction architecture
-  val architecture = dtflearn.feedforward_stack(
-    timelagutils.getAct(max_degree, 1), FLOAT64)(
-    net_layer_sizes.tail) >> output_mapping
+  val architecture = dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >> output_mapping
 
 
   val lossFunc = timelagutils.get_loss(
@@ -310,7 +351,12 @@ def apply(
   
   val train_data_tf = {
     scaled_data.training_dataset
-      .build[(Tensor, Tensor), (Output, Output), (DataType, DataType), (DataType, DataType), (Shape, Shape)](
+      .build[
+        (Tensor, Tensor), 
+        (Output, Output), 
+        (DataType, DataType), 
+        (DataType, DataType),
+         (Shape, Shape)](
       Left(identityPipe[(Tensor, Tensor)]),
       (FLOAT64, FLOAT64),
       (Shape(input_dim), Shape(causal_window)))
