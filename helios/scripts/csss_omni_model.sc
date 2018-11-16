@@ -12,9 +12,31 @@ import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.utils.L2Regularization
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
-import org.platanios.tensorflow.api.learn.layers.Activation
+import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import $file.timelagutils
+import org.platanios.tensorflow.api.learn.Mode
+import org.platanios.tensorflow.api.ops.variables.RandomNormalInitializer
+
+//Customized layer based on Bala et. al
+
+val quadratic_fit = (name: String) => new Layer[Output, Output](name) {
+  override val layerType = s"LocalQuadraticFit"
+
+  override protected def _forward(input: Output)(implicit mode: Mode) = {
+
+    val aa = tf.variable("aa", input.dataType, Shape(), RandomNormalInitializer())
+    val bb = tf.variable("bb", input.dataType, Shape(), RandomNormalInitializer())
+    val cc = tf.variable("cc", input.dataType, Shape(), RandomNormalInitializer())
+
+
+    val a = input.pow(2.0).multiply(aa)
+    val b = input.multiply(bb)
+
+    a + b + cc
+  }
+}
+
 
 //Set time zone to UTC
 DateTimeZone.setDefault(DateTimeZone.UTC)
@@ -390,6 +412,7 @@ def apply(
       dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
       output_mapping
   } else {
+    quadratic_fit("Layer_0") >>
     dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
       output_mapping
   }
