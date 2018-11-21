@@ -40,9 +40,13 @@ val layer_poly = (power: Int) => (n: String) => new Activation(n) {
   }
 }
 
-val getAct = (degree: Int, s: Int) => (i: Int) =>
+val getPolyAct = (degree: Int, s: Int) => (i: Int) =>
   if(i - s == 0) layer_poly(degree)(s"Act_$i")
   else tf.learn.Sigmoid(s"Act_$i")
+
+val getReLUAct = (s: Int) => (i: Int) =>
+  if(i - s == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
+  else dtflearn.Phi(s"Act_$i")
 
 //subroutine to calculate sliding autocorrelation of a time series.
 def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
@@ -151,12 +155,26 @@ def generate_data(
     .map(p => (p._1, (p._2._1, p._2._2.get, p._2._3)))
 
 
+
+  (data, joined_data)
+}
+
+def plot_data(dataset: TLDATA): Unit = {
+
+  val (data, joined_data) = dataset
+
+  val sliding_window = joined_data.head._2._2.length
+
+  val (causes, effects) = data.unzip
+
   val energies = data.map(_._2._2)
 
   /*spline(energies)
   title("Output Time Series")*/
 
   val effect_times = data.map(_._2._1)
+
+  val outputs = effects.groupBy(_._1.toInt).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
 
   try {
 
@@ -177,7 +195,6 @@ def generate_data(
   spline(autocorrelation(2*sliding_window)(data.map(_._2._2.toDouble)))
   title("Auto-covariance of time series")
 
-  (data, joined_data)
 }
 
 //Transform the generated data into a tensorflow compatible object
@@ -257,12 +274,13 @@ def get_ffnet_properties(
 
 def get_ffnet_properties(
   d: Int, num_pred_dims: Int,
-  layer_sizes: Seq[Int]) = {
+  layer_sizes: Seq[Int],
+  dType: String = "FLOAT64") = {
 
   val net_layer_sizes       = Seq(d) ++ layer_sizes ++ Seq(num_pred_dims)
   val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
   val layer_parameter_names = (1 to net_layer_sizes.tail.length).map(s => "Linear_"+s+"/Weights")
-  val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)("FLOAT64")
+  val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)(dType)
 
   (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes)
 }
@@ -766,7 +784,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     plot_title = "Input-Output Relationships: Test Data"
   )*/
 
-  selected_indices.foreach(i => {
+  /*selected_indices.foreach(i => {
     plot_input_output(
       input = collated_data_test.map(_._2._1),
       input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
@@ -776,9 +794,9 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
       plot_legend = Seq(s"Predictor_$i", s"Target_$i"),
       plot_title = "Input-Output Relationships: Test Data"
     )
-  })
+  })*/
 
-  plot_input_output(
+  /*plot_input_output(
     input = collated_data_test.map(_._2._1),
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
     predictions = selected_probabilities,
@@ -786,7 +804,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     ylab = "p_i",
     plot_legend = selected_indices.map(i => s"Predictor_$i"),
     plot_title = "Input-Output/Probability Relationships: Test Data"
-  )
+  )*/
 
 
   plot_time_series(
@@ -794,7 +812,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     metrics_train.preds, plot_title =
       "Training Set Predictions")
 
-  plot_input_output(
+  /*plot_input_output(
     input = collated_data.map(_._2._1),
     input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
     targets = metrics_train.targets,
@@ -802,7 +820,7 @@ def plot_and_write_results(results: ExperimentResult): Unit = {
     xlab = "||x||_2",
     ylab = "f(x(t))",
     plot_title = "Input-Output Relationship: Training Data"
-  )
+  )*/
 
 
   val err_train     = metrics_train.preds.subtract(metrics_train.targets)
@@ -1055,7 +1073,7 @@ def run_exp2(
     results_model_eval
   )
 
-  plot_and_write_results(exp_results)
+  //plot_and_write_results(exp_results)
 
   exp_results
 

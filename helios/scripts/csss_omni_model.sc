@@ -9,7 +9,7 @@ import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
-import _root_.io.github.mandar2812.PlasmaML.utils.L2Regularization
+import _root_.io.github.mandar2812.PlasmaML.utils.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
@@ -303,12 +303,11 @@ object FTExperiment {
 
 }
 
-val hybrid_poly = (max_degree: Int) => timelagutils.getAct(max_degree, 1)
 
 @main
 def apply(
   num_neurons: Seq[Int] = Seq(120, 90),
-  activation_func: Int => Activation = hybrid_poly(2),
+  activation_func: Int => Activation = timelagutils.getReLUAct(1),
   optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
   year_range: Range = 2011 to 2017,
   test_year: Int = 2015,
@@ -317,6 +316,9 @@ def apply(
   deltaTFTE: Int = 5,
   latitude_limit: Double = 40d,
   reg: Double = 0.0001,
+  p_wt: Double = 0.75,
+  e_wt: Double = 1.0,
+  specificity: Double = 1.5,
   mo_flag: Boolean = true,
   prob_timelags: Boolean = true,
   log_scale_fte: Boolean = false,
@@ -400,7 +402,7 @@ def apply(
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     timelagutils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
-  val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default", 1.0)
+  val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
 
   //Prediction architecture
   val architecture = if (conv_flag) {
@@ -412,19 +414,19 @@ def apply(
       dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
       output_mapping
   } else {
-    quadratic_fit("Layer_0") >>
-    dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
+    dtflearn.feedforward_stack(
+      activation_func,
+      FLOAT64)(
+      net_layer_sizes.tail) >>
       output_mapping
   }
 
 
 
   val lossFunc = timelagutils.get_loss(
-    causal_window, mo_flag,
-    prob_timelags, 0.0, 1.0,
-    0.0, 0.0,
-    0.75, "Kullback-Leibler",
-    1.0, 1.0, 1.5)
+    causal_window, mo_flag, prob_timelags,
+    prior_wt = p_wt, prior_divergence =  "Kullback-Leibler",
+    error_wt = e_wt, c = specificity)
 
   val loss = lossFunc >>
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
@@ -460,7 +462,7 @@ def apply(
   val (model, estimator) = dtflearn.build_tf_model(
     architecture, input, trainInput, trainingInputLayer,
     loss, optimizer, summariesDir,
-    dtflearn.rel_loss_change_stop(0.05, iterations))(
+    dtflearn.rel_loss_change_stop(0.005, iterations))(
     train_data_tf)
 
 
