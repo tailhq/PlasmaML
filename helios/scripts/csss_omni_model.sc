@@ -404,12 +404,29 @@ def apply(
 
   val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
 
+  val filter_depths = Seq(
+    Seq(4, 4, 4, 4),
+    Seq(2, 2, 2, 2),
+    Seq(1, 1, 1, 1)
+  )
+
+  val activation = DataPipe[String, Layer[Output, Output]]((s: String) => tf.learn.ReLU(s, 0.01f))
+
   //Prediction architecture
   val architecture = if (conv_flag) {
     tf.learn.Cast("Cast/Input", FLOAT32) >>
-      dtflearn.conv2d_unit(Shape(3, 3, 1, 4), (1, 1), 0.01f, true, 0.4f)(1) >>
+      dtflearn.inception_unit(
+        1, filter_depths.head,
+        activation, use_batch_norm = true)(1) >>
       tf.learn.MaxPool(s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
-      dtflearn.conv2d_unit(Shape(3, 3, 4, 2), (2, 2), 0.01f, true, 0.4f)(2) >>
+      dtflearn.inception_unit(
+        filter_depths.head.sum, filter_depths(1),
+        activation, use_batch_norm = true)(2) >>
+      tf.learn.MaxPool(s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
+      dtflearn.inception_unit(
+        filter_depths(1).sum, filter_depths.last,
+        activation, use_batch_norm = true)(3) >>
+      tf.learn.MaxPool(s"MaxPool_3", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
       tf.learn.Flatten("FlattenFeatures") >>
       dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
       output_mapping
