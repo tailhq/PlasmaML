@@ -84,28 +84,28 @@ case class CausalDynamicTimeLag(
     val model_errors = preds.subtract(targets)
 
     val target_prob =
-      if(divergence == "Hellinger") model_errors.square.multiply(-1.0).divide(temperature).softmax()
+      if(divergence == "Hellinger") model_errors.square.multiply(-1).divide(temperature).softmax()
       else dtf.tensor_f64(
         1, size_causal_window)(
         (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
 
     def kl(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
 
-    val m = target_prob.add(prob).divide(2.0)
+    val m = target_prob.add(prob).divide(2)
 
     val prior_term = divergence match {
       case "L2" =>
-        target_prob.subtract(prob).square.sum(axes = 1).divide(2.0).mean()
+        target_prob.subtract(prob).square.sum(axes = 1).divide(2).mean()
       case "Hellinger" =>
-        target_prob.sqrt.subtract(prob.sqrt).square.sum(axes = 1).divide(2.0).sqrt.mean()
+        target_prob.sqrt.subtract(prob.sqrt).square.sum(axes = 1).divide(2).sqrt.mean()
       case "Jensen-Shannon" =>
-        kl(target_prob, m).add(kl(prob, m)).multiply(0.5)
+        kl(target_prob, m).add(kl(prob, m)).divide(2)
       case "Cross-Entropy" =>
-        target_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
+        target_prob.multiply(prob.log).sum(axes = 1).multiply(-1).mean()
       case "Kullback-Leibler" =>
         kl(prob, target_prob)
       case _ =>
-        Tensor(0.0).toOutput
+        prob.log.multiply(prob).multiply(-1).sum(axes = 1).mean()
 
     }
 
