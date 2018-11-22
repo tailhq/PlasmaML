@@ -1,9 +1,6 @@
 package io.github.mandar2812.PlasmaML
 
-import java.io.IOException
-import java.nio.file.Files
-
-import ammonite.ops.{Path, exists, home, ls}
+import ammonite.ops._
 import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
@@ -207,13 +204,14 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
+
     val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
+      if (exists(tf_summary_dir)) ls! tf_summary_dir |? os.isFile |? (_.segments.toSeq.last.contains("model.ckpt-"))
       else Seq()
 
     val checkpoint_max =
       if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
+      else (checkpoints | (_.segments.toSeq.last.split("-").last.split('.').head.toInt)).max
 
     val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
 
@@ -459,7 +457,7 @@ package object helios {
       tf.learn.ScalarSummary("Loss", "ReconstructionLoss")
 
     //Now train the model
-    val (model, estimator) = dtflearn.build_tf_model(
+    val (model, estimator) = dtflearn.build_unsup_tf_model(
       arch, input, loss,
       optimizer, java.nio.file.Paths.get(tf_summary_dir.toString()),
       stop_criteria, stepRateFreq = 5000, summarySaveFreq = 5000, checkPointFreq = 5000)(
@@ -1302,12 +1300,12 @@ package object helios {
     val tf_summary_dir = tempdir/resDirName
 
     val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
+      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.toSeq.last.contains("model.ckpt-"))
       else Seq()
 
     val checkpoint_max =
       if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
+      else (checkpoints | (_.segments.toSeq.last.split("-").last.split('.').head.toInt)).max
 
     val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
 

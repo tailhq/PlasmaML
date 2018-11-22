@@ -10,7 +10,6 @@ lazy val commonSettings = Seq(
   scalaVersion in ThisBuild := scala,
   libraryDependencies in ThisBuild ++= (commonDependencies ++ dynaMLDependency ++ tensorflowDependency),
   resolvers in ThisBuild ++= Seq(
-    "jitpack" at "https://jitpack.io",
     "jzy3d-releases" at "http://maven.jzy3d.org/releases",
     "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
     "BeDataDriven" at "https://nexus.bedatadriven.com/content/groups/public",

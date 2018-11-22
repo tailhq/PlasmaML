@@ -213,7 +213,7 @@ object GOESLoader {
 
     files |?
       (_.isFile) |?
-      (f => filePattern.findFirstMatchIn(f.segments.last).isDefined) ||
+      (f => filePattern.findFirstMatchIn(f.segments.toSeq.last).isDefined) ||
       parse_file |>
       (_.groupBy(_._1).mapValues(_.map(_._2)).toStream.sortBy(_._1.getMillis))
   }

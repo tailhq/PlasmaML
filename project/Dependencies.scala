@@ -4,7 +4,7 @@ import sbt._
 
 object Dependencies {
 
-  val scala = "2.11.8"
+  val scala = "2.11.11"
 
   val tfscala_version = "0.2.4"
 
@@ -15,18 +15,19 @@ object Dependencies {
   val packagedTFFlag: Boolean = true
 
   //Set to dev, if pulling DynaML master SNAPSHOT
-  val status = "prod"
+  val status = "dev"
 
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val latest_dynaml_release = "v1.5.3"
+  val latest_dynaml_dev_release = "v2.0"
   val dynaml_branch = ""
 
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
-    if(status == "local") ("io.github.mandar2812", "dynaml_2.11", "v2.0-SNAPSHOT")
-    else if(status == "dev") ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", s"$dynaml_branch-SNAPSHOT")
-    else ("com.github.transcendent-ai-labs.DynaML", "dynaml_2.11", latest_dynaml_release)
+    if(status == "local") ("io.github.transcendent-ai-labs", "dynaml_2.11", "v2.0-SNAPSHOT")
+    else if(status == "dev") ("io.github.transcendent-ai-labs", "dynaml_2.11", s"$latest_dynaml_dev_release-SNAPSHOT")
+    else ("io.github.transcendent-ai-labs", "dynaml_2.11", latest_dynaml_release)
 
   val platform: String = {
     // Determine platform name using code similar to javacpp

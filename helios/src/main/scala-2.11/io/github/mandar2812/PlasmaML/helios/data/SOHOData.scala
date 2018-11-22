@@ -169,7 +169,7 @@ object SOHOLoader {
     val filePattern = getFilePattern(year_month, soho_source)
 
     val image_paths = if(dirTreeCreated) {
-      ls! soho_files_path |? (s => s.isDir && s.segments.last == soho_source.instrument) ||
+      ls! soho_files_path |? (s => s.isDir && s.segments.toSeq.last == soho_source.instrument) ||
         (d => {
           ls! d |?
             (s => s.isDir && s.segments.contains(year)) ||
@@ -182,7 +182,7 @@ object SOHOLoader {
     }
 
     image_paths | (file => {
-      (filePattern.findFirstMatchIn(file.segments.last), file)
+      (filePattern.findFirstMatchIn(file.segments.toSeq.last), file)
     }) |? (_._1.isDefined) | (c => {
       val Some(matchStr) = c._1
 
@@ -221,7 +221,7 @@ object SOHOLoader {
     val filePattern = getFilePattern(year_month, soho_sources)
 
     val image_paths = if(dirTreeCreated) {
-      ls! soho_files_path |? (s => s.isDir && soho_sources.map(_.instrument).contains(s.segments.last)) ||
+      ls! soho_files_path |? (s => s.isDir && soho_sources.map(_.instrument).contains(s.segments.toSeq.last)) ||
         (d => {
           ls! d |?
             (s => s.isDir && s.segments.contains(year)) ||
@@ -234,7 +234,7 @@ object SOHOLoader {
     }
 
     image_paths | (file => {
-      (filePattern.findFirstMatchIn(file.segments.last), file)
+      (filePattern.findFirstMatchIn(file.segments.toSeq.last), file)
     }) |? (_._1.isDefined) | (c => {
       val Some(matchStr) = c._1
 

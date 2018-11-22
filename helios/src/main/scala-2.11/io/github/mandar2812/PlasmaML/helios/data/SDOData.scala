@@ -189,7 +189,7 @@ object SDOLoader {
     val filePattern = getFilePattern(year_month, sdo_source)
 
     val image_paths = if(dirTreeCreated) {
-      ls! sdo_files_path |? (s => s.isDir && s.segments.last == sdo_source.instrument) ||
+      ls! sdo_files_path |? (s => s.isDir && s.segments.toSeq.last == sdo_source.instrument) ||
         (d => {
           ls! d |?
             (s => s.isDir && s.segments.contains(year)) ||
@@ -202,7 +202,7 @@ object SDOLoader {
     }
 
     (image_paths | (file => {
-      (filePattern.findFirstMatchIn(file.segments.last), file)
+      (filePattern.findFirstMatchIn(file.segments.toSeq.last), file)
     }) |? (_._1.isDefined) | (c => {
       val Some(matchStr) = c._1
 
@@ -241,7 +241,7 @@ object SDOLoader {
     val filePattern = getFilePattern(year_month, sdo_sources)
 
     val image_paths = if(dirTreeCreated) {
-      ls! sdo_files_path |? (s => s.isDir && sdo_sources.map(_.instrument).contains(s.segments.last)) ||
+      ls! sdo_files_path |? (s => s.isDir && sdo_sources.map(_.instrument).contains(s.segments.toSeq.last)) ||
         (d => {
           ls! d |?
             (s => s.isDir && s.segments.contains(year)) ||
@@ -254,7 +254,7 @@ object SDOLoader {
     }
 
     (image_paths | (file => {
-      (filePattern.findFirstMatchIn(file.segments.last), file)
+      (filePattern.findFirstMatchIn(file.segments.toSeq.last), file)
     }) |? (_._1.isDefined) | (c => {
       val Some(matchStr) = c._1
 
