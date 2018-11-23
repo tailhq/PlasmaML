@@ -3,7 +3,7 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
-import _root_.io.github.mandar2812.PlasmaML.helios.core._
+import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.utils._
 import $file.timelagutils
 import org.platanios.tensorflow.api.learn.layers.Activation
@@ -30,7 +30,7 @@ def main(
   c_cutoff: Double                   = 0.0,
   prior_wt: Double                   = 1d,
   c: Double                          = 1d,
-  prior_type: String                 = "Hellinger",
+  prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   temp: Double                       = 1.0,
   error_wt: Double                   = 1.0,
   mo_flag: Boolean                   = true,

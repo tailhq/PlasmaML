@@ -239,6 +239,7 @@ def load_solar_wind_data(start: DateTime, end: DateTime)(deltaT: (Int, Int)) = {
 
 }
 
+type SC_DATA = (helios.data.TF_DATA, (GaussianScalerTF, GaussianScalerTF))
 
 val scale_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
 
@@ -250,14 +251,16 @@ val scale_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
     dataset.training_dataset.map(DataPipe((p: (Tensor, Tensor)) => p._2)).data.toSeq
   )
 
-  val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
+  //val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
 
   val n = concat_features.shape(0)
 
+  val mean_t = concat_targets.mean(axes = 0)
+  val std_t  = concat_targets.subtract(mean_t).square.mean(axes = 0).multiply(n/(n-1)).sqrt
   val mean_f = concat_features.mean(axes = 0)
   val std_f  = concat_features.subtract(mean_f).square.mean(axes = 0).multiply(n/(n-1)).sqrt
   
-  val targets_scaler = MinMaxScalerTF(min, max)
+  val targets_scaler = GaussianScalerTF(mean_t, std_t)
 
   val features_scaler = GaussianScalerTF(mean_f, std_f)
   
@@ -304,15 +307,16 @@ object FTExperiment {
 }
 
 
+
 @main
 def apply(
-  num_neurons: Seq[Int] = Seq(120, 90),
+  num_neurons: Seq[Int] = Seq(30, 30),
   activation_func: Int => Activation = timelagutils.getReLUAct(1),
   optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
   year_range: Range = 2011 to 2017,
   test_year: Int = 2015,
   sw_threshold: Double = 700d,
-  deltaT: (Int, Int) = (48, 108),
+  deltaT: (Int, Int) = (48, 72),
   deltaTFTE: Int = 5,
   latitude_limit: Double = 40d,
   reg: Double = 0.0001,
@@ -442,7 +446,7 @@ def apply(
 
   val lossFunc = timelagutils.get_loss(
     causal_window, mo_flag, prob_timelags,
-    prior_wt = p_wt, prior_divergence =  "Kullback-Leibler",
+    prior_wt = p_wt, prior_divergence =  helios.learn.cdt_loss.JensenShannon,
     error_wt = e_wt, c = specificity)
 
   val loss = lossFunc >>
@@ -451,7 +455,7 @@ def apply(
 
 
   println("Scaling data attributes")
-  val (scaled_data, scalers): helios.data.SC_TF_DATA = scale_dataset(
+  val (scaled_data, scalers): SC_DATA = scale_dataset(
     dataset.copy(
       training_dataset = dataset.training_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2),
       test_dataset = dataset.test_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2)

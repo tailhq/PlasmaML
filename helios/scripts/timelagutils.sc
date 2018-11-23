@@ -334,7 +334,7 @@ def get_loss(
   corr_sc: Double               = 2.5,
   c_cutoff: Double              = 0.0,
   prior_wt: Double              = 1d,
-  prior_divergence: String      = "Hellinger",
+  prior_divergence:  helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   temp: Double                  = 1.0,
   error_wt: Double              = 1.0,
   c: Double                     = 1.0) =
@@ -352,6 +352,7 @@ def get_loss(
         "Loss/ProbWeightedTS",
         sliding_window,
         prior_wt = prior_wt,
+        error_wt = error_wt,
         temperature = 0.75,
         divergence = prior_divergence,
         specificity = c)

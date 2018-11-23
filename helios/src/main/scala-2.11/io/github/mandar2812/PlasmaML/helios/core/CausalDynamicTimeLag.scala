@@ -70,7 +70,7 @@ case class CausalDynamicTimeLag(
   error_wt: Double = 1.0,
   temperature: Double = 1.0,
   specificity: Double = 1.0,
-  divergence: String = "Hellinger") extends
+  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler) extends
   Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
@@ -83,31 +83,15 @@ case class CausalDynamicTimeLag(
 
     val model_errors = preds.subtract(targets)
 
-    val target_prob =
-      if(divergence == "Hellinger") model_errors.square.multiply(-1).divide(temperature).softmax()
-      else dtf.tensor_f64(
+    val target_prob = divergence match {
+      case CausalDynamicTimeLag.Hellinger => model_errors.square.multiply(-1).divide(temperature).softmax()
+      case _ => dtf.tensor_f64(
         1, size_causal_window)(
         (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
-
-    def kl(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
-
-    val m = target_prob.add(prob).divide(2)
-
-    val prior_term = divergence match {
-      case "L2" =>
-        target_prob.subtract(prob).square.sum(axes = 1).divide(2).mean()
-      case "Hellinger" =>
-        target_prob.sqrt.subtract(prob.sqrt).square.sum(axes = 1).divide(2).sqrt.mean()
-      case "Jensen-Shannon" =>
-        kl(target_prob, m).add(kl(prob, m)).divide(2)
-      case "Cross-Entropy" =>
-        target_prob.multiply(prob.log).sum(axes = 1).multiply(-1).mean()
-      case "Kullback-Leibler" =>
-        kl(prob, target_prob)
-      case _ =>
-        prob.log.multiply(prob).multiply(-1).sum(axes = 1).mean()
-
     }
+
+
+    val prior_term = divergence(prob, target_prob)
 
     model_errors.square
       .multiply(prob.multiply(specificity).add(1))
@@ -118,6 +102,42 @@ case class CausalDynamicTimeLag(
 }
 
 object CausalDynamicTimeLag {
+
+  sealed trait Divergence {
+    def apply(p: Output, q: Output): Output
+  }
+
+  object KullbackLeibler extends Divergence {
+    override def apply(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
+  }
+
+  object JensenShannon extends Divergence {
+    override def apply(p: Output, q: Output): Output = {
+
+      val m = p.add(q).divide(2)
+
+      (KullbackLeibler(p, m) + KullbackLeibler(q, m))/2
+
+    }
+  }
+
+  object CrossEntropy extends Divergence {
+    override def apply(p: Output, q: Output): Output = q.multiply(p.log).sum(axes = 1).multiply(-1).mean()
+  }
+
+  object Hellinger extends Divergence {
+    override def apply(p: Output, q: Output): Output =
+      q.sqrt.subtract(p.sqrt).square.sum(axes = 1).divide(2).sqrt.mean()
+  }
+
+  object L2 extends Divergence {
+    override def apply(p: Output, q: Output): Output = q.subtract(p).square.sum(axes = 1).divide(2).mean()
+  }
+
+  object Entropy extends Divergence {
+    override def apply(p: Output, q: Output): Output = p.log.multiply(p).multiply(-1).sum(axes = 1).mean()
+  }
+
   def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
     new Layer[Output, (Output, Output)](name) {
       override val layerType: String = s"OutputWTSLoss[horizon:$size_causal_window]"
@@ -133,9 +153,10 @@ case class CausalDynamicTimeLagSO(
   override val name: String,
   size_causal_window: Int,
   prior_wt: Double = 1.5,
+  error_wt: Double = 1.0,
   temperature: Double = 1.0,
   specificity: Double = 1.0,
-  divergence: String = "Hellinger") extends
+  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler) extends
   Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"WTSLossSO[horizon:$size_causal_window]"
@@ -149,24 +170,20 @@ case class CausalDynamicTimeLagSO(
 
     val model_errors = repeated_preds.subtract(targets)
 
-    val prior_prob =
-      if(divergence == "Hellinger") model_errors.square.multiply(-1.0).divide(temperature).softmax()
-      else dtf.tensor_f64(
+    val target_prob = divergence match {
+      case CausalDynamicTimeLag.Hellinger => model_errors.square.multiply(-1).divide(temperature).softmax()
+      case _ => dtf.tensor_f64(
         1, size_causal_window)(
         (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
+    }
 
-    def kl(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
 
-    val m = prior_prob.add(prob).divide(2.0)
+    val prior_term = divergence(prob, target_prob)
 
-    val prior_term =
-      if(divergence == "Jensen-Shannon") kl(prior_prob, m).add(kl(prob, m)).multiply(0.5)
-      else if(divergence == "Hellinger") prior_prob.sqrt.subtract(prob.sqrt).square.sum(axes = 1).sqrt.divide(math.sqrt(2.0)).mean()
-      else if(divergence == "Cross-Entropy") prior_prob.multiply(prob.log).sum(axes = 1).multiply(-1.0).mean()
-      else if(divergence == "Kullback-Leibler") kl(prob, prior_prob)
-      else Tensor(0.0).toOutput
-
-    model_errors.square.multiply(prob.multiply(specificity).add(1)).sum(axes = 1).mean()
+    model_errors.square
+      .multiply(prob.multiply(specificity).add(1))
+      .sum(axes = 1).mean()
+      .multiply(error_wt)
       .add(prior_term.multiply(prior_wt))
   }
 }
