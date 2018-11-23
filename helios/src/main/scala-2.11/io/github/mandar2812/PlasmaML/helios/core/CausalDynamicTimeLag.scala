@@ -101,6 +101,72 @@ case class CausalDynamicTimeLag(
   }
 }
 
+case class CausalDynamicTimeLagI(
+  override val name: String,
+  size_causal_window: Int) extends
+  Loss[(Output, Output)](name) {
+
+  override val layerType: String = s"L2Loss[horizon:$size_causal_window]"
+
+  override protected def _forward(input: (Output, Output))(implicit mode: Mode): Output = {
+
+    val preds    = input._1
+
+    val targets  = input._2
+
+    preds.subtract(targets).square.sum(axes = 1).mean()
+  }
+}
+
+
+case class CausalDynamicTimeLagII(
+  override val name: String,
+  size_causal_window: Int,
+  prior_wt: Double = 1.5,
+  error_wt: Double = 1.0,
+  temperature: Double = 1.0,
+  specificity: Double = 1.0,
+  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler) extends
+  Loss[(Output, Output)](name) {
+
+  override val layerType: String = s"CTL[horizon:$size_causal_window]"
+
+  override protected def _forward(input: (Output, Output))(implicit mode: Mode): Output = {
+
+    val prob    = input._1
+
+    val model_errors = input._2
+
+    val target_prob = divergence match {
+      case CausalDynamicTimeLag.Hellinger => model_errors.square.multiply(-1).divide(temperature).softmax()
+      case _ => dtf.tensor_f64(
+        1, size_causal_window)(
+        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
+    }
+
+
+    val prior_term = divergence(prob, target_prob)
+
+    model_errors.square
+      .multiply(prob.multiply(specificity))
+      .sum(axes = 1).mean()
+      .multiply(error_wt)
+      .add(prior_term.multiply(prior_wt))
+  }
+}
+
+object CausalDynamicTimeLagII {
+  def output_mapping(name: String): Layer[Output, Output] =
+    new Layer[Output, Output](name) {
+      override val layerType: String = s"ProbCDT"
+
+      override protected def _forward(input: Output)(implicit mode: Mode): Output = {
+        input.softmax()
+      }
+    }
+}
+
+
 object CausalDynamicTimeLag {
 
   sealed trait Divergence {

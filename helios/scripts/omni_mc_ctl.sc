@@ -33,7 +33,7 @@ def main(
   reg: Double                           = 0.001,
   prior_wt: Double                      = 0.85,
   error_wt: Double                      = 1.0,
-  prior_type: String                    = "Hellinger",
+  prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   c: Double                             = 1.0,
   temp: Double                          = 0.75,
   stop_criteria: StopCriteria           = dtflearn.max_iter_stop(5000),

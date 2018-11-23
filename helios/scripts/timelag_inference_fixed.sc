@@ -36,7 +36,7 @@ def main(
   mo_flag: Boolean              = true,
   prob_timelags: Boolean        = true,
   dist_type: String             = "default",
-  timelag_pred_strategy: String = "mode"): timelagutils.ExperimentResult = {
+  timelag_pred_strategy: String = "mode"): timelagutils.ExperimentResult[timelagutils.JointModelRun] = {
 
   //Output computation
   val beta = 100f

@@ -85,6 +85,8 @@ package object helios {
     val rBFWeightedSWLoss: RBFWeightedSWLoss.type              = RBFWeightedSWLoss
     val dynamicRBFSWLoss: DynamicRBFSWLoss.type                = DynamicRBFSWLoss
     val cdt_loss: CausalDynamicTimeLag.type                    = CausalDynamicTimeLag
+    val cdt_i: CausalDynamicTimeLagI.type                      = CausalDynamicTimeLagI
+    val cdt_ii: CausalDynamicTimeLagII.type                    = CausalDynamicTimeLagII
     val cdt_loss_so: CausalDynamicTimeLagSO.type               = CausalDynamicTimeLagSO
     val cdt_poisson_loss: WeightedTimeSeriesLossPoisson.type   = WeightedTimeSeriesLossPoisson
     val cdt_gaussian_loss: WeightedTimeSeriesLossGaussian.type = WeightedTimeSeriesLossGaussian
