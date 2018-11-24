@@ -104,7 +104,7 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
   }),
   javaOptions in Universal ++= Seq(
     // -J params will be added as jvm parameters
-    "-J-Xmx4096m",
+    "-J-Xmx8096m",
     "-J-Xms64m"
   ),
   dataDirectory := new File("data/"),

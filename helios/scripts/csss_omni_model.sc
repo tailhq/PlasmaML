@@ -323,6 +323,7 @@ def apply(
   p_wt: Double = 0.75,
   e_wt: Double = 1.0,
   specificity: Double = 1.5,
+  divergence: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.JensenShannon,
   mo_flag: Boolean = true,
   prob_timelags: Boolean = true,
   log_scale_fte: Boolean = false,
@@ -435,10 +436,7 @@ def apply(
       dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
       output_mapping
   } else {
-    dtflearn.feedforward_stack(
-      activation_func,
-      FLOAT64)(
-      net_layer_sizes.tail) >>
+    dtflearn.feedforward_stack(activation_func,FLOAT64)(net_layer_sizes.tail) >>
       output_mapping
   }
 
@@ -446,7 +444,7 @@ def apply(
 
   val lossFunc = timelagutils.get_loss(
     causal_window, mo_flag, prob_timelags,
-    prior_wt = p_wt, prior_divergence =  helios.learn.cdt_loss.JensenShannon,
+    prior_wt = p_wt, prior_divergence =  divergence,
     error_wt = e_wt, c = specificity)
 
   val loss = lossFunc >>

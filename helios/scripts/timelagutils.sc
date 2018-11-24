@@ -45,8 +45,8 @@ val getPolyAct = (degree: Int, s: Int) => (i: Int) =>
   else tf.learn.Sigmoid(s"Act_$i")
 
 val getReLUAct = (s: Int) => (i: Int) =>
-  if(i - s == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
-  else dtflearn.Phi(s"Act_$i")
+  if((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
+  else tf.learn.Sigmoid(s"Act_$i")
 
 //subroutine to calculate sliding autocorrelation of a time series.
 def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
@@ -1285,7 +1285,7 @@ def run_exp3(
         estimator_ii,
         (metrics_output_train, metrics_time_lag_train),
         (metrics_output_test, metrics_time_lag_test),
-        tf_summary_dir_i,
+        tf_summary_dir,
         (scalers._2.i(predictions_training_i), predictions_training_ii),
         (scalers._2.i(predictions_test_i), predictions_test_ii)
       )
