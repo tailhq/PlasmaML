@@ -120,33 +120,33 @@ package object helios {
 
   }
 
-  case class SupervisedModelRun[X, T](
+  case class SupervisedModelRun[X, T, ModelOutput, ModelOutputSym](
     data_and_scales: (TFDataSet[(X, T)], (ReversibleScaler[X], ReversibleScaler[T])),
     model: SupervisedTrainableModel[
-      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, ModelOutputSym,
       Tensor, Output, DataType, Shape, Output],
     estimator: Estimator[
-      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, ModelOutputSym,
       (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
-      ((Output, Output), Output)],
+      (ModelOutputSym, Output)],
     metrics_train: Option[RegressionMetricsTF],
     metrics_test: Option[RegressionMetricsTF],
     summary_dir: Path,
-    training_preds: Option[(Tensor, Tensor)],
-    test_preds: Option[(Tensor, Tensor)]) extends ModelRun {
+    training_preds: Option[ModelOutput],
+    test_preds: Option[ModelOutput]) extends ModelRun {
 
     override type DATA_PATTERN = (X, T)
 
     override type SCALERS = (ReversibleScaler[X], ReversibleScaler[T])
 
     override type MODEL = SupervisedTrainableModel[
-      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, ModelOutputSym,
       Tensor, Output, DataType, Shape, Output]
 
     override type ESTIMATOR = Estimator[
-      Tensor, Output, DataType, Shape, (Output, Output),
+      Tensor, Output, DataType, Shape, ModelOutputSym,
       (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
-      ((Output, Output), Output)]
+      (ModelOutputSym, Output)]
   }
 
   case class ExperimentType(
@@ -154,11 +154,11 @@ package object helios {
     probabilistic_time_lags: Boolean,
     timelag_prediction: String)
 
-  case class ExperimentResult[DATA, X, Y](
+  case class ExperimentResult[DATA, X, Y, ModelOutput, ModelOutputSym](
     config: ExperimentType,
     train_data: DATA,
     test_data: DATA,
-    results: SupervisedModelRun[X, Y])
+    results: SupervisedModelRun[X, Y, ModelOutput, ModelOutputSym])
 
 
   /**
@@ -515,7 +515,7 @@ package object helios {
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
     miniBatchSize: Int = 16,
-    reuseExistingModel: Boolean = false): ExperimentResult[DataSet[PATTERN], Tensor, Tensor] = {
+    reuseExistingModel: Boolean = false): ExperimentResult[DataSet[PATTERN], Tensor, Tensor, (Tensor, Tensor), (Output, Output)] = {
 
     //The directories to write model parameters and summaries.
     val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id
@@ -943,7 +943,7 @@ package object helios {
     prob_timelags: Boolean = true,
     optimizer: Optimizer = tf.train.AdaDelta(0.001),
     miniBatchSize: Int = 16,
-    reuseExistingModel: Boolean = false): ExperimentResult[DataSet[MC_PATTERN], Tensor, Tensor] = {
+    reuseExistingModel: Boolean = false): ExperimentResult[DataSet[MC_PATTERN], Tensor, Tensor, (Tensor, Tensor), (Output, Output)] = {
 
     //The directories to write model parameters and summaries.
     val resDirName = if(reuseExistingModel) results_id else "helios_omni_"+results_id

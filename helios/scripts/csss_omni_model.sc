@@ -235,7 +235,9 @@ def load_solar_wind_data(start: DateTime, end: DateTime)(deltaT: (Int, Int)) = {
   dtfdata.dataset(start.getYear to end.getYear)
     .map(DataPipe((i: Int) => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
     .transform(omni_processing)
-    .to_zip(identityPipe[DateTime] * DataPipe((s: Seq[Double]) => Tensor(s).reshape(Shape(s.length))))
+    .to_zip(identityPipe[DateTime] * DataPipe(
+      (s: Seq[Double]) => if (s.length == 1) Tensor(s).reshape(Shape()) else Tensor(s).reshape(Shape(s.length))
+    ))
 
 }
 
@@ -535,7 +537,7 @@ def apply(
 
   val experiment_config = helios.ExperimentType(mo_flag, prob_timelags, "mode")
 
-  val results = helios.SupervisedModelRun(
+  val results = helios.SupervisedModelRun[Tensor, Tensor, (Tensor, Tensor), (Output, Output)](
     (scaled_data, scalers),
     model, estimator, None,
     Some(reg_metrics),
@@ -556,5 +558,204 @@ def apply(
     dataset.test_dataset,
     results
   )
+
+}
+
+
+def single_output(
+  num_neurons: Seq[Int] = Seq(30, 30),
+  activation_func: Int => Activation = timelagutils.getReLUAct(1),
+  optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
+  year_range: Range = 2011 to 2017,
+  test_year: Int = 2015,
+  sw_threshold: Double = 700d,
+  deltaT: Int = 96,
+  deltaTFTE: Int = 5,
+  latitude_limit: Double = 40d,
+  reg: Double = 0.0001,
+  log_scale_fte: Boolean = false,
+  conv_flag: Boolean = false,
+  iterations: Int = 10000,
+  miniBatch: Int = 1000,
+  fte_data_path: Path = home/'Downloads/'fte) = {
+
+
+  val sum_dir_prefix = "fte_omni"
+
+  val dt = DateTime.now()
+
+  val summary_dir_index  = sum_dir_prefix+s"_so_${deltaT}_"+dt.toString("YYYY-MM-dd-HH-mm")
+
+  val tf_summary_dir     = home/'tmp/summary_dir_index
+
+  val (test_start, test_end) = (
+    new DateTime(test_year, 1, 1, 0, 0),
+    new DateTime(test_year, 12, 31, 23, 59)
+  )
+
+  val (start, end) = (
+    new DateTime(year_range.min, 1, 1, 0, 0),
+    new DateTime(year_range.max, 12, 31, 23, 59))
+
+
+  if(
+    FTExperiment.fte_data.size == 0 ||
+      FTExperiment.omni_data.size == 0 ||
+      FTExperiment.config != FTExperiment.Config(
+        (year_range.min, year_range.max), (deltaT, 1),
+        deltaTFTE, latitude_limit, log_scale_fte)) {
+
+    println("\nProcessing FTE Data")
+    FTExperiment.fte_data = load_fte_data(
+      fte_data_path, carrington_rotations,
+      log_scale_fte, start, end)(deltaTFTE, latitude_limit, conv_flag)
+
+    FTExperiment.config = FTExperiment.Config(
+      (year_range.min, year_range.max),
+      (deltaT, 1), deltaTFTE, latitude_limit,
+      log_scale_fte)
+
+    println("Processing OMNI solar wind data")
+    FTExperiment.omni_data = load_solar_wind_data(start, end)((deltaT, 1))
+
+  } else {
+    println("\nUsing cached data sets")
+  }
+
+
+  val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
+    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) /*&& p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold*/)
+      false
+    else
+      true
+  )
+
+  println("Constructing joined data set")
+  val dataset = FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
+
+  //val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
+
+  val input_dim = dataset.training_dataset.data.head._2._1.shape
+
+  val input = tf.learn.Input(FLOAT64, Shape(-1) ++ input_dim)
+
+  val trainInput = tf.learn.Input(FLOAT64, Shape(-1))
+
+  val trainingInputLayer = tf.learn.Cast("TrainInput", FLOAT64)
+
+  val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+
+  val num_pred_dims = 1
+
+  val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
+    timelagutils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
+
+  //val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
+
+  val filter_depths = Seq(
+    Seq(4, 4, 4, 4),
+    Seq(2, 2, 2, 2),
+    Seq(1, 1, 1, 1)
+  )
+
+  val activation = DataPipe[String, Layer[Output, Output]]((s: String) => tf.learn.ReLU(s, 0.01f))
+
+  //Prediction architecture
+  val architecture = if (conv_flag) {
+    tf.learn.Cast("Cast/Input", FLOAT32) >>
+      dtflearn.inception_unit(
+        1, filter_depths.head,
+        activation, use_batch_norm = true)(1) >>
+      tf.learn.MaxPool(s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
+      dtflearn.inception_unit(
+        filter_depths.head.sum, filter_depths(1),
+        activation, use_batch_norm = true)(2) >>
+      tf.learn.MaxPool(s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
+      dtflearn.inception_unit(
+        filter_depths(1).sum, filter_depths.last,
+        activation, use_batch_norm = true)(3) >>
+      tf.learn.MaxPool(s"MaxPool_3", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
+      tf.learn.Flatten("FlattenFeatures") >>
+      dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail)
+  } else {
+    dtflearn.feedforward_stack(activation_func,FLOAT64)(net_layer_sizes.tail)
+  }
+
+
+
+  val loss = tf.learn.L2Loss("Loss/L2") >>
+    tf.learn.ScalarSummary("Loss/Error", "Error") >>
+    L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
+    tf.learn.ScalarSummary("Loss/Net", "ModelLoss")
+
+
+  println("Scaling data attributes")
+  val (scaled_data, scalers): SC_DATA = scale_dataset(
+    dataset.copy(
+      training_dataset = dataset.training_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2),
+      test_dataset = dataset.test_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2)
+    )
+  )
+
+
+  val train_data_tf = {
+    scaled_data.training_dataset
+      .build[
+      (Tensor, Tensor),
+      (Output, Output),
+      (DataType, DataType),
+      (DataType, DataType),
+      (Shape, Shape)](
+      Left(identityPipe[(Tensor, Tensor)]),
+      (FLOAT64, FLOAT64),
+      (input_dim, Shape()))
+      .repeat()
+      .shuffle(10)
+      .batch(miniBatch)
+      .prefetch(10)
+  }
+
+  val (model, estimator) = dtflearn.build_tf_model(
+    architecture, input, trainInput, trainingInputLayer,
+    loss, optimizer, summariesDir,
+    dtflearn.rel_loss_change_stop(0.005, iterations))(
+    train_data_tf)
+
+
+  val nTest = scaled_data.test_dataset.size
+
+  val predictions: Tensor = dtfutils.buffered_preds[
+    Tensor, Output, DataType, Shape, Output,
+    Tensor, Output, DataType, Shape, Output,
+    Tensor, Tensor, Tensor](
+    estimator, tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._1), axis = 0),
+    500, nTest)
+
+
+  val pred_targets = scalers._2.i(predictions)
+
+  val reg_metrics = new RegressionMetricsTF(
+    pred_targets.reshape(Shape(nTest)),
+    tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._2), axis = 0))
+
+
+  val experiment_config = helios.ExperimentType(false, false, "single-output")
+
+  val results = helios.SupervisedModelRun[Tensor, Tensor, Tensor, Output](
+    (scaled_data, scalers),
+    model, estimator, None,
+    Some(reg_metrics),
+    tf_summary_dir, None,
+    Some(pred_targets)
+  )
+
+  helios.ExperimentResult(
+    experiment_config,
+    dataset.training_dataset,
+    dataset.test_dataset,
+    results
+  )
+
+
 
 }
