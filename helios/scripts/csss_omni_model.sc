@@ -382,7 +382,7 @@ def apply(
 
   
   val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
-    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) && p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold) 
+    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) /*&& p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold*/)
       false
     else 
       true

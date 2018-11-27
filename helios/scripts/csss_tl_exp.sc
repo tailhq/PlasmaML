@@ -8,7 +8,7 @@ import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 
 @main
 def apply(
-    start_year: Int = 2011: Int, 
+    start_year: Int = 2011,
     end_year: Int = 2017, 
     divergence_term: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.JensenShannon,
     network_size: Seq[Int] = Seq(100, 80), 
@@ -48,7 +48,7 @@ def apply(
 }
 
 def single_output(
-  start_year: Int = 2011: Int,
+  start_year: Int = 2011,
   end_year: Int = 2017,
   network_size: Seq[Int] = Seq(100, 80),
   activation_func: Int => Activation = timelagutils.getReLUAct(1),

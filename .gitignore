@@ -31,6 +31,7 @@ data/.RData
 data/.Rhistory
 rnn-omni-explorer/rsconnect
 logs
+!project/project/plugins.sbt
 project/project
 project/target
 target
