@@ -138,7 +138,8 @@ def load_fte_data(
   carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
   log_flag: Boolean,
   start: DateTime, end: DateTime)(
-  deltaTFTE: Int, 
+  deltaTFTE: Int,
+  fte_step: Int,
   latitude_limit: Double,
   conv_flag: Boolean): ZipDataSet[DateTime, Tensor] = {
 
@@ -197,19 +198,21 @@ def load_fte_data(
 
   val load_history = (history: Iterable[(DateTime, Tensor)]) => {
 
-    val history_size = history.toSeq.length
+    val history_size = history.toSeq.length/fte_step
+
+    val hs = history.map(_._2).toSeq.zipWithIndex.filter(_._2 % fte_step == 0).map(_._1)
 
     (
       history.last._1,
       if(conv_flag)
-        tfi.stack(history.map(_._2).toSeq, axis = -1).reshape(history.head._2.shape ++ Shape(history_size, 1))
+        tfi.stack(hs, axis = -1).reshape(history.head._2.shape ++ Shape(history_size, 1))
       else
-        tfi.concatenate(history.map(_._2).toSeq, axis = -1)
+        tfi.concatenate(hs, axis = -1)
     )
   }
 
   val generate_history = (s: Iterable[(DateTime, Tensor)]) =>
-    if (deltaTFTE > 0) s.sliding(deltaTFTE + 1).map(load_history).toIterable
+    if (deltaTFTE > 0) s.sliding((deltaTFTE + 1)*fte_step).map(load_history).toIterable
     else if(conv_flag) s.map(c => (c._1, c._2.reshape(Shape(c._2.shape(0), 1, 1))))
     else s
 
@@ -320,6 +323,7 @@ def apply(
   sw_threshold: Double = 700d,
   deltaT: (Int, Int) = (48, 72),
   deltaTFTE: Int = 5,
+  fteStep: Int = 1,
   latitude_limit: Double = 40d,
   reg: Double = 0.0001,
   p_wt: Double = 0.75,
@@ -366,7 +370,7 @@ def apply(
     println("\nProcessing FTE Data")
     FTExperiment.fte_data = load_fte_data(
       fte_data_path, carrington_rotations, 
-      log_scale_fte, start, end)(deltaTFTE, latitude_limit, conv_flag)
+      log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
     
     FTExperiment.config = FTExperiment.Config(
       (year_range.min, year_range.max), 
@@ -571,6 +575,7 @@ def single_output(
   sw_threshold: Double = 700d,
   deltaT: Int = 96,
   deltaTFTE: Int = 5,
+  fteStep: Int = 1,
   latitude_limit: Double = 40d,
   reg: Double = 0.0001,
   log_scale_fte: Boolean = false,
@@ -608,7 +613,7 @@ def single_output(
     println("\nProcessing FTE Data")
     FTExperiment.fte_data = load_fte_data(
       fte_data_path, carrington_rotations,
-      log_scale_fte, start, end)(deltaTFTE, latitude_limit, conv_flag)
+      log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
     FTExperiment.config = FTExperiment.Config(
       (year_range.min, year_range.max),
