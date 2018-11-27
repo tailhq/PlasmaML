@@ -286,6 +286,7 @@ object FTExperiment {
     data_limits: (Int, Int),
     deltaT: (Int, Int),
     deltaTFTE: Int,
+    fteStep: Int,
     latitude_limit: Double,
     log_scale_fte: Boolean
   )
@@ -295,6 +296,7 @@ object FTExperiment {
     (0, 0),
     (0, 0),
     0,
+    1,
     90d,
     false
   )
@@ -306,7 +308,7 @@ object FTExperiment {
   def clear_cache(): Unit = {
     fte_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
     omni_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
-    config = Config((0, 0), (0, 0), 0, 90d, false)
+    config = Config((0, 0), (0, 0), 0, 1, 90d, false)
   }
 
 }
@@ -335,7 +337,7 @@ def apply(
   log_scale_fte: Boolean = false,
   conv_flag: Boolean = false,
   iterations: Int = 10000,
-  miniBatch: Int = 1000,
+  miniBatch: Int = 32,
   fte_data_path: Path = home/'Downloads/'fte) = {
 
 
@@ -364,7 +366,7 @@ def apply(
     FTExperiment.fte_data.size == 0 || 
     FTExperiment.omni_data.size == 0 ||
     FTExperiment.config != FTExperiment.Config(
-      (year_range.min, year_range.max), deltaT, 
+      (year_range.min, year_range.max), deltaT, fteStep,
       deltaTFTE, latitude_limit, log_scale_fte)) {
     
     println("\nProcessing FTE Data")
@@ -374,7 +376,7 @@ def apply(
     
     FTExperiment.config = FTExperiment.Config(
       (year_range.min, year_range.max), 
-      deltaT, deltaTFTE, latitude_limit, 
+      deltaT, deltaTFTE, fteStep, latitude_limit,
       log_scale_fte)
 
     println("Processing OMNI solar wind data")
@@ -581,7 +583,7 @@ def single_output(
   log_scale_fte: Boolean = false,
   conv_flag: Boolean = false,
   iterations: Int = 10000,
-  miniBatch: Int = 1000,
+  miniBatch: Int = 32,
   fte_data_path: Path = home/'Downloads/'fte) = {
 
 
@@ -608,17 +610,20 @@ def single_output(
       FTExperiment.omni_data.size == 0 ||
       FTExperiment.config != FTExperiment.Config(
         (year_range.min, year_range.max), (deltaT, 1),
-        deltaTFTE, latitude_limit, log_scale_fte)) {
+        deltaTFTE, fteStep, latitude_limit, log_scale_fte)) {
 
     println("\nProcessing FTE Data")
     FTExperiment.fte_data = load_fte_data(
       fte_data_path, carrington_rotations,
-      log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
+      log_scale_fte, start, end)(
+      deltaTFTE, fteStep,
+      latitude_limit,
+      conv_flag)
 
     FTExperiment.config = FTExperiment.Config(
       (year_range.min, year_range.max),
-      (deltaT, 1), deltaTFTE, latitude_limit,
-      log_scale_fte)
+      (deltaT, 1), deltaTFTE, fteStep,
+      latitude_limit, log_scale_fte)
 
     println("Processing OMNI solar wind data")
     FTExperiment.omni_data = load_solar_wind_data(start, end)((deltaT, 1))
