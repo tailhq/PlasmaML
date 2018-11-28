@@ -19,7 +19,7 @@ val res_exp2 = exp2.main(
   mo_flag = true, prob_timelags = true,
   dist_type = "default")
 
-  val res_exp2_sw = exp2.stage_wise(
+val res_exp2_sw = exp2.stage_wise(
   d = 8, n = 4000, sliding_window = 20,
   noise = 0.5, noiserot = 0.001,
   alpha = 0.005, 
@@ -27,7 +27,7 @@ val res_exp2 = exp2.main(
   num_neurons_ii = Seq(30, 20), 
   iterations = 150000, miniBatch = 1024,
   optimizer = tf.train.Adam(0.01),
-  reg = 0.001, c = 1.0, 
+  reg_i = 0.001, reg_ii = 0.0001, c = 1.0,
   prior_type = helios.learn.cdt_loss.JensenShannon, 
   error_wt = 1.0, prior_wt = 0.75,
   mo_flag = true, prob_timelags = true,

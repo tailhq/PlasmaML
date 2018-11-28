@@ -147,8 +147,19 @@ def load_fte_data(
 
   val end_rotation = carrington_rotation_table.filter(_._2.contains(end)).data.head._1
 
+
+  val clamp_fte: FTEPattern => FTEPattern = (p: FTEPattern) => p.fte match {
+    case Some(f) => if(math.abs(f) <= 1000d) p else p.copy(fte = Some(1000d*math.signum(f)))
+    case None => p
+  }
+
+  val load_fte_for_rotation = DataPipe(get_fte_for_rotation(data_path) _)
+
+
+
   val fte = dtfdata.dataset(start_rotation to end_rotation)
-    .flatMap(get_fte_for_rotation(data_path) _)
+    .flatMap(load_fte_for_rotation)
+    .map(identityPipe[Int] * IterableDataPipe[FTEPattern, FTEPattern](clamp_fte))
     .to_zip(identityPipe)
 
   val fte_data = carrington_rotation_table.join(fte)
@@ -281,24 +292,29 @@ val scale_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
 
 
 object FTExperiment {
-  
-  case class Config(
+
+  case class FTEConfig(
     data_limits: (Int, Int),
-    deltaT: (Int, Int),
     deltaTFTE: Int,
     fteStep: Int,
     latitude_limit: Double,
     log_scale_fte: Boolean
   )
 
+  case class OMNIConfig(deltaT: (Int, Int))
+
+  case class Config(fte_config: FTEConfig, omni_config: OMNIConfig)
+
 
   var config = Config(
-    (0, 0),
-    (0, 0),
-    0,
-    1,
-    90d,
-    false
+    FTEConfig(
+      (0, 0),
+      0,
+      1,
+      90d,
+      false
+    ),
+    OMNIConfig((0, 0))
   )
 
   var fte_data: ZipDataSet[DateTime, Tensor] = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
@@ -308,7 +324,10 @@ object FTExperiment {
   def clear_cache(): Unit = {
     fte_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
     omni_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
-    config = Config((0, 0), (0, 0), 0, 1, 90d, false)
+    config = Config(
+      FTEConfig((0, 0), 0, 1, 90d, false),
+      OMNIConfig((0, 0))
+    )
   }
 
 }
@@ -362,35 +381,47 @@ def apply(
     new DateTime(year_range.max, 12, 31, 23, 59))
 
 
-  if(
-    FTExperiment.fte_data.size == 0 || 
-    FTExperiment.omni_data.size == 0 ||
-    FTExperiment.config != FTExperiment.Config(
-      (year_range.min, year_range.max), deltaT, fteStep,
-      deltaTFTE, latitude_limit, log_scale_fte)) {
-    
+  if(FTExperiment.fte_data.size == 0 ||
+      FTExperiment.config.fte_config != FTExperiment.FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE, fteStep,
+        latitude_limit,
+        log_scale_fte)
+  ) {
+
     println("\nProcessing FTE Data")
+
     FTExperiment.fte_data = load_fte_data(
-      fte_data_path, carrington_rotations, 
+      fte_data_path, carrington_rotations,
       log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
-    
-    FTExperiment.config = FTExperiment.Config(
-      (year_range.min, year_range.max), 
-      deltaT, deltaTFTE, fteStep, latitude_limit,
-      log_scale_fte)
+
+    FTExperiment.config = FTExperiment.config.copy(fte_config = FTExperiment.FTEConfig(
+      (year_range.min, year_range.max),
+      deltaTFTE, fteStep, latitude_limit,
+      log_scale_fte))
+
+
+
+  } else {
+    println("\nUsing cached FTE data sets")
+  }
+
+
+  if(FTExperiment.omni_data.size == 0 || FTExperiment.config.omni_config != FTExperiment.OMNIConfig(deltaT)) {
 
     println("Processing OMNI solar wind data")
     FTExperiment.omni_data = load_solar_wind_data(start, end)(deltaT)
 
+    FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig(deltaT))
+
   } else {
-    println("\nUsing cached data sets")
+    println("\nUsing cached OMNI data set")
   }
 
-  
   val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
     if (p._1.isAfter(test_start) && p._1.isBefore(test_end) /*&& p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold*/)
       false
-    else 
+    else
       true
   )
 
@@ -467,14 +498,14 @@ def apply(
       test_dataset = dataset.test_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2)
     )
   )
-  
-  
+
+
   val train_data_tf = {
     scaled_data.training_dataset
       .build[
-        (Tensor, Tensor), 
-        (Output, Output), 
-        (DataType, DataType), 
+        (Tensor, Tensor),
+        (Output, Output),
+        (DataType, DataType),
         (DataType, DataType),
          (Shape, Shape)](
       Left(identityPipe[(Tensor, Tensor)]),
@@ -605,31 +636,39 @@ def single_output(
     new DateTime(year_range.max, 12, 31, 23, 59))
 
 
-  if(
-    FTExperiment.fte_data.size == 0 ||
-      FTExperiment.omni_data.size == 0 ||
-      FTExperiment.config != FTExperiment.Config(
-        (year_range.min, year_range.max), (deltaT, 1),
-        deltaTFTE, fteStep, latitude_limit, log_scale_fte)) {
+  if(FTExperiment.fte_data.size == 0 ||
+    FTExperiment.config.fte_config != FTExperiment.FTEConfig(
+      (year_range.min, year_range.max), deltaT,
+      fteStep, latitude_limit, log_scale_fte)
+  ) {
 
     println("\nProcessing FTE Data")
+
     FTExperiment.fte_data = load_fte_data(
       fte_data_path, carrington_rotations,
-      log_scale_fte, start, end)(
-      deltaTFTE, fteStep,
-      latitude_limit,
-      conv_flag)
+      log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
-    FTExperiment.config = FTExperiment.Config(
+    FTExperiment.config = FTExperiment.config.copy(fte_config = FTExperiment.FTEConfig(
       (year_range.min, year_range.max),
-      (deltaT, 1), deltaTFTE, fteStep,
-      latitude_limit, log_scale_fte)
+      deltaTFTE, fteStep, latitude_limit,
+      log_scale_fte))
+
+
+
+  } else {
+    println("\nUsing cached FTE data sets")
+  }
+
+
+  if(FTExperiment.omni_data.size == 0 || FTExperiment.config.omni_config != FTExperiment.OMNIConfig((deltaT, 1))) {
 
     println("Processing OMNI solar wind data")
     FTExperiment.omni_data = load_solar_wind_data(start, end)((deltaT, 1))
 
+    FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig((deltaT, 1)))
+
   } else {
-    println("\nUsing cached data sets")
+    println("\nUsing cached OMNI data set")
   }
 
 
