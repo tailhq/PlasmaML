@@ -1,6 +1,12 @@
+import sbt._
 logLevel := Level.Error
-  
-addSbtCoursier
+
+
+resolvers ++= Seq(Resolver.sonatypeRepo("snapshots"))
+
+//addSbtCoursier
+
+addSbtPlugin("io.get-coursier" % "sbt-coursier" % "1.1.0-SNAPSHOT")
 
 addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.11")
 
