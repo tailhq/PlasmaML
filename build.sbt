@@ -15,7 +15,8 @@ lazy val commonSettings = Seq(
     "BeDataDriven" at "https://nexus.bedatadriven.com/content/groups/public",
     "atlassian-maven" at "https://maven.atlassian.com/maven-external",
     Resolver.sonatypeRepo("public"),
-    Resolver.sonatypeRepo("snapshots")
+    Resolver.sonatypeRepo("snapshots"),
+    Resolver.typesafeIvyRepo("releases")
   )
 )
 
