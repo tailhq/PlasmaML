@@ -1,10 +1,29 @@
 import $file.timelagutils
 import $file.csss_omni_model
-
+import _root_.io.github.mandar2812.dynaml.tensorflow.data.DataSet
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.PlasmaML.helios
+import org.joda.time.DateTime
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
+
+type CV_RESULT = Map[
+  Int,
+  helios.ExperimentResult[
+    DataSet[(DateTime, (Tensor, Tensor))],
+    Tensor, Tensor,
+    (Tensor, Tensor),
+    (Output, Output)]
+  ]
+
+type CV_RESULT_SO = Map[
+  Int,
+  helios.ExperimentResult[
+    DataSet[(DateTime, (Tensor, Tensor))],
+    Tensor, Tensor,
+    Tensor, Output]
+  ]
+
 
 @main
 def apply(
@@ -22,7 +41,7 @@ def apply(
     max_iterations: Int = 100000, 
     batch_size: Int = 32, 
     regularization_const: Double = 0.001, 
-    optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01)) = {
+    optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01)): CV_RESULT = {
     
     val cv_results = (start_year to end_year).map(ty => {
 
@@ -66,7 +85,7 @@ def single_output(
   max_iterations: Int = 100000,
   batch_size: Int = 32,
   regularization_const: Double = 0.001,
-  optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01)) = {
+  optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01)): CV_RESULT_SO = {
 
     val cv_results = (start_year to end_year).map(ty => {
 
