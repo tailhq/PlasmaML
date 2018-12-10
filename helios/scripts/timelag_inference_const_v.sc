@@ -50,7 +50,9 @@ def main(
 
       val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f
 
-      (distance/out, out + scala.util.Random.nextGaussian().toFloat)
+      val noisy_output = out + scala.util.Random.nextGaussian().toFloat
+
+      (distance/noisy_output, noisy_output)
     })
 
   val num_pred_dims = timelagutils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
