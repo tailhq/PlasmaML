@@ -252,10 +252,20 @@ def load_fte_data(
 
 }
 
-
+/**
+  * Load the OMNI solar wind time series as a [[Tensor]]
+  *
+  * @param start Starting time of the data.
+  * @param end End time of the data.
+  * @param deltaT The time window (t + l, t + l + h)
+  * @param log_flag If set to true, log scale the velocity values.
+  *
+  * @return A [[ZipDataSet]] with time indexed tensors containing
+  *         sliding time histories of the solar wind.
+  * */
 def load_solar_wind_data(
   start: DateTime, end: DateTime)(
-  deltaT: (Int, Int), log_flag: Boolean) = {
+  deltaT: (Int, Int), log_flag: Boolean): ZipDataSet[DateTime, Tensor] = {
 
   val omni_processing =
     OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
@@ -310,7 +320,12 @@ val scale_dataset = DataPipe((dataset: TFDataSet[(Tensor, Tensor)]) => {
 
 })
 
-
+/**
+  * A configuration object for running experiments
+  * on the FTE data sets.
+  *
+  * Contains cached values of experiment parameters, and data sets.
+  * */
 object FTExperiment {
 
   case class FTEConfig(
@@ -327,14 +342,8 @@ object FTExperiment {
 
 
   var config = Config(
-    FTEConfig(
-      (0, 0),
-      0,
-      1,
-      90d,
-      false
-    ),
-    OMNIConfig((0, 0), false)
+    FTEConfig((0, 0), 0, 1, 90d, log_scale_fte = false),
+    OMNIConfig((0, 0), log_flag = false)
   )
 
   var fte_data: ZipDataSet[DateTime, Tensor] = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
@@ -483,16 +492,16 @@ def apply(
   val architecture = if (conv_flag) {
     tf.learn.Cast("Cast/Input", FLOAT32) >>
       dtflearn.inception_unit(
-        1, filter_depths.head,
-        activation, use_batch_norm = true)(1) >>
+        channels = 1, filter_depths.head,
+        activation, use_batch_norm = true)(layer_index = 1) >>
       tf.learn.MaxPool(s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
       dtflearn.inception_unit(
         filter_depths.head.sum, filter_depths(1),
-        activation, use_batch_norm = true)(2) >>
+        activation, use_batch_norm = true)(layer_index = 2) >>
       tf.learn.MaxPool(s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
       dtflearn.inception_unit(
         filter_depths(1).sum, filter_depths.last,
-        activation, use_batch_norm = true)(3) >>
+        activation, use_batch_norm = true)(layer_index = 3) >>
       tf.learn.MaxPool(s"MaxPool_3", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
       tf.learn.Flatten("FlattenFeatures") >>
       dtflearn.feedforward_stack(activation_func, FLOAT64)(net_layer_sizes.tail) >>
@@ -592,12 +601,11 @@ def apply(
     z(time_lag)
   })
 
-  val reg_metrics = if(log_scale_omni) {
-    new RegressionMetricsTF(pred_targets.exp, actual_targets.map(math.exp))
-  } else {
-    new RegressionMetricsTF(pred_targets, actual_targets)
-  }
+  val (final_predictions, final_targets) =
+    if(log_scale_omni) (pred_targets.exp, actual_targets.map(math.exp))
+    else (pred_targets, actual_targets)
 
+  val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
 
   val experiment_config = helios.ExperimentType(mo_flag, prob_timelags, "mode")
 
@@ -606,12 +614,12 @@ def apply(
     model, estimator, None,
     Some(reg_metrics),
     tf_summary_dir, None,
-    Some((pred_targets, pred_time_lags_test))
+    Some((final_predictions, pred_time_lags_test))
   )
 
   helios.write_predictions(
-    dtfutils.toDoubleSeq(pred_targets).toSeq,
-    actual_targets,
+    dtfutils.toDoubleSeq(final_predictions).toSeq,
+    final_targets,
     dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
     tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
 
