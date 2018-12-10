@@ -19,28 +19,28 @@ import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 
 @main
 def main(
-  year_range: Range                     = 2001 to 2004,
-  test_year: Int                        = 2003,
-  ff_stack_sizes: Seq[Int]              = Seq(256, 128, 64),
-  image_sources: Seq[SolarImagesSource] = Seq(SDO(AIA193, 512), SDO(HMIB, 512)),
-  buffer_size: Int                      = 2000,
-  re: Boolean                           = true,
-  scaleDown: Int                        = 4,
-  time_horizon: (Int, Int)              = (48, 96),
-  image_hist: Int                       = 0,
-  image_hist_downsamp: Int              = 1,
-  opt: Optimizer                        = tf.train.AdaDelta(0.01),
-  reg: Double                           = 0.001,
-  prior_wt: Double                      = 0.85,
-  error_wt: Double                      = 1.0,
+  year_range: Range                            = 2001 to 2004,
+  test_year: Int                               = 2003,
+  ff_stack_sizes: Seq[Int]                     = Seq(256, 128, 64),
+  image_sources: Seq[SolarImagesSource]        = Seq(SDO(AIA193, 512), SDO(HMIB, 512)),
+  buffer_size: Int                             = 2000,
+  re: Boolean                                  = true,
+  scaleDown: Int                               = 4,
+  time_horizon: (Int, Int)                     = (48, 96),
+  image_hist: Int                              = 0,
+  image_hist_downsamp: Int                     = 1,
+  opt: Optimizer                               = tf.train.AdaDelta(0.01),
+  reg: Double                                  = 0.001,
+  prior_wt: Double                             = 0.85,
+  error_wt: Double                             = 1.0,
   prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
-  c: Double                             = 1.0,
-  temp: Double                          = 0.75,
-  stop_criteria: StopCriteria           = dtflearn.max_iter_stop(5000),
-  miniBatch: Int                        = 16,
-  tmpdir: Path                          = root/"home"/System.getProperty("user.name")/"tmp",
-  path_to_images: Option[Path]          = None,
-  existingModelDir: String              = "") = {
+  c: Double                                    = 1.0,
+  temp: Double                                 = 0.75,
+  stop_criteria: StopCriteria                  = dtflearn.max_iter_stop(5000),
+  miniBatch: Int                               = 16,
+  tmpdir: Path                                 = root/"home"/System.getProperty("user.name")/"tmp",
+  path_to_images: Option[Path]                 = None,
+  existingModelDir: String                     = "") = {
 
   //Data with MDI images
 
@@ -75,7 +75,7 @@ def main(
 
   val patch_range = data.get_patch_range(magic_ratio, image_sizes/scaleDown)
 
-  val image_preprocess = data.image_central_patch(magic_ratio, image_sizes) > data.image_scale(1.0/scaleDown)
+  val image_preprocess = data.image_scale(1.0/scaleDown) > data.image_central_patch(magic_ratio, image_sizes/scaleDown)
 
   val (image_filters, num_channels, image_to_bytes) = image_sources.map(image_source => {
 
