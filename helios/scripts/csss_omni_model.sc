@@ -102,7 +102,19 @@ val process_fte_file = {
 }
 
 
-def get_fte_for_rotation(data_path: Path)(cr: Int) = try {
+/**
+  * Load the Flux Tube Expansion (FTE) data.
+  *
+  * Assumes the files have the schema
+  * "HMIfootpoint_ch_csss{carrington_rotation}HR.dat"
+  *
+  * @param data_path Path containing the FTE data files.
+  * @param cr The Carrington rotation number
+  *
+  * @throws java.nio.file.NoSuchFileException if the files cannot be
+  *                                           found in the specified location
+  * */
+def get_fte_for_rotation(data_path: Path)(cr: Int): Iterable[(Int, Iterable[FTEPattern])] = try {
   Iterable((cr, process_fte_file(data_path)(cr)))
 } catch {
   case _: java.nio.file.NoSuchFileException => Iterable()
@@ -133,6 +145,10 @@ implicit val dateOrdering: Ordering[DateTime] = new Ordering[DateTime] {
 }
 
 
+/**
+  * Creates a DynaML data set consisting of time FTE values.
+  * The FTE values are loaded in a [[Tensor]] object.
+  * */
 def load_fte_data(
   data_path: Path,
   carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
@@ -237,12 +253,16 @@ def load_fte_data(
 }
 
 
-def load_solar_wind_data(start: DateTime, end: DateTime)(deltaT: (Int, Int)) = {
+def load_solar_wind_data(
+  start: DateTime, end: DateTime)(
+  deltaT: (Int, Int), log_flag: Boolean) = {
+
   val omni_processing =
     OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
-      IterableDataPipe[(DateTime, Seq[Double])](
-        (p: (DateTime, Seq[Double])) => p._1.isAfter(start) && p._1.isBefore(end)
-      )
+      IterableDataPipe(
+        (p: (DateTime, Seq[Double])) => p._1.isAfter(start) && p._1.isBefore(end)) >
+      IterableDataPipe(
+        (p: (DateTime, Seq[Double])) => (p._1, if(log_flag) p._2.map(math.log) else p._2))
 
   val omni_data_path = pwd/'data
 
@@ -301,7 +321,7 @@ object FTExperiment {
     log_scale_fte: Boolean
   )
 
-  case class OMNIConfig(deltaT: (Int, Int))
+  case class OMNIConfig(deltaT: (Int, Int), log_flag: Boolean)
 
   case class Config(fte_config: FTEConfig, omni_config: OMNIConfig)
 
@@ -314,7 +334,7 @@ object FTExperiment {
       90d,
       false
     ),
-    OMNIConfig((0, 0))
+    OMNIConfig((0, 0), false)
   )
 
   var fte_data: ZipDataSet[DateTime, Tensor] = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
@@ -326,7 +346,7 @@ object FTExperiment {
     omni_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
     config = Config(
       FTEConfig((0, 0), 0, 1, 90d, false),
-      OMNIConfig((0, 0))
+      OMNIConfig((0, 0), false)
     )
   }
 
@@ -354,6 +374,7 @@ def apply(
   mo_flag: Boolean = true,
   prob_timelags: Boolean = true,
   log_scale_fte: Boolean = false,
+  log_scale_omni: Boolean = false,
   conv_flag: Boolean = false,
   iterations: Int = 10000,
   miniBatch: Int = 32,
@@ -407,19 +428,21 @@ def apply(
   }
 
 
-  if(FTExperiment.omni_data.size == 0 || FTExperiment.config.omni_config != FTExperiment.OMNIConfig(deltaT)) {
+  if(
+    FTExperiment.omni_data.size == 0 ||
+      FTExperiment.config.omni_config != FTExperiment.OMNIConfig(deltaT, log_scale_omni)) {
 
     println("Processing OMNI solar wind data")
-    FTExperiment.omni_data = load_solar_wind_data(start, end)(deltaT)
+    FTExperiment.omni_data = load_solar_wind_data(start, end)(deltaT, log_scale_omni)
 
-    FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig(deltaT))
+    FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig(deltaT, log_scale_omni))
 
   } else {
     println("\nUsing cached OMNI data set")
   }
 
   val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
-    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) /*&& p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold*/)
+    if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
       false
     else
       true
@@ -569,7 +592,11 @@ def apply(
     z(time_lag)
   })
 
-  val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
+  val reg_metrics = if(log_scale_omni) {
+    new RegressionMetricsTF(pred_targets.exp, actual_targets.map(math.exp))
+  } else {
+    new RegressionMetricsTF(pred_targets, actual_targets)
+  }
 
 
   val experiment_config = helios.ExperimentType(mo_flag, prob_timelags, "mode")
@@ -612,6 +639,7 @@ def single_output(
   latitude_limit: Double = 40d,
   reg: Double = 0.0001,
   log_scale_fte: Boolean = false,
+  log_scale_omni: Boolean = false,
   conv_flag: Boolean = false,
   iterations: Int = 10000,
   miniBatch: Int = 32,
@@ -646,7 +674,9 @@ def single_output(
 
     FTExperiment.fte_data = load_fte_data(
       fte_data_path, carrington_rotations,
-      log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
+      log_scale_fte, start, end)(
+      deltaTFTE, fteStep,
+      latitude_limit, conv_flag)
 
     FTExperiment.config = FTExperiment.config.copy(fte_config = FTExperiment.FTEConfig(
       (year_range.min, year_range.max),
@@ -660,12 +690,14 @@ def single_output(
   }
 
 
-  if(FTExperiment.omni_data.size == 0 || FTExperiment.config.omni_config != FTExperiment.OMNIConfig((deltaT, 1))) {
+  if(
+    FTExperiment.omni_data.size == 0 ||
+      FTExperiment.config.omni_config != FTExperiment.OMNIConfig((deltaT, 1), log_scale_omni)) {
 
     println("Processing OMNI solar wind data")
-    FTExperiment.omni_data = load_solar_wind_data(start, end)((deltaT, 1))
+    FTExperiment.omni_data = load_solar_wind_data(start, end)((deltaT, 1), log_scale_omni)
 
-    FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig((deltaT, 1)))
+    FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig((deltaT, 1), log_scale_omni))
 
   } else {
     println("\nUsing cached OMNI data set")
@@ -673,7 +705,7 @@ def single_output(
 
 
   val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
-    if (p._1.isAfter(test_start) && p._1.isBefore(test_end) /*&& p._2._2.max().scalar.asInstanceOf[Double] >= sw_threshold*/)
+    if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
       false
     else
       true
@@ -682,7 +714,7 @@ def single_output(
   println("Constructing joined data set")
   val dataset = FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
 
-  //val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
+
 
   val input_dim = dataset.training_dataset.data.head._2._1.shape
 
@@ -699,7 +731,7 @@ def single_output(
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     timelagutils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
-  //val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
+
 
   val filter_depths = Seq(
     Seq(4, 4, 4, 4),
@@ -781,11 +813,15 @@ def single_output(
     500, nTest)
 
 
-  val pred_targets = scalers._2.i(predictions)
+  val pred_targets = scalers._2.i(predictions).reshape(Shape(nTest))
 
-  val reg_metrics = new RegressionMetricsTF(
-    pred_targets.reshape(Shape(nTest)),
-    tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._2), axis = 0))
+  val stacked_targets = tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._2), axis = 0)
+
+  val reg_metrics = if(log_scale_omni) {
+    new RegressionMetricsTF(pred_targets.exp, stacked_targets.exp)
+  } else {
+    new RegressionMetricsTF(pred_targets, stacked_targets)
+  }
 
 
   val experiment_config = helios.ExperimentType(false, false, "single-output")
