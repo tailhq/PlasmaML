@@ -47,11 +47,11 @@ import org.platanios.tensorflow.api.ops.Output
   *                   <ul>
   *                     <li>
   *                       <a href="https://en.wikipedia.org/wiki/Hellinger_distance">
-  *                         Hellinger distance</a> (default)
+  *                         Hellinger distance</a>
   *                     </li>
   *                     <li>
   *                       <a href="https://en.wikipedia.org/wiki/Kullback–Leibler_divergence">
-  *                         Kullback-Leibler Divergence</a>
+  *                         Kullback-Leibler Divergence</a> (default)
   *                     </li>
   *                     <li>
   *                       <a href="https://en.wikipedia.org/wiki/Cross_entropy">Cross Entropy</a>

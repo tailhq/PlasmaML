@@ -42,8 +42,6 @@ def main(
   path_to_images: Option[Path]                 = None,
   existingModelDir: String                     = "") = {
 
-  //Data with MDI images
-
   print("Running experiment with test split from year: ")
   pprint.pprintln(test_year)
 
@@ -107,11 +105,9 @@ def main(
   /*
   * Construct architecture components.
   *
-  * 1) Convolutional segment: Consists of two convolutional pyramids interspersed by batch normalisation
-  * 2) Pre Upwind feed-forward segment.
-  * 3) Upwind 1D computational layer.
-  * 4) Post Upwind feed-forward segment.
-  * 5) A post processing output mapping.
+  * 1) Convolutional segment: Consists of inception stacks interspersed by max pooling
+  * 2) A fully connected segment.
+  * 3) A post processing output mapping.
   * */
 
   val filter_depths_stack1 = Seq(
