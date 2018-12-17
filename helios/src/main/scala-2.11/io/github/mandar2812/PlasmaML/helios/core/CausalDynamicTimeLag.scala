@@ -34,6 +34,7 @@ import org.platanios.tensorflow.api.ops.Output
   *                 predicted probability distribution of the
   *                 time lags and the so called
   *                 "target probability distribution".
+  *
   * @param temperature The Gibbs temperature which scales the softmax probability
   *                    transformation while computing the target probability distribution.
   *

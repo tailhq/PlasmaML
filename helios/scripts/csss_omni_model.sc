@@ -354,8 +354,8 @@ object FTExperiment {
     fte_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
     omni_data = dtfdata.dataset(Iterable[(DateTime, Tensor)]()).to_zip(identityPipe)
     config = Config(
-      FTEConfig((0, 0), 0, 1, 90d, false),
-      OMNIConfig((0, 0), false)
+      FTEConfig((0, 0), 0, 1, 90d, log_scale_fte = false),
+      OMNIConfig((0, 0), log_flag = false)
     )
   }
 
