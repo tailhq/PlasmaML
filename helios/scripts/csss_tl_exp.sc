@@ -31,7 +31,8 @@ def apply(
     start_year: Int = 2011,
     end_year: Int = 2017, 
     divergence_term: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.JensenShannon,
-    network_size: Seq[Int] = Seq(100, 80), 
+    temperature: Double = 1.5,
+    network_size: Seq[Int] = Seq(100, 60),
     activation_func: Int => Activation = timelagutils.getReLUAct(1),
     history_fte: Int = 10,
     fte_step: Int = 2,
@@ -63,7 +64,8 @@ def apply(
           deltaT = causal_window,
           reg = regularization_const,
           divergence = divergence_term,
-          summary_top_dir = summary_dir
+          summary_top_dir = summary_dir,
+          temperature = temperature
         )
         
         fte.FTExperiment.clear_cache()

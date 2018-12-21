@@ -376,7 +376,8 @@ package object fte {
     p_wt: Double = 0.75,
     e_wt: Double = 1.0,
     specificity: Double = 1.5,
-    divergence: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.JensenShannon,
+    temperature: Double = 1.0,
+    divergence: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
     mo_flag: Boolean = true,
     prob_timelags: Boolean = true,
     log_scale_fte: Boolean = false,
@@ -514,7 +515,7 @@ package object fte {
     val lossFunc = timelagutils.get_loss(
       causal_window, mo_flag, prob_timelags,
       prior_wt = p_wt, prior_divergence =  divergence,
-      error_wt = e_wt, c = specificity)
+      error_wt = e_wt, c = specificity, temp = temperature)
 
     val loss = lossFunc >>
       L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
