@@ -384,7 +384,8 @@ package object fte {
     conv_flag: Boolean = false,
     iterations: Int = 10000,
     miniBatch: Int = 32,
-    fte_data_path: Path = home/'Downloads/'fte) = {
+    fte_data_path: Path = home/'Downloads/'fte,
+    summary_top_dir: Path = home/'tmp) = {
 
 
     val sum_dir_prefix = "fte_omni"
@@ -396,7 +397,7 @@ package object fte {
       else sum_dir_prefix+"_timelag_inference_"+dt.toString("YYYY-MM-dd-HH-mm")
     }
 
-    val tf_summary_dir     = home/'tmp/summary_dir_index
+    val tf_summary_dir     = summary_top_dir/summary_dir_index
 
     val (test_start, test_end) = (
       new DateTime(test_year, 1, 1, 0, 0),
@@ -648,7 +649,8 @@ package object fte {
     conv_flag: Boolean = false,
     iterations: Int = 10000,
     miniBatch: Int = 32,
-    fte_data_path: Path = home/'Downloads/'fte) = {
+    fte_data_path: Path = home/'Downloads/'fte,
+    summary_top_dir: Path = home/'tmp) = {
 
 
     val sum_dir_prefix = "fte_omni"
@@ -657,7 +659,7 @@ package object fte {
 
     val summary_dir_index  = sum_dir_prefix+s"_so_${deltaT}_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-    val tf_summary_dir     = home/'tmp/summary_dir_index
+    val tf_summary_dir     = summary_top_dir/summary_dir_index
 
     val (test_start, test_end) = (
       new DateTime(test_year, 1, 1, 0, 0),
