@@ -8,6 +8,7 @@ val mainVersion = "v0.1"
 lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   scalaVersion in ThisBuild := scala,
+  crossScalaVersions in ThisBuild := crossScala,
   libraryDependencies in ThisBuild ++= (commonDependencies ++ dynaMLDependency ++ tensorflowDependency),
   resolvers in ThisBuild ++= Seq(
     "jzy3d-releases" at "http://maven.jzy3d.org/releases",
@@ -30,8 +31,7 @@ lazy val mag_core = (project in file("mag-core")).enablePlugins(JavaAppPackaging
         """import io.github.mandar2812.dynaml.kernels._;"""+
         """import io.github.mandar2812.dynaml.DynaMLPipe;"""+
         """import com.quantifind.charts.Highcharts._;"""+
-        """import breeze.linalg.DenseVector;""" ,
-    scalacOptions ++= Seq("-optimise", "-Yclosure-elim", "-Yinline"))
+        """import breeze.linalg.DenseVector;""")
 
 
 lazy val omni =

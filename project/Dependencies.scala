@@ -4,7 +4,13 @@ import sbt._
 
 object Dependencies {
 
-  val scala = "2.11.11"
+  val scala_major = 2.12
+
+  val scala_minor = 4
+
+  val scala = s"$scala_major.$scala_minor"
+
+  val crossScala = Seq("2.11.8", "2.12.4")
 
   val tfscala_version = "0.2.4"
 
@@ -15,7 +21,7 @@ object Dependencies {
   val packagedTFFlag: Boolean = true
 
   //Set to dev, if pulling DynaML master SNAPSHOT
-  val status = "prod"
+  val status = "dev"
 
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
@@ -25,9 +31,9 @@ object Dependencies {
 
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
-    if(status == "local") ("io.github.transcendent-ai-labs", "dynaml_2.11", "v2.0-SNAPSHOT")
-    else if(status == "dev") ("io.github.transcendent-ai-labs", "dynaml_2.11", s"$latest_dynaml_dev_release-SNAPSHOT")
-    else ("io.github.transcendent-ai-labs", "dynaml_2.11", latest_dynaml_release)
+    if(status == "local") ("io.github.transcendent-ai-labs", "dynaml", "v2.0-SNAPSHOT")
+    else if(status == "dev") ("io.github.transcendent-ai-labs", "dynaml", s"$latest_dynaml_dev_release-SNAPSHOT")
+    else ("io.github.transcendent-ai-labs", "dynaml", latest_dynaml_release)
 
   val platform: String = {
     // Determine platform name using code similar to javacpp
@@ -74,31 +80,32 @@ object Dependencies {
   }
 
   val commonDependencies = Seq(
-    "com.nativelibs4java" % "scalaxy-streams_2.11" % "0.3.4" % "provided",
     "org.jsoup" % "jsoup" % "1.9.1",
     "joda-time" % "joda-time" % "2.10",
     "org.joda" % "joda-convert" % "2.1",
-    "org.json4s" % "json4s-native_2.11" % "3.3.0",
-    "com.typesafe.slick" %% "slick" % "3.1.1"
+    "org.json4s" %% "json4s-native" % "3.6.2",
+    "com.typesafe.slick" %% "slick" % "3.2.3"
   )
 
-  val dynaMLDependency = Seq(
-    dynamlGroupID % dynamlArtifact % dynaMLVersion)
-    .map(_.exclude("org.platanios", "tensorflow_2.11"))
-    .map(_.exclude("org.platanios", "tensorflow-data_2.11"))
-    .map(_.exclude("org.platanios", "tensorflow-jni_2.11"))
-    .map(_.exclude("org.platanios", "tensorflow-examples_2.11"))
-    .map(_.exclude("org.platanios", "tensorflow-api_2.11"))
-    .map(_.exclude("org.platanios", "tensorflow-horovod_2.11"))
+  val dynaMLDependency = Seq(dynamlGroupID %% dynamlArtifact % dynaMLVersion)
+    .map(_.withExclusions(
+      Vector(
+        "org.platanios" %% "tensorflow", 
+        "org.platanios" %% "tensorflow-data",
+        "org.platanios" %% "tensorflow-jni",
+        "org.platanios" %% "tensorflow-examples",
+        "org.platanios" %% "tensorflow-api",
+        "org.platanios" %% "tensorflow-horovod"
+      )))
 
   val tf =
-    if(packagedTFFlag) "org.platanios" % "tensorflow_2.11" % tfscala_version classifier tensorflow_classifier
-    else "org.platanios" % "tensorflow_2.11" % tfscala_version
+    if(packagedTFFlag) "org.platanios" %% "tensorflow" % tfscala_version classifier tensorflow_classifier
+    else "org.platanios" %% "tensorflow" % tfscala_version
 
-  val tf_examples = "org.platanios" % "tensorflow-data_2.11" % tfscala_version
+  val tf_examples = "org.platanios" %% "tensorflow-data" % tfscala_version
 
   val tensorflowDependency = Seq(
     tf,
     tf_examples
-  ).map(_.exclude("org.typelevel", "spire_2.11"))
+  ).map(_.withExclusions(Vector("org.typelevel" %% "spire")))
 }

@@ -38,11 +38,11 @@ public class RecordMap {
     /**
      * Constructor.
      *
-     * @param   array of entries containing stored variable record blocks,
+     * @param   entries array of entries containing stored variable record blocks,
      *          need not be sorted
      * @param   recSize   size of each variable record in bytes
      */
-    private RecordMap( Entry[] entries, int recSize ) {
+    private RecordMap( RecordMap.Entry[] entries, int recSize ) {
         recSize_ = recSize;
 
         // Sort entries into order of record data.

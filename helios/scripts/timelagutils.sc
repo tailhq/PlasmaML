@@ -1,6 +1,6 @@
 import breeze.linalg.{DenseMatrix, qr}
 import breeze.stats.distributions.Gaussian
-import com.quantifind.charts.Highcharts._
+import io.github.mandar2812.dynaml.graphics.charts.Highcharts._
 import ammonite.ops._
 import ammonite.ops.ImplicitWd._
 import org.joda.time.DateTime
