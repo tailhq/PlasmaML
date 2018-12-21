@@ -1,5 +1,5 @@
-import $file.timelagutils
-import $file.csss_omni_model
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelagutils
+import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.dynaml.tensorflow.data.DataSet
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api._
@@ -45,7 +45,7 @@ def apply(
     
     val cv_results = (start_year to end_year).map(ty => {
 
-        val result = csss_omni_model(
+        val result = fte.exp_cdt(
             year_range = start_year to end_year, 
             test_year = ty, 
             optimizer = optimization_algo,
@@ -63,7 +63,7 @@ def apply(
             divergence = divergence_term
         )
         
-        csss_omni_model.FTExperiment.clear_cache()
+        fte.FTExperiment.clear_cache()
         (ty, result)
     }).toMap
 
@@ -89,7 +89,7 @@ def single_output(
 
     val cv_results = (start_year to end_year).map(ty => {
 
-        val result = csss_omni_model.single_output(
+        val result = fte.exp_single_output(
             year_range = start_year to end_year,
             test_year = ty,
             optimizer = optimization_algo,
@@ -108,6 +108,8 @@ def single_output(
 
         (ty, result)
     }).toMap
+
+    fte.FTExperiment.clear_cache()
 
     cv_results
 

@@ -5,7 +5,7 @@ import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.helios
-import $file.timelagutils
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelagutils
 import org.platanios.tensorflow.api.learn.layers.Activation
 
 @main
