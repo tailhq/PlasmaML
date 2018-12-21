@@ -39,6 +39,7 @@ def apply(
     crop_latitude: Double = 40d, 
     log_scale_fte: Boolean = false,
     log_scale_omni: Boolean = false,
+    conv_flag: Boolean = false,
     causal_window: (Int, Int) = (48, 72),
     max_iterations: Int = 100000, 
     batch_size: Int = 32, 
@@ -65,7 +66,8 @@ def apply(
           reg = regularization_const,
           divergence = divergence_term,
           summary_top_dir = summary_dir,
-          temperature = temperature
+          temperature = temperature,
+          conv_flag = conv_flag
         )
         
         fte.FTExperiment.clear_cache()
