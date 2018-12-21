@@ -1,3 +1,4 @@
+import _root_.ammonite.ops._
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelagutils
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.dynaml.tensorflow.data.DataSet
@@ -41,26 +42,28 @@ def apply(
     max_iterations: Int = 100000, 
     batch_size: Int = 32, 
     regularization_const: Double = 0.001, 
-    optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01)): CV_RESULT = {
+    optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01),
+    summary_dir: Path = home/'tmp): CV_RESULT = {
     
     val cv_results = (start_year to end_year).map(ty => {
 
         val result = fte.exp_cdt(
-            year_range = start_year to end_year, 
-            test_year = ty, 
-            optimizer = optimization_algo,
-            num_neurons = network_size, 
-            activation_func = activation_func,
-            miniBatch = batch_size, 
-            iterations = max_iterations, 
-            latitude_limit = crop_latitude, 
-            deltaTFTE = history_fte, 
-            fteStep = fte_step,
-            log_scale_fte = log_scale_fte,
-            log_scale_omni = log_scale_omni,
-            deltaT = causal_window, 
-            reg = regularization_const, 
-            divergence = divergence_term
+          year_range = start_year to end_year,
+          test_year = ty,
+          optimizer = optimization_algo,
+          num_neurons = network_size,
+          activation_func = activation_func,
+          miniBatch = batch_size,
+          iterations = max_iterations,
+          latitude_limit = crop_latitude,
+          deltaTFTE = history_fte,
+          fteStep = fte_step,
+          log_scale_fte = log_scale_fte,
+          log_scale_omni = log_scale_omni,
+          deltaT = causal_window,
+          reg = regularization_const,
+          divergence = divergence_term,
+          summary_top_dir = summary_dir
         )
         
         fte.FTExperiment.clear_cache()
@@ -85,25 +88,27 @@ def single_output(
   max_iterations: Int = 100000,
   batch_size: Int = 32,
   regularization_const: Double = 0.001,
-  optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01)): CV_RESULT_SO = {
+  optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01),
+  summary_dir: Path = home/'tmp): CV_RESULT_SO = {
 
     val cv_results = (start_year to end_year).map(ty => {
 
         val result = fte.exp_single_output(
-            year_range = start_year to end_year,
-            test_year = ty,
-            optimizer = optimization_algo,
-            num_neurons = network_size,
-            activation_func = activation_func,
-            miniBatch = batch_size,
-            iterations = max_iterations,
-            latitude_limit = crop_latitude,
-            deltaTFTE = history_fte,
-            fteStep = fte_step,
-            log_scale_fte = log_scale_fte,
-            log_scale_omni = log_scale_omni,
-            deltaT = causal_lag,
-            reg = regularization_const
+          year_range = start_year to end_year,
+          test_year = ty,
+          optimizer = optimization_algo,
+          num_neurons = network_size,
+          activation_func = activation_func,
+          miniBatch = batch_size,
+          iterations = max_iterations,
+          latitude_limit = crop_latitude,
+          deltaTFTE = history_fte,
+          fteStep = fte_step,
+          log_scale_fte = log_scale_fte,
+          log_scale_omni = log_scale_omni,
+          deltaT = causal_lag,
+          reg = regularization_const,
+          summary_top_dir = summary_dir
         )
 
         (ty, result)
