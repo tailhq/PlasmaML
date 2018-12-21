@@ -11,7 +11,7 @@ import breeze.stats.distributions._
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 //Load Wisp-Highcharts for plotting
-import com.quantifind.charts.Highcharts._
+import _root_.io.github.mandar2812.dynaml.graphics.charts.Highcharts._
 //Import spire implicits for definition of
 //fields, algebraic structures on primitive types
 import spire.implicits._
