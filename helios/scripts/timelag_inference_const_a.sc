@@ -6,6 +6,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelagutils
+import ammonite.ops._
 import org.platanios.tensorflow.api.learn.layers.Activation
 
 @main
@@ -36,7 +37,8 @@ def main(
   mo_flag: Boolean                   = true,
   prob_timelags: Boolean             = true,
   dist_type: String                  = "default",
-  timelag_pred_strategy: String      = "mode"): timelagutils.ExperimentResult[timelagutils.JointModelRun] = {
+  timelag_pred_strategy: String      = "mode",
+  summaries_top_dir: Path            = home/'tmp): timelagutils.ExperimentResult[timelagutils.JointModelRun] = {
 
   //Output computation
   val beta = 100f
@@ -101,7 +103,8 @@ def main(
       iterations, optimizer,
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,
-      timelag_pred_strategy)
+      timelag_pred_strategy,
+      summaries_top_dir)
   } else {
 
     timelagutils.run_exp(
@@ -110,6 +113,7 @@ def main(
       miniBatch,
       sum_dir_prefix,
       mo_flag, prob_timelags,
-      timelag_pred_strategy)
+      timelag_pred_strategy,
+      summaries_top_dir)
   }
 }

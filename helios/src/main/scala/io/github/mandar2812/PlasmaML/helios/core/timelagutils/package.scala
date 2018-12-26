@@ -965,13 +965,14 @@ package object timelagutils {
     dataset: TLDATA,
     architecture: Layer[Output, (Output, Output)],
     loss: Layer[((Output, Output), Output), Output],
-    iterations: Int             = 150000,
-    optimizer: Optimizer        = tf.train.AdaDelta(0.01),
-    miniBatch: Int              = 512,
-    sum_dir_prefix: String      = "",
-    mo_flag: Boolean            = false,
-    prob_timelags: Boolean      = false,
-    timelag_pred_strategy: String = "mode"): ExperimentResult[JointModelRun] = {
+    iterations: Int               = 150000,
+    optimizer: Optimizer          = tf.train.AdaDelta(0.01),
+    miniBatch: Int                = 512,
+    sum_dir_prefix: String        = "",
+    mo_flag: Boolean              = false,
+    prob_timelags: Boolean        = false,
+    timelag_pred_strategy: String = "mode",
+    summaries_top_dir: Path       = home/'tmp): ExperimentResult[JointModelRun] = {
 
     val train_fraction = 0.7
 
@@ -988,7 +989,8 @@ package object timelagutils {
       ),
       architecture, loss,
       iterations, optimizer, miniBatch, sum_dir_prefix,
-      mo_flag, prob_timelags, timelag_pred_strategy
+      mo_flag, prob_timelags, timelag_pred_strategy,
+      summaries_top_dir
     )
   }
 
@@ -1003,7 +1005,8 @@ package object timelagutils {
     sum_dir_prefix: String        = "",
     mo_flag: Boolean              = false,
     prob_timelags: Boolean        = false,
-    timelag_pred_strategy: String = "mode"): ExperimentResult[JointModelRun] = {
+    timelag_pred_strategy: String = "mode",
+    summaries_top_dir: Path       = home/'tmp): ExperimentResult[JointModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
@@ -1028,7 +1031,7 @@ package object timelagutils {
           if(mo_flag) sum_dir_prefix+"_timelag_inference_mo_"+dt.toString("YYYY-MM-dd-HH-mm")
           else sum_dir_prefix+"_timelag_inference_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-        val tf_summary_dir     = home/'tmp/summary_dir_index
+        val tf_summary_dir     = summaries_top_dir/summary_dir_index
 
         val input              = tf.learn.Input(FLOAT64, Shape(-1, tf_dataset.trainData.shape(1)))
 
@@ -1137,7 +1140,8 @@ package object timelagutils {
     sum_dir_prefix: String        = "",
     mo_flag: Boolean              = false,
     prob_timelags: Boolean        = false,
-    timelag_pred_strategy: String = "mode"): ExperimentResult[StageWiseModelRun] = {
+    timelag_pred_strategy: String = "mode",
+    summaries_top_dir: Path       = home/'tmp): ExperimentResult[StageWiseModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
@@ -1164,7 +1168,7 @@ package object timelagutils {
           else sum_dir_prefix+"_timelag_inference_"+dt.toString("YYYY-MM-dd-HH-mm")
 
 
-        val tf_summary_dir = home/'tmp/summary_dir_index
+        val tf_summary_dir       = summaries_top_dir/summary_dir_index
 
         val tf_summary_dir_i     = tf_summary_dir/'model_i
 
