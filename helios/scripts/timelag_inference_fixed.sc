@@ -6,7 +6,7 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.ammonite.ops._
-import _root_.io.github.mandar2812.PlasmaML.helios.core.timelagutils
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 
 @main
 def main(
@@ -37,7 +37,7 @@ def main(
   prob_timelags: Boolean        = true,
   dist_type: String             = "default",
   timelag_pred_strategy: String = "mode",
-  summaries_top_dir: Path       = home/'tmp): timelagutils.ExperimentResult[timelagutils.JointModelRun] = {
+  summaries_top_dir: Path       = home/'tmp): timelag.ExperimentResult[timelag.JointModelRun] = {
 
   //Output computation
   val beta = 100f
@@ -50,12 +50,12 @@ def main(
       (fixed_lag, out + scala.util.Random.nextGaussian().toFloat)
     })
 
-  val num_pred_dims = timelagutils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
+  val num_pred_dims = timelag.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelagutils.get_ffnet_properties(d, num_pred_dims, num_neurons)
+    timelag.get_ffnet_properties(d, num_pred_dims, num_neurons)
 
-  val output_mapping = timelagutils.get_output_mapping(sliding_window, mo_flag, prob_timelags, dist_type, time_scale)
+  val output_mapping = timelag.get_output_mapping(sliding_window, mo_flag, prob_timelags, dist_type, time_scale)
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
@@ -63,7 +63,7 @@ def main(
     net_layer_sizes.tail) >> output_mapping
 
 
-  val lossFunc = timelagutils.get_loss(
+  val lossFunc = timelag.get_loss(
     sliding_window, mo_flag,
     prob_timelags, p, time_scale,
     corr_sc, c_cutoff,
@@ -74,16 +74,16 @@ def main(
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-  val dataset: timelagutils.TLDATA = timelagutils.generate_data(
+  val dataset: timelag.TLDATA = timelag.generate_data(
     compute_output, d, n, noise, noiserot,
     alpha, sliding_window)
 
   if(train_test_separate) {
-    val dataset_test: timelagutils.TLDATA = timelagutils.generate_data(
+    val dataset_test: timelag.TLDATA = timelag.generate_data(
       compute_output, d, n, noise, noiserot,
       alpha, sliding_window)
 
-    timelagutils.run_exp2(
+    timelag.run_exp2(
       (dataset, dataset_test), architecture, loss,
       iterations, optimizer,
       miniBatch, sum_dir_prefix,
@@ -93,7 +93,7 @@ def main(
 
   } else {
 
-    timelagutils.run_exp(
+    timelag.run_exp(
       dataset, architecture, loss,
       iterations, optimizer,
       miniBatch,

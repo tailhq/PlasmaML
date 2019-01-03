@@ -24,7 +24,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import org.platanios.tensorflow.api.learn.estimators.Estimator
 import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, SupervisedTrainableModel}
 
-package object timelagutils {
+package object timelag {
 
   //Define some types for convenience.
 

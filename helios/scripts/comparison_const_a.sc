@@ -45,7 +45,7 @@ def main(
     (dt, vf + scala.util.Random.nextGaussian().toFloat*noise.toFloat)
   })
 
-  val dataset: timelagutils.TLDATA = timelagutils.generate_data(
+  val dataset: timelag.TLDATA = timelag.generate_data(
     compute_output > compute_time_lag,
     d = d, n = n, noise = noise, noiserot = noiserot,
     alpha = alpha, sliding_window = sliding_window)
@@ -95,7 +95,7 @@ def main(
 
     val app_sum_dir_prefix = if(wt > 0) sum_dir_prefix+"_sp" else sum_dir_prefix
 
-    timelagutils.run_exp(
+    timelag.run_exp(
       dataset, architecture, loss,
       iterations, optimizer, 512, app_sum_dir_prefix,
       mo_flag, loss)

@@ -12,7 +12,6 @@ build/*.jar
 .settings
 .cache
 .cache_data
-target/*
 .DS_Store
 release.properties
 *.log

@@ -1,5 +1,5 @@
 import _root_.ammonite.ops._
-import _root_.io.github.mandar2812.PlasmaML.helios.core.timelagutils
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.dynaml.tensorflow.data.DataSet
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
@@ -28,24 +28,24 @@ type CV_RESULT_SO = Map[
 
 @main
 def apply(
-    start_year: Int = 2011,
-    end_year: Int = 2017, 
-    divergence_term: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.JensenShannon,
-    temperature: Double = 1.5,
-    network_size: Seq[Int] = Seq(100, 60),
-    activation_func: Int => Activation = timelagutils.getReLUAct(1),
-    history_fte: Int = 10,
-    fte_step: Int = 2,
-    crop_latitude: Double = 40d, 
-    log_scale_fte: Boolean = false,
-    log_scale_omni: Boolean = false,
-    conv_flag: Boolean = false,
-    causal_window: (Int, Int) = (48, 72),
-    max_iterations: Int = 100000, 
-    batch_size: Int = 32, 
-    regularization_const: Double = 0.001, 
-    optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01),
-    summary_dir: Path = home/'tmp): CV_RESULT = {
+           start_year: Int = 2011,
+           end_year: Int = 2017,
+           divergence_term: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.JensenShannon,
+           temperature: Double = 1.5,
+           network_size: Seq[Int] = Seq(100, 60),
+           activation_func: Int => Activation = timelag.getReLUAct(1),
+           history_fte: Int = 10,
+           fte_step: Int = 2,
+           crop_latitude: Double = 40d,
+           log_scale_fte: Boolean = false,
+           log_scale_omni: Boolean = false,
+           conv_flag: Boolean = false,
+           causal_window: (Int, Int) = (48, 72),
+           max_iterations: Int = 100000,
+           batch_size: Int = 32,
+           regularization_const: Double = 0.001,
+           optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01),
+           summary_dir: Path = home/'tmp): CV_RESULT = {
     
     val cv_results = (start_year to end_year).map(ty => {
 
@@ -79,21 +79,21 @@ def apply(
 }
 
 def single_output(
-  start_year: Int = 2011,
-  end_year: Int = 2017,
-  network_size: Seq[Int] = Seq(100, 80),
-  activation_func: Int => Activation = timelagutils.getReLUAct(1),
-  history_fte: Int = 10,
-  fte_step: Int = 2,
-  crop_latitude: Double = 40d,
-  log_scale_fte: Boolean = false,
-  log_scale_omni: Boolean = false,
-  causal_lag: Int = 96,
-  max_iterations: Int = 100000,
-  batch_size: Int = 32,
-  regularization_const: Double = 0.001,
-  optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01),
-  summary_dir: Path = home/'tmp): CV_RESULT_SO = {
+                   start_year: Int = 2011,
+                   end_year: Int = 2017,
+                   network_size: Seq[Int] = Seq(100, 80),
+                   activation_func: Int => Activation = timelag.getReLUAct(1),
+                   history_fte: Int = 10,
+                   fte_step: Int = 2,
+                   crop_latitude: Double = 40d,
+                   log_scale_fte: Boolean = false,
+                   log_scale_omni: Boolean = false,
+                   causal_lag: Int = 96,
+                   max_iterations: Int = 100000,
+                   batch_size: Int = 32,
+                   regularization_const: Double = 0.001,
+                   optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01),
+                   summary_dir: Path = home/'tmp): CV_RESULT_SO = {
 
     val cv_results = (start_year to end_year).map(ty => {
 

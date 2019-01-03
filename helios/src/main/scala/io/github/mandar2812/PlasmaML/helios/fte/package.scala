@@ -15,7 +15,7 @@ import _root_.io.github.mandar2812.PlasmaML.utils.{L2Regularization, L1Regulariz
 import _root_.io.github.mandar2812.PlasmaML.helios
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
-import _root_.io.github.mandar2812.PlasmaML.helios.core.timelagutils
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.ops.variables.RandomNormalInitializer
 
@@ -363,7 +363,7 @@ package object fte {
 
   def exp_cdt(
     num_neurons: Seq[Int] = Seq(30, 30),
-    activation_func: Int => Activation = timelagutils.getReLUAct(1),
+    activation_func: Int => Activation = timelag.getReLUAct(1),
     optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
@@ -472,12 +472,12 @@ package object fte {
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
 
-    val num_pred_dims = timelagutils.get_num_output_dims(causal_window, mo_flag, prob_timelags, "default")
+    val num_pred_dims = timelag.get_num_output_dims(causal_window, mo_flag, prob_timelags, "default")
 
     val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-      timelagutils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
+      timelag.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
-    val output_mapping = timelagutils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
+    val output_mapping = timelag.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
 
     val filter_depths = Seq(
       Seq(4, 4, 4, 4),
@@ -512,7 +512,7 @@ package object fte {
 
 
 
-    val lossFunc = timelagutils.get_loss(
+    val lossFunc = timelag.get_loss(
       causal_window, mo_flag, prob_timelags,
       prior_wt = p_wt, prior_divergence =  divergence,
       error_wt = e_wt, c = specificity, temp = temperature)
@@ -635,7 +635,7 @@ package object fte {
 
   def exp_single_output(
     num_neurons: Seq[Int] = Seq(30, 30),
-    activation_func: Int => Activation = timelagutils.getReLUAct(1),
+    activation_func: Int => Activation = timelag.getReLUAct(1),
     optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
@@ -739,7 +739,7 @@ package object fte {
     val num_pred_dims = 1
 
     val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-      timelagutils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
+      timelag.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
 
 
