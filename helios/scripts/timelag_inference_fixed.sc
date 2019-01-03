@@ -50,12 +50,12 @@ def main(
       (fixed_lag, out + scala.util.Random.nextGaussian().toFloat)
     })
 
-  val num_pred_dims = timelag.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
+  val num_pred_dims = timelag.utils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelag.get_ffnet_properties(d, num_pred_dims, num_neurons)
+    timelag.utils.get_ffnet_properties(d, num_pred_dims, num_neurons)
 
-  val output_mapping = timelag.get_output_mapping(sliding_window, mo_flag, prob_timelags, dist_type, time_scale)
+  val output_mapping = timelag.utils.get_output_mapping(sliding_window, mo_flag, prob_timelags, dist_type, time_scale)
 
   //Prediction architecture
   val architecture = dtflearn.feedforward_stack(
@@ -63,7 +63,7 @@ def main(
     net_layer_sizes.tail) >> output_mapping
 
 
-  val lossFunc = timelag.get_loss(
+  val lossFunc = timelag.utils.get_loss(
     sliding_window, mo_flag,
     prob_timelags, p, time_scale,
     corr_sc, c_cutoff,
@@ -74,12 +74,12 @@ def main(
     L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
-  val dataset: timelag.TLDATA = timelag.generate_data(
+  val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
     compute_output, d, n, noise, noiserot,
     alpha, sliding_window)
 
   if(train_test_separate) {
-    val dataset_test: timelag.TLDATA = timelag.generate_data(
+    val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
       compute_output, d, n, noise, noiserot,
       alpha, sliding_window)
 

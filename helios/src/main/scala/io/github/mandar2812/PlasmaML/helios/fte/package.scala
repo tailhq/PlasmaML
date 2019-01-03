@@ -363,7 +363,7 @@ package object fte {
 
   def exp_cdt(
     num_neurons: Seq[Int] = Seq(30, 30),
-    activation_func: Int => Activation = timelag.getReLUAct(1),
+    activation_func: Int => Activation = timelag.utils.getReLUAct(1),
     optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
@@ -472,12 +472,12 @@ package object fte {
     val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
 
 
-    val num_pred_dims = timelag.get_num_output_dims(causal_window, mo_flag, prob_timelags, "default")
+    val num_pred_dims = timelag.utils.get_num_output_dims(causal_window, mo_flag, prob_timelags, "default")
 
     val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-      timelag.get_ffnet_properties(-1, num_pred_dims, num_neurons)
+      timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
-    val output_mapping = timelag.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
+    val output_mapping = timelag.utils.get_output_mapping(causal_window, mo_flag, prob_timelags, "default")
 
     val filter_depths = Seq(
       Seq(4, 4, 4, 4),
@@ -512,7 +512,7 @@ package object fte {
 
 
 
-    val lossFunc = timelag.get_loss(
+    val lossFunc = timelag.utils.get_loss(
       causal_window, mo_flag, prob_timelags,
       prior_wt = p_wt, prior_divergence =  divergence,
       error_wt = e_wt, c = specificity, temp = temperature)
@@ -635,7 +635,7 @@ package object fte {
 
   def exp_single_output(
     num_neurons: Seq[Int] = Seq(30, 30),
-    activation_func: Int => Activation = timelag.getReLUAct(1),
+    activation_func: Int => Activation = timelag.utils.getReLUAct(1),
     optimizer: tf.train.Optimizer = tf.train.Adam(0.001),
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
@@ -739,7 +739,7 @@ package object fte {
     val num_pred_dims = 1
 
     val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-      timelag.get_ffnet_properties(-1, num_pred_dims, num_neurons)
+      timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
 
 
@@ -834,7 +834,10 @@ package object fte {
     }
 
 
-    val experiment_config = helios.ExperimentType(false, false, "single-output")
+    val experiment_config = helios.ExperimentType(
+      multi_output = false,
+      probabilistic_time_lags = false,
+      "single-output")
 
     val results = helios.SupervisedModelRun[Tensor, Tensor, Tensor, Output](
       (scaled_data, scalers),
