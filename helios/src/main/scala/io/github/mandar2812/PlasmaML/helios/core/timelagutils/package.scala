@@ -12,27 +12,38 @@ import org.platanios.tensorflow.api.learn.layers.{Activation, Input, Layer, Loss
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import _root_.io.github.mandar2812.dynaml.tensorflow._
+import _root_.io.github.mandar2812.dynaml.tensorflow.data.TFDataSet
 import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.probability.RandomVariable
 import _root_.io.github.mandar2812.dynaml.evaluation._
+import _root_.io.github.mandar2812.dynaml.models.TFModel
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
+import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import org.platanios.tensorflow.api.learn.estimators.Estimator
 import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, SupervisedTrainableModel}
 
 package object timelagutils {
 
   //Define some types for convenience.
-  type DATA        = Stream[((Int, Tensor), (Float, Float))]
-  type SLIDINGDATA = Stream[(Int, (Tensor, Stream[Double], Float))]
+
+  type PATTERN     = ((Int, Tensor), (Float, Float))
+  type SLIDINGPATT = (Int, (Tensor, Stream[Double], Float))
+
+  type DATA        = Stream[PATTERN]
+  type SLIDINGDATA = Stream[SLIDINGPATT]
   type TLDATA      = (DATA, SLIDINGDATA)
+
+  type PROCDATA    = (HeliosDataSet, (Tensor, Tensor))
+
+  type NNPROP      = (Seq[Int], Seq[Shape], Seq[String], Seq[String])
 
   //Alias for the identity pipe/mapping
   def id[T]: DataPipe[T, T] = Pipe.identityPipe[T]
 
   //A Polynomial layer builder
-  val layer_poly = (power: Int) => (n: String) => new Activation(n) {
+  val layer_poly: Int => String => Activation = (power: Int) => (n: String) => new Activation(n) {
     override val layerType = "Poly"
 
     override protected def _forward(input: Output)(implicit mode: Mode): Output = {
@@ -43,11 +54,11 @@ package object timelagutils {
     }
   }
 
-  val getPolyAct = (degree: Int, s: Int) => (i: Int) =>
+  val getPolyAct: (Int, Int) => Int => Activation = (degree: Int, s: Int) => (i: Int) =>
     if(i - s == 0) layer_poly(degree)(s"Act_$i")
     else tf.learn.Sigmoid(s"Act_$i")
 
-  val getReLUAct = (s: Int) => (i: Int) =>
+  val getReLUAct: Int => Int => Activation = (s: Int) => (i: Int) =>
     if((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
@@ -65,15 +76,40 @@ package object timelagutils {
     }).toStream
   }
 
-  //Subroutine to generate synthetic
-  //input-lagged output time series.
+
+  /**
+    * Subroutine to generate synthetic input-lagged output time series.
+    *
+    * x(n+1) = (1 - &alpha;). R(n) &times; x(n) + &epsilon;
+    *
+    * y(t + &Delta;t(x(t))) = f[x(t)]
+    *
+    * &Delta;t(x(t)) = g[x(t)]
+    *
+    * @param compute_output_and_lag A data pipe which takes the input x(t) a tensor and
+    *                               computes y(t + &Delta;t(x(t))) the output and &Delta;(x(t)), the
+    *                               causal time lag.
+    *
+    * @param d The dimensions in the input time series x(t)
+    * @param n The length of the time series x(t)
+    * @param noise The variance of &epsilon;
+    * @param noiserot The variance of elements of R<sub>i,j</sub>,
+    *                 a randomly generated matrix used to compute
+    *                 an orthogonal transformation (rotation) of
+    *                 x(t)
+    * @param alpha A relaxation parameter which controls the
+    *              auto-correlation time scale of x(t)
+    *
+    * @param sliding_window The size of the sliding time window [y(t), ..., y(t+h)]
+    *                       to construct. This is used as training label for the model.
+    * */
   def generate_data(
+    compute_output_and_lag: DataPipe[Tensor, (Float, Float)],
     d: Int = 3, n: Int = 5,
-    sliding_window: Int,
     noise: Double = 0.5,
     noiserot: Double = 0.1,
     alpha: Double = 0.0,
-    compute_output_and_lag: DataPipe[Tensor, (Float, Float)]): TLDATA = {
+    sliding_window: Int): TLDATA = {
 
     val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
       () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
@@ -162,6 +198,9 @@ package object timelagutils {
     (data, joined_data)
   }
 
+  /**
+    * Plot the synthetic data set produced by [[generate_data()]].
+    * */
   def plot_data(dataset: TLDATA): Unit = {
 
     val (data, joined_data) = dataset
@@ -200,19 +239,26 @@ package object timelagutils {
 
   }
 
-  //Transform the generated data into a tensorflow compatible object
-  def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int) =
-    DataPipe((data: SLIDINGDATA) => {
-      require(
+  /**
+    * Transform the generated data into a tensorflow compatible object
+    * */
+  def load_data_into_tensors(
+    num_training: Int,
+    num_test: Int,
+    sliding_window: Int)
+  : DataPipe[SLIDINGDATA, PROCDATA] = DataPipe((data: SLIDINGDATA) => {
 
-        num_training + num_test == data.length,
-        "Size of train and test data must add up to total size of data!")
+    require(
+      num_training + num_test == data.length,
+      "Size of train and test data "+ "must add up to total size of data!"
+      )
 
-      (data.take(num_training), data.takeRight(num_test))
-    }) > data_splits_to_tensors(sliding_window)
+    (data.take(num_training), data.takeRight(num_test))}) >
+    data_splits_to_tensors(sliding_window)
 
-  def data_splits_to_tensors(sliding_window: Int) =
-    DataPipe2((training_data: SLIDINGDATA, test_data: SLIDINGDATA)=> {
+  def data_splits_to_tensors(sliding_window: Int)
+  : DataPipe2[SLIDINGDATA, SLIDINGDATA, PROCDATA] =
+    DataPipe2((training_data: SLIDINGDATA, test_data: SLIDINGDATA) => {
 
       val features_train = dtf.stack(training_data.map(_._2._1), axis = 0)
 
@@ -243,9 +289,32 @@ package object timelagutils {
       (tf_dataset, (train_time_lags, test_time_lags))
     })
 
+  def data_splits_to_dataset(causal_window: Int) = DataPipe2((training_data: SLIDINGDATA, test_data: SLIDINGDATA) => {
 
-  //Scale training features/labels, apply scaling to test features
 
+    val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
+      dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*),
+      dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*))
+
+    val train_dataset = dtfdata.dataset(training_data).map(
+      (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
+    )
+
+    val test_dataset = dtfdata.dataset(test_data).map(
+      (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
+    )
+
+    val tf_dataset = TFDataSet(train_dataset, test_dataset)
+
+    (tf_dataset, (train_time_lags, test_time_lags))
+  })
+
+
+  /**
+    * Scale training features/labels, on the test data; apply scaling
+    * only to the features.
+    *
+    * */
   val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
 
     val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization(dataset.trainData, dataset.trainLabels)
@@ -258,15 +327,29 @@ package object timelagutils {
     )
   })
 
-  val scale_data = DataPipe(
+  private val scale_data_v1 = DataPipe(
     scale_helios_dataset,
     id[(Tensor, Tensor)]
   )
 
+  private val scale_data_v2 = DataPipe(
+    fte.scale_dataset, id[(Tensor, Tensor)]
+  )
+
+  /**
+    * Returns the properties [[NNPROP]] (i.e. layer sizes, shapes, parameter names, & data types)
+    * of a feed-forward/dense neural stack which consists of layers of equal size.
+    *
+    * @param d The dimensionality of the input (assumed to be a rank 1 tensor).
+    * @param num_pred_dims The dimensionality of the network output.
+    * @param num_neurons The size of each hidden layer.
+    * @param num_hidden_layers The number of hidden layers.
+    *
+    * */
   def get_ffnet_properties(
     d: Int, num_pred_dims: Int,
     num_neurons: Int,
-    num_hidden_layers: Int) = {
+    num_hidden_layers: Int): NNPROP = {
 
     val net_layer_sizes       = Seq(d) ++ Seq.fill(num_hidden_layers)(num_neurons) ++ Seq(num_pred_dims)
     val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
@@ -276,26 +359,56 @@ package object timelagutils {
     (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes)
   }
 
+  /**
+    * Returns the properties [[NNPROP]] (i.e. layer sizes, shapes, parameter names, & data types)
+    * of a feed-forward/dense neural stack which consists of layers of unequal size.
+    *
+    * @param d The dimensionality of the input (assumed to be a rank 1 tensor).
+    * @param num_pred_dims The dimensionality of the network output.
+    * @param layer_sizes The size of each hidden layer.
+    * @param dType The data type of the layer weights and biases.
+    * @param starting_index The numeric index of the first layer, defaults to 1.
+    *
+    * */
   def get_ffnet_properties(
     d: Int, num_pred_dims: Int,
     layer_sizes: Seq[Int],
     dType: String = "FLOAT64",
-    starting_index: Int = 1) = {
+    starting_index: Int = 1): NNPROP = {
 
     val net_layer_sizes       = Seq(d) ++ layer_sizes ++ Seq(num_pred_dims)
+
     val layer_shapes          = net_layer_sizes.sliding(2).toSeq.map(c => Shape(c.head, c.last))
-    val layer_parameter_names = (starting_index until starting_index + net_layer_sizes.tail.length).map(s => "Linear_"+s+"/Weights")
+
+    val size                  = net_layer_sizes.tail.length
+
+    val layer_parameter_names = (starting_index until starting_index + size).map(i => s"Linear_$i/Weights")
+
     val layer_datatypes       = Seq.fill(net_layer_sizes.tail.length)(dType)
 
     (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes)
   }
 
+  /**
+    * Creates an output mapping layer which
+    * produces outputs in the form desired by
+    * time lag based loss functions in [[helios.core]].
+    *
+    * @param causal_window The size of the sliding causal time window.
+    * @param mo_flag Set to true if the model produces predictions for each
+    *                time step in the causal window.
+    * @param prob_timelags Set to true if the time lag prediction is in the
+    *                      form of a probability distribution over the causal
+    *                      time window.
+    * @param time_scale An optional parameter, used only if `mo_flag` and
+    *                   `prob_timelags` are both set to false.
+    * */
   def get_output_mapping(
     causal_window: Int,
     mo_flag: Boolean,
     prob_timelags: Boolean,
     dist_type: String,
-    time_scale: Double = 1.0) = if (!mo_flag) {
+    time_scale: Double = 1.0): Layer[Output, (Output, Output)] = if (!mo_flag) {
 
     if (!prob_timelags) RBFWeightedSWLoss.output_mapping("Output/RBFWeightedL1", causal_window, time_scale)
     else CausalDynamicTimeLagSO.output_mapping("Output/SOProbWeightedTS", causal_window)
@@ -306,18 +419,40 @@ package object timelagutils {
 
   } else {
     dist_type match {
-      case "poisson"  => helios.learn.cdt_poisson_loss.output_mapping("Output/PoissonWeightedTS", causal_window)
-      case "beta"     => helios.learn.cdt_beta_loss.output_mapping("Output/BetaWeightedTS", causal_window)
-      case "gaussian" => helios.learn.cdt_gaussian_loss.output_mapping("Output/GaussianWeightedTS", causal_window)
-      case _          => helios.learn.cdt_loss.output_mapping("Output/ProbWeightedTS", causal_window)
+      case "poisson"  => helios.learn.cdt_poisson_loss.output_mapping(
+        name = "Output/PoissonWeightedTS",
+        causal_window)
+
+      case "beta"     => helios.learn.cdt_beta_loss.output_mapping(
+        name = "Output/BetaWeightedTS",
+        causal_window)
+
+      case "gaussian" => helios.learn.cdt_gaussian_loss.output_mapping(
+        name = "Output/GaussianWeightedTS",
+        causal_window)
+
+      case _          => helios.learn.cdt_loss.output_mapping(
+        name = "Output/ProbWeightedTS",
+        causal_window)
     }
   }
 
+  /**
+    * Calculate the size of the
+    * penultimate layer of a neural stack
+    * used for causal time lag prediction.
+    * @param causal_window The size of the sliding causal time window.
+    * @param mo_flag Set to true if the model produces predictions for each
+    *                time step in the causal window.
+    * @param prob_timelags Set to true if the time lag prediction is in the
+    *                      form of a probability distribution over the causal
+    *                      time window.
+    * */
   def get_num_output_dims(
     causal_window: Int,
     mo_flag: Boolean,
     prob_timelags: Boolean,
-    dist_type: String) =
+    dist_type: String): Int =
     if(!mo_flag) 2
     else if(mo_flag && !prob_timelags) causal_window + 1
     else if(!mo_flag && prob_timelags) causal_window + 1
@@ -331,6 +466,15 @@ package object timelagutils {
     }
 
 
+  /**
+    * Get the appropriate causal time lag loss function.
+    * @param sliding_window The size of the sliding causal time window.
+    * @param mo_flag Set to true if the model produces predictions for each
+    *                time step in the causal window.
+    * @param prob_timelags Set to true if the time lag prediction is in the
+    *                      form of a probability distribution over the causal
+    *                      time window.
+    * */
   def get_loss(
     sliding_window: Int,
     mo_flag: Boolean,
@@ -343,7 +487,7 @@ package object timelagutils {
     prior_divergence:  helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
     temp: Double                  = 1.0,
     error_wt: Double              = 1.0,
-    c: Double                     = 1.0) =
+    c: Double                     = 1.0): Loss[((Output, Output), Output)] =
     if (!mo_flag) {
       if (!prob_timelags) {
         RBFWeightedSWLoss(
@@ -382,6 +526,10 @@ package object timelagutils {
         specificity = c)
     }
 
+  /**
+    * Process the predictions made by a causal time lag model.
+    *
+    * */
   def process_predictions(
     predictions: (Tensor, Tensor),
     time_window: Int,
@@ -633,9 +781,11 @@ package object timelagutils {
     type MODEL
     type ESTIMATOR
 
+    type DATA
+
     val summary_dir: Path
 
-    val data_and_scales: (HeliosDataSet, (GaussianScalerTF, GaussianScalerTF))
+    val data_and_scales: (DATA, (GaussianScalerTF, GaussianScalerTF))
 
     val metrics_train: (RegressionMetricsTF, RegressionMetricsTF)
 
@@ -645,6 +795,31 @@ package object timelagutils {
 
     val estimator: ESTIMATOR
 
+  }
+
+  case class TunedModelRun(
+    data_and_scales: (TFDataSet[(Tensor, Tensor)], (GaussianScalerTF, GaussianScalerTF)),
+    model: TFModel[
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, Output],
+    metrics_train: (RegressionMetricsTF, RegressionMetricsTF),
+    metrics_test: (RegressionMetricsTF, RegressionMetricsTF),
+    summary_dir: Path,
+    training_preds: (Tensor, Tensor),
+    test_preds: (Tensor, Tensor)) extends ModelRun {
+
+    override type DATA = TFDataSet[(Tensor, Tensor)]
+
+    override type MODEL = TFModel[
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, Output]
+
+    override type ESTIMATOR = Estimator[
+      Tensor, Output, DataType, Shape, (Output, Output),
+      (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
+      ((Output, Output), Output)]
+
+    override val estimator: ESTIMATOR = model.estimator
   }
 
   case class JointModelRun(
@@ -661,6 +836,8 @@ package object timelagutils {
     summary_dir: Path,
     training_preds: (Tensor, Tensor),
     test_preds: (Tensor, Tensor)) extends ModelRun {
+
+    override type DATA = HeliosDataSet
 
     override type MODEL = SupervisedTrainableModel[
       Tensor, Output, DataType, Shape, (Output, Output),
@@ -693,6 +870,8 @@ package object timelagutils {
     summary_dir: Path,
     training_preds: (Tensor, Tensor),
     test_preds: (Tensor, Tensor)) extends ModelRun {
+
+    override type DATA = HeliosDataSet
 
     override type MODEL = SupervisedTrainableModel[
       Tensor, Output, DataType, Shape, Output,
@@ -1111,7 +1290,7 @@ package object timelagutils {
     //The processing pipeline
     val train_and_evaluate =
       data_splits_to_tensors(causal_window) >
-        scale_data >
+        scale_data_v1 >
         model_train_eval
 
     val results_model_eval = train_and_evaluate(collated_data, collated_data_test)
@@ -1303,7 +1482,7 @@ package object timelagutils {
     //The processing pipeline
     val train_and_evaluate =
       data_splits_to_tensors(causal_window) >
-        scale_data >
+        scale_data_v1 >
         model_train_eval
 
     val results_model_eval = train_and_evaluate(collated_data, collated_data_test)

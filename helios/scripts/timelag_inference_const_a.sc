@@ -87,15 +87,13 @@ def main(
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelagutils.TLDATA = timelagutils.generate_data(
-    d, n, sliding_window,
-    noise, noiserot, alpha,
-    compute_output > compute_time_lag)
+    compute_output > compute_time_lag, d, n,
+    noise, noiserot, alpha, sliding_window)
 
   if(train_test_separate) {
     val dataset_test: timelagutils.TLDATA = timelagutils.generate_data(
-      d, n, sliding_window,
-      noise, noiserot, alpha,
-      compute_output > compute_time_lag)
+      compute_output > compute_time_lag, d, n,
+      noise, noiserot, alpha, sliding_window)
 
     timelagutils.run_exp2(
       (dataset, dataset_test),

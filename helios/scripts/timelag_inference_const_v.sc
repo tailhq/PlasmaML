@@ -86,15 +86,13 @@ def main(
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelagutils.TLDATA = timelagutils.generate_data(
-    d, n, sliding_window,
-    noise, noiserot, alpha,
-    compute_output)
+    compute_output, d, n, noise, noiserot,
+    alpha, sliding_window)
 
   if(train_test_separate) {
     val dataset_test: timelagutils.TLDATA = timelagutils.generate_data(
-      d, n, sliding_window,
-      noise, noiserot, alpha,
-      compute_output)
+      compute_output, d, n, noise, noiserot,
+      alpha, sliding_window)
 
     timelagutils.run_exp2(
       (dataset, dataset_test),
@@ -161,15 +159,9 @@ def stage_wise(
     })
 
 
-  val dataset: timelagutils.TLDATA = timelagutils.generate_data(
-    d, n, sliding_window,
-    noise, noiserot, alpha,
-    compute_output)
+  val dataset: timelagutils.TLDATA = timelagutils.generate_data(compute_output, d, n, noise, noiserot, alpha, sliding_window)
 
-  val dataset_test: timelagutils.TLDATA = timelagutils.generate_data(
-    d, n, sliding_window,
-    noise, noiserot, alpha,
-    compute_output)
+  val dataset_test: timelagutils.TLDATA = timelagutils.generate_data(compute_output, d, n, noise, noiserot, alpha, sliding_window)
 
   val (net_layer_sizes_i, layer_shapes_i, layer_parameter_names_i, layer_datatypes_i) =
     timelagutils.get_ffnet_properties(d, sliding_window, num_neurons_i, "FLOAT32")

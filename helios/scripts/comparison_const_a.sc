@@ -6,8 +6,6 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
 import _root_.io.github.mandar2812.PlasmaML.utils._
 
-import $file.timelagutils
-
 @main
 def main(
   d: Int                 = 3,
@@ -48,8 +46,9 @@ def main(
   })
 
   val dataset: timelagutils.TLDATA = timelagutils.generate_data(
-    d, n, sliding_window, noise, noiserot,
-    compute_output > compute_time_lag)
+    compute_output > compute_time_lag,
+    d = d, n = n, noise = noise, noiserot = noiserot,
+    alpha = alpha, sliding_window = sliding_window)
 
 
   val num_outputs        = sliding_window
@@ -97,8 +96,8 @@ def main(
     val app_sum_dir_prefix = if(wt > 0) sum_dir_prefix+"_sp" else sum_dir_prefix
 
     timelagutils.run_exp(
-      dataset,
+      dataset, architecture, loss,
       iterations, optimizer, 512, app_sum_dir_prefix,
-      mo_flag, architecture, loss)
+      mo_flag, loss)
   })
 }
