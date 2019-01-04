@@ -58,7 +58,7 @@ package object timelag {
   case class TunedModelRun(
     data_and_scales: (TFDataSet[(Tensor, Tensor)], (GaussianScalerTF, GaussianScalerTF)),
     model: TFModel[
-      Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
       Tensor, Output, DataType.Aux[Double], DataType, Shape, Output],
     metrics_train: (RegressionMetricsTF, RegressionMetricsTF),
     metrics_test: (RegressionMetricsTF, RegressionMetricsTF),
@@ -69,7 +69,7 @@ package object timelag {
     override type DATA = TFDataSet[(Tensor, Tensor)]
 
     override type MODEL = TFModel[
-      Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
       Tensor, Output, DataType.Aux[Double], DataType, Shape, Output]
 
     override type ESTIMATOR = Estimator[
@@ -760,6 +760,8 @@ package object timelag {
     fitness_function: DataPipe[DataSet[((Tensor, Tensor), Tensor)], Double],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     iterations: Int               = 150000,
+    iterations_tuning: Int        = 20000,
+    num_samples: Int              = 20,
     optimizer: Optimizer          = tf.train.AdaDelta(0.01),
     miniBatch: Int                = 512,
     sum_dir_prefix: String        = "",
@@ -770,6 +772,8 @@ package object timelag {
 
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
+
+    val data_size = collated_data.toStream.length
 
     val causal_window = collated_data.head._2._2.length
     val input_shape   = collated_data.head._2._1.shape
@@ -794,27 +798,35 @@ package object timelag {
         dtflearn.rel_loss_change_stop(0.005, iterations/10)
       )
 
-      val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10)
+      val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
+
+      val stackOperation = DataPipe[Iterable[(Tensor, Tensor)], (Tensor, Tensor)](bat =>
+        (tfi.stack(bat.map(_._1).toSeq, axis = -1), tfi.stack(bat.map(_._2).toSeq, axis = -1))
+      )
 
       val tunableTFModel: TunableTFModel[
-        Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+        Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
         Tensor, Output, DataType.Aux[Double], DataType, Shape, Output] =
         dtflearn.tunable_tf_model(
           loss_func_gen, hyper_params,
           tfdata.training_dataset,
           fitness_function,
           architecture,
-          (FLOAT64, input_shape),
+          (FLOAT32, input_shape),
           (FLOAT64, Shape(causal_window)),
           tf.learn.Cast("TrainInput", FLOAT64),
           train_config_tuning,
           data_split_func = Some(DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextGaussian() <= 0.7)),
           data_processing = tf_data_ops,
-          inMemory = false
+          inMemory = false,
+          concatOp = Some(stackOperation)
       )
 
       val gs = new GridSearch[tunableTFModel.type](tunableTFModel)
 
+      gs.setPrior(hyper_prior)
+
+      gs.setNumSamples(num_samples)
 
 
       println("--------------------------------------------------------------------")
@@ -832,14 +844,15 @@ package object timelag {
       println("Training final model based on chosen configuration")
 
       val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
-        Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+        Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
         Tensor, Output, DataType.Aux[Double], DataType, Shape, Output
         ](
-        loss_func_gen, architecture, (FLOAT64, input_shape),
+        loss_func_gen, architecture, (FLOAT32, input_shape),
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
         train_config_tuning.copy(stopCriteria =  dtflearn.rel_loss_change_stop(0.005, iterations)),
-        tf_data_ops, inMemory = false
+        tf_data_ops, inMemory = false,
+        concatOp = Some(stackOperation)
       )
 
       val best_model = model_function(config)(tfdata.training_dataset)
