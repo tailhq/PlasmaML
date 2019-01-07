@@ -49,3 +49,6 @@ data/all_results.txt
 .ensime
 *result*.csv
 .vscode
+.metals
+.bloop
+project/.bloop

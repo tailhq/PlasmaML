@@ -819,7 +819,8 @@ package object timelag {
           data_split_func = Some(DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextGaussian() <= 0.7)),
           data_processing = tf_data_ops,
           inMemory = false,
-          concatOp = Some(stackOperation)
+          concatOpI = Some(stackOperation),
+          concatOpT = Some(stackOperation)
       )
 
       val gs = new GridSearch[tunableTFModel.type](tunableTFModel)
@@ -847,10 +848,12 @@ package object timelag {
         Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
         Tensor, Output, DataType.Aux[Double], DataType, Shape, Output
         ](
-        loss_func_gen, arch, (FLOAT32, input_shape),
+        loss_func_generator, arch, (FLOAT32, input_shape),
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
-        train_config_tuning.copy(stopCriteria =  dtflearn.rel_loss_change_stop(0.005, iterations)),
+        train_config_tuning.copy(
+          summaryDir = summaries_top_dir, 
+          stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations)),
         tf_data_ops, inMemory = false,
         concatOpI = Some(stackOperation),
         concatOpT = Some(stackOperation)
@@ -858,16 +861,25 @@ package object timelag {
 
       val best_model = model_function(config)(tfdata.training_dataset)
 
+      best_model.train()
+
       val extract_features = (p: (Tensor, Tensor)) => p._1
       val extract_preds    = (p: (Tensor, (Tensor, Tensor))) => p._2
 
-      val test_predictions = collect_predictions(
-        best_model.infer_coll(tfdata.test_dataset.map(extract_features)).map(extract_preds)
-      )
+      val model_predictions_test = best_model.infer_coll(tfdata.test_dataset.map(extract_features))
+      val model_predictions_train = best_model.infer_coll(tfdata.training_dataset.map(extract_features))
 
-      val train_predictions = collect_predictions(
-        best_model.infer_coll(tfdata.training_dataset.map(extract_features)).map(extract_preds)
-      )
+
+      val test_predictions = model_predictions_test match {
+        case Left(tensor) => tensor
+        case Right(collection) => collect_predictions(collection)
+      }
+      
+
+      val train_predictions = model_predictions_train match {
+        case Left(tensor) => tensor
+        case Right(collection) => collect_predictions(collection)
+      }
 
       val (pred_outputs_train, pred_time_lags_train) = process_predictions(
         train_predictions,
