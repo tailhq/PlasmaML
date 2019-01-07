@@ -397,6 +397,229 @@ package object timelag {
   }
 
 
+  def plot_and_write_results_tuned(results: ExperimentResult[TunedModelRun]): Unit = {
+
+    val (
+      (data, collated_data),
+      (data_test, collated_data_test),
+      tf_data,
+      (metrics_train, metrics_time_lag_train),
+      (metrics_test, metrics_time_lag_test),
+      tf_summary_dir,
+      train_preds,
+      test_preds) = results match {
+        case ExperimentResult(
+          _,
+          (d, cd),
+          (dt, cdt),
+          TunedModelRun(
+          (tf_d, _), _, 
+          (m_train, m_time_lag_train),
+          (m_test, m_time_lag_test),
+          tf_dir,
+          tr_preds,
+          te_preds)) => (
+            (d, cd),
+            (dt, cdt),
+            tf_d,
+            (m_train, m_time_lag_train),
+            (m_test, m_time_lag_test),
+            tf_dir,
+            tr_preds,
+            te_preds
+          )
+      }
+
+    val err_time_lag_test = metrics_time_lag_test.preds.subtract(metrics_time_lag_test.targets)
+
+    val mae_lag = err_time_lag_test
+      .abs.mean()
+      .scalar
+      .asInstanceOf[Double]
+
+    val pred_time_lags_test = metrics_time_lag_test.preds
+
+    print("Mean Absolute Error in time lag = ")
+    pprint.pprintln(mae_lag)
+
+    plot_histogram(pred_time_lags_test, plot_title = "Predicted Time Lags")
+    plot_histogram(err_time_lag_test, plot_title = "Time Lag prediction errors")
+
+    plot_time_series(metrics_test.targets, metrics_test.preds, plot_title = "Test Set Predictions")
+
+    plot_input_output(
+      input = collated_data_test.map(_._2._1),
+      input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+      targets = metrics_test.targets,
+      predictions = metrics_test.preds,
+      xlab = "||x(t)||_2",
+      ylab = "f(x(t))",
+      plot_title = "Input-Output Relationship: Test Data"
+    )
+
+    /*
+    * Now we compare the predictions of the individual predictions
+    * */
+    val num_models = collated_data.head._2._2.length
+
+    val time_lag_max = math.min(num_models, collated_data_test.map(_._2._3).max.toInt)
+
+    val selected_indices = (0 to time_lag_max).filter(_ % 2 == 0)
+
+    //Write the model outputs to disk
+
+    write_model_outputs(train_preds, tf_summary_dir, "train")
+    write_model_outputs(test_preds,  tf_summary_dir, "test")
+
+    val model_preds = test_preds._1.unstack(num_models, axis = 1)
+    val targets     = tfi.stack(tf_data.test_dataset.map((p: (Tensor, Tensor)) => p._2).data.toSeq, axis = 0).unstack(num_models, axis = 1)
+
+    val selected_errors = selected_indices.map(i => model_preds(i)/*.squaredDifference(targets(i)).sqrt*/)
+
+    val probabilities = test_preds._2.unstack(num_models, axis = 1)
+
+    val selected_probabilities = selected_indices.map(probabilities(_))
+
+    /*plot_input_output(
+      input = collated_data_test.map(_._2._1),
+      input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+      predictions = selected_errors :+ metrics_test.targets,
+      xlab = "||x||_2",
+      ylab = "Predictor f_i",
+      plot_legend = selected_indices.map(i => s"Predictor_$i") :+ "Data",
+      plot_title = "Input-Output Relationships: Test Data"
+    )*/
+
+    /*selected_indices.foreach(i => {
+      plot_input_output(
+        input = collated_data_test.map(_._2._1),
+        input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+        predictions = Seq(model_preds(i), targets(i)),
+        xlab = "||x||_2",
+        ylab = "Predictor f_i",
+        plot_legend = Seq(s"Predictor_$i", s"Target_$i"),
+        plot_title = "Input-Output Relationships: Test Data"
+      )
+    })*/
+
+    /*plot_input_output(
+      input = collated_data_test.map(_._2._1),
+      input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+      predictions = selected_probabilities,
+      xlab = "||x||_2",
+      ylab = "p_i",
+      plot_legend = selected_indices.map(i => s"Predictor_$i"),
+      plot_title = "Input-Output/Probability Relationships: Test Data"
+    )*/
+
+
+    plot_time_series(
+      metrics_train.targets,
+      metrics_train.preds, plot_title =
+        "Training Set Predictions")
+
+    /*plot_input_output(
+      input = collated_data.map(_._2._1),
+      input_to_scalar = (t: Tensor) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+      targets = metrics_train.targets,
+      predictions = metrics_train.preds,
+      xlab = "||x||_2",
+      ylab = "f(x(t))",
+      plot_title = "Input-Output Relationship: Training Data"
+    )*/
+
+
+    val err_train     = metrics_train.preds.subtract(metrics_train.targets)
+    val err_lag_train = metrics_time_lag_train.preds.subtract(metrics_time_lag_train.targets)
+
+    val train_err_scatter = plot_scatter(
+      err_train,
+      err_lag_train,
+      xlab = Some("Error in Velocity"),
+      ylab = Some("Error in Time Lag"),
+      plot_title = Some("Training Set Errors; Scatter")
+    )
+
+
+    write_data_set((data, collated_data), tf_summary_dir, "train_data")
+
+    //Write errors in target vs errors in time lag for the training data.
+    write(
+      tf_summary_dir/"train_errors.csv",
+      "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+
+    val train_scatter = plot_scatter(
+      metrics_train.preds,
+      metrics_time_lag_train.preds,
+      xlab = Some("Velocity"),
+      ylab = Some("Time Lag"),
+      plot_title = Some("Training Set; Scatter"))
+
+    hold()
+
+    val train_actual_scatter = plot_scatter(
+      metrics_train.targets,
+      metrics_time_lag_train.targets)
+    legend(Seq("Predictions", "Actual Data"))
+    unhold()
+
+
+    write_predictions_and_gt(train_scatter, train_actual_scatter, tf_summary_dir, "train")
+
+    val err_test     = metrics_test.preds.subtract(metrics_test.targets)
+    val err_lag_test = metrics_time_lag_test.preds.subtract(metrics_time_lag_test.targets)
+
+    val test_err_scatter = plot_scatter(
+      err_test, err_lag_test,
+      xlab = Some("Error in Velocity"),
+      ylab = Some("Error in Time Lag"),
+      plot_title = Some("Test Set Errors; Scatter")
+    )
+
+    //Write errors in target vs errors in time lag for the test data.
+    write(
+      tf_summary_dir/"test_errors.csv",
+      "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
+
+    write_data_set((data_test, collated_data_test), tf_summary_dir, "test_data")
+
+    val test_scatter = plot_scatter(
+      metrics_test.preds,
+      metrics_time_lag_test.preds,
+      xlab = Some("Velocity"),
+      ylab = Some("Time Lag"),
+      plot_title = Some("Test Set; Scatter"))
+
+    hold()
+
+    val test_actual_scatter = plot_scatter(
+      metrics_test.targets,
+      metrics_time_lag_test.targets)
+
+    legend(Seq("Predictions", "Actual Data"))
+    unhold()
+
+    write_predictions_and_gt(test_scatter, test_actual_scatter, tf_summary_dir, "test")
+
+    val script1 = pwd/'helios/'scripts/"visualise_tl_results.R"
+    val script2 = pwd/'helios/'scripts/"visualise_tl_preds.R"
+
+    try {
+      %%('Rscript, script1, tf_summary_dir)
+    } catch {
+      case e: Exception => e.printStackTrace()
+    }
+
+    try {
+      %%('Rscript, script2, tf_summary_dir)
+    } catch {
+      case e: Exception => e.printStackTrace()
+    }
+
+  }
+
+
   //Runs an experiment given some architecture, loss and training parameters.
   def run_exp(
     dataset: TLDATA,
@@ -852,11 +1075,12 @@ package object timelag {
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
         train_config_tuning.copy(
-          summaryDir = summaries_top_dir, 
+          summaryDir = tf_summary_dir, 
           stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations)),
         tf_data_ops, inMemory = false,
         concatOpI = Some(stackOperation),
-        concatOpT = Some(stackOperation)
+        concatOpT = Some(stackOperation), 
+        create_working_dir = None
       )
 
       val best_model = model_function(config)(tfdata.training_dataset)

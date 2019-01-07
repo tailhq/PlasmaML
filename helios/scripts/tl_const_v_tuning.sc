@@ -107,11 +107,11 @@ def main(
   )
 
   val hyper_prior = Map(
-    "prior_wt"    -> lg_p,
-    "error_wt"    -> lg_e,
+    "prior_wt"    -> UniformRV(0.5, 1.5),
+    "error_wt"    -> UniformRV(0.75, 1.5),
     "temperature" -> UniformRV(0.9, 2.0),
     "specificity" -> UniformRV(1.0, 2.0),
-    "reg"         -> lu_reg
+    "reg"         -> UniformRV(math.pow(10d, -4d), math.pow(10d, -2.5d))
   )
 
 
