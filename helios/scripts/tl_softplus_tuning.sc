@@ -49,14 +49,15 @@ def main(
   //Time Lag Computation
   // distance/velocity
   val distance = beta*10
+  //Time Lag Computation
+  // distance/velocity
+  //val distance = beta*10
   val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
     (v: Tensor) => {
 
       val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f
 
-      val noisy_output = out + scala.util.Random.nextGaussian().toFloat
-
-      (distance/noisy_output, noisy_output)
+      (math.log(1 + math.exp((out - 300f)/75f)).toFloat, out + scala.util.Random.nextGaussian().toFloat)
   })
 
   run_model_tuning_cdt(

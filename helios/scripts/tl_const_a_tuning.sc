@@ -40,27 +40,34 @@ def main(
   timelag_pred_strategy: String                = "mode",
   summaries_top_dir: Path                      = home/'tmp): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
-  //Output computation
-  val beta = 100f
   val mo_flag = true
   val prob_timelags = true
 
+  //Output computation
+  val beta = 100f
+  val compute_output = DataPipe(
+    (v: Tensor) =>
+      (
+        v.square.mean().scalar.asInstanceOf[Float]*beta*0.5f/d,
+        beta*0.05f
+      )
+  )
 
   //Time Lag Computation
-  // distance/velocity
+  // 1/2*a*t^2 + u*t - s = 0
+  // t = (-u + sqrt(u*u + 2as))/a
   val distance = beta*10
-  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
-    (v: Tensor) => {
 
-      val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f
-
-      val noisy_output = out + scala.util.Random.nextGaussian().toFloat
-
-      (distance/noisy_output, noisy_output)
+  val compute_time_lag = DataPipe((va: (Float, Float)) => {
+    val (v, a) = va
+    val dt = (math.sqrt(v*v + 2*a*distance).toFloat - v)/a
+    val vf = math.sqrt(v*v + 2f*a*distance).toFloat
+    (dt, vf + scala.util.Random.nextGaussian().toFloat)
   })
 
+
   run_model_tuning_cdt(
-    compute_output,
+    compute_output > compute_time_lag,
     d, n, sliding_window, noise, noiserot, 
     alpha, train_test_separate, num_neurons, 
     activation_func, iterations, iterations_tuning, 
