@@ -754,10 +754,10 @@ package object timelag {
 
   def run_exp_hyp(
     dataset: (TLDATA, TLDATA),
-    architecture: Layer[Output, (Output, Output)],
+    arch: Layer[Output, (Output, Output)],
     hyper_params: List[String],
-    loss_func_gen: dtflearn.tunable_tf_model.HyperParams => Layer[((Output, Output), Output), Output],
-    fitness_function: DataPipe[DataSet[((Tensor, Tensor), Tensor)], Double],
+    loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output, Output), Output), Output],
+    fitness_func: DataPipe2[(Tensor, Tensor), Tensor, Double],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     iterations: Int               = 150000,
     iterations_tuning: Int        = 20000,
@@ -795,23 +795,23 @@ package object timelag {
 
       val train_config_tuning = dtflearn.model.trainConfig(
         tf_summary_dir, optimizer,
-        dtflearn.rel_loss_change_stop(0.005, iterations/10)
+        dtflearn.rel_loss_change_stop(0.005, iterations_tuning)
       )
 
       val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
 
-      val stackOperation = DataPipe[Iterable[(Tensor, Tensor)], (Tensor, Tensor)](bat =>
-        (tfi.stack(bat.map(_._1).toSeq, axis = -1), tfi.stack(bat.map(_._2).toSeq, axis = -1))
+      val stackOperation = DataPipe[Iterable[Tensor], Tensor](bat =>
+        tfi.stack(bat.toSeq, axis = 0)
       )
 
       val tunableTFModel: TunableTFModel[
         Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
         Tensor, Output, DataType.Aux[Double], DataType, Shape, Output] =
         dtflearn.tunable_tf_model(
-          loss_func_gen, hyper_params,
+          loss_func_generator, hyper_params,
           tfdata.training_dataset,
-          fitness_function,
-          architecture,
+          fitness_func,
+          arch,
           (FLOAT32, input_shape),
           (FLOAT64, Shape(causal_window)),
           tf.learn.Cast("TrainInput", FLOAT64),
@@ -847,12 +847,13 @@ package object timelag {
         Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
         Tensor, Output, DataType.Aux[Double], DataType, Shape, Output
         ](
-        loss_func_gen, architecture, (FLOAT32, input_shape),
+        loss_func_gen, arch, (FLOAT32, input_shape),
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
         train_config_tuning.copy(stopCriteria =  dtflearn.rel_loss_change_stop(0.005, iterations)),
         tf_data_ops, inMemory = false,
-        concatOp = Some(stackOperation)
+        concatOpI = Some(stackOperation),
+        concatOpT = Some(stackOperation)
       )
 
       val best_model = model_function(config)(tfdata.training_dataset)

@@ -131,24 +131,12 @@ def main(
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
-  val fitness_function = DataPipe[DataSet[((Tensor, Tensor), Tensor)], Double](validation_coll => {
+  val fitness_function = DataPipe2[(Tensor, Tensor), Tensor, Double]((preds, targets) => {
 
-    //collect tensors into one big tensor.
-    val get_preds: (((Tensor, Tensor), Tensor)) => Tensor = _._1._1
-    val get_lag_probs: (((Tensor, Tensor), Tensor)) => Tensor = _._1._2
-    val get_targets: (((Tensor, Tensor), Tensor)) => Tensor = _._2
-
-
-
-    val preds = tfi.stack(validation_coll.map(get_preds).data.toSeq, axis = -1)
-    val prob_lags = tfi.stack(validation_coll.map(get_lag_probs).data.toSeq, axis = -1)
-    val targets = tfi.stack(validation_coll.map(get_targets).data.toSeq, axis = -1)
-
-
-    preds
+    preds._1
       .subtract(targets)
       .square
-      .multiply(prob_lags)
+      .multiply(preds._2)
       .sum(axes = 1)
       .mean()
       .scalar
