@@ -5,9 +5,10 @@ import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe._
+import io.github.mandar2812.dynaml.models.{TunableTFModel, TFModel}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
-import io.github.mandar2812.dynaml.tensorflow.{dtf, dtflearn, dtfutils}
-import io.github.mandar2812.dynaml.tensorflow.data.{TFDataSet, DataSet}
+import io.github.mandar2812.dynaml.tensorflow._
+import io.github.mandar2812.dynaml.tensorflow.data.{DataSet, TFDataSet}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
 import io.github.mandar2812.PlasmaML.helios.core._
 import io.github.mandar2812.PlasmaML.helios.data._
@@ -149,6 +150,29 @@ package object helios {
       (ModelOutputSym, Output)]
   }
 
+  case class TunedModelRun[
+  IT, IO, IDA, ID, IS, I, ITT,
+  TT, TO, TDA, TD, TS, T](
+    data_and_scales: (TFDataSet[(IT, TT)], (ReversibleScaler[IT], ReversibleScaler[TT])),
+    model: TFModel[IT, IO, IDA, ID, IS, I, ITT, TT, TO, TDA, TD, TS, T],
+    metrics_train: Option[RegressionMetricsTF],
+    metrics_test: Option[RegressionMetricsTF],
+    summary_dir: Path,
+    training_preds: Option[ITT],
+    test_preds: Option[ITT]) extends
+    ModelRun {
+
+    override type DATA_PATTERN = (IT, TT)
+
+    override type SCALERS = (ReversibleScaler[IT], ReversibleScaler[TT])
+
+    override type MODEL = TFModel[IT, IO, IDA, ID, IS, I, ITT, TT, TO, TDA, TD, TS, T]
+
+    override type ESTIMATOR = dtflearn.SupEstimatorTF[IT, IO, ID, IS, I, TT, TO, TD, TS, T]
+
+    override val estimator: ESTIMATOR = model.estimator
+  }
+
   case class ExperimentType(
     multi_output: Boolean,
     probabilistic_time_lags: Boolean,
@@ -159,6 +183,11 @@ package object helios {
     train_data: DATA,
     test_data: DATA,
     results: SupervisedModelRun[X, Y, ModelOutput, ModelOutputSym])
+
+  case class Experiment[Run <: ModelRun](
+    config: ExperimentType,
+    results: Run
+  )
 
 
   /**

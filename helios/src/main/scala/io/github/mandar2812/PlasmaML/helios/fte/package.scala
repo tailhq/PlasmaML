@@ -2,27 +2,36 @@ package io.github.mandar2812.PlasmaML.helios
 
 import ammonite.ops._
 import org.joda.time._
+import breeze.stats._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.evaluation._
+import io.github.mandar2812.dynaml.optimization._
+import io.github.mandar2812.dynaml.models.{TunableTFModel, TFModel}
 import io.github.mandar2812.dynaml.tensorflow.data._
 import io.github.mandar2812.dynaml.tensorflow.utils._
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
-import org.platanios.tensorflow.api._
+import io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
-import _root_.io.github.mandar2812.PlasmaML.utils.{L2Regularization, L1Regularization}
+import _root_.io.github.mandar2812.PlasmaML.utils.{L1Regularization, L2Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
+import breeze.stats.distributions.ContinuousDistr
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
-import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.ops.variables.RandomNormalInitializer
+import org.platanios.tensorflow.api.types.DataType
+import org.platanios.tensorflow.api._
 
 package object fte {
 
-  //Customized layer based on Bala et. al
+  type ModelRunTuning = TunedModelRun[
+    Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+    Tensor, Output, DataType.Aux[Double], DataType, Shape, Output]
 
+  //Customized layer based on Bala et. al
   val quadratic_fit = (name: String) => new Layer[Output, Output](name) {
     override val layerType = s"LocalQuadraticFit"
 
@@ -632,6 +641,272 @@ package object fte {
 
   }
 
+
+  def exp_cdt_tuning(
+    arch: Layer[Output, (Output, Output)],
+    hyper_params: List[String],
+    loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output, Output), Output), Output],
+    fitness_func: DataPipe2[(Tensor, Tensor), Tensor, Double],
+    hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
+    iterations: Int                              = 150000,
+    iterations_tuning: Int                       = 20000,
+    num_samples: Int                             = 20,
+    miniBatch: Int                               = 32,
+    optimizer: tf.train.Optimizer                = tf.train.Adam(0.001),
+    year_range: Range                            = 2011 to 2017,
+    test_year: Int                               = 2015,
+    sw_threshold: Double                         = 700d,
+    deltaT: (Int, Int)                           = (48, 72),
+    deltaTFTE: Int                               = 5,
+    fteStep: Int                                 = 1,
+    latitude_limit: Double                       = 40d,
+    divergence: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
+    log_scale_fte: Boolean                       = false,
+    log_scale_omni: Boolean                      = false,
+    conv_flag: Boolean                           = false,
+    fte_data_path: Path                          = home/'Downloads/'fte,
+    summary_top_dir: Path                        = home/'tmp): helios.Experiment[ModelRunTuning] = {
+
+
+    val mo_flag: Boolean = true
+    val prob_timelags: Boolean = true
+
+
+    val sum_dir_prefix = if(conv_flag) "fte_omni_conv" else "fte_omni"
+
+    val dt = DateTime.now()
+
+    val summary_dir_index = {
+      if(mo_flag) sum_dir_prefix+"_mo_tl_"+dt.toString("YYYY-MM-dd-HH-mm")
+      else sum_dir_prefix+"_tl_"+dt.toString("YYYY-MM-dd-HH-mm")
+    }
+
+    val tf_summary_dir     = summary_top_dir/summary_dir_index
+
+    val (test_start, test_end) = (
+      new DateTime(test_year, 1, 1, 0, 0),
+      new DateTime(test_year, 12, 31, 23, 59)
+    )
+
+    val (start, end) = (
+      new DateTime(year_range.min, 1, 1, 0, 0),
+      new DateTime(year_range.max, 12, 31, 23, 59))
+
+
+    if(FTExperiment.fte_data.size == 0 ||
+      FTExperiment.config.fte_config != FTExperiment.FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE, fteStep,
+        latitude_limit,
+        log_scale_fte)
+    ) {
+
+      println("\nProcessing FTE Data")
+
+      FTExperiment.fte_data = load_fte_data(
+        fte_data_path, carrington_rotations,
+        log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
+
+      FTExperiment.config = FTExperiment.config.copy(fte_config = FTExperiment.FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE, fteStep, latitude_limit,
+        log_scale_fte))
+
+
+
+    } else {
+      println("\nUsing cached FTE data sets")
+    }
+
+
+    if(
+      FTExperiment.omni_data.size == 0 ||
+        FTExperiment.config.omni_config != FTExperiment.OMNIConfig(deltaT, log_scale_omni)) {
+
+      println("Processing OMNI solar wind data")
+      FTExperiment.omni_data = load_solar_wind_data(start, end)(deltaT, log_scale_omni)
+
+      FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig(deltaT, log_scale_omni))
+
+    } else {
+      println("\nUsing cached OMNI data set")
+    }
+
+    val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
+      if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
+        false
+      else
+        true
+    )
+
+    println("Constructing joined data set")
+    val dataset = FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
+
+    val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
+
+    val input_shape = dataset.training_dataset.data.head._2._1.shape
+
+    val data_size = dataset.training_dataset.size
+
+
+    println("Scaling data attributes")
+    val (scaled_data, scalers): SC_DATA = scale_dataset(
+      dataset.copy(
+        training_dataset = dataset.training_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2),
+        test_dataset = dataset.test_dataset.map((p: (DateTime, (Tensor, Tensor))) => p._2)
+      )
+    )
+
+
+    val train_config_tuning = dtflearn.model.trainConfig(
+      tf_summary_dir, optimizer,
+      dtflearn.rel_loss_change_stop(0.005, iterations_tuning)
+    )
+
+
+    val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
+
+    val stackOperation = DataPipe[Iterable[Tensor], Tensor](bat =>
+      tfi.stack(bat.toSeq, axis = 0)
+    )
+
+    val tunableTFModel: TunableTFModel[
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, Output] =
+      dtflearn.tunable_tf_model(
+        loss_func_generator, hyper_params,
+        scaled_data.training_dataset,
+        fitness_func,
+        arch,
+        (FLOAT64, input_shape),
+        (FLOAT64, Shape(causal_window)),
+        tf.learn.Cast("TrainInput", FLOAT64),
+        train_config_tuning,
+        data_split_func = Some(DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextGaussian() <= 0.7)),
+        data_processing = tf_data_ops,
+        inMemory = false,
+        concatOpI = Some(stackOperation),
+        concatOpT = Some(stackOperation)
+      )
+
+
+
+    val gs = new GridSearch[tunableTFModel.type](tunableTFModel)
+
+    gs.setPrior(hyper_prior)
+
+    gs.setNumSamples(num_samples)
+
+
+    println("--------------------------------------------------------------------")
+    println("Initiating model tuning")
+    println("--------------------------------------------------------------------")
+
+    val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
+
+    println("--------------------------------------------------------------------")
+    println("Model tuning complete")
+    println("Chosen configuration:")
+    pprint.pprintln(config)
+    println("--------------------------------------------------------------------")
+
+    println("Training final model based on chosen configuration")
+
+    val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, Output
+      ](
+      loss_func_generator, arch, (FLOAT64, input_shape),
+      (FLOAT64, Shape(causal_window)),
+      tf.learn.Cast("TrainInput", FLOAT64),
+      train_config_tuning.copy(
+        summaryDir = tf_summary_dir,
+        stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations)),
+      tf_data_ops, inMemory = false,
+      concatOpI = Some(stackOperation),
+      concatOpT = Some(stackOperation),
+      create_working_dir = None
+    )
+
+    val best_model = model_function(config)(scaled_data.training_dataset)
+
+    best_model.train()
+
+    val extract_features = (p: (Tensor, Tensor)) => p._1
+    val model_predictions_test = best_model.infer_coll(scaled_data.test_dataset.map(extract_features))
+
+    val predictions = model_predictions_test match {
+      case Left(tensor) => tensor
+      case Right(collection) => timelag.utils.collect_predictions(collection)
+    }
+
+    val nTest = scaled_data.test_dataset.size
+
+    val index_times = Tensor(
+      (0 until causal_window).map(_.toDouble)
+    ).reshape(
+      Shape(causal_window)
+    )
+
+    val pred_time_lags_test: Tensor = if(prob_timelags) {
+      val unsc_probs = predictions._2
+
+      unsc_probs.topK(1)._2.reshape(Shape(nTest)).cast(FLOAT64)
+
+    } else predictions._2
+
+    val pred_targets: Tensor = if (mo_flag) {
+      val all_preds =
+        if (prob_timelags) scalers._2.i(predictions._1)
+        else scalers._2.i(predictions._1)
+
+      val repeated_times = tfi.stack(Seq.fill(causal_window)(pred_time_lags_test.floor), axis = -1)
+
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
+
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
+    } else {
+      scalers._2(0).i(predictions._1)
+    }
+
+    val test_labels = scaled_data.test_dataset.data.map(_._2).map(t => dtfutils.toDoubleSeq(t).toSeq).toSeq
+
+    val actual_targets = test_labels.zipWithIndex.map(zi => {
+      val (z, index) = zi
+      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
+
+      z(time_lag)
+    })
+
+    val (final_predictions, final_targets) =
+      if(log_scale_omni) (pred_targets.exp, actual_targets.map(math.exp))
+      else (pred_targets, actual_targets)
+
+    val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
+
+    val experiment_config = helios.ExperimentType(mo_flag, prob_timelags, "mode")
+
+    val results = helios.TunedModelRun(
+      (scaled_data, scalers),
+      best_model, None,
+      Some(reg_metrics),
+      tf_summary_dir, None,
+      Some((final_predictions, pred_time_lags_test))
+    )
+
+    helios.write_predictions(
+      dtfutils.toDoubleSeq(final_predictions).toSeq,
+      final_targets,
+      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+      tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
+
+
+    helios.Experiment(
+      experiment_config,
+      results
+    )
+
+  }
 
   def exp_single_output(
     num_neurons: Seq[Int] = Seq(30, 30),
