@@ -1018,7 +1018,14 @@ package object timelag {
 
       val train_config_tuning = dtflearn.model.trainConfig(
         tf_summary_dir, optimizer,
-        dtflearn.rel_loss_change_stop(0.005, iterations_tuning)
+        dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
+        Some(
+          dtflearn.model._train_hooks(
+            tf_summary_dir,
+            iterations_tuning/3,
+            iterations_tuning/3,
+            iterations_tuning)
+        )
       )
 
       val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
@@ -1076,7 +1083,14 @@ package object timelag {
         tf.learn.Cast("TrainInput", FLOAT64),
         train_config_tuning.copy(
           summaryDir = tf_summary_dir, 
-          stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations)),
+          stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
+          trainHooks = Some(
+            dtflearn.model._train_hooks(
+              tf_summary_dir,
+              iterations/3,
+              iterations/3,
+              iterations/2)
+          )),
         tf_data_ops, inMemory = false,
         concatOpI = Some(stackOperation),
         concatOpT = Some(stackOperation), 
