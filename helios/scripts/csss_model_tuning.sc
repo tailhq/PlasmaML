@@ -162,6 +162,7 @@ def apply(
     optimizer = optimization_algo,
     miniBatch = batch_size,
     iterations = max_iterations,
+    num_samples = num_samples,
     iterations_tuning = max_iterations_tuning,
     latitude_limit = crop_latitude,
     deltaTFTE = history_fte,
