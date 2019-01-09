@@ -7,7 +7,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.evaluation._
 import io.github.mandar2812.dynaml.optimization._
-import io.github.mandar2812.dynaml.models.{TunableTFModel, TFModel}
+import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
 import io.github.mandar2812.dynaml.tensorflow.data._
 import io.github.mandar2812.dynaml.tensorflow.utils._
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtflearn, dtfutils}
@@ -24,6 +24,7 @@ import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.ops.variables.RandomNormalInitializer
 import org.platanios.tensorflow.api.types.DataType
 import org.platanios.tensorflow.api._
+import _root_.io.github.mandar2812.dynaml.models.TunableTFModel.HyperParams
 
 package object fte {
 
@@ -757,17 +758,30 @@ package object fte {
       )
     )
 
+    val train_config_tuning =
+      dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
+        DataPipe((p: Path) => dtflearn.model.trainConfig(
+          p, optimizer,
+        dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
+        Some(
+          dtflearn.model._train_hooks(
+            p,
+            iterations_tuning/3,
+            iterations_tuning/3,
+            iterations_tuning)))
+        )
 
-    val train_config_tuning = dtflearn.model.trainConfig(
-      tf_summary_dir, optimizer,
-      dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
-      Some(
-        dtflearn.model._train_hooks(
-          tf_summary_dir,
-          iterations_tuning/3,
-          iterations_tuning/3,
-          iterations_tuning)
-      )
+    val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
+      dtflearn.model.trainConfig(
+        summaryDir = tf_summary_dir,
+        stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
+        trainHooks = Some(
+          dtflearn.model._train_hooks(
+            tf_summary_dir,
+            iterations/3,
+            iterations/3,
+            iterations/2)
+        ))
     )
 
 
@@ -788,7 +802,7 @@ package object fte {
         (FLOAT64, input_shape),
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
-        train_config_tuning,
+        train_config_tuning(tf_summary_dir),
         data_split_func = Some(DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextGaussian() <= 0.7)),
         data_processing = tf_data_ops,
         inMemory = false,
@@ -821,25 +835,14 @@ package object fte {
 
     val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
       Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
-      Tensor, Output, DataType.Aux[Double], DataType, Shape, Output
-      ](
+      Tensor, Output, DataType.Aux[Double], DataType, Shape, Output](
       loss_func_generator, arch, (FLOAT64, input_shape),
       (FLOAT64, Shape(causal_window)),
       tf.learn.Cast("TrainInput", FLOAT64),
-      train_config_tuning.copy(
-        summaryDir = tf_summary_dir,
-        stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
-        trainHooks = Some(
-          dtflearn.model._train_hooks(
-            tf_summary_dir,
-            iterations/3,
-            iterations/3,
-            iterations/2)
-        )),
-      tf_data_ops, inMemory = false,
+      train_config_test, tf_data_ops,
+      inMemory = false,
       concatOpI = Some(stackOperation),
-      concatOpT = Some(stackOperation),
-      create_working_dir = None
+      concatOpT = Some(stackOperation)
     )
 
     val best_model = model_function(config)(scaled_data.training_dataset)

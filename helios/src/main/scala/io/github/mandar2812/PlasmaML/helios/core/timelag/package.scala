@@ -1016,16 +1016,30 @@ package object timelag {
 
       val tf_summary_dir     = summaries_top_dir/summary_dir_index
 
-      val train_config_tuning = dtflearn.model.trainConfig(
-        tf_summary_dir, optimizer,
-        dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
-        Some(
-          dtflearn.model._train_hooks(
-            tf_summary_dir,
-            iterations_tuning/3,
-            iterations_tuning/3,
-            iterations_tuning)
-        )
+      val train_config_tuning =
+        dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
+          DataPipe((p: Path) => dtflearn.model.trainConfig(
+            p, optimizer,
+            dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
+            Some(
+              dtflearn.model._train_hooks(
+                p,
+                iterations_tuning/3,
+                iterations_tuning/3,
+                iterations_tuning)))
+          )
+
+      val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
+        dtflearn.model.trainConfig(
+          summaryDir = tf_summary_dir,
+          stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
+          trainHooks = Some(
+            dtflearn.model._train_hooks(
+              tf_summary_dir,
+              iterations/3,
+              iterations/3,
+              iterations/2)
+          ))
       )
 
       val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
@@ -1045,7 +1059,7 @@ package object timelag {
           (FLOAT32, input_shape),
           (FLOAT64, Shape(causal_window)),
           tf.learn.Cast("TrainInput", FLOAT64),
-          train_config_tuning,
+          train_config_tuning(tf_summary_dir),
           data_split_func = Some(DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextGaussian() <= 0.7)),
           data_processing = tf_data_ops,
           inMemory = false,
@@ -1081,20 +1095,10 @@ package object timelag {
         loss_func_generator, arch, (FLOAT32, input_shape),
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
-        train_config_tuning.copy(
-          summaryDir = tf_summary_dir, 
-          stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
-          trainHooks = Some(
-            dtflearn.model._train_hooks(
-              tf_summary_dir,
-              iterations/3,
-              iterations/3,
-              iterations/2)
-          )),
+        train_config_test,
         tf_data_ops, inMemory = false,
         concatOpI = Some(stackOperation),
-        concatOpT = Some(stackOperation), 
-        create_working_dir = None
+        concatOpT = Some(stackOperation)
       )
 
       val best_model = model_function(config)(tfdata.training_dataset)
@@ -1102,7 +1106,6 @@ package object timelag {
       best_model.train()
 
       val extract_features = (p: (Tensor, Tensor)) => p._1
-      val extract_preds    = (p: (Tensor, (Tensor, Tensor))) => p._2
 
       val model_predictions_test = best_model.infer_coll(tfdata.test_dataset.map(extract_features))
       val model_predictions_train = best_model.infer_coll(tfdata.training_dataset.map(extract_features))
