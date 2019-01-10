@@ -829,12 +829,18 @@ package object fte {
     val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
 
     println("--------------------------------------------------------------------")
-    println("Model tuning complete")
+    println("\nModel tuning complete")
     println("Chosen configuration:")
     pprint.pprintln(config)
     println("--------------------------------------------------------------------")
 
     println("Training final model based on chosen configuration")
+
+    write(
+      tf_summary_dir/"state.csv",
+      config.keys.mkString(start = "", sep = ",", end = "\n") +
+        config.values.mkString(start = "", sep = ",", end = "")
+    )
 
     val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
       Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
