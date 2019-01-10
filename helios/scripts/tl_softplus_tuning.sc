@@ -25,7 +25,7 @@ def main(
   num_samples: Int                             = 20,
   miniBatch: Int                               = 32,
   optimizer: Optimizer                         = tf.train.AdaDelta(0.01),
-  sum_dir_prefix: String                       = "const_v",
+  sum_dir_prefix: String                       = "softplus",
   prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   dist_type: String                            = "default",
   timelag_pred_strategy: String                = "mode",
