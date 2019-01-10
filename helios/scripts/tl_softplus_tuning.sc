@@ -29,7 +29,8 @@ def main(
   prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   dist_type: String                            = "default",
   timelag_pred_strategy: String                = "mode",
-  summaries_top_dir: Path                      = home/'tmp): timelag.ExperimentResult[timelag.TunedModelRun] = {
+  summaries_top_dir: Path                      = home/'tmp,
+  hyp_opt_iterations: Option[Int]              = Some(5)): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
   //Output computation
   val beta = 100f
@@ -58,6 +59,6 @@ def main(
     activation_func, iterations, iterations_tuning, 
     num_samples, miniBatch, optimizer, sum_dir_prefix, 
     prior_type, dist_type, timelag_pred_strategy, 
-    summaries_top_dir
+    summaries_top_dir, hyp_opt_iterations
   )
 }
