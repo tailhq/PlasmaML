@@ -1,12 +1,9 @@
 import _root_.io.github.mandar2812.dynaml.tensorflow._
-import _root_.io.github.mandar2812.dynaml.tensorflow.data.DataSet
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.DynaMLPipe
 import _root_.io.github.mandar2812.dynaml.analysis._
-import _root_.io.github.mandar2812.dynaml.analysis.implicits._
-import _root_.io.github.mandar2812.dynaml.models.TunableTFModel
 import _root_.spire.implicits._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.helios
@@ -37,7 +34,8 @@ def apply(
   prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   dist_type: String                            = "default",
   timelag_pred_strategy: String                = "mode",
-  summaries_top_dir: Path                      = home/'tmp): timelag.ExperimentResult[timelag.TunedModelRun] = {
+  summaries_top_dir: Path                      = home/'tmp,
+  hyp_opt_iterations: Option[Int]              = Some(5)): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
   //Output computation
   val beta = 100f
@@ -150,6 +148,7 @@ def apply(
     miniBatch, sum_dir_prefix,
     mo_flag, prob_timelags,
     timelag_pred_strategy,
-    summaries_top_dir)
+    summaries_top_dir,
+    hyp_opt_iterations = hyp_opt_iterations)
 
 }

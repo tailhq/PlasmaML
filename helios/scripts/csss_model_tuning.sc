@@ -35,7 +35,8 @@ def apply(
   num_samples: Int                                  = 20,
   batch_size: Int                                   = 32,
   optimization_algo: tf.train.Optimizer             = tf.train.Adam(0.01),
-  summary_dir: Path                                 = home/'tmp): helios.Experiment[fte.ModelRunTuning] = {
+  summary_dir: Path                                 = home/'tmp,
+  hyp_opt_iterations: Option[Int]                   = Some(5)): helios.Experiment[fte.ModelRunTuning] = {
 
 
   val num_pred_dims = timelag.utils.get_num_output_dims(
@@ -171,5 +172,6 @@ def apply(
     log_scale_omni = log_scale_omni,
     deltaT = causal_window,
     divergence = divergence_term,
-    summary_top_dir = summary_dir)
+    summary_top_dir = summary_dir,
+    hyp_opt_iterations = hyp_opt_iterations)
 }

@@ -982,16 +982,17 @@ package object timelag {
     loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output, Output), Output), Output],
     fitness_func: DataPipe2[(Tensor, Tensor), Tensor, Double],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
-    iterations: Int               = 150000,
-    iterations_tuning: Int        = 20000,
-    num_samples: Int              = 20,
-    optimizer: Optimizer          = tf.train.AdaDelta(0.01),
-    miniBatch: Int                = 512,
-    sum_dir_prefix: String        = "",
-    mo_flag: Boolean              = false,
-    prob_timelags: Boolean        = false,
-    timelag_pred_strategy: String = "mode",
-    summaries_top_dir: Path       = home/'tmp): ExperimentResult[TunedModelRun] = {
+    iterations: Int                 = 150000,
+    iterations_tuning: Int          = 20000,
+    num_samples: Int                = 20,
+    optimizer: Optimizer            = tf.train.AdaDelta(0.01),
+    miniBatch: Int                  = 512,
+    sum_dir_prefix: String          = "",
+    mo_flag: Boolean                = false,
+    prob_timelags: Boolean          = false,
+    timelag_pred_strategy: String   = "mode",
+    summaries_top_dir: Path         = home/'tmp,
+    hyp_opt_iterations: Option[Int] = Some(5)): ExperimentResult[TunedModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
@@ -1067,11 +1068,13 @@ package object timelag {
           concatOpT = Some(stackOperation)
       )
 
-      val gs = new GridSearch[tunableTFModel.type](tunableTFModel)
+      val gs = new CoupledSimulatedAnnealing[tunableTFModel.type](tunableTFModel)
 
       gs.setPrior(hyper_prior)
 
       gs.setNumSamples(num_samples)
+
+      gs.setMaxIterations(hyp_opt_iterations.getOrElse(5))
 
 
       println("--------------------------------------------------------------------")

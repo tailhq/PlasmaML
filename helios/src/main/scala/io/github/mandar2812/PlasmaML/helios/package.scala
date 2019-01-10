@@ -417,7 +417,7 @@ package object helios {
 
     val tf_summary_dir = tempdir/resDirName
 
-    val load_image_into_tensor = data.read_image >
+    val load_image_into_tensor = read_image >
       preprocess_image >
       image_to_bytearr >
       DataPipe(
@@ -563,7 +563,7 @@ package object helios {
     * */
 
 
-    val image_into_tensor = data.read_image >
+    val image_into_tensor = read_image >
       preprocess_image >
       image_to_bytearr >
       DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
@@ -778,7 +778,7 @@ package object helios {
     *
     * */
 
-    val load_image_into_tensor = data.read_image >
+    val load_image_into_tensor = read_image >
       preprocess_image >
       image_to_bytearr >
       /*data.image_to_tensor(
@@ -1009,7 +1009,7 @@ package object helios {
             .reverse
             .head
 
-        val processing_for_channel = data.read_image > preprocess_image(kv._1) > images_to_bytes(kv._1)
+        val processing_for_channel = read_image > preprocess_image(kv._1) > images_to_bytes(kv._1)
 
         if (first_non_corrupted_file._1 > 0) Some(processing_for_channel(first_non_corrupted_file._2)) else None
 

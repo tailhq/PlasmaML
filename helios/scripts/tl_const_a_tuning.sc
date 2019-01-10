@@ -1,16 +1,7 @@
-import _root_.io.github.mandar2812.dynaml.tensorflow._
-import _root_.io.github.mandar2812.dynaml.tensorflow.data.DataSet
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
-import _root_.io.github.mandar2812.dynaml.probability._
-import _root_.io.github.mandar2812.dynaml.DynaMLPipe
-import _root_.io.github.mandar2812.dynaml.analysis._
-import _root_.io.github.mandar2812.dynaml.analysis.implicits._
-import _root_.io.github.mandar2812.dynaml.models.TunableTFModel
-import _root_.spire.implicits._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.helios
-import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.ammonite.ops._
 import org.platanios.tensorflow.api._

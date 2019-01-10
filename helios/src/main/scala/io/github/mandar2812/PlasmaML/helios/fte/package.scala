@@ -666,7 +666,8 @@ package object fte {
     log_scale_omni: Boolean                      = false,
     conv_flag: Boolean                           = false,
     fte_data_path: Path                          = home/'Downloads/'fte,
-    summary_top_dir: Path                        = home/'tmp): helios.Experiment[ModelRunTuning] = {
+    summary_top_dir: Path                        = home/'tmp,
+    hyp_opt_iterations: Option[Int]              = Some(5)): helios.Experiment[ModelRunTuning] = {
 
 
     val mo_flag: Boolean = true
@@ -812,11 +813,13 @@ package object fte {
 
 
 
-    val gs = new GridSearch[tunableTFModel.type](tunableTFModel)
+    val gs = new CoupledSimulatedAnnealing[tunableTFModel.type](tunableTFModel)
 
     gs.setPrior(hyper_prior)
 
     gs.setNumSamples(num_samples)
+
+    gs.setMaxIterations(hyp_opt_iterations.getOrElse(5))
 
 
     println("--------------------------------------------------------------------")
