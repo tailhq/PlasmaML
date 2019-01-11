@@ -84,7 +84,7 @@ def main(
       compute_output, d, size_test, noise, noiserot,
       alpha, sliding_window)
 
-    timelag.run_exp2(
+    timelag.run_exp_joint(
       (dataset, dataset_test), architecture, loss,
       iterations, optimizer,
       miniBatch, sum_dir_prefix,

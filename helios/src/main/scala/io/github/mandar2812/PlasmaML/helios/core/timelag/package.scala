@@ -642,7 +642,7 @@ package object timelag {
     val num_test = collated_data.length - num_training
 
 
-    run_exp2(
+    run_exp_joint(
       (
         (data.take(num_training), collated_data.take(num_training)),
         (data.takeRight(num_test), collated_data.takeRight(num_test))
@@ -655,7 +655,45 @@ package object timelag {
   }
 
 
-  def run_exp2(
+  /**
+    * <h4>Causal Time Lag: Joint Inference</h4>
+    *
+    * Runs a model train-evaluation experiment. The model
+    * is trained to predict output labels for the entire
+    * causal window and a prediction for the causal time lag link
+    * between multi-dimensional input time series x(t) and a
+    * one dimensional output series y(t).
+    *
+    * @param dataset The training and test data tuple, each one of
+    *                type [[TLDATA]].
+    * @param architecture The neural architecture making the predictions.
+    * @param loss The loss function used to train the models, see the [[helios.learn]]
+    *             package for the kind of loss functions implemented.
+    *
+    * @param iterations The max number of training iterations to run.
+    * @param optimizer The optimization algorithm to use for training
+    *                  model parameters.
+    * @param miniBatch Size of one data batch, used for gradient based learning.
+    * @param sum_dir_prefix The string prefix given to the model's summary/results
+    *                       directory.
+    * @param mo_flag If the model making one prediction for the entire causal window, then
+    *                set to false. If the model is making one prediction for each output
+    *                in the causal window, set to true.
+    * @param prob_timelags If the model is making probabilisitc prediction of the causal
+    *                      time lag, then set to true.
+    * @param timelag_pred_strategy In case of probabilistic time lag prediction, how
+    *                              should the target be chosen. Defaults to "mode", meaning
+    *                              the most likely output in the prediction is given
+    *                              as the target prediction.
+    *
+    * @param summaries_top_dir The top level directory under which the model summary directory
+    *                          will be created, defaults to ~/tmp
+    *
+    * @return An [[ExperimentResult]] object which contains
+    *         the evaluation results of type [[JointModelRun]]
+    *
+    * */
+  def run_exp_joint(
     dataset: (TLDATA, TLDATA),
     architecture: Layer[Output, (Output, Output)],
     loss: Layer[((Output, Output), Output), Output],
@@ -786,7 +824,48 @@ package object timelag {
 
   }
 
-  def run_exp3(
+  /**
+    * <h4>Causal Time Lag: Stage Wise Inference</h4>
+    *
+    * Runs a model train-evaluation experiment. The model
+    * is trained in two stages (each with a different model and architecture).
+    *
+    * <ol>
+    *   <li>Train to predict output labels</li>
+    *   <li>Train model for predicting the causal time lag link</li>
+    * </ol>
+    *
+    * @param dataset The training and test data tuple, each one of
+    *                type [[TLDATA]].
+    * @param architecture_i The neural architecture making the output predictions.
+    * @param architecture_ii The neural architecture making the time lag predictions.
+    * @param loss_i The loss function used to train the model I,  see [[helios.learn.cdt_i]]
+    * @param loss_ii The loss function used to train the model II, see [[helios.learn.cdt_ii]]
+    *
+    * @param iterations The max number of training iterations to run.
+    * @param optimizer The optimization algorithm to use for training
+    *                  model parameters.
+    * @param miniBatch Size of one data batch, used for gradient based learning.
+    * @param sum_dir_prefix The string prefix given to the model's summary/results
+    *                       directory.
+    * @param mo_flag If the model making one prediction for the entire causal window, then
+    *                set to false. If the model is making one prediction for each output
+    *                in the causal window, set to true.
+    * @param prob_timelags If the model is making probabilisitc prediction of the causal
+    *                      time lag, then set to true.
+    * @param timelag_pred_strategy In case of probabilistic time lag prediction, how
+    *                              should the target be chosen. Defaults to "mode", meaning
+    *                              the most likely output in the prediction is given
+    *                              as the target prediction.
+    *
+    * @param summaries_top_dir The top level directory under which the model summary directory
+    *                          will be created, defaults to ~/tmp
+    *
+    * @return An [[ExperimentResult]] object which contains
+    *         the evaluation results of type [[StageWiseModelRun]]
+    *
+    * */
+  def run_exp_stage_wise(
     dataset: (TLDATA, TLDATA),
     architecture_i: Layer[Output, Output],
     architecture_ii: Layer[Output, Output],
@@ -975,16 +1054,66 @@ package object timelag {
     exp_results
   }
 
+  /**
+    * <h4>Causal Time Lag: Joint Inference</h4>
+    * <h5>Hyper-parameter Tuning</h5>
+    *
+    * Runs a model train-tune-evaluation experiment.
+    *
+    * The model is trained to predict output labels for the entire
+    * causal window and a prediction for the causal time lag link
+    * between multi-dimensional input time series x(t) and a
+    * one dimensional output series y(t).
+    *
+    * The hyper-parameters of the loss function are determined using
+    * hyper-parameter optimization algorithms such as [[GridSearch]] and
+    * [[CoupledSimulatedAnnealing]].
+    *
+    * @param dataset The training and test data tuple, each one of
+    *                type [[TLDATA]].
+    * @param architecture The neural architecture making the predictions.
+    * @param loss_func_generator A function which takes the hyper-parameters
+    *                            [[dtflearn.tunable_tf_model.HyperParams]] and returns
+    *                            an instantiated loss function.
+    * @param iterations The max number of training iterations to run.
+    * @param iterations_tuning The max number of iterations of training to run for each model instance
+    *                          during the tuning process.
+    * @param optimizer The optimization algorithm to use for training
+    *                  model parameters.
+    * @param miniBatch Size of one data batch, used for gradient based learning.
+    * @param sum_dir_prefix The string prefix given to the model's summary/results
+    *                       directory.
+    * @param mo_flag If the model making one prediction for the entire causal window, then
+    *                set to false. If the model is making one prediction for each output
+    *                in the causal window, set to true.
+    * @param prob_timelags If the model is making probabilisitc prediction of the causal
+    *                      time lag, then set to true.
+    * @param timelag_pred_strategy In case of probabilistic time lag prediction, how
+    *                              should the target be chosen. Defaults to "mode", meaning
+    *                              the most likely output in the prediction is given
+    *                              as the target prediction.
+    * @param summaries_top_dir The top level directory under which the model summary directory
+    *                          will be created, defaults to ~/tmp
+    * @param num_samples The number of hyper-parameter samples to generate from
+    *                    the hyper-parameter prior distribution.
+    * @param hyper_optimizer The hyper parameter optimization algorithm to use,
+    *                        either "gs" (grid search) or "csa" (coupled simulated annealing).
+    * @param hyp_opt_iterations If `hyper_optimizer` is set to "csa", then this parameter is used
+    *                           for setting the number of csa iterations.
+    *
+    * @return An [[ExperimentResult]] object which contains
+    *         the evaluation results of type [[TunedModelRun]]
+    *
+    * */
   def run_exp_hyp(
     dataset: (TLDATA, TLDATA),
-    arch: Layer[Output, (Output, Output)],
+    architecture: Layer[Output, (Output, Output)],
     hyper_params: List[String],
     loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output, Output), Output), Output],
     fitness_func: DataPipe2[(Tensor, Tensor), Tensor, Double],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     iterations: Int                 = 150000,
     iterations_tuning: Int          = 20000,
-    num_samples: Int                = 20,
     optimizer: Optimizer            = tf.train.AdaDelta(0.01),
     miniBatch: Int                  = 512,
     sum_dir_prefix: String          = "",
@@ -992,6 +1121,8 @@ package object timelag {
     prob_timelags: Boolean          = false,
     timelag_pred_strategy: String   = "mode",
     summaries_top_dir: Path         = home/'tmp,
+    num_samples: Int                = 20,
+    hyper_optimizer: String         = "gs",
     hyp_opt_iterations: Option[Int] = Some(5)): ExperimentResult[TunedModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
@@ -1056,7 +1187,7 @@ package object timelag {
           loss_func_generator, hyper_params,
           tfdata.training_dataset,
           fitness_func,
-          arch,
+          architecture,
           (FLOAT32, input_shape),
           (FLOAT64, Shape(causal_window)),
           tf.learn.Cast("TrainInput", FLOAT64),
@@ -1068,14 +1199,21 @@ package object timelag {
           concatOpT = Some(stackOperation)
       )
 
-      val gs = new CoupledSimulatedAnnealing[tunableTFModel.type](tunableTFModel)
+      val gs = hyper_optimizer match {
+        case "csa" =>
+          new CoupledSimulatedAnnealing[tunableTFModel.type](
+            tunableTFModel).setMaxIterations(
+            hyp_opt_iterations.getOrElse(5)
+          )
+
+        case "gs"  => new GridSearch[tunableTFModel.type](tunableTFModel)
+
+        case _     => new GridSearch[tunableTFModel.type](tunableTFModel)
+      }
 
       gs.setPrior(hyper_prior)
 
       gs.setNumSamples(num_samples)
-
-      gs.setMaxIterations(hyp_opt_iterations.getOrElse(5))
-
 
       println("--------------------------------------------------------------------")
       println("Initiating model tuning")
@@ -1101,7 +1239,7 @@ package object timelag {
         Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
         Tensor, Output, DataType.Aux[Double], DataType, Shape, Output
         ](
-        loss_func_generator, arch, (FLOAT32, input_shape),
+        loss_func_generator, architecture, (FLOAT32, input_shape),
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
         train_config_test,

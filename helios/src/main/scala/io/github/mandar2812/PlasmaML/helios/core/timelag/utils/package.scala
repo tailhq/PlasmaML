@@ -32,6 +32,8 @@ package object utils {
 
   type PROCDATA    = (HeliosDataSet, (Tensor, Tensor))
 
+  type PROCDATA2   = (TFDataSet[(Tensor, Tensor)], (Tensor, Tensor))
+
   type NNPROP      = (Seq[Int], Seq[Shape], Seq[String], Seq[String])
 
   //Alias for the identity pipe/mapping
@@ -235,12 +237,21 @@ package object utils {
   }
 
   /**
-    * Transform the generated data into a tensorflow compatible object
+    * Creates a data pipeline which takes a [[SLIDINGDATA]] object
+    * and returns a [[PROCDATA]] instance.
+    *
+    * The pipeline splits the data set into training and test then loads
+    * them into a [[HeliosDataSet]] object. Uses the [[data_splits_to_tensors()]]
+    * method.
+    *
+    * The ground truth time lags are also returned.
+    *
+    * @param num_training The size of the training data set.
+    * @param num_test The size of the test data set.
+    * @param sliding_window The size of the causal time window.
+    *
     * */
-  def load_data_into_tensors(
-    num_training: Int,
-    num_test: Int,
-    sliding_window: Int)
+  def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int)
   : DataPipe[SLIDINGDATA, PROCDATA] = DataPipe((data: SLIDINGDATA) => {
 
     require(
@@ -251,8 +262,14 @@ package object utils {
     (data.take(num_training), data.takeRight(num_test))}) >
     data_splits_to_tensors(sliding_window)
 
-  def data_splits_to_tensors(sliding_window: Int)
-  : DataPipe2[SLIDINGDATA, SLIDINGDATA, PROCDATA] =
+  /**
+    * Takes training and test data sets of type [[SLIDINGDATA]]
+    * and loads them in an object of type [[PROCDATA]].
+    *
+    * @param sliding_window The size of the causal time window.
+    *
+    * */
+  def data_splits_to_tensors(sliding_window: Int): DataPipe2[SLIDINGDATA, SLIDINGDATA, PROCDATA] =
     DataPipe2((training_data: SLIDINGDATA, test_data: SLIDINGDATA) => {
 
       val features_train = dtf.stack(training_data.map(_._2._1), axis = 0)
@@ -284,25 +301,40 @@ package object utils {
       (tf_dataset, (train_time_lags, test_time_lags))
     })
 
-  def data_splits_to_dataset(causal_window: Int) = DataPipe2((training_data: SLIDINGDATA, test_data: SLIDINGDATA) => {
 
+  /**
+    * Takes training and test data sets of type [[SLIDINGDATA]]
+    * and loads them in an object of type [[PROCDATA2]].
+    *
+    * [[PROCDATA2]] consists of a DynaML [[TFDataSet]] object,
+    * along with the ground truth causal time lags for the
+    * train and test sets.
+    *
+    * @param causal_window The size of the causal time window.
+    *
+    * */
+  def data_splits_to_dataset(causal_window: Int): DataPipe2[SLIDINGDATA, SLIDINGDATA, PROCDATA2] =
+    DataPipe2(
+      (training_data: SLIDINGDATA, test_data: SLIDINGDATA) => {
 
-    val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
-      dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*),
-      dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*))
+        //Get the ground truth values of the causal time lags.
+        val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
+          dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*),
+          dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*))
 
-    val train_dataset = dtfdata.dataset(training_data).map(
-      (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
-    )
+        //Create the data set
+        val train_dataset = dtfdata.dataset(training_data).map(
+          (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
+        )
 
-    val test_dataset = dtfdata.dataset(test_data).map(
-      (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
-    )
+        val test_dataset = dtfdata.dataset(test_data).map(
+          (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
+        )
 
-    val tf_dataset = TFDataSet(train_dataset, test_dataset)
+        val tf_dataset = TFDataSet(train_dataset, test_dataset)
 
-    (tf_dataset, (train_time_lags, test_time_lags))
-  })
+        (tf_dataset, (train_time_lags, test_time_lags))
+      })
 
 
   /**
@@ -322,11 +354,19 @@ package object utils {
     )
   })
 
+  /**
+    * Data pipeline used by [[run_exp_joint()]] and [[run_exp_stage_wise()]]
+    * methods to scale data before training.
+    * */
   val scale_data_v1 = DataPipe(
     scale_helios_dataset,
     id[(Tensor, Tensor)]
   )
 
+  /**
+    * Data pipeline used by [[run_exp_hyp()]]
+    * method to scale data before training.
+    * */
   val scale_data_v2 = DataPipe(
     fte.scale_dataset, id[(Tensor, Tensor)]
   )

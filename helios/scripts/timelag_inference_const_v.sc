@@ -95,7 +95,7 @@ def main(
       compute_output, d, size_test, noise, noiserot,
       alpha, sliding_window)
 
-    timelag.run_exp2(
+    timelag.run_exp_joint(
       (dataset, dataset_test),
       architecture, loss,
       iterations, optimizer,
@@ -205,7 +205,7 @@ def stage_wise(
     L2Regularization(layer_parameter_names_ii, layer_datatypes_ii, layer_shapes_ii, reg_ii) >>
     tf.learn.ScalarSummary("Loss", "TimeLagLoss")
 
-  timelag.run_exp3(
+  timelag.run_exp_stage_wise(
     (dataset, dataset_test),
     architecture_i, architecture_ii, loss_i, loss_ii,
     iterations, optimizer, miniBatch, sum_dir_prefix,

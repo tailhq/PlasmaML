@@ -95,7 +95,7 @@ def main(
       compute_output > compute_time_lag, d, n,
       noise, noiserot, alpha, sliding_window)
 
-    timelag.run_exp2(
+    timelag.run_exp_joint(
       (dataset, dataset_test),
       architecture, loss,
       iterations, optimizer,

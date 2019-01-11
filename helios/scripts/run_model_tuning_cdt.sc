@@ -28,7 +28,6 @@ def apply(
   activation_func: Int => Activation           = timelag.utils.getReLUAct(1),
   iterations: Int                              = 150000,
   iterations_tuning: Int                       = 20000,
-  num_samples: Int                             = 20,
   miniBatch: Int                               = 32,
   optimizer: Optimizer                         = tf.train.AdaDelta(0.01),
   sum_dir_prefix: String                       = "cdt",
@@ -36,6 +35,8 @@ def apply(
   dist_type: String                            = "default",
   timelag_pred_strategy: String                = "mode",
   summaries_top_dir: Path                      = home/'tmp,
+  num_samples: Int                             = 20,
+  hyper_optimizer: String                      = "gs",
   hyp_opt_iterations: Option[Int]              = Some(5)): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
   //Output computation
@@ -144,12 +145,12 @@ def apply(
     architecture, hyper_parameters,
     loss_func_generator,
     fitness_function, hyper_prior,
-    iterations, iterations_tuning,
-    num_samples, optimizer,
+    iterations, iterations_tuning, optimizer,
     miniBatch, sum_dir_prefix,
     mo_flag, prob_timelags,
     timelag_pred_strategy,
-    summaries_top_dir,
+    summaries_top_dir, num_samples,
+    hyper_optimizer,
     hyp_opt_iterations = hyp_opt_iterations)
 
 }
