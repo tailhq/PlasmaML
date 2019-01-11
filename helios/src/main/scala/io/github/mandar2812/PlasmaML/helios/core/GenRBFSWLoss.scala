@@ -14,7 +14,7 @@ import org.platanios.tensorflow.api.ops.Output
   * the solar wind propagation from heliospheric
   * images to ACE.
   *
-  * @author mandar2812
+  * @author mandar2812*
   * */
 case class GenRBFSWLoss(
   override val name:  String,

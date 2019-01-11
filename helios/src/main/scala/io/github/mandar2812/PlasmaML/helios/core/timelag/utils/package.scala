@@ -15,7 +15,7 @@ import io.github.mandar2812.dynaml.tensorflow.data.TFDataSet
 import io.github.mandar2812.dynaml.tensorflow._
 import io.github.mandar2812.dynaml.tensorflow.data._
 import io.github.mandar2812.dynaml.tensorflow.utils.GaussianScalerTF
-import org.platanios.tensorflow.api.learn.Mode
+import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer, Loss}
 import org.platanios.tensorflow.api.{FLOAT64, Output, Shape, Tensor, tf, tfi}
 
@@ -500,6 +500,15 @@ package object utils {
       }
     }
 
+
+  def get_stop_condition(it: Int, tol: Double, epochF: Boolean): StopCriteria = if(epochF) {
+    tf.learn.StopCriteria(
+      maxSteps = None,
+      maxEpochs = Some(it),
+      relLossChangeTol = Some(tol))
+  } else {
+    dtflearn.rel_loss_change_stop(tol, it)
+  }
 
   /**
     * Get the appropriate causal time lag loss function.

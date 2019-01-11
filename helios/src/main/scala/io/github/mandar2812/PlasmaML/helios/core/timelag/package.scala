@@ -20,7 +20,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import org.platanios.tensorflow.api.learn.estimators.Estimator
-import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, SupervisedTrainableModel}
+import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, StopCriteria, SupervisedTrainableModel}
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag.utils._
 import breeze.stats.distributions.ContinuousDistr
 
@@ -637,7 +637,8 @@ package object timelag {
     mo_flag: Boolean              = false,
     prob_timelags: Boolean        = false,
     timelag_pred_strategy: String = "mode",
-    summaries_top_dir: Path       = home/'tmp): ExperimentResult[JointModelRun] = {
+    summaries_top_dir: Path       = home/'tmp,
+    epochFlag: Boolean            = false): ExperimentResult[JointModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
@@ -672,13 +673,13 @@ package object timelag {
 
         val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
 
+        val stopCondition      = get_stop_condition(iterations, 0.05, epochFlag)
+
         val (model, estimator) = dtflearn.build_tf_model(
           architecture, input, trainInput, trainingInputLayer,
           loss, optimizer, summariesDir,
-          dtflearn.rel_loss_change_stop(0.05, iterations))(
+          stopCondition)(
           training_data)
-
-
 
         val predictions_training: (Tensor, Tensor) = estimator.infer(() => tf_dataset.trainData)
 
@@ -811,7 +812,8 @@ package object timelag {
     mo_flag: Boolean              = false,
     prob_timelags: Boolean        = false,
     timelag_pred_strategy: String = "mode",
-    summaries_top_dir: Path       = home/'tmp): ExperimentResult[StageWiseModelRun] = {
+    summaries_top_dir: Path       = home/'tmp,
+    epochFlag: Boolean = false): ExperimentResult[StageWiseModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
@@ -858,7 +860,7 @@ package object timelag {
         val (model_i, estimator_i) = dtflearn.build_tf_model(
           architecture_i, input_i, trainInput_i, trainingInputLayer_i,
           loss_i, optimizer, summariesDir_i,
-          dtflearn.rel_loss_change_stop(0.05, iterations))(
+          get_stop_condition(iterations, 0.05, epochFlag))(
           training_data_i)
 
 
@@ -900,7 +902,7 @@ package object timelag {
         val (model_ii, estimator_ii) = dtflearn.build_tf_model(
           architecture_ii, input_ii, trainInput_ii, trainingInputLayer_ii,
           loss_ii, optimizer, summariesDir_ii,
-          dtflearn.rel_loss_change_stop(0.05, iterations))(
+          get_stop_condition(iterations, 0.05, epochFlag))(
           training_data_ii)
 
 
@@ -1056,7 +1058,8 @@ package object timelag {
     summaries_top_dir: Path         = home/'tmp,
     num_samples: Int                = 20,
     hyper_optimizer: String         = "gs",
-    hyp_opt_iterations: Option[Int] = Some(5)): ExperimentResult[TunedModelRun] = {
+    hyp_opt_iterations: Option[Int] = Some(5),
+    epochFlag: Boolean              = false): ExperimentResult[TunedModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
@@ -1081,11 +1084,15 @@ package object timelag {
 
       val tf_summary_dir     = summaries_top_dir/summary_dir_index
 
+      val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.05, epochFlag)
+
+      val stop_condition_test   = get_stop_condition(iterations, 0.05, epochFlag)
+
       val train_config_tuning =
         dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
           DataPipe((p: Path) => dtflearn.model.trainConfig(
             p, optimizer,
-            dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
+            stop_condition_tuning,
             Some(
               dtflearn.model._train_hooks(
                 p,
@@ -1097,7 +1104,7 @@ package object timelag {
       val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
         dtflearn.model.trainConfig(
           summaryDir = tf_summary_dir,
-          stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
+          stopCriteria = stop_condition_test,
           trainHooks = Some(
             dtflearn.model._train_hooks(
               tf_summary_dir,
