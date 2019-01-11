@@ -12,7 +12,8 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 @main
 def main(
   d: Int                             = 3,
-  n: Int                             = 100,
+  size_training: Int                 = 100,
+  size_test: Int                     = 50,
   sliding_window: Int                = 15,
   noise: Double                      = 0.5,
   noiserot: Double                   = 0.1,
@@ -86,12 +87,12 @@ def main(
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, n, noise, noiserot,
+    compute_output, d, size_training, noise, noiserot,
     alpha, sliding_window)
 
   if(train_test_separate) {
     val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-      compute_output, d, n, noise, noiserot,
+      compute_output, d, size_test, noise, noiserot,
       alpha, sliding_window)
 
     timelag.run_exp2(
@@ -119,7 +120,8 @@ def main(
 
 def stage_wise(
   d: Int                             = 3,
-  n: Int                             = 100,
+  size_training: Int                 = 100,
+  size_test: Int                     = 50,
   sliding_window: Int                = 15,
   noise: Double                      = 0.5,
   noiserot: Double                   = 0.1,
@@ -159,15 +161,25 @@ def stage_wise(
     })
 
 
-  val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(compute_output, d, n, noise, noiserot, alpha, sliding_window)
+  val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
+    compute_output, d, size_training,
+    noise, noiserot, alpha, sliding_window)
 
-  val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(compute_output, d, n, noise, noiserot, alpha, sliding_window)
+  val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
+    compute_output, d, size_test,
+    noise, noiserot, alpha, sliding_window)
 
   val (net_layer_sizes_i, layer_shapes_i, layer_parameter_names_i, layer_datatypes_i) =
-    timelag.utils.get_ffnet_properties(d, sliding_window, num_neurons_i, "FLOAT32")
+    timelag.utils.get_ffnet_properties(
+      d, sliding_window,
+      num_neurons_i,
+      dType = "FLOAT32")
 
   val (net_layer_sizes_ii, layer_shapes_ii, layer_parameter_names_ii, layer_datatypes_ii) =
-    timelag.utils.get_ffnet_properties(d, sliding_window, num_neurons_ii, "FLOAT32", net_layer_sizes_i.length - 1)
+    timelag.utils.get_ffnet_properties(
+      d, sliding_window, num_neurons_ii,
+      dType = "FLOAT32",
+      net_layer_sizes_i.length - 1)
 
   //Prediction architecture
   val architecture_i = dtflearn.feedforward_stack(

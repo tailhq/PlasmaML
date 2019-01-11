@@ -16,8 +16,9 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 @main
 def apply(
   compute_output: DataPipe[Tensor, (Float, Float)],
-  d: Int                                       = 3,
-  n: Int                                       = 100,
+  d: Int                                       = 10,
+  size_training: Int                           = 1000,
+  size_test: Int                               = 500,
   sliding_window: Int                          = 15,
   noise: Double                                = 0.5,
   noiserot: Double                             = 0.1,
@@ -30,7 +31,7 @@ def apply(
   num_samples: Int                             = 20,
   miniBatch: Int                               = 32,
   optimizer: Optimizer                         = tf.train.AdaDelta(0.01),
-  sum_dir_prefix: String                       = "const_v",
+  sum_dir_prefix: String                       = "cdt",
   prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   dist_type: String                            = "default",
   timelag_pred_strategy: String                = "mode",
@@ -129,11 +130,11 @@ def apply(
   })
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, n, noise, noiserot,
+    compute_output, d, size_training, noise, noiserot,
     alpha, sliding_window)
 
   val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, n, noise, noiserot,
+    compute_output, d, size_test, noise, noiserot,
     alpha, sliding_window)
 
 
