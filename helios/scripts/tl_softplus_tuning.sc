@@ -36,16 +36,7 @@ def main(
 
   //Output computation
   val beta = 100f
-  val mo_flag = true
-  val prob_timelags = true
 
-
-  //Time Lag Computation
-  // distance/velocity
-  val distance = beta*10
-  //Time Lag Computation
-  // distance/velocity
-  //val distance = beta*10
   val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
     (v: Tensor) => {
 

@@ -34,9 +34,6 @@ def main(
   hyper_optimizer: String                      = "gs",
   hyp_opt_iterations: Option[Int]              = Some(5)): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
-  val mo_flag = true
-  val prob_timelags = true
-
   //Output computation
   val beta = 100f
   val compute_output = DataPipe(

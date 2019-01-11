@@ -728,24 +728,20 @@ package object utils {
   /**
     * Plot input-output pairs as a scatter plot.
     *
-    * @param x The x axis data, a tensor of rank 1
-    * @param y The y axis data, a tensor of rank 1
+    * @param xy The x and y axis data, a sequence of tuples
     * @param xlab x-axis label
     * @param ylab y-axis label
     * @param plot_title The plot title, as a string.
     * */
   def plot_scatter(
-    x: Tensor,
-    y: Tensor,
+    xy: Seq[(Double, Double)],
     xlab: Option[String] = None,
     ylab: Option[String] = None,
-    plot_title: Option[String] = None): Seq[(Double, Double)] = {
-    val xy = dtfutils.toDoubleSeq(x).zip(dtfutils.toDoubleSeq(y)).toSeq
+    plot_title: Option[String] = None): Unit = {
     scatter(xy)
     if(xlab.isDefined) xAxis(xlab.get)
     if(ylab.isDefined) yAxis(ylab.get)
     if(plot_title.isDefined) title(plot_title.get)
-    xy
   }
 
   def write_data_set(

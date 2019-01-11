@@ -36,9 +36,6 @@ def main(
 
   //Output computation
   val beta = 100f
-  val mo_flag = true
-  val prob_timelags = true
-
 
   //Time Lag Computation
   // distance/velocity
