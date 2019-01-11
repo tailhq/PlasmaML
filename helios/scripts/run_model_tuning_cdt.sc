@@ -37,7 +37,8 @@ def apply(
   summaries_top_dir: Path                      = home/'tmp,
   num_samples: Int                             = 20,
   hyper_optimizer: String                      = "gs",
-  hyp_opt_iterations: Option[Int]              = Some(5)): timelag.ExperimentResult[timelag.TunedModelRun] = {
+  hyp_opt_iterations: Option[Int]              = Some(5),
+  epochFlag: Boolean                           = false): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
   //Output computation
   val beta = 100f
@@ -151,6 +152,7 @@ def apply(
     timelag_pred_strategy,
     summaries_top_dir, num_samples,
     hyper_optimizer,
-    hyp_opt_iterations = hyp_opt_iterations)
+    hyp_opt_iterations = hyp_opt_iterations,
+    epochFlag = epochFlag)
 
 }
