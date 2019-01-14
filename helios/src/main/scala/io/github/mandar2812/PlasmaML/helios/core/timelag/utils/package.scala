@@ -501,9 +501,29 @@ package object utils {
     }
 
 
-  def get_stop_condition(it: Int, tol: Double, epochF: Boolean): StopCriteria = if(epochF) {
+  def get_train_hooks(
+    p: Path, it: Int,
+    epochFlag: Boolean,
+    num_data: Int,
+    batch_size: Int) = if(epochFlag) {
+
+    val epochSize = num_data/batch_size
+    dtflearn.model._train_hooks(p, it*epochSize/3, it*epochSize/3, it*epochSize)
+  } else {
+    dtflearn.model._train_hooks(p, it/3, it/3, it)
+  }
+
+  def get_stop_condition(
+    it: Int,
+    tol: Double,
+    epochF: Boolean,
+    num_data: Int,
+    batch_size: Int): StopCriteria = if(epochF) {
+
+    val epochSize = num_data/batch_size
+
     tf.learn.StopCriteria(
-      maxSteps = None,
+      maxSteps = Some(it*epochSize),
       maxEpochs = Some(it),
       relLossChangeTol = Some(tol))
   } else {

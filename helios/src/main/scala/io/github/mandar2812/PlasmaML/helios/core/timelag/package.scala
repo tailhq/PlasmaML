@@ -643,6 +643,8 @@ package object timelag {
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
 
+    val data_size = collated_data.toSeq.length
+
     val causal_window  = collated_data.head._2._2.length
     val num_test       = collated_data_test.length
 
@@ -673,7 +675,7 @@ package object timelag {
 
         val summariesDir       = java.nio.file.Paths.get(tf_summary_dir.toString())
 
-        val stopCondition      = get_stop_condition(iterations, 0.05, epochFlag)
+        val stopCondition      = get_stop_condition(iterations, 0.05, epochFlag, data_size, miniBatch)
 
         val (model, estimator) = dtflearn.build_tf_model(
           architecture, input, trainInput, trainingInputLayer,
@@ -818,6 +820,8 @@ package object timelag {
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
 
+    val data_size = collated_data.toSeq.length
+
     val causal_window  = collated_data.head._2._2.length
     val num_test       = collated_data_test.length
 
@@ -860,7 +864,7 @@ package object timelag {
         val (model_i, estimator_i) = dtflearn.build_tf_model(
           architecture_i, input_i, trainInput_i, trainingInputLayer_i,
           loss_i, optimizer, summariesDir_i,
-          get_stop_condition(iterations, 0.05, epochFlag))(
+          get_stop_condition(iterations, 0.05, epochFlag, data_size, miniBatch))(
           training_data_i)
 
 
@@ -902,7 +906,7 @@ package object timelag {
         val (model_ii, estimator_ii) = dtflearn.build_tf_model(
           architecture_ii, input_ii, trainInput_ii, trainingInputLayer_ii,
           loss_ii, optimizer, summariesDir_ii,
-          get_stop_condition(iterations, 0.05, epochFlag))(
+          get_stop_condition(iterations, 0.05, epochFlag, data_size, miniBatch))(
           training_data_ii)
 
 
@@ -1064,7 +1068,9 @@ package object timelag {
     val (data, collated_data): TLDATA           = dataset._1
     val (data_test, collated_data_test): TLDATA = dataset._2
 
-    val data_size = collated_data.toStream.length
+    val data_size = collated_data.toSeq.length
+
+    val data_size_test = collated_data_test.toSeq.length
 
     val causal_window = collated_data.head._2._2.length
     val input_shape   = collated_data.head._2._1.shape
@@ -1084,34 +1090,23 @@ package object timelag {
 
       val tf_summary_dir     = summaries_top_dir/summary_dir_index
 
-      val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.05, epochFlag)
+      val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.05, epochFlag, data_size, miniBatch)
 
-      val stop_condition_test   = get_stop_condition(iterations, 0.05, epochFlag)
+      val stop_condition_test   = get_stop_condition(iterations, 0.05, epochFlag, data_size, miniBatch)
 
       val train_config_tuning =
         dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
           DataPipe((p: Path) => dtflearn.model.trainConfig(
             p, optimizer,
             stop_condition_tuning,
-            Some(
-              dtflearn.model._train_hooks(
-                p,
-                iterations_tuning/3,
-                iterations_tuning/3,
-                iterations_tuning)))
-          )
+            Some(get_train_hooks(p, iterations_tuning, epochFlag, data_size, miniBatch))
+          ))
 
       val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
         dtflearn.model.trainConfig(
           summaryDir = tf_summary_dir,
           stopCriteria = stop_condition_test,
-          trainHooks = Some(
-            dtflearn.model._train_hooks(
-              tf_summary_dir,
-              iterations/3,
-              iterations/3,
-              iterations/2)
-          ))
+          trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch)))
       )
 
       val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
