@@ -12,6 +12,7 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 @main
 def main(
   d: Int                             = 3,
+  confounding: Double                = 0d,
   size_training: Int                 = 100,
   size_test: Int                     = 50,
   sliding_window: Int                = 15,
@@ -87,13 +88,15 @@ def main(
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, size_training, noise, noiserot,
-    alpha, sliding_window)
+    compute_output, sliding_window,
+    d, size_training, noiserot,
+    alpha, noise)
 
   if(train_test_separate) {
     val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-      compute_output, d, size_test, noise, noiserot,
-      alpha, sliding_window)
+      compute_output, sliding_window,
+      d, size_test, noiserot,
+      alpha, noise, confounding)
 
     timelag.run_exp_joint(
       (dataset, dataset_test),
@@ -120,6 +123,7 @@ def main(
 
 def stage_wise(
   d: Int                             = 3,
+  confounding: Double                = 0d,
   size_training: Int                 = 100,
   size_test: Int                     = 50,
   sliding_window: Int                = 15,
@@ -162,12 +166,14 @@ def stage_wise(
 
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, size_training,
-    noise, noiserot, alpha, sliding_window)
+    compute_output, sliding_window,
+    d, size_training, noiserot,
+    alpha, noise, confounding)
 
   val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, size_test,
-    noise, noiserot, alpha, sliding_window)
+    compute_output, sliding_window,
+    d, size_test, noiserot,
+    alpha, noise, confounding)
 
   val (net_layer_sizes_i, layer_shapes_i, layer_parameter_names_i, layer_datatypes_i) =
     timelag.utils.get_ffnet_properties(

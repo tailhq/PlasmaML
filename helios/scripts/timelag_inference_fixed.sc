@@ -12,6 +12,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 def main(
   fixed_lag: Float              = 3f,
   d: Int                        = 3,
+  confounding: Double           = 0d,
   size_training: Int            = 100,
   size_test: Int                = 50,
   sliding_window: Int           = 15,
@@ -76,16 +77,19 @@ def main(
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, size_training, noise, noiserot,
-    alpha, sliding_window)
+    compute_output, sliding_window,
+    d, size_training, noiserot,
+    alpha, noise, confounding)
 
   if(train_test_separate) {
     val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-      compute_output, d, size_test, noise, noiserot,
-      alpha, sliding_window)
+      compute_output, sliding_window, d,
+      size_test, noiserot, alpha,
+      noise, confounding)
 
     timelag.run_exp_joint(
-      (dataset, dataset_test), architecture, loss,
+      (dataset, dataset_test),
+      architecture, loss,
       iterations, optimizer,
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,

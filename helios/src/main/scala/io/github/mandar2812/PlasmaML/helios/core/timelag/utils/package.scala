@@ -17,7 +17,7 @@ import io.github.mandar2812.dynaml.tensorflow.data._
 import io.github.mandar2812.dynaml.tensorflow.utils.GaussianScalerTF
 import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer, Loss}
-import org.platanios.tensorflow.api.{FLOAT64, Output, Shape, Tensor, tf, tfi}
+import org.platanios.tensorflow.api._
 
 package object utils {
 
@@ -99,14 +99,20 @@ package object utils {
     *
     * @param sliding_window The size of the sliding time window [y(t), ..., y(t+h)]
     *                       to construct. This is used as training label for the model.
+    *
+    * @param confounding_factor A number between 0 and 1 determining how many input dimensions
+    *                           should be retained in the generated data set. Defaults to 0, which
+    *                           retains all the dimensions.
     * */
   def generate_data(
     compute_output_and_lag: DataPipe[Tensor, (Float, Float)],
-    d: Int = 3, n: Int = 5,
-    noise: Double = 0.5,
-    noiserot: Double = 0.1,
-    alpha: Double = 0.0,
-    sliding_window: Int): TLDATA = {
+    sliding_window: Int, d: Int = 3, n: Int = 5,
+    noiserot: Double = 0.1, alpha: Double = 0.0,
+    noise: Double = 0.5, confounding_factor: Double = 0d): TLDATA = {
+
+    require(
+      confounding_factor >= 0d && confounding_factor <= 1d,
+      "The confounding factor can only be between 0 and 1")
 
     val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
       () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
@@ -190,9 +196,14 @@ package object utils {
       .filter(_._2._2.isDefined)
       .map(p => (p._1, (p._2._1, p._2._2.get, p._2._3)))
 
+    //Now slice the input tensors depending on the confounding.
+    val num_sel_dims = d*math.ceil(1d - confounding_factor).toInt
 
+    val data_con = data.map(patt => ((patt._1._1, patt._1._2(0 :: num_sel_dims)), patt._2))
 
-    (data, joined_data)
+    val joined_data_con = joined_data.map(patt => (patt._1, (patt._2._1(0 :: num_sel_dims), patt._2._2, patt._2._3)))
+
+    (data_con, joined_data_con)
   }
 
   /**

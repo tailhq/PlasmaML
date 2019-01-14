@@ -17,6 +17,7 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 def apply(
   compute_output: DataPipe[Tensor, (Float, Float)],
   d: Int                                       = 10,
+  confounding: Double                          = 0d,
   size_training: Int                           = 1000,
   size_test: Int                               = 500,
   sliding_window: Int                          = 15,
@@ -132,12 +133,14 @@ def apply(
   })
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, size_training, noise, noiserot,
-    alpha, sliding_window)
+    compute_output, sliding_window,
+    d, size_training, noiserot,
+    alpha, noise, confounding)
 
   val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, d, size_test, noise, noiserot,
-    alpha, sliding_window)
+    compute_output, sliding_window,
+    d, size_test, noiserot, alpha,
+    noise, confounding)
 
 
 

@@ -12,6 +12,7 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 @main
 def main(
   d: Int                             = 3,
+  confounding: Double                = 0d,
   n: Int                             = 100,
   sliding_window: Int                = 15,
   noise: Double                      = 0.5,
@@ -87,13 +88,13 @@ def main(
     tf.learn.ScalarSummary("Loss", "ModelLoss")
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output > compute_time_lag, d, n,
-    noise, noiserot, alpha, sliding_window)
+    compute_output > compute_time_lag, sliding_window,
+    d, n, noiserot, alpha, noise, confounding)
 
   if(train_test_separate) {
     val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-      compute_output > compute_time_lag, d, n,
-      noise, noiserot, alpha, sliding_window)
+      compute_output > compute_time_lag, sliding_window,
+      d, n, noiserot, alpha, noise, confounding)
 
     timelag.run_exp_joint(
       (dataset, dataset_test),

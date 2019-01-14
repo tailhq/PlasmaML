@@ -12,6 +12,7 @@ import $file.run_model_tuning_cdt
 @main
 def main(
   d: Int                                       = 3,
+  confounding: Double                          = 0d,
   size_training: Int                           = 100,
   size_test: Int                               = 50,
   sliding_window: Int                          = 15,
@@ -48,7 +49,7 @@ def main(
 
   run_model_tuning_cdt(
     compute_output,
-    d, size_training, size_test, sliding_window, noise, noiserot,
+    d, confounding, size_training, size_test, sliding_window, noise, noiserot,
     alpha, train_test_separate, num_neurons, 
     activation_func, iterations, iterations_tuning, 
     miniBatch, optimizer, sum_dir_prefix,

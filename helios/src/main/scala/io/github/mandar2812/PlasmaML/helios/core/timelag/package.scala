@@ -23,6 +23,8 @@ import org.platanios.tensorflow.api.learn.estimators.Estimator
 import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, StopCriteria, SupervisedTrainableModel}
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag.utils._
 import breeze.stats.distributions.ContinuousDistr
+import org.json4s._
+import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
 
 package object timelag {
 
