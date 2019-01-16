@@ -14,15 +14,15 @@ import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.evaluation._
-import _root_.io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch}
+import _root_.io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch, CMAES}
 import _root_.io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
-import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import org.platanios.tensorflow.api.learn.estimators.Estimator
 import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, StopCriteria, SupervisedTrainableModel}
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag.utils._
 import breeze.stats.distributions.ContinuousDistr
+
 import org.json4s._
 import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
 
@@ -1092,9 +1092,9 @@ package object timelag {
 
       val tf_summary_dir     = summaries_top_dir/summary_dir_index
 
-      val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.05, epochFlag, data_size, miniBatch)
+      val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.01, epochFlag, data_size, miniBatch)
 
-      val stop_condition_test   = get_stop_condition(iterations, 0.05, epochFlag, data_size, miniBatch)
+      val stop_condition_test   = get_stop_condition(iterations, 0.01, epochFlag, data_size, miniBatch)
 
       val train_config_tuning =
         dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
@@ -1144,6 +1144,18 @@ package object timelag {
           )
 
         case "gs"  => new GridSearch[tunableTFModel.type](tunableTFModel)
+
+
+        case "cma" => new CMAES(
+          tunableTFModel,
+          hyper_params,
+          0.8,
+          Some(
+            hyper_params.map(
+              h => (h, Encoder((x: Double) => math.log(x), (x: Double) => math.exp(x)))
+            ).toMap
+          )
+        ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
 
         case _     => new GridSearch[tunableTFModel.type](tunableTFModel)
       }
