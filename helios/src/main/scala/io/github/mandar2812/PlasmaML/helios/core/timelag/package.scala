@@ -1065,6 +1065,7 @@ package object timelag {
     num_samples: Int                = 20,
     hyper_optimizer: String         = "gs",
     hyp_opt_iterations: Option[Int] = Some(5),
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
     epochFlag: Boolean              = false): ExperimentResult[TunedModelRun] = {
 
     val (data, collated_data): TLDATA           = dataset._1
@@ -1150,11 +1151,7 @@ package object timelag {
           tunableTFModel,
           hyper_params,
           0.8,
-          Some(
-            hyper_params.map(
-              h => (h, Encoder((x: Double) => math.log(x), (x: Double) => math.exp(x)))
-            ).toMap
-          )
+          hyp_mapping
         ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
 
         case _     => new GridSearch[tunableTFModel.type](tunableTFModel)

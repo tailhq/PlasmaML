@@ -10,6 +10,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.utils._
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.ammonite.ops._
+import breeze.numerics.sigmoid
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.layers.Activation
 
@@ -103,6 +104,20 @@ def apply(
     "reg"         -> UniformRV(math.pow(10d, -4d), math.pow(10d, -2.5d))
   )
 
+  val hyp_scaling = hyper_prior.map(p =>
+    (
+      p._1,
+      Encoder((x: Double) => (x - p._2.min)/(p._2.max - p._2.min), (u: Double) => u*(p._2.max - p._2.min) + p._2.min)
+    )
+  )
+
+  val logit = Encoder((x: Double) => math.log(x/(1d - x)), (x: Double) => sigmoid(x))
+
+  val hyp_mapping = Some(
+    hyper_parameters.map(
+      h => (h, hyp_scaling(h) > logit)
+    ).toMap
+  )
 
   val loss_func_generator = (h: Map[String, Double]) => {
 
@@ -156,6 +171,7 @@ def apply(
     summaries_top_dir, num_samples,
     hyper_optimizer,
     hyp_opt_iterations = hyp_opt_iterations,
-    epochFlag = epochFlag)
+    epochFlag = epochFlag,
+    hyp_mapping = hyp_mapping)
 
 }
