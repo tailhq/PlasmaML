@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.helios.core.timelag
 
 import ammonite.ops.{Path, write}
 import breeze.linalg.{DenseMatrix, qr}
-import breeze.stats.distributions.Gaussian
+import breeze.stats.distributions.{Bernoulli, Gaussian, LogNormal}
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.core.{CausalDynamicTimeLagSO, MOGrangerLoss, RBFWeightedSWLoss}
@@ -59,7 +59,13 @@ package object utils {
     if((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
-  //subroutine to calculate sliding autocorrelation of a time series.
+  /**
+    * Calculate sliding autocorrelation of a time series.
+    *
+    * @param n The maximum time lag until which the autocorrelation
+    *          spectrum should be computed.
+    * @param data The (univariate) time series.
+    * */
   def autocorrelation(n: Int)(data: Stream[Double]): Stream[Double] = {
     val mean = data.sum/data.length
     val variance = data.map(_ - mean).map(math.pow(_, 2d)).sum/(data.length - 1d)
@@ -93,7 +99,7 @@ package object utils {
     * @param noiserot The variance of elements of R<sub>i,j</sub>,
     *                 a randomly generated matrix used to compute
     *                 an orthogonal transformation (rotation) of
-    *                 x(t)
+    *                 x(t).
     * @param alpha A relaxation parameter which controls the
     *              auto-correlation time scale of x(t)
     *
@@ -114,48 +120,63 @@ package object utils {
       confounding_factor >= 0d && confounding_factor <= 1d,
       "The confounding factor can only be between 0 and 1")
 
-    val random_gaussian_vec = DataPipe((i: Int) => RandomVariable(
-      () => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*)
-    ))
+    val random_gaussian_vec: DataPipe[Int, RandomVariable[Tensor]] =
+      DataPipe((i: Int) =>
+        RandomVariable(() => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*))
+      )
 
-    val normalise = DataPipe((t: RandomVariable[Tensor]) => t.draw.l2Normalize(0))
+    val normalise: DataPipe[RandomVariable[Tensor], Tensor] =
+      DataPipe((t: RandomVariable[Tensor]) => t.draw.l2Normalize(0))
 
     val normalised_gaussian_vec = random_gaussian_vec > normalise
 
-    val x0 = normalised_gaussian_vec(d)
-
-    val random_gaussian_mat = DataPipe(
+    val random_gaussian_mat: DataPipe[Int, DenseMatrix[Double]] = DataPipe(
       (n: Int) => DenseMatrix.rand(n, n, Gaussian(0d, noiserot))
     )
 
-    val rand_rot_mat =
+    //A data pipe which returns a random rotation matrix, given n, the number of dimensions
+    val rand_rot_mat: DataPipe[Int, Tensor] =
       random_gaussian_mat >
         DataPipe((m: DenseMatrix[Double]) => qr(m).q) >
         DataPipe((m: DenseMatrix[Double]) => dtf.tensor_f32(m.rows, m.rows)(m.toArray:_*).transpose())
 
 
-    val rotation = rand_rot_mat(d)
-
     val get_rotation_operator = MetaPipe((rotation_mat: Tensor) => (x: Tensor) => rotation_mat.matmul(x))
 
-    val rotation_op = get_rotation_operator(rotation)
+    //Get the rotation operator for the randomly generated rotation.
+    val rotation_op: DataPipe[Tensor, Tensor] = get_rotation_operator(rand_rot_mat(d))
 
     val translation_op = DataPipe2((tr: Tensor, x: Tensor) => tr.add(x.multiply(1.0f - alpha.toFloat)))
 
+    //Create a time series of random increments d(t)
     val translation_vecs = random_gaussian_vec(d).iid(n+500-1).draw
 
-    val x_tail = translation_vecs.scanLeft(x0)((x, sc) => translation_op(sc, rotation_op(x)))
+    //Impulse vecs
+    val impulse: RandomVariable[Tensor] =
+      RandomVariable(new Bernoulli(0.995)).iid(d) >
+        StreamDataPipe((f: Boolean) => if(f) 1d else LogNormal(1d, noise).draw()) >
+        DataPipe((s: Stream[Double]) => dtf.tensor_f32(d)(s:_*))
+
+    val impulse_vecs = impulse.iid(n+500-1).draw
+
+    //Generate the time series x(t) = R.x(t-1) + d(t)
+    val x0 = normalised_gaussian_vec(d)
+
+    val x_tail =
+      translation_vecs.zip(impulse_vecs).scanLeft(x0)((x, sc) => sc._2.multiply(translation_op(sc._1, rotation_op(x))))
 
     val x: Seq[Tensor] = (Stream(x0) ++ x_tail).takeRight(n)
 
-    val calculate_outputs =
+    //Takes input x(t) and returns {y(t + delta(x(t))), delta(x(t))}
+    val calculate_outputs: DataPipe[Tensor, (Float, Float)] =
       compute_output_and_lag >
         DataPipe(
           DataPipe((d: Float) => d),
           DataPipe((v: Float) => v)
         )
 
-
+    //Finally create the data pipe which takes a stream of x(t) and
+    //generates the input output pairs.
     val generate_data_pipe = StreamDataPipe(
       DataPipe(id[Int], BifurcationPipe(id[Tensor], calculate_outputs))  >
         DataPipe((pattern: (Int, (Tensor, (Float, Float)))) =>
@@ -168,8 +189,14 @@ package object utils {
 
     val (causes, effects) = data.unzip
 
-    val outputs = effects.groupBy(_._1.toInt).mapValues(v => v.map(_._2).sum/v.length.toDouble).toSeq.sortBy(_._1)
+    val outputs =
+      effects
+        .groupBy(_._1.toInt)
+        .mapValues(v => v.map(_._2).sum/v.length.toDouble)
+        .toSeq
+        .sortBy(_._1)
 
+    //Interpolate the gaps in the generated data.
     val linear_segments = outputs.sliding(2).toList.map(s =>
       DataPipe((t: Double) => {
 
@@ -182,7 +209,11 @@ package object utils {
       })
     )
 
-    val interpolated_output_signal = causes.map(_._1).map(t => (t, linear_segments.map(_.run(t.toDouble)).sum))
+    val interpolated_output_signal =
+      causes
+        .map(_._1)
+        .map(
+          t => (t, linear_segments.map(_.run(t.toDouble)).sum))
 
     val effectsMap = interpolated_output_signal
       .sliding(sliding_window)
@@ -218,9 +249,6 @@ package object utils {
     val (causes, effects) = data.unzip
 
     val energies = data.map(_._2._2)
-
-    /*spline(energies)
-    title("Output Time Series")*/
 
     val effect_times = data.map(_._2._1)
 

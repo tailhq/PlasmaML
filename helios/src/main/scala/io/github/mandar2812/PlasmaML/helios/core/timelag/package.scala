@@ -1140,7 +1140,7 @@ package object timelag {
       val gs = hyper_optimizer match {
         case "csa" =>
           new CoupledSimulatedAnnealing[tunableTFModel.type](
-            tunableTFModel).setMaxIterations(
+            tunableTFModel, hyp_mapping).setMaxIterations(
             hyp_opt_iterations.getOrElse(5)
           )
 
