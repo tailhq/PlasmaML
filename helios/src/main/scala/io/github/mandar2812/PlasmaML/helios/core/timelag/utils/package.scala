@@ -155,7 +155,7 @@ package object utils {
     val impulse: RandomVariable[Tensor] =
       RandomVariable(new Bernoulli(0.995)).iid(d) >
         StreamDataPipe((f: Boolean) => if(f) 1d else LogNormal(1d, noise).draw()) >
-        DataPipe((s: Stream[Double]) => dtf.tensor_f32(d)(s:_*))
+        DataPipe((s: Stream[Double]) => dtf.tensor_f32(d, 1)(s:_*))
 
     val impulse_vecs = impulse.iid(n+500-1).draw
 
@@ -163,7 +163,7 @@ package object utils {
     val x0 = normalised_gaussian_vec(d)
 
     val x_tail =
-      translation_vecs.zip(impulse_vecs).scanLeft(x0)((x, sc) => sc._2.multiply(translation_op(sc._1, rotation_op(x))))
+      translation_vecs.zip(impulse_vecs).scanLeft(x0)((x, sc) => sc._2 * translation_op(sc._1, rotation_op(x)))
 
     val x: Seq[Tensor] = (Stream(x0) ++ x_tail).takeRight(n)
 
@@ -180,7 +180,7 @@ package object utils {
     val generate_data_pipe = StreamDataPipe(
       DataPipe(id[Int], BifurcationPipe(id[Tensor], calculate_outputs))  >
         DataPipe((pattern: (Int, (Tensor, (Float, Float)))) =>
-          ((pattern._1, pattern._2._1.reshape(Shape(d))), (pattern._1+pattern._2._2._1, pattern._2._2._2)))
+          ((pattern._1, pattern._2._1.reshape(Shape(d))), (pattern._1 + pattern._2._2._1, pattern._2._2._2)))
     )
 
     val times = (0 until n).toStream
