@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.helios.core.timelag
 
 import ammonite.ops.{Path, write}
 import breeze.linalg.{DenseMatrix, qr}
-import breeze.stats.distributions.{Bernoulli, Gaussian, LogNormal}
+import breeze.stats.distributions.{Bernoulli, Gaussian, LogNormal, Uniform}
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
 import io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.core.{CausalDynamicTimeLagSO, MOGrangerLoss, RBFWeightedSWLoss}
@@ -153,8 +153,8 @@ package object utils {
 
     //Impulse vecs
     val impulse: RandomVariable[Tensor] =
-      RandomVariable(new Bernoulli(0.995)).iid(d) >
-        StreamDataPipe((f: Boolean) => if(f) 1d else LogNormal(1d, noise).draw()) >
+      RandomVariable(new Bernoulli(0.999)).iid(d) >
+        StreamDataPipe((f: Boolean) => if(f) 1d else Uniform(0.9d, 2d).draw()) >
         DataPipe((s: Stream[Double]) => dtf.tensor_f32(d, 1)(s:_*))
 
     val impulse_vecs = impulse.iid(n+500-1).draw
