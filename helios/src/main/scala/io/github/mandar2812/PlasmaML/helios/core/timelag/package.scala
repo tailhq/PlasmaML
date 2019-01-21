@@ -1093,7 +1093,7 @@ package object timelag {
 
       val tf_summary_dir     = summaries_top_dir/summary_dir_index
 
-      val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.01, epochFlag, data_size, miniBatch)
+      val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.05, epochFlag, data_size, miniBatch)
 
       val stop_condition_test   = get_stop_condition(iterations, 0.01, epochFlag, data_size, miniBatch)
 
