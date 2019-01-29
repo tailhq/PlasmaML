@@ -1147,7 +1147,7 @@ package object timelag {
         case "gs"  => new GridSearch[tunableTFModel.type](tunableTFModel)
 
 
-        case "cma" => new CMAES(
+        case "cma" => new CMAES[tunableTFModel.type](
           tunableTFModel,
           hyper_params,
           0.8,
