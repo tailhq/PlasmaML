@@ -1130,7 +1130,9 @@ package object timelag {
           (FLOAT64, Shape(causal_window)),
           tf.learn.Cast("TrainInput", FLOAT64),
           train_config_tuning(tf_summary_dir),
-          data_split_func = Some(DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextGaussian() <= 0.7)),
+          data_split_func = Some(
+            DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
+          ),
           data_processing = tf_data_ops,
           inMemory = false,
           concatOpI = Some(stackOperation),
@@ -1150,7 +1152,7 @@ package object timelag {
         case "cma" => new CMAES[tunableTFModel.type](
           tunableTFModel,
           hyper_params,
-          0.8,
+          learning_rate = 0.8,
           hyp_mapping
         ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
 
@@ -1183,8 +1185,7 @@ package object timelag {
 
       val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
         Tensor, Output, DataType.Aux[Float], DataType, Shape, (Output, Output), (Tensor, Tensor),
-        Tensor, Output, DataType.Aux[Double], DataType, Shape, Output
-        ](
+        Tensor, Output, DataType.Aux[Double], DataType, Shape, Output](
         loss_func_generator, architecture, (FLOAT32, input_shape),
         (FLOAT64, Shape(causal_window)),
         tf.learn.Cast("TrainInput", FLOAT64),
