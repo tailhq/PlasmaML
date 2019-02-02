@@ -189,12 +189,26 @@ package object utils {
 
     val (causes, effects) = data.unzip
 
+    /*
+    * Create a variable `outputs` which is
+    * a collection of time lags and targets
+    * (∂t, y(t)).
+    *
+    * This is done by:
+    *
+    * 1. grouping the collection by observation time
+    * 2. averaging any targets which are incident at the same time
+    * 3. sorting the collection to yield a temporal sequence y(t)
+    *
+    * */
     val outputs =
       effects
         .groupBy(_._1.toInt)
         .mapValues(v => v.map(_._2).sum/v.length.toDouble)
         .toSeq
         .sortBy(_._1)
+
+    val starting_lag = outputs.map(_._1).min
 
     //Interpolate the gaps in the generated data.
     val linear_segments = outputs.sliding(2).toList.map(s =>
@@ -211,9 +225,9 @@ package object utils {
 
     val interpolated_output_signal =
       causes
+        .drop(starting_lag)
         .map(_._1)
-        .map(
-          t => (t, linear_segments.map(_.run(t.toDouble)).sum))
+        .map(t => (t, linear_segments.map(_.run(t.toDouble)).sum))
 
     val effectsMap = interpolated_output_signal
       .sliding(sliding_window)
