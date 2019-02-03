@@ -55,10 +55,15 @@ package object fte {
   DateTimeZone.setDefault(DateTimeZone.UTC)
 
   //Load the Carrington Rotation Table
-  val carrington_rotation_table = pwd/'data/"CR_Table.rdb"
+  val carrington_rotation_table: Path = pwd/'data/"CR_Table.rdb"
 
-  val process_carrington_file =
-    DataPipe((p: Path) => (read.lines! p).toStream) > dropHead > dropHead > trimLines > replaceWhiteSpaces > splitLine
+  val process_carrington_file: DataPipe[Path, Stream[Array[String]]] =
+    DataPipe((p: Path) => (read.lines! p).toStream) >
+      dropHead >
+      dropHead >
+      trimLines >
+      replaceWhiteSpaces >
+      splitLine
 
   case class CarringtonRotation(start: DateTime, end: DateTime) {
 
@@ -75,13 +80,13 @@ package object fte {
     (s.head.toInt, CarringtonRotation(limits._1, limits._2))
   })
 
-  val carrington_rotations =
+  val carrington_rotations: ZipDataSet[Int, CarringtonRotation] =
     dtfdata.dataset(process_carrington_file(carrington_rotation_table)).to_zip(read_time_stamps)
 
-
-
   val fte_file = MetaPipe(
-    (data_path: Path) => (carrington_rotation: Int) => data_path/s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
+    (data_path: Path) =>
+      (carrington_rotation: Int) =>
+        data_path/s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
   )
 
 
