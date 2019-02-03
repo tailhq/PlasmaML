@@ -156,7 +156,7 @@ def main[T <: SolarImagesSource](
     dtfutils.get_ffstack_properties(
       -1,
       num_pred_dims,
-      ff_stack,
+      ff_stack.dropRight(1),
       dType = "FLOAT64",
       starting_index = ff_index)
 
