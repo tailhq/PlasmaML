@@ -9,7 +9,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios
 import io.github.mandar2812.PlasmaML.helios.data.SOHO
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Resolutions._
-import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}

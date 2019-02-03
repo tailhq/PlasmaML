@@ -14,7 +14,7 @@ import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
 import io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
-import _root_.io.github.mandar2812.PlasmaML.utils.{L1Regularization, L2Regularization}
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import breeze.stats.distributions.ContinuousDistr

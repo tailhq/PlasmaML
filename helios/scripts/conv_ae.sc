@@ -9,7 +9,7 @@ import io.github.mandar2812.PlasmaML.helios.core.AutoEncoder
 import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImagesSource}
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
-import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import org.platanios.tensorflow.api.Output
 import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.Layer

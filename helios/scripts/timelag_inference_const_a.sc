@@ -3,7 +3,7 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
-import _root_.io.github.mandar2812.PlasmaML.utils._
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import ammonite.ops._

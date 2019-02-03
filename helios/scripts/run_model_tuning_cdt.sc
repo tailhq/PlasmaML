@@ -7,7 +7,7 @@ import _root_.io.github.mandar2812.dynaml.analysis._
 import _root_.spire.implicits._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.helios
-import _root_.io.github.mandar2812.PlasmaML.utils._
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.ammonite.ops._
 import breeze.numerics.sigmoid

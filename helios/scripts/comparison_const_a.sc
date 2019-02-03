@@ -4,7 +4,7 @@ import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.helios.core._
-import _root_.io.github.mandar2812.PlasmaML.utils._
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 
 @main
 def main(
@@ -45,7 +45,7 @@ def main(
     (dt, vf + scala.util.Random.nextGaussian().toFloat*noise.toFloat)
   })
 
-  val dataset: timelag.TLDATA = timelag.generate_data(
+  val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
     compute_output > compute_time_lag,
     d = d, n = n, noise = noise, noiserot = noiserot,
     alpha = alpha, sliding_window = sliding_window)

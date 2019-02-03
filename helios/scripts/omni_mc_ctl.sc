@@ -9,7 +9,7 @@ import io.github.mandar2812.PlasmaML.helios.data.{MC_PATTERN, SDO, SOHO, SOHODat
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Resolutions._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
-import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import org.platanios.tensorflow.api.Output
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.Layer
@@ -154,8 +154,8 @@ def main(
     output_mapping
 
 
-  val (layer_shapes, layer_parameter_names, layer_datatypes) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack, ff_index, "FLOAT64")
+  val (_, layer_shapes, layer_parameter_names, layer_datatypes) =
+    dtfutils.get_ffstack_properties(-1, num_pred_dims, ff_stack, dType = "FLOAT64", starting_index = ff_index)
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",

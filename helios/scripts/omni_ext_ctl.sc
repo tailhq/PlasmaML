@@ -8,7 +8,7 @@ import io.github.mandar2812.PlasmaML.helios.data
 import io.github.mandar2812.PlasmaML.helios.data.{SDO, SOHO, SOHOData, SolarImagesSource}
 import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
-import io.github.mandar2812.PlasmaML.utils.L2Regularization
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.{::, FLOAT32, FLOAT64, Shape, tf}
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -111,7 +111,10 @@ def main[T <: SolarImagesSource](
 
 
   val image_neural_stack = tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.inception_stack(num_channels*(image_hist_downsamp + 1), filter_depths)(1) >>
+    dtflearn.inception_stack(
+      num_channels*(image_hist_downsamp + 1),
+      filter_depths, tf.learn.ReLU(_),
+      use_batch_norm = true)(starting_index = 1) >>
     tf.learn.Flatten("Flatten_1") >>
     conv_ff_stack
 
@@ -137,14 +140,26 @@ def main[T <: SolarImagesSource](
     fc_stack >>
     output_mapping
 
-  val (layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ conv_ff_stack_sizes, ff_index_conv, "FLOAT64")
+  val (_, layer_shapes_conv, layer_parameter_names_conv, layer_datatypes_conv) =
+    dtfutils.get_ffstack_properties(
+      -1, conv_ff_stack_sizes.last,
+      conv_ff_stack_sizes.dropRight(1),
+      starting_index = ff_index_conv,
+      dType = "FLOAT64")
 
-  val (layer_shapes_hist, layer_parameter_names_hist, layer_datatypes_hist) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ hist_ff_stack_sizes, ff_index_hist, "FLOAT64")
+  val (_, layer_shapes_hist, layer_parameter_names_hist, layer_datatypes_hist) =
+    dtfutils.get_ffstack_properties(
+      -1, hist_ff_stack_sizes.last,
+      hist_ff_stack_sizes.dropRight(1),
+      dType = "FLOAT64",
+      starting_index = ff_index_hist)
 
-  val (layer_shapes_fc, layer_parameter_names_fc, layer_datatypes_fc) =
-    dtfutils.get_ffstack_properties(Seq(-1) ++ ff_stack_sizes, ff_index_fc, "FLOAT64")
+  val (_, layer_shapes_fc, layer_parameter_names_fc, layer_datatypes_fc) =
+    dtfutils.get_ffstack_properties(
+      -1, ff_stack_sizes.last,
+      ff_stack_sizes.dropRight(1),
+      dType = "FLOAT64",
+      starting_index = ff_index_fc)
 
   val loss_func = helios.learn.cdt_loss(
     "Loss/CDT-SW",

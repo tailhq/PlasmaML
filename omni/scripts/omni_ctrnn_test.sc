@@ -8,7 +8,7 @@ import io.github.mandar2812.dynaml.tensorflow.utils._
 import io.github.mandar2812.dynaml.tensorflow.layers._
 import io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 import io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader, OmniOSA}
-import _root_.io.github.mandar2812.PlasmaML.utils._
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.StopCriteria

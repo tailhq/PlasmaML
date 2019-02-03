@@ -8,7 +8,7 @@ import _root_.io.github.mandar2812.dynaml.analysis._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
-import _root_.io.github.mandar2812.PlasmaML.utils.L2Regularization
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
