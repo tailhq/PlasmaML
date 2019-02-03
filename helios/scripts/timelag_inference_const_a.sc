@@ -43,6 +43,7 @@ def main(
 
   //Output computation
   val beta = 100f
+
   val compute_output = DataPipe(
     (v: Tensor) =>
       (
@@ -89,12 +90,12 @@ def main(
 
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
     compute_output > compute_time_lag, sliding_window,
-    d, n, noiserot, alpha, noise, confounding)
+    d, n, noiserot, alpha, noise)
 
-  if(train_test_separate) {
+  val experiment_result = if(train_test_separate) {
     val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
       compute_output > compute_time_lag, sliding_window,
-      d, n, noiserot, alpha, noise, confounding)
+      d, n, noiserot, alpha, noise)
 
     timelag.run_exp_joint(
       (dataset, dataset_test),
@@ -103,7 +104,8 @@ def main(
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,
       timelag_pred_strategy,
-      summaries_top_dir)
+      summaries_top_dir,
+      confounding_factor = confounding)
   } else {
 
     timelag.run_exp(
@@ -113,6 +115,13 @@ def main(
       sum_dir_prefix,
       mo_flag, prob_timelags,
       timelag_pred_strategy,
-      summaries_top_dir)
+      summaries_top_dir,
+      confounding_factor = confounding)
   }
+
+  experiment_result.copy(
+    config = experiment_result.config.copy(
+      output_mapping = Some(compute_output > DataPipe[(Float, Float), Float](_._1))
+    )
+  )
 }

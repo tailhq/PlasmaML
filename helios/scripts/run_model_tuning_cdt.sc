@@ -43,8 +43,6 @@ def apply(
   epochFlag: Boolean                           = false,
   regularization_type: String                  = "L2"): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
-  //Output computation
-  val beta = 100f
   val mo_flag = true
   val prob_timelags = true
 
@@ -62,32 +60,6 @@ def apply(
     activation_func, FLOAT32)(
     net_layer_sizes.tail) >>
     output_mapping
-
-
-  implicit val detImpl = DynaMLPipe.identityPipe[Double]
-
-  val h: PushforwardMap[Double, Double, Double] = PushforwardMap(
-    DataPipe((x: Double) => math.exp(x)),
-    DifferentiableMap(
-      (x: Double) => math.log(x),
-      (x: Double) => 1.0/x)
-  )
-
-  val h10: PushforwardMap[Double, Double, Double] = PushforwardMap(
-    DataPipe((x: Double) => math.pow(10d, x)),
-    DifferentiableMap(
-      (x: Double) => math.log10(x),
-      (x: Double) => 1.0/(x*math.log(10d)))
-  )
-
-  val g1 = GaussianRV(0.0, 0.75)
-
-  val g2 = GaussianRV(0.2, 0.75)
-
-  val lg_p = h -> g1
-  val lg_e = h -> g2
-
-  val lu_reg = h10 -> UniformRV(-4d, -2.5d)
 
   val hyper_parameters = List(
     "prior_wt",
@@ -152,17 +124,17 @@ def apply(
       .asInstanceOf[Double]
   })
 
-  val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, sliding_window,
-    d, size_training, noiserot,
-    alpha, noise, confounding)
+  val dataset: timelag.utils.TLDATA =
+    timelag.utils.generate_data(
+      compute_output, sliding_window,
+      d, size_training, noiserot,
+      alpha, noise)
 
-  val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
-    compute_output, sliding_window,
-    d, size_test, noiserot, alpha,
-    noise, confounding)
-
-
+  val dataset_test: timelag.utils.TLDATA =
+    timelag.utils.generate_data(
+      compute_output, sliding_window,
+      d, size_test, noiserot, alpha,
+      noise)
 
   timelag.run_exp_hyp(
     (dataset, dataset_test),
@@ -177,6 +149,7 @@ def apply(
     hyper_optimizer,
     hyp_opt_iterations = hyp_opt_iterations,
     epochFlag = epochFlag,
-    hyp_mapping = hyp_mapping)
+    hyp_mapping = hyp_mapping,
+    confounding_factor = confounding)
 
 }

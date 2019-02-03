@@ -49,10 +49,13 @@ def main(
   //Time Lag Computation
   // distance/velocity
   val distance = beta*10
-  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
-    (v: Tensor) => {
 
-      val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f
+  val compute_v = DataPipe[Tensor, Float]((v: Tensor) => v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f)
+
+  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
+    (x: Tensor) => {
+
+      val out = compute_v(x)
 
       val noisy_output = out + scala.util.Random.nextGaussian().toFloat
 
@@ -92,11 +95,11 @@ def main(
     d, size_training, noiserot,
     alpha, noise)
 
-  if(train_test_separate) {
+  val experiment_result = if(train_test_separate) {
     val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
       compute_output, sliding_window,
       d, size_test, noiserot,
-      alpha, noise, confounding)
+      alpha, noise)
 
     timelag.run_exp_joint(
       (dataset, dataset_test),
@@ -105,7 +108,8 @@ def main(
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,
       timelag_pred_strategy,
-      summaries_top_dir)
+      summaries_top_dir,
+      confounding_factor = confounding)
   } else {
 
     timelag.run_exp(
@@ -116,8 +120,15 @@ def main(
       sum_dir_prefix,
       mo_flag, prob_timelags,
       timelag_pred_strategy,
-      summaries_top_dir)
+      summaries_top_dir,
+      confounding_factor = confounding)
   }
+
+  experiment_result.copy(
+    config = experiment_result.config.copy(
+      output_mapping = Some(compute_v)
+    )
+  )
 }
 
 
@@ -168,12 +179,12 @@ def stage_wise(
   val dataset: timelag.utils.TLDATA = timelag.utils.generate_data(
     compute_output, sliding_window,
     d, size_training, noiserot,
-    alpha, noise, confounding)
+    alpha, noise)
 
   val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
     compute_output, sliding_window,
     d, size_test, noiserot,
-    alpha, noise, confounding)
+    alpha, noise)
 
   val (net_layer_sizes_i, layer_shapes_i, layer_parameter_names_i, layer_datatypes_i) =
     timelag.utils.get_ffnet_properties(
@@ -211,11 +222,17 @@ def stage_wise(
     L2Regularization(layer_parameter_names_ii, layer_datatypes_ii, layer_shapes_ii, reg_ii) >>
     tf.learn.ScalarSummary("Loss", "TimeLagLoss")
 
-  timelag.run_exp_stage_wise(
+  val experiment_result = timelag.run_exp_stage_wise(
     (dataset, dataset_test),
     architecture_i, architecture_ii, loss_i, loss_ii,
     iterations, optimizer, miniBatch, sum_dir_prefix,
     mo_flag, prob_timelags, timelag_pred_strategy,
-    summaries_top_dir
+    summaries_top_dir, confounding_factor = confounding
+  )
+
+  experiment_result.copy(
+    config = experiment_result.config.copy(
+      output_mapping = Some(compute_output > DataPipe[(Float, Float), Float](_._1))
+    )
   )
 }

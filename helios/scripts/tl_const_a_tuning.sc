@@ -60,7 +60,7 @@ def main(
   })
 
 
-  run_model_tuning_cdt(
+  val experiment_result = run_model_tuning_cdt(
     compute_output > compute_time_lag,
     d, confounding, size_training, size_test, sliding_window, noise, noiserot,
     alpha, train_test_separate, num_neurons, 
@@ -69,5 +69,11 @@ def main(
     prior_type, dist_type, timelag_pred_strategy, 
     summaries_top_dir, num_samples, hyper_optimizer,
     hyp_opt_iterations, epochFlag
+  )
+
+  experiment_result.copy(
+    config = experiment_result.config.copy(
+      output_mapping = Some(compute_output > DataPipe[(Float, Float), Float](_._1))
+    )
   )
 }

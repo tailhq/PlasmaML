@@ -147,7 +147,10 @@ package object timelag {
   case class ExperimentType(
     multi_output: Boolean,
     probabilistic_time_lags: Boolean,
-    timelag_prediction: String)
+    timelag_prediction: String,
+    input_shape: Shape,
+    confounding_factor: Double,
+    output_mapping: Option[DataPipe[Tensor, Float]] = None)
 
   case class ExperimentResult[Results <: ModelRun](
     config: ExperimentType,
@@ -567,7 +570,8 @@ package object timelag {
     mo_flag: Boolean              = false,
     prob_timelags: Boolean        = false,
     timelag_pred_strategy: String = "mode",
-    summaries_top_dir: Path       = home/'tmp): ExperimentResult[JointModelRun] = {
+    summaries_top_dir: Path       = home/'tmp,
+    confounding_factor: Double    = 0d): ExperimentResult[JointModelRun] = {
 
     val train_fraction = 0.7
 
@@ -585,7 +589,8 @@ package object timelag {
       architecture, loss,
       iterations, optimizer, miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags, timelag_pred_strategy,
-      summaries_top_dir
+      summaries_top_dir,
+      confounding_factor = confounding_factor
     )
   }
 
@@ -640,10 +645,11 @@ package object timelag {
     prob_timelags: Boolean        = false,
     timelag_pred_strategy: String = "mode",
     summaries_top_dir: Path       = home/'tmp,
-    epochFlag: Boolean            = false): ExperimentResult[JointModelRun] = {
+    epochFlag: Boolean            = false,
+    confounding_factor: Double    = 0d): ExperimentResult[JointModelRun] = {
 
-    val (data, collated_data): TLDATA           = dataset._1
-    val (data_test, collated_data_test): TLDATA = dataset._2
+    val (data, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
+    val (data_test, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
 
     val data_size = collated_data.toSeq.length
 
@@ -753,8 +759,13 @@ package object timelag {
     val results_model_eval = train_and_evaluate(collated_data, collated_data_test)
 
     val exp_results = ExperimentResult(
-      ExperimentType(mo_flag, prob_timelags, timelag_pred_strategy),
-      (data, collated_data), (data_test, collated_data_test),
+      ExperimentType(
+        mo_flag, prob_timelags,
+        timelag_pred_strategy,
+        dataset._1._1.head._1._2.shape,
+        confounding_factor),
+      dataset._1,
+      dataset._2,
       results_model_eval
     )
 
@@ -817,10 +828,11 @@ package object timelag {
     prob_timelags: Boolean        = false,
     timelag_pred_strategy: String = "mode",
     summaries_top_dir: Path       = home/'tmp,
-    epochFlag: Boolean = false): ExperimentResult[StageWiseModelRun] = {
+    epochFlag: Boolean            = false,
+    confounding_factor: Double    = 0d): ExperimentResult[StageWiseModelRun] = {
 
-    val (data, collated_data): TLDATA           = dataset._1
-    val (data_test, collated_data_test): TLDATA = dataset._2
+    val (data, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
+    val (data_test, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
 
     val data_size = collated_data.toSeq.length
 
@@ -987,8 +999,13 @@ package object timelag {
     val results_model_eval = train_and_evaluate(collated_data, collated_data_test)
 
     val exp_results = ExperimentResult(
-      ExperimentType(mo_flag, prob_timelags, timelag_pred_strategy),
-      (data, collated_data), (data_test, collated_data_test),
+      ExperimentType(
+        mo_flag, prob_timelags,
+        timelag_pred_strategy,
+        dataset._1._1.head._1._2.shape,
+        confounding_factor),
+      dataset._1,
+      dataset._2,
       results_model_eval
     )
 
@@ -1066,10 +1083,12 @@ package object timelag {
     hyper_optimizer: String         = "gs",
     hyp_opt_iterations: Option[Int] = Some(5),
     hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
-    epochFlag: Boolean              = false): ExperimentResult[TunedModelRun] = {
+    epochFlag: Boolean              = false,
+    confounding_factor: Double      = 0d): ExperimentResult[TunedModelRun] = {
 
-    val (data, collated_data): TLDATA           = dataset._1
-    val (data_test, collated_data_test): TLDATA = dataset._2
+
+    val (data, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
+    val (data_test, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
 
     val data_size = collated_data.toSeq.length
 
@@ -1285,8 +1304,13 @@ package object timelag {
     val results_model_eval = train_and_evaluate(collated_data, collated_data_test)
 
     val exp_results = ExperimentResult(
-      ExperimentType(mo_flag, prob_timelags, timelag_pred_strategy),
-      (data, collated_data), (data_test, collated_data_test),
+      ExperimentType(
+        mo_flag, prob_timelags,
+        timelag_pred_strategy,
+        input_shape,
+        confounding_factor),
+      dataset._1,
+      dataset._2,
       results_model_eval
     )
 

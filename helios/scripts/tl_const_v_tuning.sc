@@ -43,17 +43,20 @@ def main(
   //Time Lag Computation
   // distance/velocity
   val distance = beta*10
-  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
-    (v: Tensor) => {
 
-      val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f
+  val compute_v = DataPipe[Tensor, Float]((v: Tensor) => v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f)
+
+  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
+    (x: Tensor) => {
+
+      val out = compute_v(x)
 
       val noisy_output = out + scala.util.Random.nextGaussian().toFloat
 
       (distance/noisy_output, noisy_output)
-  })
+    })
 
-  run_model_tuning_cdt(
+  val experiment_result = run_model_tuning_cdt(
     compute_output,
     d, confounding, size_training, size_test,
     sliding_window, noise, noiserot,
@@ -63,5 +66,11 @@ def main(
     prior_type, dist_type, timelag_pred_strategy, 
     summaries_top_dir, num_samples, hyper_optimizer,
     hyp_opt_iterations, epochFlag
+  )
+
+  experiment_result.copy(
+    config = experiment_result.config.copy(
+      output_mapping = Some(compute_v)
+    )
   )
 }

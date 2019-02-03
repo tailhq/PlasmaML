@@ -44,8 +44,6 @@ package object utils {
     override val layerType = "Poly"
 
     override protected def _forward(input: Output)(implicit mode: Mode): Output = {
-      //val power = dtf.tensor_i32(input.shape(1))((1 to input.shape(1)):_*)
-
       input.pow(power)
 
     }
@@ -105,20 +103,12 @@ package object utils {
     *
     * @param sliding_window The size of the sliding time window [y(t), ..., y(t+h)]
     *                       to construct. This is used as training label for the model.
-    *
-    * @param confounding_factor A number between 0 and 1 determining how many input dimensions
-    *                           should be retained in the generated data set. Defaults to 0, which
-    *                           retains all the dimensions.
     * */
   def generate_data(
     compute_output_and_lag: DataPipe[Tensor, (Float, Float)],
     sliding_window: Int, d: Int = 3, n: Int = 5,
     noiserot: Double = 0.1, alpha: Double = 0.0,
-    noise: Double = 0.5, confounding_factor: Double = 0d): TLDATA = {
-
-    require(
-      confounding_factor >= 0d && confounding_factor <= 1d,
-      "The confounding factor can only be between 0 and 1")
+    noise: Double = 0.5): TLDATA = {
 
     val random_gaussian_vec: DataPipe[Int, RandomVariable[Tensor]] =
       DataPipe((i: Int) =>
@@ -242,7 +232,30 @@ package object utils {
       .map(p => (p._1, (p._2._1, p._2._2.get, p._2._3)))
 
     //Now slice the input tensors depending on the confounding.
+
+    (data, joined_data)
+  }
+
+  /**
+    * Introduce confounding factors in a generated data set.
+    * Implemented by hiding a fraction of the input features.
+    *
+    * @param dataset A generated time series data set, of type [[TLDATA]]
+    *
+    * @param confounding_factor A fraction, which represents the degree of confounding.
+    *                           a value of 0 represents no confounding factors
+    *                           in the final data set.
+    * */
+  def confound_data(dataset: TLDATA, confounding_factor: Double): TLDATA = {
+    require(
+      confounding_factor >= 0d && confounding_factor <= 1d,
+      "The confounding factor can only be between 0 and 1")
+
+    val d = dataset._1.head._1._2.shape(0).scalar.asInstanceOf[Int]
+
     val num_sel_dims = d*math.ceil(1d - confounding_factor).toInt
+
+    val (data, joined_data) = dataset
 
     val data_con = data.map(patt => ((patt._1._1, patt._1._2(0 :: num_sel_dims)), patt._2))
 

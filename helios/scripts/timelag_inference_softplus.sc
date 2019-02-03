@@ -49,10 +49,13 @@ def main(
   //Time Lag Computation
   // distance/velocity
   //val distance = beta*10
-  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
-    (v: Tensor) => {
 
-      val out = v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f
+  val compute_v = DataPipe[Tensor, Float]((v: Tensor) => v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f)
+
+  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
+    (x: Tensor) => {
+
+      val out = compute_v(x)
 
       (math.log(1 + math.exp((out - 300f)/75f)).toFloat, out + scala.util.Random.nextGaussian().toFloat)
   })
@@ -85,14 +88,14 @@ def main(
     compute_output, sliding_window,
     d, size_training,
     noiserot, alpha,
-    noise, confounding)
+    noise)
 
-  if(train_test_separate) {
+  val experiment_result = if(train_test_separate) {
     val dataset_test: timelag.utils.TLDATA = timelag.utils.generate_data(
       compute_output, sliding_window,
       d, size_test,
       noiserot, alpha,
-      noise, confounding)
+      noise)
 
     timelag.run_exp_joint(
       (dataset, dataset_test),
@@ -101,7 +104,8 @@ def main(
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,
       timelag_pred_strategy,
-      summaries_top_dir)
+      summaries_top_dir,
+      confounding_factor = confounding)
   } else {
 
     timelag.run_exp(
@@ -111,6 +115,13 @@ def main(
       miniBatch, sum_dir_prefix,
       mo_flag, prob_timelags,
       timelag_pred_strategy,
-      summaries_top_dir)
+      summaries_top_dir,
+      confounding_factor = confounding)
   }
+
+  experiment_result.copy(
+    config = experiment_result.config.copy(
+      output_mapping = Some(compute_v)
+    )
+  )
 }
