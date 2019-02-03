@@ -125,14 +125,10 @@ def main[T <: SolarImagesSource](
       num_channels*(image_hist_downsamp + 1),
       filter_depths_stack1, activation,
       use_batch_norm = true)(1) >>
-    //dtflearn.batch_norm("BatchNorm_1") >>
-    //tf.learn.ReLU("ReLU_1", 0.01f) >>
     tf.learn.MaxPool(s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
     dtflearn.inception_stack(
       filter_depths_stack1.last.sum, filter_depths_stack2,
       activation, use_batch_norm = true)(5) >>
-    //dtflearn.batch_norm("BatchNorm_2") >>
-    //tf.learn.ReLU("ReLU_2", 0.01f) >>
     tf.learn.MaxPool(s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding)
 
 
@@ -141,7 +137,7 @@ def main[T <: SolarImagesSource](
     ff_stack, starting_index = ff_index)
 
   val output_mapping = helios.learn.cdt_loss.output_mapping(
-    "Output/CDT-SW",
+    name = "Output/CDT-SW",
     dataset.data.head._2._2.length)
 
 
