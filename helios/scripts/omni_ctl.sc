@@ -133,7 +133,7 @@ def main[T <: SolarImagesSource](
 
 
   val post_conv_ff_stack = dtflearn.feedforward_stack(
-    (i: Int) => dtflearn.Phi("Act_"+i), FLOAT64)(
+    (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
     ff_stack, starting_index = ff_index)
 
   val output_mapping = helios.learn.cdt_loss.output_mapping(
