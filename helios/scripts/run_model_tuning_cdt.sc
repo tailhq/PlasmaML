@@ -40,7 +40,8 @@ def apply(
   num_samples: Int                             = 20,
   hyper_optimizer: String                      = "gs",
   hyp_opt_iterations: Option[Int]              = Some(5),
-  epochFlag: Boolean                           = false): timelag.ExperimentResult[timelag.TunedModelRun] = {
+  epochFlag: Boolean                           = false,
+  regularization_type: String                  = "L2"): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
   //Output computation
   val beta = 100f
@@ -130,8 +131,12 @@ def apply(
       error_wt = h("error_wt"),
       c = h("specificity"))
 
+    val reg_layer =
+      if(regularization_type == "L1") L1Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+      else L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+
     lossFunc >>
-      L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg")) >>
+      reg_layer >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
