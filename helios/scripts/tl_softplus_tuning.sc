@@ -34,7 +34,8 @@ def main(
   num_samples: Int                             = 20,
   hyper_optimizer: String                      = "gs",
   hyp_opt_iterations: Option[Int]              = Some(5),
-  epochFlag: Boolean                           = false): timelag.ExperimentResult[timelag.TunedModelRun] = {
+  epochFlag: Boolean                           = false,
+  regularization_type: String                  = "L2"): timelag.ExperimentResult[timelag.TunedModelRun] = {
 
   //Output computation
   val beta = 100f
