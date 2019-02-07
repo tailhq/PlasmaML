@@ -1087,12 +1087,10 @@ package object timelag {
     confounding_factor: Double      = 0d): ExperimentResult[TunedModelRun] = {
 
 
-    val (data, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
-    val (data_test, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
+    val (_, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
+    val (_, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
 
     val data_size = collated_data.toSeq.length
-
-    val data_size_test = collated_data_test.toSeq.length
 
     val causal_window = collated_data.head._2._2.length
     val input_shape   = collated_data.head._2._1.shape
