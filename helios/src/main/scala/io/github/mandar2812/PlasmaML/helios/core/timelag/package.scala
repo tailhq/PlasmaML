@@ -1088,7 +1088,7 @@ package object timelag {
 
 
     val (_, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
-    val (_, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
+    val (_, collated_data_test): TLDATA      = confound_data(dataset._2, confounding_factor)
 
     val data_size = collated_data.toSeq.length
 
