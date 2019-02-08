@@ -67,11 +67,12 @@ import org.platanios.tensorflow.api.ops.Output
 case class CausalDynamicTimeLag(
   override val name: String,
   size_causal_window: Int,
-  prior_wt: Double = 1.5,
-  error_wt: Double = 1.0,
-  temperature: Double = 1.0,
-  specificity: Double = 1.0,
-  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler) extends
+  prior_wt: Double                                             = 1.5,
+  error_wt: Double                                             = 1.0,
+  temperature: Double                                          = 1.0,
+  specificity: Double                                          = 1.0,
+  divergence: CausalDynamicTimeLag.Divergence                  = CausalDynamicTimeLag.KullbackLeibler,
+  target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann) extends
   Loss[((Output, Output), Output)](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
@@ -84,14 +85,15 @@ case class CausalDynamicTimeLag(
 
     val model_errors = preds.subtract(targets)
 
-    val target_prob = divergence match {
-      case CausalDynamicTimeLag.Hellinger => model_errors.square.multiply(-1).divide(temperature).softmax()
+    val target_prob = target_distribution match {
+      case CausalDynamicTimeLag.Boltzmann => model_errors.square.multiply(-1).divide(temperature).softmax()
 
-      case CausalDynamicTimeLag.KullbackLeibler => model_errors.square.multiply(-1).divide(temperature).softmax()
-
-      case _ => dtf.tensor_f64(
+      case CausalDynamicTimeLag.Uniform => dtf.tensor_f64(
         1, size_causal_window)(
-        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
+        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*
+      ).toOutput
+
+      case _ => model_errors.square.multiply(-1).divide(temperature).softmax()
     }
 
 
@@ -103,6 +105,60 @@ case class CausalDynamicTimeLag(
       .multiply(error_wt)
       .add(prior_term.multiply(prior_wt))
   }
+}
+
+object CausalDynamicTimeLag {
+
+  sealed trait Divergence {
+    def apply(p: Output, q: Output): Output
+  }
+
+  object KullbackLeibler extends Divergence {
+    override def apply(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
+  }
+
+  object JensenShannon extends Divergence {
+    override def apply(p: Output, q: Output): Output = {
+
+      val m = p.add(q).divide(2)
+
+      (KullbackLeibler(p, m) + KullbackLeibler(q, m))/2
+
+    }
+  }
+
+  object CrossEntropy extends Divergence {
+    override def apply(p: Output, q: Output): Output = q.multiply(p.log).sum(axes = 1).multiply(-1).mean()
+  }
+
+  object Hellinger extends Divergence {
+    override def apply(p: Output, q: Output): Output =
+      q.sqrt.subtract(p.sqrt).square.sum(axes = 1).divide(2).sqrt.mean()
+  }
+
+  object L2 extends Divergence {
+    override def apply(p: Output, q: Output): Output = q.subtract(p).square.sum(axes = 1).divide(2).mean()
+  }
+
+  object Entropy extends Divergence {
+    override def apply(p: Output, q: Output): Output = p.log.multiply(p).multiply(-1).sum(axes = 1).mean()
+  }
+
+
+  sealed trait TargetDistribution
+
+  object Boltzmann extends TargetDistribution
+
+  object Uniform extends TargetDistribution
+
+  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
+    new Layer[Output, (Output, Output)](name) {
+      override val layerType: String = s"OutputWTSLoss[horizon:$size_causal_window]"
+
+      override protected def _forward(input: Output)(implicit mode: Mode): (Output, Output) = {
+        (input(::, 0::size_causal_window), input(::, size_causal_window::).softmax())
+      }
+    }
 }
 
 case class CausalDynamicTimeLagI(
@@ -166,54 +222,6 @@ object CausalDynamicTimeLagII {
 
       override protected def _forward(input: Output)(implicit mode: Mode): Output = {
         input.softmax()
-      }
-    }
-}
-
-
-object CausalDynamicTimeLag {
-
-  sealed trait Divergence {
-    def apply(p: Output, q: Output): Output
-  }
-
-  object KullbackLeibler extends Divergence {
-    override def apply(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
-  }
-
-  object JensenShannon extends Divergence {
-    override def apply(p: Output, q: Output): Output = {
-
-      val m = p.add(q).divide(2)
-
-      (KullbackLeibler(p, m) + KullbackLeibler(q, m))/2
-
-    }
-  }
-
-  object CrossEntropy extends Divergence {
-    override def apply(p: Output, q: Output): Output = q.multiply(p.log).sum(axes = 1).multiply(-1).mean()
-  }
-
-  object Hellinger extends Divergence {
-    override def apply(p: Output, q: Output): Output =
-      q.sqrt.subtract(p.sqrt).square.sum(axes = 1).divide(2).sqrt.mean()
-  }
-
-  object L2 extends Divergence {
-    override def apply(p: Output, q: Output): Output = q.subtract(p).square.sum(axes = 1).divide(2).mean()
-  }
-
-  object Entropy extends Divergence {
-    override def apply(p: Output, q: Output): Output = p.log.multiply(p).multiply(-1).sum(axes = 1).mean()
-  }
-
-  def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
-    new Layer[Output, (Output, Output)](name) {
-      override val layerType: String = s"OutputWTSLoss[horizon:$size_causal_window]"
-
-      override protected def _forward(input: Output)(implicit mode: Mode): (Output, Output) = {
-        (input(::, 0::size_causal_window), input(::, size_causal_window::).softmax())
       }
     }
 }

@@ -609,15 +609,16 @@ package object utils {
     sliding_window: Int,
     mo_flag: Boolean,
     prob_timelags: Boolean,
-    p: Double                     = 1.0,
-    time_scale: Double            = 1.0,
-    corr_sc: Double               = 2.5,
-    c_cutoff: Double              = 0.0,
-    prior_wt: Double              = 1d,
-    prior_divergence:  helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
-    temp: Double                  = 1.0,
-    error_wt: Double              = 1.0,
-    c: Double                     = 1.0): Loss[((Output, Output), Output)] =
+    p: Double                                             = 1.0,
+    time_scale: Double                                    = 1.0,
+    corr_sc: Double                                       = 2.5,
+    c_cutoff: Double                                      = 0.0,
+    prior_wt: Double                                      = 1d,
+    prior_divergence:  helios.learn.cdt_loss.Divergence   = helios.learn.cdt_loss.KullbackLeibler,
+    target_dist: helios.learn.cdt_loss.TargetDistribution = helios.learn.cdt_loss.Boltzmann,
+    temp: Double                                          = 1.0,
+    error_wt: Double                                      = 1.0,
+    c: Double                                             = 1.0): Loss[((Output, Output), Output)] =
     if (!mo_flag) {
       if (!prob_timelags) {
         RBFWeightedSWLoss(
@@ -653,6 +654,7 @@ package object utils {
         error_wt = error_wt,
         temperature = temp,
         divergence = prior_divergence,
+        target_distribution = target_dist,
         specificity = c)
     }
 
@@ -845,21 +847,21 @@ package object utils {
     identifier: String): Unit = {
 
     //Write the features.
-    write(
+    write.over(
       summary_dir/s"${identifier}_features.csv",
       data._2.map(_._2._1)
         .map(x => dtfutils.toDoubleSeq(x).mkString(","))
         .mkString("\n")
     )
 
-    write(
+    write.over(
       summary_dir/s"${identifier}_output_lag.csv",
       data._1.map(_._2)
         .map(x => s"${x._1},${x._2}")
         .mkString("\n"))
 
     //Write the slided outputs.
-    write(
+    write.over(
       summary_dir/s"${identifier}_targets.csv",
       data._2.map(_._2._2)
         .map(_.mkString(","))
@@ -875,12 +877,12 @@ package object utils {
 
     val h = outputs._1.shape(1)
 
-    write(
+    write.over(
       summary_dir/s"${identifier}_predictions.csv",
       dtfutils.toDoubleSeq(outputs._1).grouped(h).map(_.mkString(",")).mkString("\n")
     )
 
-    write(
+    write.over(
       summary_dir/s"${identifier}_probabilities.csv",
       dtfutils.toDoubleSeq(outputs._2).grouped(h).map(_.mkString(",")).mkString("\n")
     )
@@ -892,7 +894,7 @@ package object utils {
     ground_truth: Seq[(Double, Double)],
     summary_dir: Path, identifier: String): Unit = {
 
-    write(
+    write.over(
       summary_dir/s"${identifier}_scatter.csv",
       "predv,predlag,actualv,actuallag\n"+
         predictions.zip(ground_truth).map(
