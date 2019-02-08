@@ -12,7 +12,7 @@ import $file.run_model_tuning_cdt
 @main
 def main(
   d: Int                                                = 3,
-  confounding: Double                                   = 0d,
+  confounding: Seq[Double]                              = Seq(0d, 0.25, 0.5, 0.75),
   size_training: Int                                    = 100,
   size_test: Int                                        = 50,
   sliding_window: Int                                   = 15,
@@ -36,7 +36,8 @@ def main(
   hyper_optimizer: String                               = "gs",
   hyp_opt_iterations: Option[Int]                       = Some(5),
   epochFlag: Boolean                                    = false,
-  regularization_type: String                           = "L2"): timelag.ExperimentResult[timelag.TunedModelRun] = {
+  regularization_type: String                           = "L2")
+: Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
 
   //Output computation
   val beta = 100f
@@ -57,7 +58,7 @@ def main(
       (distance/noisy_output, noisy_output)
     })
 
-  val experiment_result = run_model_tuning_cdt(
+  val experiment_results = run_model_tuning_cdt(
     compute_output,
     d, confounding, size_training, size_test,
     sliding_window, noise, noiserot,
@@ -69,7 +70,7 @@ def main(
     hyper_optimizer, hyp_opt_iterations, epochFlag
   )
 
-  experiment_result.copy(
+  experiment_results.map(experiment_result => experiment_result.copy(
     config = experiment_result.config.copy(output_mapping = Some(compute_v))
-  )
+  ))
 }

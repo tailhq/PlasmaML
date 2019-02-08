@@ -2,9 +2,6 @@ import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability._
-import _root_.io.github.mandar2812.dynaml.DynaMLPipe
-import _root_.io.github.mandar2812.dynaml.analysis._
-import _root_.spire.implicits._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
@@ -18,7 +15,7 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 def apply(
   compute_output: DataPipe[Tensor, (Float, Float)],
   d: Int                                                = 10,
-  confounding: Double                                   = 0d,
+  confounding: Seq[Double]                              = Seq(0d, 0.25, 0.5, 0.75),
   size_training: Int                                    = 1000,
   size_test: Int                                        = 500,
   sliding_window: Int                                   = 15,
@@ -42,7 +39,8 @@ def apply(
   hyper_optimizer: String                               = "gs",
   hyp_opt_iterations: Option[Int]                       = Some(5),
   epochFlag: Boolean                                    = false,
-  regularization_type: String                           = "L2"): timelag.ExperimentResult[timelag.TunedModelRun] = {
+  regularization_type: String                           = "L2")
+: Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
 
   val mo_flag = true
   val prob_timelags = true
@@ -138,20 +136,22 @@ def apply(
       d, size_test, noiserot, alpha,
       noise)
 
-  timelag.run_exp_hyp(
-    (dataset, dataset_test),
-    architecture, hyper_parameters,
-    loss_func_generator,
-    fitness_function, hyper_prior,
-    iterations, iterations_tuning, optimizer,
-    miniBatch, sum_dir_prefix,
-    mo_flag, prob_timelags,
-    timelag_pred_strategy,
-    summaries_top_dir, num_samples,
-    hyper_optimizer,
-    hyp_opt_iterations = hyp_opt_iterations,
-    epochFlag = epochFlag,
-    hyp_mapping = hyp_mapping,
-    confounding_factor = confounding)
+  confounding.map(c =>
+    timelag.run_exp_hyp(
+      (dataset, dataset_test),
+      architecture, hyper_parameters,
+      loss_func_generator,
+      fitness_function, hyper_prior,
+      iterations, iterations_tuning, optimizer,
+      miniBatch, sum_dir_prefix,
+      mo_flag, prob_timelags,
+      timelag_pred_strategy,
+      summaries_top_dir, num_samples,
+      hyper_optimizer,
+      hyp_opt_iterations = hyp_opt_iterations,
+      epochFlag = epochFlag,
+      hyp_mapping = hyp_mapping,
+      confounding_factor = c)
+  )
 
 }
