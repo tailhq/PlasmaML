@@ -63,8 +63,6 @@ def main(
   )
 
   experiment_result.copy(
-    config = experiment_result.config.copy(
-      output_mapping = Some(compute_v)
-    )
+    config = experiment_result.config.copy(output_mapping = Some(compute_v))
   )
 }
