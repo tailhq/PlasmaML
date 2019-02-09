@@ -1159,8 +1159,8 @@ package object timelag {
       val dt = DateTime.now()
 
       val summary_dir_index  =
-        if(mo_flag) sum_dir_prefix+"_timelag_mo_"+dt.toString("YYYY-MM-dd-HH-mm")
-        else sum_dir_prefix+"_timelag_"+dt.toString("YYYY-MM-dd-HH-mm")
+        if(mo_flag) sum_dir_prefix+"_timelag_mo_"+dt.toString("YYYY-MM-dd-HH-mm-ss")
+        else sum_dir_prefix+"_timelag_"+dt.toString("YYYY-MM-dd-HH-mm-ss")
 
       val tf_summary_dir        = summaries_top_dir/summary_dir_index
 

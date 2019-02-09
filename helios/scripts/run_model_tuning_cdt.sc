@@ -48,7 +48,7 @@ def apply(
   val num_pred_dims = timelag.utils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelag.utils.get_ffnet_properties(d, num_pred_dims, num_neurons, "FLOAT32")
+    timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons, "FLOAT32")
 
   val output_mapping = timelag.utils.get_output_mapping(
     sliding_window, mo_flag,
