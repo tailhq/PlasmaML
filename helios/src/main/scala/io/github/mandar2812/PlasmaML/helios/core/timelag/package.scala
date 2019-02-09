@@ -149,7 +149,7 @@ package object timelag {
     probabilistic_time_lags: Boolean,
     timelag_prediction: String,
     input_shape: Shape,
-    confounding_factor: Double,
+    actual_input_shape: Shape,
     output_mapping: Option[DataPipe[Tensor, Float]] = None)
 
   case class ExperimentResult[Results <: ModelRun](
@@ -340,15 +340,20 @@ package object timelag {
     write_model_outputs(test_preds,  tf_summary_dir, "test")
 
     //Write errors in target vs errors in time lag for the training data.
-    write(
+    write.over(
       tf_summary_dir/"train_errors.csv",
       "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
 
     //Write errors in target vs errors in time lag for the test data.
-    write(
+    write.over(
       tf_summary_dir/"test_errors.csv",
       "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
 
+    //Write model performance
+    write_performance(
+      (metrics_train, metrics_time_lag_train),
+      (metrics_test, metrics_time_lag_test),
+      tf_summary_dir)
 
     val script1 = pwd/'helios/'scripts/"visualise_tl_results.R"
     val script2 = pwd/'helios/'scripts/"visualise_tl_preds.R"
@@ -529,15 +534,21 @@ package object timelag {
     write_model_outputs(test_preds,  tf_summary_dir, "test")
 
     //Write errors in target vs errors in time lag for the training data.
-    write(
+    write.over(
       tf_summary_dir/"train_errors.csv",
       "error_v,error_lag\n"+train_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
 
     //Write errors in target vs errors in time lag for the test data.
-    write(
+    write.over(
       tf_summary_dir/"test_errors.csv",
       "error_v,error_lag\n"+test_err_scatter.map(c => c._1.toString + "," + c._2.toString).mkString("\n"))
 
+
+    //Write model performance
+    write_performance(
+      (metrics_train, metrics_time_lag_train),
+      (metrics_test, metrics_time_lag_test),
+      tf_summary_dir)
 
     val script1 = pwd/'helios/'scripts/"visualise_tl_results.R"
     val script2 = pwd/'helios/'scripts/"visualise_tl_preds.R"
@@ -553,6 +564,48 @@ package object timelag {
     } catch {
       case e: Exception => e.printStackTrace()
     }
+
+  }
+
+  def organize_results(
+    results: Seq[ExperimentResult[TunedModelRun]],
+    directory: Path): Unit = {
+
+    //First generate plots and dump files for each experiment.
+    results.foreach(res => {
+      plot_and_write_results_tuned(res, browser_plots = false)
+      mkdir! directory/res.results.summary_dir.segments.last
+    })
+
+    //TODO: Include all non-tunable experiment parameters here
+    //Create a manifest file
+    val header = "tlpred,actualdim,inputdim,dir\n"
+    val manifest_data = results.map(r =>
+      s"${r.config.timelag_prediction}," +
+        s"${r.config.actual_input_shape.scalar.asInstanceOf[Int]}," +
+        s"${r.config.input_shape.scalar.asInstanceOf[Int]}," +
+        s"${r.results.summary_dir.segments.last}"
+    ).mkString("\n")
+
+    write.over(
+      directory/"manifest.csv",
+      header+manifest_data
+    )
+
+    //Now copy plots and csv/json files to `directory`
+    results.foreach(res => {
+
+      val files_to_copy =
+        ls! res.results.summary_dir |? (f =>
+          f.segments.last.contains(".csv") ||
+            f.segments.last.contains(".png") ||
+            f.segments.last.contains(".pdf") ||
+            f.segments.last.contains(".json")
+          )
+
+      files_to_copy.foreach(f => cp.into(f, directory/res.results.summary_dir.segments.last))
+
+    })
 
   }
 
@@ -648,10 +701,10 @@ package object timelag {
     epochFlag: Boolean            = false,
     confounding_factor: Double    = 0d): ExperimentResult[JointModelRun] = {
 
-    val (data, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
-    val (data_test, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
+    val (_, collated_data): TLDATA      = confound_data(dataset._1, confounding_factor)
+    val (_, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
 
-    val data_size = collated_data.toSeq.length
+    val data_size      = collated_data.toSeq.length
 
     val causal_window  = collated_data.head._2._2.length
     val num_test       = collated_data_test.length
@@ -762,8 +815,8 @@ package object timelag {
       ExperimentType(
         mo_flag, prob_timelags,
         timelag_pred_strategy,
-        dataset._1._1.head._1._2.shape,
-        confounding_factor),
+        collated_data.head._2._1.shape,
+        dataset._1._1.head._1._2.shape),
       dataset._1,
       dataset._2,
       results_model_eval
@@ -831,8 +884,8 @@ package object timelag {
     epochFlag: Boolean            = false,
     confounding_factor: Double    = 0d): ExperimentResult[StageWiseModelRun] = {
 
-    val (data, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
-    val (data_test, collated_data_test): TLDATA = confound_data(dataset._2, confounding_factor)
+    val (_, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
+    val (_, collated_data_test): TLDATA      = confound_data(dataset._2, confounding_factor)
 
     val data_size = collated_data.toSeq.length
 
@@ -1002,8 +1055,8 @@ package object timelag {
       ExperimentType(
         mo_flag, prob_timelags,
         timelag_pred_strategy,
-        dataset._1._1.head._1._2.shape,
-        confounding_factor),
+        collated_data.head._2._1.shape,
+        dataset._1._1.head._1._2.shape),
       dataset._1,
       dataset._2,
       results_model_eval
@@ -1090,11 +1143,12 @@ package object timelag {
     val (_, collated_data): TLDATA           = confound_data(dataset._1, confounding_factor)
     val (_, collated_data_test): TLDATA      = confound_data(dataset._2, confounding_factor)
 
-    val data_size = collated_data.toSeq.length
 
-    val causal_window = collated_data.head._2._2.length
-    val input_shape   = collated_data.head._2._1.shape
-    val num_test      = collated_data_test.length
+    val data_size          = collated_data.toSeq.length
+    val causal_window      = collated_data.head._2._2.length
+    val input_shape        = collated_data.head._2._1.shape
+    val actual_input_shape = dataset._1._1.head._1._2.shape
+    val num_test           = collated_data_test.length
 
     type SC_DATA = (helios.data.TF_DATA, (GaussianScalerTF, GaussianScalerTF))
 
@@ -1108,7 +1162,7 @@ package object timelag {
         if(mo_flag) sum_dir_prefix+"_timelag_mo_"+dt.toString("YYYY-MM-dd-HH-mm")
         else sum_dir_prefix+"_timelag_"+dt.toString("YYYY-MM-dd-HH-mm")
 
-      val tf_summary_dir     = summaries_top_dir/summary_dir_index
+      val tf_summary_dir        = summaries_top_dir/summary_dir_index
 
       val stop_condition_tuning = get_stop_condition(iterations_tuning, 0.05, epochFlag, data_size, miniBatch)
 
@@ -1306,7 +1360,7 @@ package object timelag {
         mo_flag, prob_timelags,
         timelag_pred_strategy,
         input_shape,
-        confounding_factor),
+        actual_input_shape),
       dataset._1,
       dataset._2,
       results_model_eval

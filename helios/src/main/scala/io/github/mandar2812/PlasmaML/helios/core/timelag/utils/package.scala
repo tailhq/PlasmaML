@@ -18,6 +18,7 @@ import io.github.mandar2812.dynaml.tensorflow.utils.GaussianScalerTF
 import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer, Loss}
 import org.platanios.tensorflow.api._
+import _root_.io.github.mandar2812.dynaml.evaluation.RegressionMetricsTF
 
 package object utils {
 
@@ -901,6 +902,20 @@ package object utils {
           c => s"${c._1._1},${c._1._2},${c._2._1},${c._2._2}"
         ).mkString("\n")
     )
+  }
+
+  def write_performance(
+    train_performance: (RegressionMetricsTF, RegressionMetricsTF),
+    test_performance: (RegressionMetricsTF, RegressionMetricsTF),
+    directory: Path): Unit = {
+
+    write.over(
+      directory/s"training_performance.json",
+      s"[${train_performance._1.to_json},${train_performance._2.to_json}]")
+
+    write.over(
+      directory/s"test_performance.json",
+      s"[${test_performance._1.to_json},${test_performance._2.to_json}]")
   }
 
 }
