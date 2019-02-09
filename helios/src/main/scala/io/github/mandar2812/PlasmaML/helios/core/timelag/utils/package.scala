@@ -253,7 +253,7 @@ package object utils {
 
     val d = dataset._1.head._1._2.shape(0).scalar.asInstanceOf[Int]
 
-    val num_sel_dims = d*math.ceil(1d - confounding_factor).toInt
+    val num_sel_dims = math.ceil(d*(1d - confounding_factor)).toInt
 
     val (data, joined_data) = dataset
 
