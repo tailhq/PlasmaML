@@ -523,8 +523,24 @@ package object timelag {
 
     }
 
+    //Write the generated data sets
     write_data_set((data, collated_data), tf_summary_dir, "train_data")
     write_data_set((data_test, collated_data_test), tf_summary_dir, "test_data")
+
+    //Write the ground truth output mapping
+    if(results.config.output_mapping.isDefined) {
+      val output = results.config.output_mapping.get
+
+      write.over(
+        tf_summary_dir/"output_mapping_train.csv",
+        collated_data.map(p => output(p._2._1)).mkString("\n")
+      )
+
+      write.over(
+        tf_summary_dir/"output_mapping_test.csv",
+        collated_data_test.map(p => output(p._2._1)).mkString("\n")
+      )
+    }
 
     write_predictions_and_gt(train_scatter, train_actual_scatter, tf_summary_dir, "train")
     write_predictions_and_gt(test_scatter, test_actual_scatter, tf_summary_dir, "test")
