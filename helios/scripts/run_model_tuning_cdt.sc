@@ -14,32 +14,32 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 @main
 def apply(
   compute_output: DataPipe[Tensor, (Float, Float)],
-  d: Int                                                = 10,
-  confounding: Seq[Double]                              = Seq(0d, 0.25, 0.5, 0.75),
-  size_training: Int                                    = 1000,
-  size_test: Int                                        = 500,
-  sliding_window: Int                                   = 15,
-  noise: Double                                         = 0.5,
-  noiserot: Double                                      = 0.1,
-  alpha: Double                                         = 0.0,
-  train_test_separate: Boolean                          = false,
-  num_neurons: Seq[Int]                                 = Seq(40),
-  activation_func: Int => Activation                    = timelag.utils.getReLUAct(1),
-  iterations: Int                                       = 150000,
-  iterations_tuning: Int                                = 20000,
-  miniBatch: Int                                        = 32,
-  optimizer: Optimizer                                  = tf.train.AdaDelta(0.01),
-  sum_dir_prefix: String                                = "cdt",
-  prior_type: helios.learn.cdt_loss.Divergence          = helios.learn.cdt_loss.KullbackLeibler,
-  target_prob: helios.learn.cdt_loss.TargetDistribution = helios.learn.cdt_loss.Boltzmann,
-  dist_type: String                                     = "default",
-  timelag_pred_strategy: String                         = "mode",
-  summaries_top_dir: Path                               = home/'tmp,
-  num_samples: Int                                      = 20,
-  hyper_optimizer: String                               = "gs",
-  hyp_opt_iterations: Option[Int]                       = Some(5),
-  epochFlag: Boolean                                    = false,
-  regularization_type: String                           = "L2")
+  d: Int                                                      = 10,
+  confounding: Seq[Double]                                    = Seq(0d, 0.25, 0.5, 0.75),
+  size_training: Int                                          = 1000,
+  size_test: Int                                              = 500,
+  sliding_window: Int                                         = 15,
+  noise: Double                                               = 0.5,
+  noiserot: Double                                            = 0.1,
+  alpha: Double                                               = 0.0,
+  train_test_separate: Boolean                                = false,
+  num_neurons: Seq[Int]                                       = Seq(40),
+  activation_func: Int => Activation                          = timelag.utils.getReLUAct(1),
+  iterations: Int                                             = 150000,
+  iterations_tuning: Int                                      = 20000,
+  miniBatch: Int                                              = 32,
+  optimizer: Optimizer                                        = tf.train.AdaDelta(0.01),
+  sum_dir_prefix: String                                      = "cdt",
+  prior_types: Seq[helios.learn.cdt_loss.Divergence]          = Seq(helios.learn.cdt_loss.KullbackLeibler),
+  target_probs: Seq[helios.learn.cdt_loss.TargetDistribution] = Seq(helios.learn.cdt_loss.Boltzmann),
+  dist_type: String                                           = "default",
+  timelag_pred_strategy: String                               = "mode",
+  summaries_top_dir: Path                                     = home/'tmp,
+  num_samples: Int                                            = 20,
+  hyper_optimizer: String                                     = "gs",
+  hyp_opt_iterations: Option[Int]                             = Some(5),
+  epochFlag: Boolean                                          = false,
+  regularization_type: String                                 = "L2")
 : Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
 
   val mo_flag = true
@@ -91,26 +91,7 @@ def apply(
     ).toMap
   )
 
-  val loss_func_generator = (h: Map[String, Double]) => {
 
-    val lossFunc = timelag.utils.get_loss(
-      sliding_window, mo_flag,
-      prob_timelags,
-      prior_wt = h("prior_wt"),
-      prior_divergence = prior_type,
-      target_dist = target_prob,
-      temp = h("temperature"),
-      error_wt = h("error_wt"),
-      c = h("specificity"))
-
-    val reg_layer =
-      if(regularization_type == "L1") L1Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
-      else L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
-
-    lossFunc >>
-      reg_layer >>
-      tf.learn.ScalarSummary("Loss", "ModelLoss")
-  }
 
   val fitness_function = DataPipe2[(Tensor, Tensor), Tensor, Double]((preds, targets) => {
 
@@ -136,7 +117,36 @@ def apply(
       d, size_test, noiserot, alpha,
       noise)
 
-  confounding.map(c => {
+  for (
+    c <- confounding;
+    prior_type <- prior_types;
+    target_prob <- target_probs
+  ) {
+
+    val loss_func_generator = (h: Map[String, Double]) => {
+
+      val lossFunc = timelag.utils.get_loss(
+        sliding_window, mo_flag,
+        prob_timelags,
+        prior_wt = h("prior_wt"),
+        prior_divergence = prior_type,
+        target_dist = target_prob,
+        temp = h("temperature"),
+        error_wt = h("error_wt"),
+        c = h("specificity"))
+
+      val reg_layer =
+        if(regularization_type == "L1")
+          L1Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+        else
+          L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+
+      lossFunc >>
+        reg_layer >>
+        tf.learn.ScalarSummary("Loss", "ModelLoss")
+    }
+
+
     val result = timelag.run_exp_hyp(
       (dataset, dataset_test),
       architecture, hyper_parameters,
@@ -153,9 +163,13 @@ def apply(
       hyp_mapping = hyp_mapping,
       confounding_factor = c)
 
-    result.copy(
-      config = result.config.copy(divergence = Some(prior_type), target_prob = Some(target_prob))
+    yield result.copy(
+      config = result.config.copy(
+        divergence = Some(prior_type),
+        target_prob = Some(target_prob),
+        reg_type = Some(regularization_type)
+      )
     )
-  })
+  }
 
 }

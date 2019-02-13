@@ -151,7 +151,8 @@ package object timelag {
     actual_input_shape: Shape,
     output_mapping: Option[DataPipe[Tensor, Float]] = None,
     divergence: Option[helios.learn.cdt_loss.Divergence] = None,
-    target_prob: Option[helios.learn.cdt_loss.TargetDistribution] = None)
+    target_prob: Option[helios.learn.cdt_loss.TargetDistribution] = None,
+    reg_type: Option[String] = Some("L2"))
 
   case class ExperimentResult[Results <: ModelRun](
     config: ExperimentType,
@@ -594,23 +595,25 @@ package object timelag {
       mkdir! directory/res.results.summary_dir.segments.last
     })
 
-    //TODO: Include all non-tunable experiment parameters here
     //Create a manifest file
-    val header = "tlpred,mo,problag,divergence,targetprob,actualdim,inputdim,dir\n"
+    val header = "tlpred,mo,problag,divergence,targetprob,regtype,actualdim,inputdim,dir\n"
     val manifest_data = results.map(r =>
       s"${r.config.timelag_prediction}," +
         s"${r.config.multi_output}," +
         s"${r.config.probabilistic_time_lags}," +
         s"${r.config.divergence.map(_.toString).getOrElse("NA")}," +
         s"${r.config.target_prob.map(_.toString).getOrElse("NA")}," +
+        s"${r.config.reg_type.getOrElse("NA")}," +
         s"${r.config.actual_input_shape.scalar.asInstanceOf[Int]}," +
         s"${r.config.input_shape.scalar.asInstanceOf[Int]}," +
         s"${r.results.summary_dir.segments.last}"
     ).mkString("\n")
 
-    write.over(
+    val file_data = if(exists! directory/"manifest.csv") manifest_data else header+manifest_data
+
+    write.append(
       directory/"manifest.csv",
-      header+manifest_data
+      file_data+"\n"
     )
 
     //Now copy plots and csv/json files to `directory`
