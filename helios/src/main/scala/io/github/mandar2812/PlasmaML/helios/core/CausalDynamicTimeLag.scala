@@ -114,7 +114,10 @@ object CausalDynamicTimeLag {
   }
 
   object KullbackLeibler extends Divergence {
+
     override def apply(p: Output, q: Output): Output = p.divide(q).log.multiply(p).sum(axes = 1).mean()
+
+    override def toString: String = "KullbackLeibler"
   }
 
   object JensenShannon extends Divergence {
@@ -125,31 +128,47 @@ object CausalDynamicTimeLag {
       (KullbackLeibler(p, m) + KullbackLeibler(q, m))/2
 
     }
+
+    override def toString: String = "JensenShannon"
   }
 
   object CrossEntropy extends Divergence {
     override def apply(p: Output, q: Output): Output = q.multiply(p.log).sum(axes = 1).multiply(-1).mean()
+
+    override def toString: String = "CrossEntropy"
   }
 
   object Hellinger extends Divergence {
     override def apply(p: Output, q: Output): Output =
       q.sqrt.subtract(p.sqrt).square.sum(axes = 1).divide(2).sqrt.mean()
+
+    override def toString: String = "Hellinger"
   }
 
   object L2 extends Divergence {
     override def apply(p: Output, q: Output): Output = q.subtract(p).square.sum(axes = 1).divide(2).mean()
+
+    override def toString: String = "L2"
   }
 
   object Entropy extends Divergence {
     override def apply(p: Output, q: Output): Output = p.log.multiply(p).multiply(-1).sum(axes = 1).mean()
+
+    override def toString: String = "ShannonEntropy"
   }
 
 
   sealed trait TargetDistribution
 
-  object Boltzmann extends TargetDistribution
+  object Boltzmann extends TargetDistribution {
 
-  object Uniform extends TargetDistribution
+    override def toString: String = "Boltzmann"
+  }
+
+  object Uniform extends TargetDistribution {
+
+    override def toString: String = "Uniform"
+  }
 
   def output_mapping(name: String, size_causal_window: Int): Layer[Output, (Output, Output)] =
     new Layer[Output, (Output, Output)](name) {

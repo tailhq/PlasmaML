@@ -14,7 +14,7 @@ import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.evaluation._
-import _root_.io.github.mandar2812.dynaml.optimization.{CoupledSimulatedAnnealing, GridSearch, CMAES}
+import _root_.io.github.mandar2812.dynaml.optimization.{CMAES, CoupledSimulatedAnnealing, GridSearch}
 import _root_.io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
@@ -22,7 +22,6 @@ import org.platanios.tensorflow.api.learn.estimators.Estimator
 import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, StopCriteria, SupervisedTrainableModel}
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag.utils._
 import breeze.stats.distributions.ContinuousDistr
-
 import org.json4s._
 import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
 
@@ -150,7 +149,9 @@ package object timelag {
     timelag_prediction: String,
     input_shape: Shape,
     actual_input_shape: Shape,
-    output_mapping: Option[DataPipe[Tensor, Float]] = None)
+    output_mapping: Option[DataPipe[Tensor, Float]] = None,
+    divergence: Option[helios.learn.cdt_loss.Divergence] = None,
+    target_prob: Option[helios.learn.cdt_loss.TargetDistribution] = None)
 
   case class ExperimentResult[Results <: ModelRun](
     config: ExperimentType,
@@ -595,9 +596,13 @@ package object timelag {
 
     //TODO: Include all non-tunable experiment parameters here
     //Create a manifest file
-    val header = "tlpred,actualdim,inputdim,dir\n"
+    val header = "tlpred,mo,problag,divergence,targetprob,actualdim,inputdim,dir\n"
     val manifest_data = results.map(r =>
       s"${r.config.timelag_prediction}," +
+        s"${r.config.multi_output}," +
+        s"${r.config.probabilistic_time_lags}," +
+        s"${r.config.divergence.map(_.toString).getOrElse("NA")}," +
+        s"${r.config.target_prob.map(_.toString).getOrElse("NA")}," +
         s"${r.config.actual_input_shape.scalar.asInstanceOf[Int]}," +
         s"${r.config.input_shape.scalar.asInstanceOf[Int]}," +
         s"${r.results.summary_dir.segments.last}"

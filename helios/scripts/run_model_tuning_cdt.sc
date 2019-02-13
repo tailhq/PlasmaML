@@ -136,8 +136,8 @@ def apply(
       d, size_test, noiserot, alpha,
       noise)
 
-  confounding.map(c =>
-    timelag.run_exp_hyp(
+  confounding.map(c => {
+    val result = timelag.run_exp_hyp(
       (dataset, dataset_test),
       architecture, hyper_parameters,
       loss_func_generator,
@@ -152,6 +152,10 @@ def apply(
       epochFlag = epochFlag,
       hyp_mapping = hyp_mapping,
       confounding_factor = c)
-  )
+
+    result.copy(
+      config = result.config.copy(divergence = Some(prior_type), target_prob = Some(target_prob))
+    )
+  })
 
 }
