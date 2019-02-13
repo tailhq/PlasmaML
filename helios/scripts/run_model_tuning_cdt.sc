@@ -121,7 +121,7 @@ def apply(
     c <- confounding;
     prior_type <- prior_types;
     target_prob <- target_probs
-  ) {
+  ) yield {
 
     val loss_func_generator = (h: Map[String, Double]) => {
 
@@ -146,7 +146,6 @@ def apply(
         tf.learn.ScalarSummary("Loss", "ModelLoss")
     }
 
-
     val result = timelag.run_exp_hyp(
       (dataset, dataset_test),
       architecture, hyper_parameters,
@@ -163,7 +162,8 @@ def apply(
       hyp_mapping = hyp_mapping,
       confounding_factor = c)
 
-    yield result.copy(
+
+    result.copy(
       config = result.config.copy(
         divergence = Some(prior_type),
         target_prob = Some(target_prob),
