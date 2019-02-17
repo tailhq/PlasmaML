@@ -19,6 +19,7 @@ import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer, Loss}
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.dynaml.evaluation.RegressionMetricsTF
+import org.platanios.tensorflow.api.learn.hooks.Hook
 
 package object utils {
 
@@ -572,7 +573,7 @@ package object utils {
     p: Path, it: Int,
     epochFlag: Boolean,
     num_data: Int,
-    batch_size: Int) = if(epochFlag) {
+    batch_size: Int): Set[Hook] = if(epochFlag) {
 
     val epochSize = num_data/batch_size
     dtflearn.model._train_hooks(p, it*epochSize/3, it*epochSize/3, it*epochSize)
@@ -580,6 +581,19 @@ package object utils {
     dtflearn.model._train_hooks(p, it/3, it/3, it)
   }
 
+
+  /**
+    * Creates a Tensorflow stop condition
+    *
+    * @param it Maximum number of iterations
+    * @param tol The tolerance, above which loss improvement
+    *            is required for continuing training
+    * @param epochF Set to true if parameter `it` is
+    *               to be treated as maximum number of epochs
+    * @param num_data The size of the data set used in training.
+    *                 Relevant only if `epochF` is set to true
+    * @param batch_size Relevant only if `epochF` is set to true.
+    * */
   def get_stop_condition(
     it: Int,
     tol: Double,
@@ -842,6 +856,21 @@ package object utils {
     if(plot_title.isDefined) title(plot_title.get)
   }
 
+  /**
+    * Write a time lag data set to disk.
+    *
+    * Writes three csv files of the form.
+    *
+    * <ul>
+    *   <li>summary_dir/identifier_features.csv</li>
+    *   <li>summary_dir/identifier_output_lag.csv</li>
+    *   <li>summary_dir/identifier_targets.csv</li>
+    * </ul>
+    *
+    * @param data A generated data set of type [[TLDATA]]
+    * @param summary_dir Path where the data should be written
+    * @param identifier A string which starts each file name
+    * */
   def write_data_set(
     data: TLDATA,
     summary_dir: Path,
@@ -871,6 +900,20 @@ package object utils {
 
   }
 
+  /**
+    * Write model outputs to disk.
+    *
+    * Writes two csv files of the form.
+    *
+    * <ul>
+    *   <li>summary_dir/identifier_predictions.csv</li>
+    *   <li>summary_dir/identifier_probabilities.csv</li>
+    * </ul>
+    *
+    * @param outputs Model outputs
+    * @param summary_dir Path where the data should be written
+    * @param identifier A string which starts each file name
+    * */
   def write_model_outputs(
     outputs: (Tensor, Tensor),
     summary_dir: Path,
@@ -890,10 +933,22 @@ package object utils {
 
   }
 
+  /**
+    * Write model predictions and ground truth to disk,
+    * in the form:
+    *
+    * summary_dir/identifier_scatter.csv
+    *
+    * @param predictions A sequence of predicted outputs and lags
+    * @param ground_truth Corresponding actual outputs and lags
+    * @param summary_dir Path where the data should be written
+    * @param identifier A string which starts each file name
+    * */
   def write_predictions_and_gt(
     predictions: Seq[(Double, Double)],
     ground_truth: Seq[(Double, Double)],
-    summary_dir: Path, identifier: String): Unit = {
+    summary_dir: Path,
+    identifier: String): Unit = {
 
     write.over(
       summary_dir/s"${identifier}_scatter.csv",
@@ -904,6 +959,9 @@ package object utils {
     )
   }
 
+  /**
+    * Write evaluation metrics to disk
+    * */
   def write_performance(
     train_performance: (RegressionMetricsTF, RegressionMetricsTF),
     test_performance: (RegressionMetricsTF, RegressionMetricsTF),
