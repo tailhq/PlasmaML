@@ -58,12 +58,14 @@ def main(
     val (v, a) = va
     val dt = (math.sqrt(v*v + 2*a*distance).toFloat - v)/a
     val vf = math.sqrt(v*v + 2f*a*distance).toFloat
-    (dt, vf + scala.util.Random.nextGaussian().toFloat)
+    (dt, vf)
   })
 
+  val add_noise = DataPipe[(Float, Float), (Float, Float)](
+    p => (p._1, p._2 + scala.util.Random.nextGaussian().toFloat))
 
   val experiment_results = run_model_tuning_cdt(
-    compute_output > compute_time_lag,
+    compute_output > compute_time_lag > add_noise,
     d, confounding, size_training, size_test, sliding_window, noise, noiserot,
     alpha, train_test_separate, num_neurons, 
     activation_func, iterations, iterations_tuning, 
@@ -75,7 +77,7 @@ def main(
 
   experiment_results.map(experiment_result => experiment_result.copy(
     config = experiment_result.config.copy(
-      output_mapping = Some(compute_output > DataPipe[(Float, Float), Float](_._1))
+      output_mapping = Some(compute_output > compute_time_lag > DataPipe[(Float, Float), Float](_._2))
     ))
   )
 }
