@@ -59,6 +59,10 @@ package object utils {
     if((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
+  val getReLUAct2: Int => Int => Activation = (s: Int) => (i: Int) =>
+    if((i - s) == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
+    else tf.learn.Sigmoid(s"Act_$i")
+
   /**
     * Calculate sliding autocorrelation of a time series.
     *
