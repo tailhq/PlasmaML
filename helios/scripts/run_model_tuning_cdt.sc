@@ -105,7 +105,7 @@ def apply(
       .asInstanceOf[Double]
 
     val entropy = preds._2
-      .multiply(-1)
+      .multiply(-1d)
       .multiply(preds._2.log)
       .sum(axes = 1)
       .mean()
