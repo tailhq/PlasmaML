@@ -95,7 +95,7 @@ def apply(
 
   val fitness_function = DataPipe2[(Tensor, Tensor), Tensor, Double]((preds, targets) => {
 
-    preds._1
+    val weighted_error = preds._1
       .subtract(targets)
       .square
       .multiply(preds._2)
@@ -103,6 +103,16 @@ def apply(
       .mean()
       .scalar
       .asInstanceOf[Double]
+
+    val entropy = preds._2
+      .multiply(-1)
+      .multiply(preds._2.log)
+      .sum(axes = 1)
+      .mean()
+      .scalar
+      .asInstanceOf[Double]
+
+    weighted_error + entropy
   })
 
   val dataset: timelag.utils.TLDATA =
