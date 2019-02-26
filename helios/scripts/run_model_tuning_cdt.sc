@@ -39,7 +39,7 @@ def apply(
   hyper_optimizer: String                                     = "gs",
   hyp_opt_iterations: Option[Int]                             = Some(5),
   epochFlag: Boolean                                          = false,
-  regularization_type: String                                 = "L2")
+  regularization_types: Seq[String]                           = Seq("L2"))
 : Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
 
   val mo_flag = true
@@ -120,7 +120,8 @@ def apply(
   for (
     c <- confounding;
     prior_type <- prior_types;
-    target_prob <- target_probs
+    target_prob <- target_probs;
+    regularization_type <- regularization_types
   ) yield {
 
     val loss_func_generator = (h: Map[String, Double]) => {

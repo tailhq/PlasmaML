@@ -36,7 +36,7 @@ def main(
   hyper_optimizer: String                                    = "gs",
   hyp_opt_iterations: Option[Int]                            = Some(5),
   epochFlag: Boolean                                         = false,
-  regularization_type: String                                = "L2")
+  regularization_types: Seq[String]                          = Seq("L2"))
 : Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
 
   //Output computation
@@ -72,7 +72,8 @@ def main(
     miniBatch, optimizer, sum_dir_prefix,
     prior_type, target_prob, dist_type,
     timelag_pred_strategy, summaries_top_dir, num_samples,
-    hyper_optimizer, hyp_opt_iterations, epochFlag
+    hyper_optimizer, hyp_opt_iterations, epochFlag,
+    regularization_types
   )
 
   experiment_results.map(experiment_result => experiment_result.copy(
