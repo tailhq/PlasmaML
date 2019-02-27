@@ -39,7 +39,8 @@ def apply(
   batch_size: Int                                   = 32,
   optimization_algo: tf.train.Optimizer             = tf.train.AdaDelta(0.01),
   summary_dir: Path                                 = home/'tmp,
-  hyp_opt_iterations: Option[Int]                   = Some(5)): helios.Experiment[fte.ModelRunTuning] = {
+  hyp_opt_iterations: Option[Int]                   = Some(5))
+: helios.Experiment[fte.ModelRunTuning, helios.ExperimentConfig] = {
 
 
   val num_pred_dims = timelag.utils.get_num_output_dims(
@@ -198,6 +199,7 @@ def apply(
     latitude_limit = crop_latitude,
     deltaTFTE = history_fte,
     fteStep = fte_step,
+    conv_flag = conv_flag,
     log_scale_fte = log_scale_fte,
     log_scale_omni = log_scale_omni,
     deltaT = causal_window,

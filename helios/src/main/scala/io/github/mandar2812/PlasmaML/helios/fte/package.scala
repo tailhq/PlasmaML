@@ -621,7 +621,7 @@ package object fte {
 
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
 
-    val experiment_config = helios.ExperimentType(mo_flag, prob_timelags, "mode")
+    val experiment_config = helios.ExperimentConfig(mo_flag, prob_timelags, "mode")
 
     val results = helios.SupervisedModelRun[Tensor, Tensor, (Tensor, Tensor), (Output, Output)](
       (scaled_data, scalers),
@@ -674,7 +674,8 @@ package object fte {
     conv_flag: Boolean                                        = false,
     fte_data_path: Path                                       = home/'Downloads/'fte,
     summary_top_dir: Path                                     = home/'tmp,
-    hyp_opt_iterations: Option[Int]                           = Some(5)): helios.Experiment[ModelRunTuning] = {
+    hyp_opt_iterations: Option[Int]                           = Some(5))
+  : helios.Experiment[ModelRunTuning, helios.ExperimentConfig] = {
 
 
     val mo_flag: Boolean = true
@@ -944,7 +945,7 @@ package object fte {
 
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
 
-    val experiment_config = helios.ExperimentType(mo_flag, prob_timelags, "mode")
+    val experiment_config = helios.ExperimentConfig(mo_flag, prob_timelags, "mode")
 
     val results = helios.TunedModelRun(
       (scaled_data, scalers),
@@ -1169,7 +1170,7 @@ package object fte {
     }
 
 
-    val experiment_config = helios.ExperimentType(
+    val experiment_config = helios.ExperimentConfig(
       multi_output = false,
       probabilistic_time_lags = false,
       "single-output")

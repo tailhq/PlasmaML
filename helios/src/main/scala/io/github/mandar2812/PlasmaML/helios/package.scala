@@ -5,7 +5,7 @@ import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe._
-import io.github.mandar2812.dynaml.models.{TunableTFModel, TFModel}
+import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
 import io.github.mandar2812.dynaml.evaluation.{ClassificationMetricsTF, RegressionMetricsTF}
 import io.github.mandar2812.dynaml.tensorflow._
 import io.github.mandar2812.dynaml.tensorflow.data.{DataSet, TFDataSet}
@@ -20,6 +20,8 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
 import org.platanios.tensorflow.api.types.DataType
 import spire.math.UByte
 import _root_.io.github.mandar2812.dynaml.graphics.charts.Highcharts._
+import breeze.stats.distributions.ContinuousDistr
+import _root_.io.github.mandar2812.dynaml.probability.ContinuousRVWithDistr
 import org.platanios.tensorflow.api.learn.estimators.Estimator
 
 /**
@@ -173,22 +175,36 @@ package object helios {
     override val estimator: ESTIMATOR = model.estimator
   }
 
-  case class ExperimentType(
+  sealed trait Config
+
+  case class ExperimentConfig(
     multi_output: Boolean,
     probabilistic_time_lags: Boolean,
-    timelag_prediction: String)
+    timelag_prediction: String) extends Config
+
+  case class ImageExpConfig(
+    image_sources: Seq[SolarImagesSource],
+    image_preprocess: Seq[DataPipe[Image, Image]],
+    multi_output: Boolean,
+    probabilistic_time_lags: Boolean,
+    timelag_prediction: String
+  ) extends Config
 
   case class ExperimentResult[DATA, X, Y, ModelOutput, ModelOutputSym](
-    config: ExperimentType,
+    config: ExperimentConfig,
     train_data: DATA,
     test_data: DATA,
     results: SupervisedModelRun[X, Y, ModelOutput, ModelOutputSym])
 
-  case class Experiment[Run <: ModelRun](
-    config: ExperimentType,
+  case class Experiment[Run <: ModelRun, Conf <: Config](
+    config: Conf,
     results: Run
   )
 
+
+  type ModelRunTuning = TunedModelRun[
+    Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
+    Tensor, Output, DataType.Aux[Double], DataType, Shape, Output]
 
   /**
     * Train a Neural architecture on a
@@ -693,7 +709,7 @@ package object helios {
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
       tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
 
-    val experiment_config = ExperimentType(mo_flag, prob_timelags, "mode")
+    val experiment_config = ExperimentConfig(mo_flag, prob_timelags, "mode")
 
     val results = SupervisedModelRun(
       (norm_tf_data, scalers),
@@ -712,6 +728,33 @@ package object helios {
       results
     )
   }
+
+  /**
+    *
+    *
+    * */
+  def run_cdt_experiment_omni_hyp(
+    data: HELIOS_OMNI_DATA,
+    tt_partition: PATTERN => Boolean,
+    architecture: Layer[Output, (Output, Output)],
+    hyper_params: List[String],
+    loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output, Output), Output), Output],
+    fitness_func: DataPipe2[(Tensor, Tensor), Tensor, Double],
+    hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
+    results_id: String,
+    resample: Boolean                              = false,
+    preprocess_image: DataPipe[Image, Image]       = identityPipe[Image],
+    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+    processed_image_size: (Int, Int)               = (-1, -1),
+    num_channels_image: Int                        = 4,
+    image_history: Int                             = 0,
+    image_history_downsampling: Int                = 1,
+    iterations: Int                                = 150000,
+    iterations_tuning: Int                         = 20000,
+    summaries_top_dir: Path                        = home/"tmp",
+    optimizer: Optimizer                           = tf.train.AdaDelta(0.001),
+    miniBatchSize: Int                             = 16)
+  : Experiment[ModelRunTuning, ImageExpConfig] = ???
 
 
   /**
@@ -1129,7 +1172,7 @@ package object helios {
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
       tf_summary_dir/("scatter_test-"+DateTime.now().toString("YYYY-MM-dd-HH-mm")+".csv"))
 
-    val experiment_config = ExperimentType(mo_flag, prob_timelags, "mode")
+    val experiment_config = ExperimentConfig(mo_flag, prob_timelags, "mode")
 
     val results = SupervisedModelRun(
       (norm_tf_data, scalers),
