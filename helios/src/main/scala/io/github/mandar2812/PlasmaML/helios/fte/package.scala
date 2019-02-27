@@ -654,25 +654,27 @@ package object fte {
     loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output, Output), Output), Output],
     fitness_func: DataPipe2[(Tensor, Tensor), Tensor, Double],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
-    iterations: Int                              = 150000,
-    iterations_tuning: Int                       = 20000,
-    num_samples: Int                             = 20,
-    miniBatch: Int                               = 32,
-    optimizer: tf.train.Optimizer                = tf.train.Adam(0.001),
-    year_range: Range                            = 2011 to 2017,
-    test_year: Int                               = 2015,
-    sw_threshold: Double                         = 700d,
-    deltaT: (Int, Int)                           = (48, 72),
-    deltaTFTE: Int                               = 5,
-    fteStep: Int                                 = 1,
-    latitude_limit: Double                       = 40d,
-    divergence: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
-    log_scale_fte: Boolean                       = false,
-    log_scale_omni: Boolean                      = false,
-    conv_flag: Boolean                           = false,
-    fte_data_path: Path                          = home/'Downloads/'fte,
-    summary_top_dir: Path                        = home/'tmp,
-    hyp_opt_iterations: Option[Int]              = Some(5)): helios.Experiment[ModelRunTuning] = {
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
+    iterations: Int                                           = 150000,
+    iterations_tuning: Int                                    = 20000,
+    num_samples: Int                                          = 20,
+    hyper_optimizer: String                                   = "gs",
+    miniBatch: Int                                            = 32,
+    optimizer: tf.train.Optimizer                             = tf.train.AdaDelta(0.001),
+    year_range: Range                                         = 2011 to 2017,
+    test_year: Int                                            = 2015,
+    sw_threshold: Double                                      = 700d,
+    deltaT: (Int, Int)                                        = (48, 72),
+    deltaTFTE: Int                                            = 5,
+    fteStep: Int                                              = 1,
+    latitude_limit: Double                                    = 40d,
+    divergence: helios.learn.cdt_loss.Divergence              = helios.learn.cdt_loss.KullbackLeibler,
+    log_scale_fte: Boolean                                    = false,
+    log_scale_omni: Boolean                                   = false,
+    conv_flag: Boolean                                        = false,
+    fte_data_path: Path                                       = home/'Downloads/'fte,
+    summary_top_dir: Path                                     = home/'tmp,
+    hyp_opt_iterations: Option[Int]                           = Some(5)): helios.Experiment[ModelRunTuning] = {
 
 
     val mo_flag: Boolean = true
@@ -700,6 +702,7 @@ package object fte {
       new DateTime(year_range.max, 12, 31, 23, 59))
 
 
+/*
     if(FTExperiment.fte_data.size == 0 ||
       FTExperiment.config.fte_config != FTExperiment.FTEConfig(
         (year_range.min, year_range.max),
@@ -738,6 +741,7 @@ package object fte {
     } else {
       println("\nUsing cached OMNI data set")
     }
+*/
 
     val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
       if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
@@ -746,8 +750,16 @@ package object fte {
         true
     )
 
+    println("\nProcessing FTE Data")
+    val fte_data = load_fte_data(
+      fte_data_path, carrington_rotations,
+      log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
+
+    println("Processing OMNI solar wind data")
+    val omni_data = load_solar_wind_data(start, end)(deltaT, log_scale_omni)
+
     println("Constructing joined data set")
-    val dataset = FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
+    val dataset = fte_data.join(omni_data).partition(tt_partition)
 
     val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
 
@@ -818,13 +830,30 @@ package object fte {
 
 
 
-    val gs = new CoupledSimulatedAnnealing[tunableTFModel.type](tunableTFModel)
+    val gs = hyper_optimizer match {
+      case "csa" =>
+        new CoupledSimulatedAnnealing[tunableTFModel.type](
+          tunableTFModel, hyp_mapping).setMaxIterations(
+          hyp_opt_iterations.getOrElse(5)
+        )
+
+      case "gs"  => new GridSearch[tunableTFModel.type](tunableTFModel)
+
+
+      case "cma" => new CMAES[tunableTFModel.type](
+        tunableTFModel,
+        hyper_params,
+        learning_rate = 0.8,
+        hyp_mapping
+      ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+
+      case _     => new GridSearch[tunableTFModel.type](tunableTFModel)
+    }
 
     gs.setPrior(hyper_prior)
 
     gs.setNumSamples(num_samples)
 
-    gs.setMaxIterations(hyp_opt_iterations.getOrElse(5))
 
 
     println("--------------------------------------------------------------------")

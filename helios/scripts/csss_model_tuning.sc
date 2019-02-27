@@ -8,8 +8,9 @@ import _root_.io.github.mandar2812.dynaml.analysis._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
-import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L1Regularization, L2Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
+import breeze.numerics.sigmoid
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
@@ -20,6 +21,7 @@ def apply(
   start_year: Int                                   = 2011,
   end_year: Int                                     = 2017,
   test_year: Int                                    = 2015,
+  sw_threshold: Double                              = 700d,
   divergence_term: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   network_size: Seq[Int]                            = Seq(100, 60),
   activation_func: Int => Activation                = timelag.utils.getReLUAct(1),
@@ -29,12 +31,13 @@ def apply(
   log_scale_fte: Boolean                            = false,
   log_scale_omni: Boolean                           = false,
   conv_flag: Boolean                                = false,
-  causal_window: (Int, Int)                         = (48, 72),
+  causal_window: (Int, Int)                         = (48, 56),
   max_iterations: Int                               = 100000,
   max_iterations_tuning: Int                        = 20000,
   num_samples: Int                                  = 20,
+  hyper_optimizer: String                           = "gs",
   batch_size: Int                                   = 32,
-  optimization_algo: tf.train.Optimizer             = tf.train.Adam(0.01),
+  optimization_algo: tf.train.Optimizer             = tf.train.AdaDelta(0.01),
   summary_dir: Path                                 = home/'tmp,
   hyp_opt_iterations: Option[Int]                   = Some(5)): helios.Experiment[fte.ModelRunTuning] = {
 
@@ -123,6 +126,21 @@ def apply(
     "reg"         -> UniformRV(math.pow(10d, -4d), math.pow(10d, -2.5d))
   )
 
+  val hyp_scaling = hyper_prior.map(p =>
+    (
+      p._1,
+      Encoder((x: Double) => (x - p._2.min)/(p._2.max - p._2.min), (u: Double) => u*(p._2.max - p._2.min) + p._2.min)
+    )
+  )
+
+  val logit = Encoder((x: Double) => math.log(x/(1d - x)), (x: Double) => sigmoid(x))
+
+  val hyp_mapping = Some(
+    hyper_parameters.map(
+      h => (h, hyp_scaling(h) > logit)
+    ).toMap
+  )
+
 
   val loss_func_generator = (h: Map[String, Double]) => {
 
@@ -142,7 +160,7 @@ def apply(
 
   val fitness_function = DataPipe2[(Tensor, Tensor), Tensor, Double]((preds, targets) => {
 
-    preds._1
+    val weighted_error = preds._1
       .subtract(targets)
       .square
       .multiply(preds._2)
@@ -150,6 +168,16 @@ def apply(
       .mean()
       .scalar
       .asInstanceOf[Double]
+
+    val entropy = preds._2
+      .multiply(-1d)
+      .multiply(preds._2.log)
+      .sum(axes = 1)
+      .mean()
+      .scalar
+      .asInstanceOf[Double]
+
+    weighted_error + entropy
   })
   
    
@@ -157,13 +185,15 @@ def apply(
   fte.exp_cdt_tuning(
     architecture, hyper_parameters,
     loss_func_generator, fitness_function,
-    hyper_prior,
+    hyper_prior, hyp_mapping = hyp_mapping,
     year_range = start_year to end_year,
     test_year = test_year,
+    sw_threshold = sw_threshold,
     optimizer = optimization_algo,
     miniBatch = batch_size,
     iterations = max_iterations,
     num_samples = num_samples,
+    hyper_optimizer = hyper_optimizer,
     iterations_tuning = max_iterations_tuning,
     latitude_limit = crop_latitude,
     deltaTFTE = history_fte,

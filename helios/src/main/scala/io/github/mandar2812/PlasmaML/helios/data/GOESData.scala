@@ -9,7 +9,7 @@ import collection.JavaConverters._
 import scala.util.matching.Regex
 
 /**
-  * Helper object for downloading solar images from the
+  * Helper object for downloading data from the
   * <a href="http://www.swpc.noaa.gov/products/goes-x-ray-flux">GOES</a> archive.
   * @author mandar2812 date 27/11/2017
   * */
@@ -70,8 +70,8 @@ object GOESLoader {
   DateTimeZone.setDefault(DateTimeZone.UTC)
 
   /**
-    * Download all the available images
-    * for a given date, corresponding to
+    * Download all the available data files
+    * for a given month, corresponding to
     * some specified instrument code.
     * */
   def fetch_urls(path: Path)(quantity: String, format: String)(year: Int, month: Int) = {
@@ -181,7 +181,7 @@ object GOESLoader {
     * */
 
     (read! file |>
-      ((c) => cleanRegex.findAllIn(c).matchData.map(_.group(1)).toList.head.split("\\r?\\n").drop(1)) |
+      (c => cleanRegex.findAllIn(c).matchData.map(_.group(1)).toList.head.split("\\r?\\n").drop(1)) |
       (line => {
         val splits = line.split(',')
 
