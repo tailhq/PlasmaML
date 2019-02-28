@@ -631,7 +631,7 @@ package object fte {
       Some((final_predictions, pred_time_lags_test))
     )
 
-    helios.write_predictions(
+    helios.write_processed_predictions(
       dtfutils.toDoubleSeq(final_predictions).toSeq,
       final_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
@@ -955,7 +955,7 @@ package object fte {
       Some((final_predictions, pred_time_lags_test))
     )
 
-    helios.write_predictions(
+    helios.write_processed_predictions(
       dtfutils.toDoubleSeq(final_predictions).toSeq,
       final_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,

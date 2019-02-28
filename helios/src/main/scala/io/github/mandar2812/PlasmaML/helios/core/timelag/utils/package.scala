@@ -973,11 +973,11 @@ package object utils {
 
     write.over(
       directory/s"training_performance.json",
-      s"[${train_performance._1.to_json},${train_performance._2.to_json}]")
+      s"[${train_performance._1.to_json},\n${train_performance._2.to_json}]")
 
     write.over(
       directory/s"test_performance.json",
-      s"[${test_performance._1.to_json},${test_performance._2.to_json}]")
+      s"[${test_performance._1.to_json},\n${test_performance._2.to_json}]")
   }
 
 }

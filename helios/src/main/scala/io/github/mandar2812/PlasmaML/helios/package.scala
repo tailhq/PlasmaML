@@ -23,6 +23,8 @@ import _root_.io.github.mandar2812.dynaml.graphics.charts.Highcharts._
 import breeze.stats.distributions.ContinuousDistr
 import _root_.io.github.mandar2812.dynaml.probability.ContinuousRVWithDistr
 import org.platanios.tensorflow.api.learn.estimators.Estimator
+import _root_.io.github.mandar2812.dynaml.optimization.{CMAES, CoupledSimulatedAnnealing, GridSearch}
+import _root_.io.github.mandar2812.dynaml.tensorflow.utils.MinMaxScalerTF
 
 /**
   * <h3>Helios</h3>
@@ -161,7 +163,9 @@ package object helios {
     metrics_test: Option[RegressionMetricsTF],
     summary_dir: Path,
     training_preds: Option[ITT],
-    test_preds: Option[ITT]) extends
+    test_preds: Option[ITT],
+    training_outputs: Option[ITT] = None,
+    test_outputs: Option[ITT]     = None) extends
     ModelRun {
 
     override type DATA_PATTERN = (IT, TT)
@@ -185,9 +189,16 @@ package object helios {
   case class ImageExpConfig(
     image_sources: Seq[SolarImagesSource],
     image_preprocess: Seq[DataPipe[Image, Image]],
+    image_history: Int,
+    image_history_downsampling: Int,
     multi_output: Boolean,
     probabilistic_time_lags: Boolean,
-    timelag_prediction: String
+    timelag_prediction: String,
+    input_shape: Shape,
+    targets_shape: Shape,
+    divergence: Option[helios.learn.cdt_loss.Divergence] = None,
+    target_prob: Option[helios.learn.cdt_loss.TargetDistribution] = None,
+    reg_type: Option[String] = Some("L2")
   ) extends Config
 
   case class ExperimentResult[DATA, X, Y, ModelOutput, ModelOutputSym](
@@ -203,8 +214,56 @@ package object helios {
 
 
   type ModelRunTuning = TunedModelRun[
-    Tensor, Output, DataType.Aux[Double], DataType, Shape, (Output, Output), (Tensor, Tensor),
-    Tensor, Output, DataType.Aux[Double], DataType, Shape, Output]
+    Tensor, Output, DataType.Aux[UByte], DataType, Shape, (Output, Output), (Tensor, Tensor),
+    Tensor, Output, DataType.Aux[Float], DataType, Shape, Output]
+
+
+  def process_predictions(
+    predictions: (Tensor, Tensor),
+    time_window: Int,
+    multi_output: Boolean = true,
+    probabilistic_time_lags: Boolean = true,
+    timelag_pred_strategy: String = "mode",
+    scale_outputs: Option[MinMaxScalerTF] = None): (Tensor, Tensor) = {
+
+    val index_times = Tensor(
+      (0 until time_window).map(_.toDouble)
+    ).reshape(
+      Shape(time_window)
+    )
+
+    val pred_time_lags = if(probabilistic_time_lags) {
+      val unsc_probs = predictions._2
+
+      if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(predictions._1.shape(0))).cast(FLOAT64)
+      else unsc_probs.multiply(index_times).sum(axes = 1)
+
+    } else predictions._2
+
+    val pred_targets: Tensor = if (multi_output) {
+
+      val all_preds =
+        if (scale_outputs.isDefined) scale_outputs.get.i(predictions._1)
+        else predictions._1
+
+      val repeated_times = tfi.stack(Seq.fill(time_window)(pred_time_lags.floor), axis = -1)
+
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
+
+      all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
+
+    } else {
+
+      if (scale_outputs.isDefined) {
+        val scaler = scale_outputs.get
+        scaler(0).i(predictions._1)
+      } else predictions._1
+
+    }
+
+    (pred_targets, pred_time_lags)
+
+  }
 
   /**
     * Train a Neural architecture on a
@@ -370,7 +429,7 @@ package object helios {
     (model, estimator, metrics, metrics_class, tf_summary_dir, labels_mean, labels_stddev, collated_data)
   }
 
-  def write_predictions(
+  def write_processed_predictions(
     preds: Seq[Double],
     targets: Seq[Double],
     timelags: Seq[Double],
@@ -703,7 +762,7 @@ package object helios {
 
     //write predictions and ground truth to a csv file
 
-    write_predictions(
+    write_processed_predictions(
       dtfutils.toDoubleSeq(pred_targets).toSeq,
       actual_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
@@ -730,11 +789,97 @@ package object helios {
   }
 
   /**
+    * Run a CDT experiment, predicting solar wind
+    * arrival time and speed using SOHO/SDO images.
+    *
+    * @param dataset A collection of [[PATTERN]] instances i.e.
+    *                date time stamps, image paths and
+    *                upstream solar wind values.
+    *                See [[HELIOS_OMNI_DATA]].
+    *
+    * @param tt_partition A function which takes each [[PATTERN]] and
+    *                     returns `true` if it should be kept in the training
+    *                     set and `false` otherwise.
+    *
+    * @param architecture Neural network architecture. Takes a tensor representation
+    *                     of an image (or time series of images) and predicts.
+    *                     <ol>
+    *                       <li>Running history of solar wind speed</li>
+    *                       <li>Probability distribution for causal time lag link</li>
+    *                     <ol>
+    *
+    * @param hyper_params A list of hyper-parameters.
+    *
+    * @param loss_func_generator A function which takes some value of hyper-parameters,
+    *                            and generates the CDT loss function. See [[CausalDynamicTimeLag]]
+    *                            for more information on its hyper-parameters.
+    *
+    * @param fitness_func A data pipe which takes the model predictions, and the ground truth solar
+    *                     wind time series and computes a fitness score which is used to compare
+    *                     hyper-parameter assignments.
+    *
+    * @param hyper_prior A prior distribution over the hyper-parameter space,
+    *                    the log likelihood computed from this is added to the
+    *                    fitness to yield the total score for a hyper-parameter
+    *                    configuration.
+    *
+    * @param results_id A string identifier for the results directory, this folder
+    *                   will contain each trained model including the resulting
+    *                   model after the tuning procedure.
+    *
+    * @param resample Set to true if the training data should be resampled to
+    *                 mitigate imbalance of low versus high solar wind episodes.
     *
     *
+    * @param preprocess_image A data pipe which applies some user specified pre-processing
+    *                         operations on each image.
+    *
+    * @param image_to_bytearr A data pipe which converts the image to an array of bytes.
+    *
+    * @param processed_image_size Size in pixels of the processed image used to construct
+    *                             tensor patterns.
+    *
+    * @param num_channels_image Number of colour channels in each processed image pattern.
+    *
+    * @param image_history If set to a positive value, a stacked time history of images
+    *                      is constructed for each data pattern.
+    *
+    * @param image_history_downsampling Sets the down-sampling frequency of the image histories.
+    *
+    * @param iterations Maximum number of iterations to train the selected model during final training.
+    *
+    * @param iterations_tuning Maximum number of iterations to train model instances
+    *                          during the tuning process.
+    *
+    * @param summaries_top_dir The top level directiry under which the results directory of the experiment
+    *                          is to be created.
+    *
+    * @param optimizer Optimization algorithm to be used in tuning and training.
+    *
+    * @param miniBatchSize The mini batch size.
+    *
+    * @param num_hyp_samples The number of hyper-parameter samples (population size) to use
+    *                        in Grid Search `gs` and Coupled Simulated Annealing `csa`
+    *                        subroutines.
+    *
+    * @param hyper_optimizer Hyper-parameter search technique.
+    *                        <ol>
+    *                          <li>gs: Grid Search (in this case random search). The default value</li>
+    *                          <li>csa: Coupled Simulated Annealing</li>
+    *                          <li>cma: Covariance Matrix Adaptation - Evolutionary Search</li>
+    *                        </ol>
+    *
+    * @param hyp_opt_iterations In case of `csa` and `cma` methods, the maximum number of iterations
+    *                           to execute.
+    *
+    * @param hyp_mapping A one-to-one functional mapping for each hyper-parameter from its original
+    *                    domain to the Real number line. Optional and defaults to [[None]].
+    *
+    * @return An [[Experiment]] instance which contains a [[ModelRunTuning]] instance and some
+    *         configuration information [[ImageExpConfig]].
     * */
   def run_cdt_experiment_omni_hyp(
-    data: HELIOS_OMNI_DATA,
+    dataset: HELIOS_OMNI_DATA,
     tt_partition: PATTERN => Boolean,
     architecture: Layer[Output, (Output, Output)],
     hyper_params: List[String],
@@ -742,19 +887,324 @@ package object helios {
     fitness_func: DataPipe2[(Tensor, Tensor), Tensor, Double],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     results_id: String,
-    resample: Boolean                              = false,
-    preprocess_image: DataPipe[Image, Image]       = identityPipe[Image],
-    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
-    processed_image_size: (Int, Int)               = (-1, -1),
-    num_channels_image: Int                        = 4,
-    image_history: Int                             = 0,
-    image_history_downsampling: Int                = 1,
-    iterations: Int                                = 150000,
-    iterations_tuning: Int                         = 20000,
-    summaries_top_dir: Path                        = home/"tmp",
-    optimizer: Optimizer                           = tf.train.AdaDelta(0.001),
-    miniBatchSize: Int                             = 16)
-  : Experiment[ModelRunTuning, ImageExpConfig] = ???
+    resample: Boolean                                         = false,
+    preprocess_image: DataPipe[Image, Image]                  = identityPipe[Image],
+    image_to_bytearr: DataPipe[Image, Array[Byte]]            = DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
+    processed_image_size: (Int, Int)                          = (-1, -1),
+    num_channels_image: Int                                   = 4,
+    image_history: Int                                        = 0,
+    image_history_downsampling: Int                           = 1,
+    iterations: Int                                           = 150000,
+    iterations_tuning: Int                                    = 20000,
+    summaries_top_dir: Path                                   = home/"tmp",
+    optimizer: Optimizer                                      = tf.train.AdaDelta(0.001),
+    miniBatchSize: Int                                        = 16,
+    num_hyp_samples: Int                                      = 20,
+    hyper_optimizer: String                                   = "gs",
+    hyp_opt_iterations: Option[Int]                           = Some(5),
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None): Experiment[ModelRunTuning, ImageExpConfig] = {
+
+    //The directories to write model parameters and summaries.
+    val resDirName = "helios_omni_"+results_id
+
+    val tf_summary_dir = summaries_top_dir/resDirName
+
+    val num_outputs = dataset.data.head._2._2.length
+
+    /*
+    * Create the data processing pipe for processing each image.
+    *
+    * 1. Load the image into a scrimage object
+    * 2. Apply pre-processing filters on the image
+    * 3. Convert the processed image into a byte array
+    * 4. Load the byte array into a tensor
+    * */
+
+
+    val image_into_tensor = read_image >
+      preprocess_image >
+      image_to_bytearr >
+      DataPipe((arr: Array[Byte]) => dtf.tensor_from_buffer(
+        dtype = "UINT8", processed_image_size._1,
+        processed_image_size._2,
+        num_channels_image)(arr))
+
+
+    val load_image: DataPipe[Seq[Path], Option[Tensor]] = DataPipe((images: Seq[Path]) => {
+
+      val first_non_corrupted_file: (Int, Path) =
+        images
+          .map(p => (available_bytes(p), p))
+          .sortBy(_._1)
+          .reverse
+          .head
+
+      if (first_non_corrupted_file._1 > 0) Some(image_into_tensor(first_non_corrupted_file._2)) else None
+
+    })
+
+    val load_targets_into_tensor = DataPipe((arr: Seq[Double]) => dtf.tensor_f32(num_outputs)(arr:_*))
+
+    val dataSet: TF_DATA = helios.data.prepare_helios_data_set(
+      dataset,
+      load_image,
+      load_targets_into_tensor,
+      tt_partition,
+      resample,
+      image_history,
+      image_history_downsampling)
+
+    val (norm_tf_data, scalers): SC_TF_DATA = scale_helios_dataset(dataSet)
+
+    val causal_horizon = dataset.data.head._2._2.length
+
+    val data_shapes = (
+      Shape(processed_image_size._1, processed_image_size._2, num_channels_image*(image_history_downsampling + 1)),
+      Shape(causal_horizon)
+    )
+
+    val data_size = dataSet.training_dataset.size
+
+
+    val stop_condition_tuning = timelag.utils.get_stop_condition(
+      iterations_tuning, 0.05, epochF = false,
+      data_size, miniBatchSize)
+
+    val stop_condition_test   = timelag.utils.get_stop_condition(
+      iterations, 0.01, epochF = false,
+      data_size, miniBatchSize)
+
+    val train_config_tuning =
+      dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
+        DataPipe((p: Path) => dtflearn.model.trainConfig(
+          p, optimizer,
+          stop_condition_tuning,
+          Some(timelag.utils.get_train_hooks(p, iterations_tuning, epochFlag = false, data_size, miniBatchSize))
+        ))
+
+    val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
+      dtflearn.model.trainConfig(
+        summaryDir = tf_summary_dir,
+        stopCriteria = stop_condition_test,
+        trainHooks = Some(
+          timelag.utils.get_train_hooks(tf_summary_dir, iterations, epochFlag = false, data_size, miniBatchSize)
+        )
+      )
+    )
+
+    val tf_data_ops = dtflearn.model.data_ops(10, miniBatchSize, 10, data_size/5)
+
+    val stackOperation = DataPipe[Iterable[Tensor], Tensor](bat =>
+      tfi.stack(bat.toSeq, axis = 0)
+    )
+
+    val tunableTFModel: TunableTFModel[
+      Tensor, Output, DataType.Aux[UByte], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Float], DataType, Shape, Output] =
+      dtflearn.tunable_tf_model(
+        loss_func_generator, hyper_params,
+        norm_tf_data.training_dataset,
+        fitness_func,
+        architecture,
+        (UINT8, data_shapes._1),
+        (FLOAT32, data_shapes._2),
+        tf.learn.Cast("TrainInput", FLOAT64),
+        train_config_tuning(tf_summary_dir),
+        data_split_func = Some(
+          DataPipe[(Tensor, Tensor), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
+        ),
+        data_processing = tf_data_ops,
+        inMemory = false,
+        concatOpI = Some(stackOperation),
+        concatOpT = Some(stackOperation)
+      )
+
+
+    val gs = hyper_optimizer match {
+      case "csa" =>
+        new CoupledSimulatedAnnealing[tunableTFModel.type](
+          tunableTFModel, hyp_mapping).setMaxIterations(
+          hyp_opt_iterations.getOrElse(5)
+        )
+
+      case "gs"  => new GridSearch[tunableTFModel.type](tunableTFModel)
+
+
+      case "cma" => new CMAES[tunableTFModel.type](
+        tunableTFModel,
+        hyper_params,
+        learning_rate = 0.8,
+        hyp_mapping
+      ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+
+      case _     => new GridSearch[tunableTFModel.type](tunableTFModel)
+    }
+
+    gs.setPrior(hyper_prior)
+
+    gs.setNumSamples(num_hyp_samples)
+
+    println("--------------------------------------------------------------------")
+    println("Initiating model tuning")
+    println("--------------------------------------------------------------------")
+
+    val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
+
+    println("--------------------------------------------------------------------")
+    println("\nModel tuning complete")
+    println("Chosen configuration:")
+    pprint.pprintln(config)
+    println("--------------------------------------------------------------------")
+
+    println("Training final model based on chosen configuration")
+
+    write(
+      tf_summary_dir/"state.csv",
+      config.keys.mkString(start = "", sep = ",", end = "\n") +
+        config.values.mkString(start = "", sep = ",", end = "")
+    )
+
+    val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
+      Tensor, Output, DataType.Aux[UByte], DataType, Shape, (Output, Output), (Tensor, Tensor),
+      Tensor, Output, DataType.Aux[Float], DataType, Shape, Output](
+      loss_func_generator, architecture,
+      (UINT8, data_shapes._1),
+      (FLOAT32, data_shapes._2),
+      tf.learn.Cast("TrainInput", FLOAT64),
+      train_config_test,
+      tf_data_ops, inMemory = false,
+      concatOpI = Some(stackOperation),
+      concatOpT = Some(stackOperation)
+    )
+
+    val best_model = model_function(config)(norm_tf_data.training_dataset)
+
+    best_model.train()
+
+    val extract_features = (p: (Tensor, Tensor)) => p._1
+
+    val model_predictions_test = best_model.infer_coll(norm_tf_data.test_dataset.map(extract_features))
+    val model_predictions_train = best_model.infer_coll(norm_tf_data.training_dataset.map(extract_features))
+
+    val test_predictions = model_predictions_test match {
+      case Left(tensor) => tensor
+      case Right(collection) => timelag.utils.collect_predictions(collection)
+    }
+
+    val train_predictions = model_predictions_train match {
+      case Left(tensor) => tensor
+      case Right(collection) => timelag.utils.collect_predictions(collection)
+    }
+
+    val (pred_outputs_train, pred_time_lags_train) = process_predictions(
+      train_predictions,
+      causal_horizon,
+      multi_output = true,
+      probabilistic_time_lags = true,
+      timelag_pred_strategy = "mode",
+      Some(scalers._2))
+
+    val (pred_outputs_test, pred_time_lags_test) = process_predictions(
+      test_predictions,
+      causal_horizon,
+      multi_output = true,
+      probabilistic_time_lags = true,
+      timelag_pred_strategy = "mode",
+      Some(scalers._2))
+
+
+    //The test labels dont require rescaling
+    val test_labels = norm_tf_data.test_dataset
+      .map((p: (Tensor, Tensor)) => p._2)
+      .map((t: Tensor) => dtfutils.toDoubleSeq(t).toSeq)
+      .data
+      .toSeq
+
+    //The training labels were scaled during processing,
+    //hence must be rescaled back to original domains.
+    val train_labels = norm_tf_data.training_dataset
+      .map((p: (Tensor, Tensor)) => scalers._2.i(p._2))
+      .map((t: Tensor) => dtfutils.toDoubleSeq(t).toSeq)
+      .data
+      .toSeq
+
+    val actual_targets_test = test_labels.zipWithIndex.map(zi => {
+      val (z, index) = zi
+      val time_lag = pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
+
+      z(time_lag)
+    })
+
+    val actual_targets_train = train_labels.zipWithIndex.map(zi => {
+      val (z, index) = zi
+      val time_lag = pred_time_lags_train(index).scalar.asInstanceOf[Double].toInt
+
+      z(time_lag)
+    })
+
+    val reg_metrics_test  = new RegressionMetricsTF(pred_outputs_test, actual_targets_test)
+    val reg_metrics_train = new RegressionMetricsTF(pred_outputs_train, actual_targets_train)
+
+
+    val results: helios.ModelRunTuning = helios.TunedModelRun(
+      (norm_tf_data, scalers),
+      best_model,
+      Some(reg_metrics_train),
+      Some(reg_metrics_test),
+      tf_summary_dir,
+      Some((pred_outputs_train, pred_time_lags_train)),
+      Some((pred_outputs_test, pred_time_lags_test))
+    )
+
+
+    val exp_config = ImageExpConfig(
+      Seq.empty[SolarImagesSource],
+      Seq(preprocess_image),
+      image_history, image_history_downsampling,
+      multi_output            = true,
+      probabilistic_time_lags = true,
+      timelag_prediction      = "mode",
+      data_shapes._1,
+      data_shapes._2
+    )
+
+    val time_stamp = DateTime.now().toString("YYYY-MM-dd-HH-mm")
+
+    val partitioned_data_collection = dataset.partition(DataPipe(tt_partition))
+
+    //Write the train and test collections
+    write_helios_data_set(
+      partitioned_data_collection.training_dataset,
+      tf_summary_dir,
+      s"training_data_$time_stamp.json")
+
+    write_helios_data_set(
+      partitioned_data_collection.test_dataset,
+      tf_summary_dir,
+      s"test_data_$time_stamp,json")
+
+
+    //Write model outputs for test data
+    timelag.utils.write_model_outputs(test_predictions, tf_summary_dir, s"test_$time_stamp")
+    //Write model outputs for training data
+    timelag.utils.write_model_outputs(train_predictions, tf_summary_dir, s"train_$time_stamp")
+
+    //Write the predictions for test data
+    write_processed_predictions(
+      dtfutils.toDoubleSeq(pred_outputs_test).toSeq,
+      actual_targets_test,
+      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+      tf_summary_dir/s"scatter_test-$time_stamp.csv")
+
+    //Write the predictions for training data
+    write_processed_predictions(
+      dtfutils.toDoubleSeq(pred_outputs_train).toSeq,
+      actual_targets_train,
+      dtfutils.toDoubleSeq(pred_time_lags_train).toSeq,
+      tf_summary_dir/s"scatter_train-$time_stamp.csv")
+
+    Experiment(exp_config, results)
+  }
 
 
   /**
@@ -959,7 +1409,7 @@ package object helios {
 
     //write predictions and ground truth to a csv file
 
-    write_predictions(
+    write_processed_predictions(
       dtfutils.toDoubleSeq(pred_targets).toSeq,
       actual_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
@@ -1166,7 +1616,7 @@ package object helios {
 
     //write predictions and ground truth to a csv file
 
-    write_predictions(
+    write_processed_predictions(
       dtfutils.toDoubleSeq(pred_targets).toSeq,
       actual_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
@@ -1352,7 +1802,7 @@ package object helios {
 
     val reg_metrics = new RegressionMetricsTF(pred_targets, actual_targets)
 
-    write_predictions(
+    write_processed_predictions(
       dtfutils.toDoubleSeq(pred_targets).toSeq,
       actual_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,

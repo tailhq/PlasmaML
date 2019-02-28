@@ -3,7 +3,7 @@ package io.github.mandar2812.PlasmaML.helios
 import java.io.IOException
 import java.nio.file.Files
 
-import ammonite.ops.{Path, pwd, root}
+import ammonite.ops._
 import breeze.linalg.DenseVector
 import com.sksamuel.scrimage.Image
 import com.sksamuel.scrimage.filter.GrayscaleFilter
@@ -21,6 +21,8 @@ import io.github.mandar2812.dynaml.utils
 import org.joda.time._
 import spire.math.UByte
 import org.platanios.tensorflow.api._
+import org.json4s._
+import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
 
 
 /**
@@ -33,6 +35,7 @@ import org.platanios.tensorflow.api._
   * */
 package object data {
 
+  implicit val formats = DefaultFormats
 
   private implicit val dateOrdering = new Ordering[DateTime] {
     override def compare(x: DateTime, y: DateTime): Int = if(x.isBefore(y)) -1 else 1
@@ -1003,6 +1006,27 @@ package object data {
       training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
       test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
     )
+  }
+
+  def write_helios_data_set(
+    dataset: HELIOS_OMNI_DATA,
+    directory: Path,
+    identifier: String): Unit = {
+
+    val pattern_to_map = DataPipe[PATTERN, Map[String, Any]](
+      p => Map(
+        "timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+        "images" -> p._2._1.map(x => x.toString),
+        "targets" -> p._2._2)
+    )
+
+    val map_to_json = DataPipe[Map[String, Any], String](p => s"write_json(p)")
+
+    val process_pattern = pattern_to_map > map_to_json
+
+    val json_records = dataset.map(process_pattern).data.mkString(",\n")
+
+    write.over(directory/s"$identifier.csv", s"[$json_records]")
   }
 
   /**
