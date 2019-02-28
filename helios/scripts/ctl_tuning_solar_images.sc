@@ -20,7 +20,7 @@ import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 
 
 @main
-def main[T <: SolarImagesSource](
+def apply[T <: SolarImagesSource](
   year_range: Range                                     = 2001 to 2004,
   test_year: Int                                        = 2003,
   ff_stack_sizes: Seq[Int]                              = Seq(256, 128, 64),
@@ -36,12 +36,12 @@ def main[T <: SolarImagesSource](
   iterations_tuning: Int                                = 50000,
   divergence: helios.learn.cdt_loss.Divergence          = helios.learn.cdt_loss.KullbackLeibler,
   target_dist: helios.learn.cdt_loss.TargetDistribution = helios.learn.cdt_loss.Boltzmann,
-  stop_criteria: StopCriteria                           = dtflearn.max_iter_stop(5000),
   miniBatch: Int                                        = 16,
   tmpdir: Path                                          = root/"home"/System.getProperty("user.name")/"tmp",
   path_to_images: Option[Path]                          = None,
   regularization_type: String                           = "L2",
   hyper_optimizer: String                               = "gs",
+  num_hyp_samples: Int                                  = 20,
   hyp_opt_iterations: Option[Int]                       = Some(5))
 : helios.Experiment[helios.ModelRunTuning, helios.ImageExpConfig] = {
 
@@ -261,7 +261,8 @@ def main[T <: SolarImagesSource](
     iterations_tuning = iterations_tuning,
     hyper_optimizer = hyper_optimizer,
     hyp_mapping = hyp_mapping,
-    hyp_opt_iterations = hyp_opt_iterations)
+    hyp_opt_iterations = hyp_opt_iterations,
+    num_hyp_samples = num_hyp_samples)
 
   experiment.copy(config = experiment.config.copy(image_sources = Seq(image_source)))
 }
