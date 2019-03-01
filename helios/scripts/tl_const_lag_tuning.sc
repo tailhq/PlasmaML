@@ -50,7 +50,7 @@ def main(
 
       val out = compute_v(x)
 
-      (fixed_lag, out + scala.util.Random.nextGaussian().toFloat)
+      (fixed_lag.toFloat, out + scala.util.Random.nextGaussian().toFloat)
     })
 
 
