@@ -589,11 +589,11 @@ package object timelag {
 
   def organize_results(
     results: Seq[ExperimentResult[TunedModelRun]],
-    directory: Path): Unit = {
+    directory: Path, identifier: String = ""): Unit = {
 
     //First generate plots and dump files for each experiment.
     results.foreach(res => {
-      plot_and_write_results_tuned(res, browser_plots = false)
+      plot_and_write_results_tuned(res, browser_plots = false, identifier = identifier)
       mkdir! directory/res.results.summary_dir.segments.last
     })
 
