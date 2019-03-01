@@ -27,7 +27,7 @@ def main(
   iterations_tuning: Int                                     = 20000,
   miniBatch: Int                                             = 32,
   optimizer: Optimizer                                       = tf.train.AdaDelta(0.01),
-  sum_dir_prefix: String                                     = "const_v",
+  sum_dir_prefix: String                                     = "const_lag",
   prior_type: Seq[helios.learn.cdt_loss.Divergence]          = Seq(helios.learn.cdt_loss.KullbackLeibler),
   target_prob: Seq[helios.learn.cdt_loss.TargetDistribution] = Seq(helios.learn.cdt_loss.Boltzmann),
   dist_type: String                                          = "default",
