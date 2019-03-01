@@ -6,6 +6,14 @@ library(directlabels)
 
 args <- commandArgs(trailingOnly = TRUE)
 direc <- args[1]
+
+if(length(args) > 1) {
+  iden <- args[2]
+} else {
+  ""
+}
+
+
 setwd(direc)
 
 features_test <- read.csv("test_data_features.csv")
@@ -56,7 +64,7 @@ err_df <- melt(
 
 ggplot(pred_df, aes(x=x_2, y=value, colour=variable)) +
   geom_smooth(se = FALSE) +
-  theme_gray(base_size = 22) + 
+  theme_gray(base_size = 20) + 
   scale_colour_viridis_d(labels = 
     lapply(
       1:(max_timelag+1),
@@ -67,11 +75,11 @@ ggplot(pred_df, aes(x=x_2, y=value, colour=variable)) +
   labs(color = "Predictors") +
   xlab(TeX('$||\\mathbf{x}||_2$')) + ylab(TeX('$\\hat{y}(\\mathbf{x})$'))
 
-ggsave("predictors.png", scale = 1.25)
+ggsave(paste(iden, "predictors.png", sep = ''), scale = 1.25, device = png())
 
 ggplot(err_df, aes(x=x_2, y=value, colour=variable)) +
   geom_smooth(se = FALSE) +
-  theme_gray(base_size = 22) + 
+  theme_gray(base_size = 20) + 
   scale_colour_viridis_d(labels = 
     lapply(
       1:(max_timelag),
@@ -81,17 +89,17 @@ ggplot(err_df, aes(x=x_2, y=value, colour=variable)) +
   labs(color = "Errors") +
   xlab(TeX('$||\\mathbf{x}||_2$')) + ylab(TeX('$|\\hat{y}_{i}(\\mathbf{x}) - y_{i}|$'))
 
-ggsave("errors.png", scale = 1.25)
+ggsave(paste(iden, "error_curves.png", sep = ''), scale = 1.25, device = png())
 
 
 
 ggplot(prob_df, aes(x=x_2,y=value, colour=variable)) +
   geom_smooth(se = TRUE) +
-  theme_gray(base_size = 22) + 
+  theme_gray(base_size = 20) + 
   scale_colour_viridis_d(labels = lapply(
     1:max_timelag,
     function(x) TeX(paste(c('$\\mathbf{P}(\\Delta t = ', x,')$'), collapse = ''))
   )) + labs(color = "Time Lag Probabilities") +
   xlab(TeX('$||\\mathbf{x}||_2$')) + ylab("Probability")
 
-ggsave("probabilities.png", scale = 1.25)
+ggsave(paste(iden, "probabilities.png", sep = ''), scale = 1.25, device = png())

@@ -117,6 +117,5 @@ def main(
     config = experiment_result.config.copy(
       output_mapping = Some(compute_v))
     )
-  )
 
 }
