@@ -40,6 +40,8 @@ def main(
   regularization_types: Seq[String]                          = Seq("L2"))
 : Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
 
+
+  val beta = 100f
   //Output computation
   val compute_v = DataPipe[Tensor, Float]((v: Tensor) => v.square.mean().scalar.asInstanceOf[Float]*beta/d)
 
