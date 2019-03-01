@@ -162,7 +162,8 @@ package object timelag {
 
   def plot_and_write_results[Results <: ModelRun](
     results: ExperimentResult[Results],
-    browser_plots: Boolean = true): Unit = {
+    browser_plots: Boolean = true, 
+    identifier: String = ""): Unit = {
 
     val (
       (data, collated_data),
@@ -361,13 +362,13 @@ package object timelag {
     val script2 = pwd/'helios/'scripts/"visualise_tl_preds.R"
 
     try {
-      %%('Rscript, script1, tf_summary_dir)
+      %%('Rscript, script1, tf_summary_dir, identifier)
     } catch {
       case e: Exception => e.printStackTrace()
     }
 
     try {
-      %%('Rscript, script2, tf_summary_dir)
+      %%('Rscript, script2, tf_summary_dir, identifier)
     } catch {
       case e: Exception => e.printStackTrace()
     }
@@ -377,7 +378,8 @@ package object timelag {
 
   def plot_and_write_results_tuned(
     results: ExperimentResult[TunedModelRun],
-    browser_plots: Boolean = true): Unit = {
+    browser_plots: Boolean = true, 
+    identifier: String = ""): Unit = {
 
     val (
       (data, collated_data),
@@ -572,13 +574,13 @@ package object timelag {
     val script2 = pwd/'helios/'scripts/"visualise_tl_preds.R"
 
     try {
-      %%('Rscript, script1, tf_summary_dir)
+      %%('Rscript, script1, tf_summary_dir, identifier)
     } catch {
       case e: Exception => e.printStackTrace()
     }
 
     try {
-      %%('Rscript, script2, tf_summary_dir)
+      %%('Rscript, script2, tf_summary_dir, identifier)
     } catch {
       case e: Exception => e.printStackTrace()
     }
