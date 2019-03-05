@@ -115,6 +115,8 @@ package object fte {
 
   }
 
+  case class FTEConfig()
+
 
   /**
     * Load the Flux Tube Expansion (FTE) data.
@@ -355,7 +357,13 @@ package object fte {
 
     case class OMNIConfig(deltaT: (Int, Int), log_flag: Boolean)
 
-    case class Config(fte_config: FTEConfig, omni_config: OMNIConfig)
+    case class Config(
+      fte_config: FTEConfig,
+      omni_config: OMNIConfig,
+      multi_output: Boolean = true,
+      probabilistic_time_lags: Boolean = true,
+      timelag_prediction: String = "mode")
+      extends helios.Config
 
 
     var config = Config(
@@ -680,7 +688,7 @@ package object fte {
     fte_data_path: Path                                       = home/'Downloads/'fte,
     summary_top_dir: Path                                     = home/'tmp,
     hyp_opt_iterations: Option[Int]                           = Some(5))
-  : helios.Experiment[ModelRunTuning, helios.ExperimentConfig] = {
+  : helios.Experiment[ModelRunTuning, FTExperiment.Config] = {
 
 
     val mo_flag: Boolean = true
@@ -706,48 +714,6 @@ package object fte {
     val (start, end) = (
       new DateTime(year_range.min, 1, 1, 0, 0),
       new DateTime(year_range.max, 12, 31, 23, 59))
-
-
-/*
-    if(FTExperiment.fte_data.size == 0 ||
-      FTExperiment.config.fte_config != FTExperiment.FTEConfig(
-        (year_range.min, year_range.max),
-        deltaTFTE, fteStep,
-        latitude_limit,
-        log_scale_fte)
-    ) {
-
-      println("\nProcessing FTE Data")
-
-      FTExperiment.fte_data = load_fte_data(
-        fte_data_path, carrington_rotations,
-        log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
-
-      FTExperiment.config = FTExperiment.config.copy(fte_config = FTExperiment.FTEConfig(
-        (year_range.min, year_range.max),
-        deltaTFTE, fteStep, latitude_limit,
-        log_scale_fte))
-
-
-
-    } else {
-      println("\nUsing cached FTE data sets")
-    }
-
-
-    if(
-      FTExperiment.omni_data.size == 0 ||
-        FTExperiment.config.omni_config != FTExperiment.OMNIConfig(deltaT, log_scale_omni)) {
-
-      println("Processing OMNI solar wind data")
-      FTExperiment.omni_data = load_solar_wind_data(start, end)(deltaT, log_scale_omni)
-
-      FTExperiment.config = FTExperiment.config.copy(omni_config = FTExperiment.OMNIConfig(deltaT, log_scale_omni))
-
-    } else {
-      println("\nUsing cached OMNI data set")
-    }
-*/
 
     val tt_partition = DataPipe((p: (DateTime, (Tensor, Tensor))) =>
       if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
@@ -950,7 +916,15 @@ package object fte {
 
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
 
-    val experiment_config = helios.ExperimentConfig(mo_flag, prob_timelags, "mode")
+    val experiment_config = FTExperiment.Config(
+      FTExperiment.FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE, fteStep, latitude_limit,
+        log_scale_fte),
+      FTExperiment.OMNIConfig(
+        deltaT,
+        log_scale_omni)
+    )
 
     val results = helios.TunedModelRun(
       (scaled_data, scalers),

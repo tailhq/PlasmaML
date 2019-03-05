@@ -179,7 +179,7 @@ package object helios {
     override val estimator: ESTIMATOR = model.estimator
   }
 
-  sealed trait Config
+  private[helios] trait Config
 
   case class ExperimentConfig(
     multi_output: Boolean,
