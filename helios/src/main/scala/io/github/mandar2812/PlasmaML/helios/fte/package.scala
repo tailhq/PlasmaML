@@ -273,16 +273,20 @@ package object fte {
     * @param end End time of the data.
     * @param deltaT The time window (t + l, t + l + h)
     * @param log_flag If set to true, log scale the velocity values.
+    * @param quantity An integer column index corresponding to the OMNI
+    *                 quantity to extract. Defaults to [[OMNIData.Quantities.V_SW]]
     *
     * @return A [[ZipDataSet]] with time indexed tensors containing
     *         sliding time histories of the solar wind.
     * */
   def load_solar_wind_data(
     start: DateTime, end: DateTime)(
-    deltaT: (Int, Int), log_flag: Boolean): ZipDataSet[DateTime, Tensor] = {
+    deltaT: (Int, Int),
+    log_flag: Boolean,
+    quantity: Int = OMNIData.Quantities.V_SW): ZipDataSet[DateTime, Tensor] = {
 
     val omni_processing =
-      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(quantity) >
         IterableDataPipe(
           (p: (DateTime, Seq[Double])) => p._1.isAfter(start) && p._1.isBefore(end)) >
         IterableDataPipe(
@@ -664,6 +668,7 @@ package object fte {
     year_range: Range                                         = 2011 to 2017,
     test_year: Int                                            = 2015,
     sw_threshold: Double                                      = 700d,
+    quantity: Int                                             = OMNIData.Quantities.V_SW,
     deltaT: (Int, Int)                                        = (48, 72),
     deltaTFTE: Int                                            = 5,
     fteStep: Int                                              = 1,
@@ -757,7 +762,7 @@ package object fte {
       log_scale_fte, start, end)(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
     println("Processing OMNI solar wind data")
-    val omni_data = load_solar_wind_data(start, end)(deltaT, log_scale_omni)
+    val omni_data = load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity)
 
     println("Constructing joined data set")
     val dataset = fte_data.join(omni_data).partition(tt_partition)

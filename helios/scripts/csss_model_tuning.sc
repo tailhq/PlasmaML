@@ -6,6 +6,7 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.DynaMLPipe
 import _root_.io.github.mandar2812.dynaml.analysis._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
+import _root_.io.github.mandar2812.PlasmaML.omni.OMNIData
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L1Regularization, L2Regularization}
@@ -31,6 +32,7 @@ def apply(
   log_scale_fte: Boolean                            = false,
   log_scale_omni: Boolean                           = false,
   conv_flag: Boolean                                = false,
+  quantity: Int                                     = OMNIData.Quantities.V_SW,
   causal_window: (Int, Int)                         = (48, 56),
   max_iterations: Int                               = 100000,
   max_iterations_tuning: Int                        = 20000,
@@ -39,7 +41,8 @@ def apply(
   batch_size: Int                                   = 32,
   optimization_algo: tf.train.Optimizer             = tf.train.AdaDelta(0.01),
   summary_dir: Path                                 = home/'tmp,
-  hyp_opt_iterations: Option[Int]                   = Some(5))
+  hyp_opt_iterations: Option[Int]                   = Some(5), 
+  reg_type: String                                  = "L2")
 : helios.Experiment[fte.ModelRunTuning, helios.ExperimentConfig] = {
 
 
@@ -154,6 +157,9 @@ def apply(
       error_wt = h("error_wt"),
       c = h("specificity"))
 
+    if(reg_type == "L2") L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+    else L1Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+    
     lossFunc >>
       L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg")) >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
