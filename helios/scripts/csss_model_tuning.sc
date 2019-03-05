@@ -43,7 +43,7 @@ def apply(
   summary_dir: Path                                 = home/'tmp,
   hyp_opt_iterations: Option[Int]                   = Some(5), 
   reg_type: String                                  = "L2")
-: helios.Experiment[fte.ModelRunTuning, helios.ExperimentConfig] = {
+: helios.Experiment[fte.ModelRunTuning, fte.FTExperiment.Config] = {
 
 
   val num_pred_dims = timelag.utils.get_num_output_dims(
