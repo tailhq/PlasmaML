@@ -196,6 +196,7 @@ def apply(
     year_range = start_year to end_year,
     test_year = test_year,
     sw_threshold = sw_threshold,
+    quantity = quantity,
     optimizer = optimization_algo,
     miniBatch = batch_size,
     iterations = max_iterations,
