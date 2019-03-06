@@ -105,7 +105,7 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
   }),
   javaOptions in Universal ++= Seq(
     // -J params will be added as jvm parameters
-    "-J-Xmx6096m",
+    "-J-Xmx8096m",
     "-J-Xms64m",
     "-XX:HeapBaseMinAddress=32G"
   ),
