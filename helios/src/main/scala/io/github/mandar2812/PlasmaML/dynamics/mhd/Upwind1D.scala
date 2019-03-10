@@ -34,12 +34,12 @@ class Upwind1D(
 
   val stencil: (Seq[Double], Seq[Double]) = Upwind1D.buildStencil(rDomain, nR, thetaDomain, nTheta)
 
-  protected val upwindForwardLayer: NeuralLayer[(Double, Double, Double), Tensor, Tensor] =
-    NeuralLayer[(Double, Double, Double), Tensor, Tensor](
+  protected val upwindForwardLayer: NeuralLayer[(Double, Double, Double), Tensor[Float], Tensor[Float]] =
+    NeuralLayer[(Double, Double, Double), Tensor[Float], Tensor[Float]](
       Upwind1D.forwardProp(nTheta),
       Activation(
-        (x: Tensor) => x,
-        (x: Tensor) => dtf.fill(FLOAT32, x.shape.entriesIterator.map(_.asInstanceOf[Int]).toSeq:_*)(1f)
+        (x: Tensor[Float]) => x,
+        (x: Tensor[Float]) => dtf.fill[Float](x.shape.entriesIterator.toSeq:_*)(1f)
       )
     )(
       (omega_rot, deltaR, deltaTheta)
@@ -47,7 +47,7 @@ class Upwind1D(
 
   val computationalStack = LazyNeuralStack(_ => upwindForwardLayer, nR)
 
-  def solve(v0: Tensor): Stream[Tensor] = computationalStack forwardPropagate v0
+  def solve(v0: Tensor[Float]): Stream[Tensor[Float]] = computationalStack forwardPropagate v0
 
 }
 
@@ -55,27 +55,27 @@ object Upwind1D {
 
   private val logger = Logger.getLogger(this.getClass)
 
-  def forwardProp(nTheta: Int) = MetaPipe((params: (Double, Double, Double)) => (v: Tensor) => {
+  def forwardProp(nTheta: Int) = MetaPipe((params: (Double, Double, Double)) => (v: Tensor[Float]) => {
     val (omega, dR, dT) = params
-    val invV = v.pow(-1d)
+    val invV = v.pow(Tensor(-1f))
 
-    val forwardDiffMat = dtf.tensor_f64(nTheta, nTheta)(
-      DenseMatrix.tabulate(nTheta, nTheta)((i, j) => if(i == j) -1d else if(j == (i+1)%nTheta) 1d else 0d).t.toArray:_*
+    val forwardDiffMat = dtf.tensor_f32(nTheta, nTheta)(
+      DenseMatrix.tabulate(nTheta, nTheta)((i, j) => if(i == j) -1f else if(j == (i+1)%nTheta) 1f else 0f).t.toArray:_*
     )
 
-    v.add(forwardDiffMat.matmul(v).multiply(invV).multiply((dR/dT)*omega))
+    v.add(forwardDiffMat.matmul(v).multiply(invV).multiply(Tensor((dR/dT)*omega).castTo[Float]))
     //v + (dR/dT)*omega*invV*:*(forwardDiffMat*v)
   })
 
   def windWithLag(
     nR: Int, nTheta: Int,
-    deltaR: Double, deltaTheta: Double): DataPipe[Stream[Tensor], (Double, Float)] =
-    DataPipe((result: Stream[Tensor]) => {
+    deltaR: Double, deltaTheta: Double): DataPipe[Stream[Tensor[Float]], (Double, Float)] =
+    DataPipe((result: Stream[Tensor[Float]]) => {
       val sliding_avg =
         DenseMatrix.tabulate(nR, nR + 1)(
-          (i, j) => if(i == j) 0.5d else if(j == (i+1)) 0.5d else 0.0d)
+          (i, j) => if(i == j) 0.5f else if(j == (i+1)) 0.5f else 0.0f)
 
-      val velocities = DenseVector(result.map(_(0).scalar.asInstanceOf[Double]):_*)
+      val velocities = DenseVector(result.map(_(0).scalar):_*)
 
       val deltat = sum((sliding_avg*velocities).map(deltaR/_))
 

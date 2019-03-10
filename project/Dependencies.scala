@@ -10,9 +10,9 @@ object Dependencies {
 
   val scala = s"$scala_major.$scala_minor"
 
-  val crossScala = Seq("2.11.8", "2.12.4")
+  val crossScala = Seq("2.12.4")
 
-  val tfscala_version = "0.2.4"
+  val tfscala_version = "0.4.1"
 
   //Set to true if, building with Nvidia GPU support.
   val gpuFlag: Boolean = false
@@ -26,12 +26,12 @@ object Dependencies {
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val latest_dynaml_release = "v1.5.3"
-  val latest_dynaml_dev_release = "v2.0"
+  val latest_dynaml_dev_release = "v2.0-tf-0.4.0"
   val dynaml_branch = ""
 
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
-    if(status == "local") ("io.github.transcendent-ai-labs", "dynaml", "v2.0-SNAPSHOT")
+    if(status == "local") ("io.github.transcendent-ai-labs", "dynaml", s"$latest_dynaml_dev_release-SNAPSHOT")
     else if(status == "dev") ("io.github.transcendent-ai-labs", "dynaml", s"$latest_dynaml_dev_release-SNAPSHOT")
     else ("io.github.transcendent-ai-labs", "dynaml", latest_dynaml_release)
 
