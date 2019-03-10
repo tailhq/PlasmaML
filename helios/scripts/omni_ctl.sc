@@ -12,12 +12,13 @@ import io.github.mandar2812.PlasmaML.helios.data.SDOData.Instruments._
 import io.github.mandar2812.PlasmaML.helios.data.SOHOData.Instruments._
 import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 
+import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
+import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.Output
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.Layer
-import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, tf}
-import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
-import org.platanios.tensorflow.api.ops.NN.SameConvPadding
+import org.platanios.tensorflow.api._
+
 
 
 @main
@@ -32,7 +33,7 @@ def main[T <: SolarImagesSource](
   time_horizon: (Int, Int)                     = (48, 96),
   image_hist: Int                              = 0,
   image_hist_downsamp: Int                     = 1,
-  opt: Optimizer                               = tf.train.AdaDelta(0.01),
+  opt: Optimizer                               = tf.train.AdaDelta(0.01f),
   reg: Double                                  = 0.001,
   prior_wt: Double                             = 0.85,
   error_wt: Double                             = 1.0,
@@ -118,32 +119,33 @@ def main[T <: SolarImagesSource](
     Seq(1, 1, 1, 1)
   )
 
-  val activation = DataPipe[String, Layer[Output, Output]]((s: String) => tf.learn.ReLU(s, 0.01f))
+  val activation = DataPipe[String, Layer[Output[Float], Output[Float]]]((s: String) => tf.learn.ReLU[Float](s, 0.01f))
 
-  val conv_section = tf.learn.Cast("Input/Cast", FLOAT32) >>
-    dtflearn.inception_stack(
+  val conv_section = tf.learn.Cast[UByte, Float]("Input/Cast") >>
+    dtflearn.inception_stack[Float](
       num_channels*(image_hist_downsamp + 1),
       filter_depths_stack1, activation,
       use_batch_norm = true)(1) >>
-    tf.learn.MaxPool(s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
-    dtflearn.inception_stack(
+    tf.learn.MaxPool[Float](s"MaxPool_1", Seq(1, 3, 3, 1), 2, 2, SameConvPadding) >>
+    dtflearn.inception_stack[Float](
       filter_depths_stack1.last.sum, filter_depths_stack2,
       activation, use_batch_norm = true)(5) >>
-    tf.learn.MaxPool(s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding)
+    tf.learn.MaxPool[Float](s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding)
 
 
-  val post_conv_ff_stack = dtflearn.feedforward_stack(
-    (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
-    ff_stack, starting_index = ff_index)
+  val post_conv_ff_stack = dtflearn.feedforward_stack[Double](
+    (i: Int) => tf.learn.Sigmoid[Double]("Act_"+i))(
+    layer_sizes = ff_stack, starting_index = ff_index)
 
-  val output_mapping = helios.learn.cdt_loss.output_mapping(
+  val output_mapping = helios.learn.cdt_loss.output_mapping[Double](
     name = "Output/CDT-SW",
     dataset.data.head._2._2.length)
 
 
-  val architecture = tf.learn.Cast("Input/Cast", FLOAT32) >>
+  val architecture =
     conv_section >>
-    tf.learn.Flatten("Flatten_1") >>
+    tf.learn.Flatten[Float]("Flatten_1") >>
+    tf.learn.Cast[Float, Double]("Cast/Double") >>
     post_conv_ff_stack >>
     output_mapping
 
@@ -156,7 +158,7 @@ def main[T <: SolarImagesSource](
       dType = "FLOAT64",
       starting_index = ff_index)
 
-  val loss_func = helios.learn.cdt_loss(
+  val loss_func = helios.learn.cdt_loss[Double, Double, Double](
     "Loss/CDT-SW",
     dataset.data.head._2._2.length,
     prior_wt = prior_wt,

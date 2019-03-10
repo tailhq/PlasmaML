@@ -49,15 +49,15 @@ package object utils {
       }
   }
 
-  def getPolyAct[T: TF: IsFloatOrDouble](degree: Int, s: Int)(i: Int): Activation[T] =
+  def getPolyAct[T: TF: IsFloatOrDouble](degree: Int, s: Int, i: Int): Activation[T] =
       if(i - s == 0) layer_poly[T](degree)(s"Act_$i")
       else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct[T: TF: IsFloatOrDouble](s: Int)(i: Int): Activation[T] =
+  def getReLUAct[T: TF: IsFloatOrDouble](s: Int, i: Int): Activation[T] =
     if((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct2[T: TF: IsFloatOrDouble](s: Int)(i: Int): Activation[T] =
+  def getReLUAct2[T: TF: IsFloatOrDouble](s: Int, i: Int): Activation[T] =
     if((i - s) == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
@@ -410,11 +410,11 @@ package object utils {
 
         //Create the data set
         val train_dataset = dtfdata.dataset(training_data).map(
-          (p: SLIDINGPATT[T]) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*).castTo[T])
+          DataPipe((p: SLIDINGPATT[T]) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*).castTo[T]))
         )
 
         val test_dataset = dtfdata.dataset(test_data).map(
-          (p: SLIDINGPATT[T]) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*).castTo[T])
+          DataPipe((p: SLIDINGPATT[T]) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*).castTo[T]))
         )
 
         val tf_dataset = TFDataSet(train_dataset, test_dataset)

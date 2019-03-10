@@ -392,7 +392,7 @@ package object fte {
 
   def exp_cdt(
     num_neurons: Seq[Int] = Seq(30, 30),
-    activation_func: Int => Activation[Double] = timelag.utils.getReLUAct(1),
+    activation_func: Int => Activation[Double] = (i: Int) => timelag.utils.getReLUAct(1, i),
     optimizer: tf.train.Optimizer = tf.train.Adam(0.001f),
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
@@ -974,7 +974,7 @@ package object fte {
 
   def exp_single_output(
     num_neurons: Seq[Int] = Seq(30, 30),
-    activation_func: Int => Activation[Double] = timelag.utils.getReLUAct(1),
+    activation_func: Int => Activation[Double] = timelag.utils.getReLUAct(1, _),
     optimizer: tf.train.Optimizer = tf.train.Adam(0.001f),
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
