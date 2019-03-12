@@ -3,8 +3,8 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
+import _root_.io.github.mandar2812.PlasmaML.utils.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
-import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.ammonite.ops._
 import breeze.numerics.sigmoid
@@ -147,9 +147,9 @@ def apply(
 
       val reg_layer =
         if(regularization_type == "L1")
-          L1Regularization[Double](layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+          L1Regularization[Double]("Reg", layer_parameter_names, layer_shapes, h("reg"))
         else
-          L2Regularization[Double](layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+          L2Regularization[Double]("Reg", layer_parameter_names, layer_shapes, h("reg"))
 
       lossFunc >>
         reg_layer >>

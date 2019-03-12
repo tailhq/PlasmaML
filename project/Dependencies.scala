@@ -12,7 +12,7 @@ object Dependencies {
 
   val crossScala = Seq("2.12.4")
 
-  val tfscala_version = "0.4.1"
+  val tfscala_version = "0.4.2-SNAPSHOT"
 
   //Set to true if, building with Nvidia GPU support.
   val gpuFlag: Boolean = false
@@ -26,7 +26,7 @@ object Dependencies {
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val latest_dynaml_release = "v1.5.3"
-  val latest_dynaml_dev_release = "v2.0-tf-0.4.0"
+  val latest_dynaml_dev_release = "v2.0-tf-0.4.2"
   val dynaml_branch = ""
 
 
