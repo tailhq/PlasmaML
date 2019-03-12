@@ -78,7 +78,7 @@ package object timelag {
       (Tensor, Tensor), (Output, Output), (DataType, DataType), (Shape, Shape),
       ((Output, Output), Output)]
 
-    override val estimator: ESTIMATOR = model.estimator
+    override val estimator: ESTIMATOR = model.estimator.get
   }
 
   case class JointModelRun(
@@ -1292,9 +1292,9 @@ package object timelag {
         concatOpT = Some(stackOperation)
       )
 
-      val best_model = model_function(config)(tfdata.training_dataset)
+      val best_model = model_function(config)
 
-      best_model.train()
+      best_model.train(tfdata.training_dataset)
 
       val extract_features = (p: (Tensor, Tensor)) => p._1
 

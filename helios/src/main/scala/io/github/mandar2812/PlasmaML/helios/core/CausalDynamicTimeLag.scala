@@ -227,7 +227,7 @@ case class CausalDynamicTimeLagII(
     val prior_term = divergence(prob, target_prob)
 
     model_errors.square
-      .multiply(prob.multiply(specificity))
+      .multiply(prob.multiply(specificity).add(1))
       .sum(axes = 1).mean()
       .multiply(error_wt)
       .add(prior_term.multiply(prior_wt))

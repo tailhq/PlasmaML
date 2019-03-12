@@ -860,9 +860,9 @@ package object fte {
       concatOpT = Some(stackOperation)
     )
 
-    val best_model = model_function(config)(scaled_data.training_dataset)
+    val best_model = model_function(config)
 
-    best_model.train()
+    best_model.train(scaled_data.training_dataset)
 
     val extract_features = (p: (Tensor, Tensor)) => p._1
     val model_predictions_test = best_model.infer_coll(scaled_data.test_dataset.map(extract_features))

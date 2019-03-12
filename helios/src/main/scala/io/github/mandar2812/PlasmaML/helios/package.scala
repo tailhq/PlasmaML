@@ -176,7 +176,7 @@ package object helios {
 
     override type ESTIMATOR = dtflearn.SupEstimatorTF[IT, IO, ID, IS, I, TT, TO, TD, TS, T]
 
-    override val estimator: ESTIMATOR = model.estimator
+    override val estimator: ESTIMATOR = model.estimator.get
   }
 
   private[helios] trait Config
@@ -1077,9 +1077,9 @@ package object helios {
       concatOpT = Some(stackOperation)
     )
 
-    val best_model = model_function(config)(norm_tf_data.training_dataset)
+    val best_model = model_function(config)
 
-    best_model.train()
+    best_model.train(norm_tf_data.training_dataset)
 
     val extract_features = (p: (Tensor, Tensor)) => p._1
 
