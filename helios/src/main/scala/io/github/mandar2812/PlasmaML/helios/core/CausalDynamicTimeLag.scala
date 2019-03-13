@@ -205,7 +205,8 @@ case class CausalDynamicTimeLagII(
   error_wt: Double = 1.0,
   temperature: Double = 1.0,
   specificity: Double = 1.0,
-  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler) extends
+  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler,
+  target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann) extends
   Loss[(Output, Output)](name) {
 
   override val layerType: String = s"CTL[horizon:$size_causal_window]"
@@ -216,11 +217,15 @@ case class CausalDynamicTimeLagII(
 
     val model_errors = input._2
 
-    val target_prob = divergence match {
-      case CausalDynamicTimeLag.Hellinger => model_errors.square.multiply(-1).divide(temperature).softmax()
-      case _ => dtf.tensor_f64(
+    val target_prob = target_distribution match {
+      case CausalDynamicTimeLag.Boltzmann => model_errors.square.multiply(-1).divide(temperature).softmax()
+
+      case CausalDynamicTimeLag.Uniform => dtf.tensor_f64(
         1, size_causal_window)(
-        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput
+        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*
+      ).toOutput
+
+      case _ => model_errors.square.multiply(-1).divide(temperature).softmax()
     }
 
 

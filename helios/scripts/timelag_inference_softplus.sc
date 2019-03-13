@@ -34,6 +34,7 @@ def main(
   prior_wt: Double                   = 1d,
   c: Double                          = 1d,
   prior_type: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
+  target_dist: helios.learn.cdt_loss.TargetDistribution = helios.learn.cdt_loss.Boltzmann,
   temp: Double                       = 1.0,
   error_wt: Double                   = 1.0,
   mo_flag: Boolean                   = true,
@@ -78,6 +79,7 @@ def main(
     prob_timelags, p, time_scale,
     corr_sc, c_cutoff,
     prior_wt, prior_type,
+    target_dist,
     temp, error_wt, c)
 
   val loss = lossFunc >>
