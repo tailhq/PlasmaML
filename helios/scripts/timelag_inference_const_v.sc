@@ -84,7 +84,7 @@ def main(
     sliding_window, mo_flag,
     prob_timelags, p, time_scale,
     corr_sc, c_cutoff,
-    prior_wt, prior_type, target_dist
+    prior_wt, prior_type, target_dist,
     temp, error_wt, c)
 
   val loss = lossFunc >>
