@@ -116,6 +116,7 @@ L: TF : IsFloatOrDouble](
       .sum(axes = 1).mean()
       .multiply(Tensor(error_wt).toOutput.castTo[P])
       .add(prior_term.multiply(Tensor(prior_wt).castTo[P]))
+      .reshape(Shape())
       .castTo[L]
   }
 }
