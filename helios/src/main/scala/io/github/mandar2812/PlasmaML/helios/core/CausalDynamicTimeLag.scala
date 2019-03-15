@@ -264,6 +264,7 @@ L: TF : IsFloatOrDouble](
       .mean[Int]()
       .multiply(Tensor(error_wt).toOutput.castTo[P])
       .add(prior_term.multiply(Tensor(prior_wt).toOutput.castTo[P]))
+      .reshape(Shape())
       .castTo[L]
   }
 }
@@ -325,6 +326,7 @@ L: TF : IsFloatOrDouble](
       .sum(axes = 1).mean[Int]()
       .multiply(Tensor(error_wt).toOutput.castTo[P])
       .add(prior_term.multiply(Tensor(prior_wt).toOutput.castTo[P]))
+      .reshape(Shape())
       .castTo[L]
   }
 }
@@ -509,6 +511,7 @@ L: TF : IsFloatOrDouble](
       .multiply(Tensor(0.5*weight_error).toOutput.castTo[P])
       .mean[Int]()
       .add(weighted_temporal_loss_tensor)
+      .reshape(Shape())
       .castTo[L]
   }
 }
