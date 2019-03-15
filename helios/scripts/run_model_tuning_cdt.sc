@@ -3,7 +3,7 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
-import _root_.io.github.mandar2812.PlasmaML.utils.{L2Regularization, L1Regularization}
+import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.ammonite.ops._
@@ -48,7 +48,7 @@ def apply(
   val num_pred_dims = timelag.utils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons, "FLOAT32")
+    timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons, "FLOAT64")
 
   val output_mapping = timelag.utils.get_output_mapping[Double](
     sliding_window, mo_flag,
@@ -58,6 +58,10 @@ def apply(
   val architecture =
     dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
       output_mapping
+
+  val scope = dtfutils.get_scope(architecture) _
+
+  val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").last))
 
   val hyper_parameters = List(
     "prior_wt",
@@ -147,9 +151,21 @@ def apply(
 
       val reg_layer =
         if(regularization_type == "L1")
-          L1Regularization[Double]("Reg", layer_parameter_names, layer_shapes, h("reg"))
+          L1Regularization[Double](
+            layer_scopes,
+            layer_parameter_names,
+            layer_datatypes,
+            layer_shapes,
+            h("reg"),
+            "L1Reg")
         else
-          L2Regularization[Double]("Reg", layer_parameter_names, layer_shapes, h("reg"))
+          L2Regularization[Double](
+            layer_scopes,
+            layer_parameter_names,
+            layer_datatypes,
+            layer_shapes,
+            h("reg"),
+            "L2Reg")
 
       lossFunc >>
         reg_layer >>

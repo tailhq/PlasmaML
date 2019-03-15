@@ -505,6 +505,8 @@ package object fte {
     val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
       timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
 
+
+
     val output_mapping = timelag.utils.get_output_mapping[Double](
       causal_window,
       mo_flag,
@@ -544,14 +546,20 @@ package object fte {
     }
 
 
+    val scope = dtfutils.get_scope(architecture) _
+
+    val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").last))
+
 
     val lossFunc = timelag.utils.get_loss[Double, Double, Double](
       causal_window, mo_flag, prob_timelags,
       prior_wt = p_wt, prior_divergence =  divergence,
       error_wt = e_wt, c = specificity, temp = temperature)
 
+
+
     val loss = lossFunc >>
-      L2Regularization[Double](layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
+      L2Regularization[Double](layer_scopes, layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
       tf.learn.ScalarSummary[Double]("Loss", "ModelLoss")
 
 
@@ -1111,10 +1119,14 @@ package object fte {
     }
 
 
+    val scope = dtfutils.get_scope(architecture) _
+
+    val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").last))
+
 
     val loss = tf.learn.L2Loss[Double, Double]("Loss/L2") >>
       tf.learn.ScalarSummary("Loss/Error", "Error") >>
-      L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, reg) >>
+      L2Regularization(layer_scopes, layer_parameter_names, layer_datatypes, layer_shapes, reg, "L2Reg") >>
       tf.learn.ScalarSummary("Loss/Net", "ModelLoss")
 
 
