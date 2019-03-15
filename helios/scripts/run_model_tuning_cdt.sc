@@ -61,7 +61,9 @@ def apply(
 
   val scope = dtfutils.get_scope(architecture) _
 
-  val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").last))
+  val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
+
+  pprint.pprintln(layer_scopes)
 
   val hyper_parameters = List(
     "prior_wt",
