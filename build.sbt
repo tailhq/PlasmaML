@@ -5,6 +5,8 @@ import Dependencies._
 
 val mainVersion = "v0.1"
 
+val heapSize = Option(System.getProperty("heap")).getOrElse("8096m")
+
 lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   scalaVersion in ThisBuild := scala,
@@ -105,7 +107,7 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
   }),
   javaOptions in Universal ++= Seq(
     // -J params will be added as jvm parameters
-    "-J-Xmx8096m",
+    s"-J-Xmx$heapSize",
     "-J-Xms64m",
     "-XX:HeapBaseMinAddress=32G"
   ),
