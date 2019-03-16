@@ -1281,7 +1281,7 @@ package object timelag {
       val stackOperationP = DataPipe[Iterable[(Tensor[T], Tensor[T])], (Tensor[T], Tensor[T])](bat => {
         val (bat1, bat2) = bat.unzip
 
-        (tfi.stack(bat1.toSeq, axis = 0), tfi.stack(bat2.toSeq, axis = 0))
+        (tfi.concatenate(bat1.toSeq, axis = 0), tfi.concatenate(bat2.toSeq, axis = 0))
       })
 
       val dTypeTag = TF[T]
