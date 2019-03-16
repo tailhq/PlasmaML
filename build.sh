@@ -25,4 +25,4 @@ fi
 
 sed -i.bak '/export PLASMAML_HOME/d' ~/${bash_file}
 echo 'export PLASMAML_HOME='${DIR} >>~/${bash_file}
-source ~/.bash_profile
+source ~/${bash_file}
