@@ -1278,27 +1278,33 @@ package object timelag {
         tfi.stack(bat.toSeq, axis = 0)
       )
 
+      val stackOperationP = DataPipe[Iterable[(Tensor[T], Tensor[T])], (Tensor[T], Tensor[T])](bat => {
+        val (bat1, bat2) = bat.unzip
+
+        (tfi.stack(bat1.toSeq, axis = 0), tfi.stack(bat2.toSeq, axis = 0))
+      })
+
       val dTypeTag = TF[T]
 
       val tunableTFModel = dtflearn.tunable_tf_model[
-          Output[T], Output[T], (Output[T], Output[T]), L,
-          Tensor[T], DataType[T], Shape,
-          Tensor[T], DataType[T], Shape,
-          (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)](
-          loss_func_generator, hyper_params,
-          tfdata.training_dataset,
-          fitness_func,
-          architecture,
-          (dTypeTag.dataType, input_shape),
-          (dTypeTag.dataType, Shape(causal_window)),
-          train_config_tuning(tf_summary_dir),
-          data_split_func = Some(
-            DataPipe[(Tensor[T], Tensor[T]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
-          ),
-          data_processing = tf_data_ops,
-          inMemory = false,
-          concatOpI = Some(stackOperation),
-          concatOpT = Some(stackOperation)
+        Output[T], Output[T], (Output[T], Output[T]), L,
+        Tensor[T], DataType[T], Shape,
+        Tensor[T], DataType[T], Shape,
+        (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)](
+        loss_func_generator, hyper_params,
+        tfdata.training_dataset,
+        fitness_func,
+        architecture,
+        (dTypeTag.dataType, input_shape),
+        (dTypeTag.dataType, Shape(causal_window)),
+        train_config_tuning(tf_summary_dir),
+        data_split_func = Some(
+          DataPipe[(Tensor[T], Tensor[T]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
+        ),
+        data_processing = tf_data_ops,
+        inMemory = false,
+        concatOpI = Some(stackOperation),
+        concatOpT = Some(stackOperation)
       )
 
       val gs = hyper_optimizer match {
@@ -1356,7 +1362,8 @@ package object timelag {
         train_config_test,
         tf_data_ops, inMemory = false,
         concatOpI = Some(stackOperation),
-        concatOpT = Some(stackOperation)
+        concatOpT = Some(stackOperation),
+        concatOpO = Some(stackOperationP)
       )
 
       val best_model = model_function(config)
@@ -1365,8 +1372,8 @@ package object timelag {
 
       val extract_features = DataPipe((p: (Tensor[T], Tensor[T])) => p._1)
 
-      val model_predictions_test = best_model.infer_coll(tfdata.test_dataset.map(extract_features))
-      val model_predictions_train = best_model.infer_coll(tfdata.training_dataset.map(extract_features))
+      val model_predictions_test = best_model.infer_batch(tfdata.test_dataset.map(extract_features))
+      val model_predictions_train = best_model.infer_batch(tfdata.training_dataset.map(extract_features))
 
 
       val test_predictions = model_predictions_test match {
