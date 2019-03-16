@@ -15,7 +15,7 @@ object Dependencies {
   val tfscala_version = "0.4.2-SNAPSHOT"
 
   //Set to true if, building with Nvidia GPU support.
-  val gpuFlag: Boolean = false
+  val gpuFlag: Boolean = Option(System.getProperty("gpu").toBoolean).getOrElse(false)
 
   //Set to false if using self compiled tensorflow library
   val packagedTFFlag: Boolean = true
