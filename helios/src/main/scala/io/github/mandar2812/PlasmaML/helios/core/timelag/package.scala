@@ -831,7 +831,7 @@ package object timelag {
 
         val metrics_output_train   = new RegressionMetricsTF[T](
           pred_outputs_train,
-          Tensor(actual_outputs_train).castTo[T])
+          Tensor(actual_outputs_train).reshape(Shape(actual_outputs_train.length)).castTo[T])
 
         metrics_output_train.target_quantity_("Output: Train Data Set")
 
@@ -859,7 +859,7 @@ package object timelag {
 
         val metrics_output_test   = new RegressionMetricsTF[T](
           pred_outputs_test,
-          Tensor(actual_outputs_test).castTo[T])
+          Tensor(actual_outputs_test).reshape(Shape(actual_outputs_test.length)).castTo[T])
         metrics_output_test.target_quantity_("Output[T]: Test Data Set")
 
         JointModelRun[T, L](
@@ -1092,7 +1092,7 @@ package object timelag {
 
         val metrics_output_train   = new RegressionMetricsTF[T](
           pred_outputs_train,
-          Tensor(actual_outputs_train).castTo[T])
+          Tensor(actual_outputs_train).reshape(Shape(actual_outputs_train.length)).castTo[T])
         metrics_output_train.target_quantity_("Output[T]: Train Data Set")
 
 
@@ -1114,7 +1114,7 @@ package object timelag {
 
         val metrics_output_test   = new RegressionMetricsTF[T](
           pred_outputs_test,
-          Tensor(actual_outputs_test).castTo[T])
+          Tensor(actual_outputs_test).reshape(Shape(actual_outputs_test.length)).castTo[T])
         metrics_output_test.target_quantity_("Output[T]: Test Data Set")
 
         StageWiseModelRun[T, L](
@@ -1409,7 +1409,7 @@ package object timelag {
 
       val metrics_output_train   = new RegressionMetricsTF[T](
         pred_outputs_train,
-        Tensor(actual_outputs_train).castTo[T])
+        Tensor(actual_outputs_train).reshape(Shape(actual_outputs_train.length)).castTo[T])
 
       metrics_output_train.target_quantity_("Output[T]: Train Data Set")
 
@@ -1435,7 +1435,7 @@ package object timelag {
 
       val metrics_output_test   = new RegressionMetricsTF[T](
         pred_outputs_test,
-        Tensor(actual_outputs_test).castTo[T])
+        Tensor(actual_outputs_test).reshape(Shape(actual_outputs_test.length)).castTo[T])
 
       metrics_output_test.target_quantity_("Output[T]: Test Data Set")
 
