@@ -173,7 +173,7 @@ package object timelag {
     results: Results)
 
   def plot_and_write_results[
-  T: TF: IsFloatOrDouble,
+  T: TF: IsFloatOrDouble: IsReal,
   L: TF: IsFloatOrDouble,
   Results <: ModelRun[T, L]](
     results: ExperimentResult[T, L, Results],
@@ -401,7 +401,7 @@ package object timelag {
   }
 
 
-  def plot_and_write_results_tuned[T: TF: IsFloatOrDouble, L: TF: IsFloatOrDouble](
+  def plot_and_write_results_tuned[T: TF: IsFloatOrDouble: IsReal, L: TF: IsFloatOrDouble](
     results: ExperimentResult[T, L, TunedModelRun[T, L]],
     browser_plots: Boolean = true, 
     identifier: String = ""): Unit = {
