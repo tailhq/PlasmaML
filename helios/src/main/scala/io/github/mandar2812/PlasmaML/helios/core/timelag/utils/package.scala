@@ -752,7 +752,7 @@ package object utils {
 
   }
 
-  def plot_time_series[T: TF: IsNotQuantized](
+  def plot_time_series[T: TF: IsNotQuantized: IsReal](
     targets: Tensor[T],
     predictions: Tensor[T],
     plot_title: String): Unit = {
@@ -764,7 +764,7 @@ package object utils {
     unhold()
   }
 
-  def plot_time_series[T: TF: IsNotQuantized](
+  def plot_time_series[T: TF: IsNotQuantized: IsReal](
     targets: Stream[(Int, Double)],
     predictions: Tensor[T],
     plot_title: String): Unit = {
@@ -781,7 +781,7 @@ package object utils {
     * */
   @throws[java.util.NoSuchElementException]
   @throws[Exception]
-  def plot_histogram[T: TF: IsNotQuantized](data: Tensor[T], plot_title: String): Unit = {
+  def plot_histogram[T: TF: IsNotQuantized: IsReal](data: Tensor[T], plot_title: String): Unit = {
     try {
 
       histogram(dtfutils.toDoubleSeq(data).toSeq)
@@ -806,7 +806,7 @@ package object utils {
     * @param ylab y-axis label
     * @param plot_title The plot title, as a string.
     * */
-  def plot_input_output[T: TF: IsNotQuantized](
+  def plot_input_output[T: TF: IsNotQuantized: IsReal](
     input: Stream[Tensor[T]],
     input_to_scalar: Tensor[T] => Double,
     targets: Tensor[T],
@@ -841,7 +841,7 @@ package object utils {
     *                    to be displayed as the plot legend.
     * @param plot_title The plot title, as a string.
     * */
-  def plot_input_output[T: TF: IsNotQuantized](
+  def plot_input_output[T: TF: IsNotQuantized: IsReal](
     input: Stream[Tensor[T]],
     input_to_scalar: Tensor[T] => Double,
     predictions: Seq[Tensor[T]],
@@ -899,7 +899,7 @@ package object utils {
     * @param summary_dir Path where the data should be written
     * @param identifier A string which starts each file name
     * */
-  def write_data_set[T: TF: IsFloatOrDouble](
+  def write_data_set[T: TF: IsFloatOrDouble: IsReal](
     data: TLDATA[T],
     summary_dir: Path,
     identifier: String): Unit = {
@@ -942,7 +942,7 @@ package object utils {
     * @param summary_dir Path where the data should be written
     * @param identifier A string which starts each file name
     * */
-  def write_model_outputs[T: TF: IsNotQuantized](
+  def write_model_outputs[T: TF: IsNotQuantized: IsReal](
     outputs: (Tensor[T], Tensor[T]),
     summary_dir: Path,
     identifier: String): Unit = {
