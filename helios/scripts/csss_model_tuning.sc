@@ -90,6 +90,10 @@ def apply(
   }
 
 
+  val scope = dtfutils.get_scope(architecture) _
+
+  val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
+
   implicit val detImpl = DynaMLPipe.identityPipe[Double]
 
   val h: PushforwardMap[Double, Double, Double] = PushforwardMap(
@@ -158,11 +162,12 @@ def apply(
       error_wt = h("error_wt"),
       c = h("specificity"))
 
-    if(reg_type == "L2") L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
-    else L1Regularization[Double](layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+    val reg =
+      if(reg_type == "L2") L2Regularization[Double](layer_scopes, layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+      else L1Regularization[Double](layer_scopes, layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
     
     lossFunc >>
-      L2Regularization[Double](layer_parameter_names, layer_datatypes, layer_shapes, h("reg")) >>
+      reg >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
