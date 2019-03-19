@@ -805,9 +805,12 @@ package object fte {
 
     val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
 
-    val stackOperation = DataPipe[Iterable[Tensor[Double]], Tensor[Double]](bat =>
-      tfi.stack(bat.toSeq, axis = 0)
-    )
+    val unzip = DataPipe[
+      Iterable[(Tensor[Double], Tensor[Double])],
+      (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](_.unzip)
+
+
+    val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios.concatOperation[Double](ax = 0))
 
     val tunableTFModel: TunableTFModel[
       Output[Double], Output[Double], (Output[Double], Output[Double]), Double,
@@ -827,8 +830,9 @@ package object fte {
         ),
         data_processing = tf_data_ops,
         inMemory = false,
-        concatOpI = Some(stackOperation),
-        concatOpT = Some(stackOperation)
+        concatOpI = Some(stackOperation[Double](ax = 0)),
+        concatOpT = Some(stackOperation[Double](ax = 0)),
+        concatOpO = Some(concatPreds)
       )
 
 
@@ -888,8 +892,9 @@ package object fte {
       (FLOAT64, Shape(causal_window)),
       train_config_test, tf_data_ops,
       inMemory = false,
-      concatOpI = Some(stackOperation),
-      concatOpT = Some(stackOperation)
+      concatOpI = Some(stackOperation[Double](ax = 0)),
+      concatOpT = Some(stackOperation[Double](ax = 0)),
+      concatOpO = Some(concatPreds)
     )
 
     val best_model = model_function(config)

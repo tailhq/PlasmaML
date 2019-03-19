@@ -275,6 +275,12 @@ package object helios {
 
   }
 
+  def stackOperation[T: TF](ax: Int = 0)  = DataPipe[Iterable[Tensor[T]], Tensor[T]](
+    bat => tfi.stack(bat.toSeq, axis = ax))
+
+  def concatOperation[T: TF](ax: Int = 0) = DataPipe[Iterable[Tensor[T]], Tensor[T]](
+    bat => tfi.concatenate(bat.toSeq, axis = ax))
+
   /**
     * Train a Neural architecture on a
     * processed data set.
@@ -1023,8 +1029,13 @@ package object helios {
 
     val tf_data_ops = dtflearn.model.data_ops(10, miniBatchSize, 10, data_size/5)
 
-    def stackOperation[T: TF]  = DataPipe[Iterable[Tensor[T]], Tensor[T]](bat => tfi.stack(bat.toSeq, axis = 0))
-    def concatOperation[T: TF] = DataPipe[Iterable[Tensor[T]], Tensor[T]](bat => tfi.concatenate(bat.toSeq, axis = 0))
+
+    val unzip = DataPipe[
+      Iterable[(Tensor[Double], Tensor[Double])],
+      (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](_.unzip)
+
+
+    val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios.concatOperation[Double](ax = 0))
 
     val tunableTFModel: TunableTFModel[
       Output[UByte], Output[Double], (Output[Double], Output[Double]), Double,
@@ -1044,8 +1055,9 @@ package object helios {
         ),
         data_processing = tf_data_ops,
         inMemory = false,
-        concatOpI = Some(stackOperation[UByte]),
-        concatOpT = Some(concatOperation[Double])
+        concatOpI = Some(stackOperation[UByte](ax = 0)),
+        concatOpT = Some(concatOperation[Double](ax = 0)),
+        concatOpO = Some(concatPreds)
       )
 
 
@@ -1103,8 +1115,9 @@ package object helios {
       (FLOAT64, data_shapes._2),
       train_config_test,
       tf_data_ops, inMemory = false,
-      concatOpI = Some(stackOperation[UByte]),
-      concatOpT = Some(concatOperation[Double])
+      concatOpI = Some(stackOperation[UByte](ax = 0)),
+      concatOpT = Some(concatOperation[Double](ax = 0)),
+      concatOpO = Some(concatPreds)
     )
 
     val best_model = model_function(config)
@@ -1113,8 +1126,8 @@ package object helios {
 
     val extract_features = DataPipe((p: (Tensor[UByte], Tensor[Double])) => p._1)
 
-    val model_predictions_test = best_model.infer_coll(norm_tf_data.test_dataset.map(extract_features))
-    val model_predictions_train = best_model.infer_coll(norm_tf_data.training_dataset.map(extract_features))
+    val model_predictions_test = best_model.infer_batch(norm_tf_data.test_dataset.map(extract_features))
+    val model_predictions_train = best_model.infer_batch(norm_tf_data.training_dataset.map(extract_features))
 
     val test_predictions = model_predictions_test match {
       case Left(tensor) => tensor
