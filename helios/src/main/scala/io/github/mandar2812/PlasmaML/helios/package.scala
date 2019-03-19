@@ -1056,7 +1056,7 @@ package object helios {
         data_processing = tf_data_ops,
         inMemory = false,
         concatOpI = Some(stackOperation[UByte](ax = 0)),
-        concatOpT = Some(concatOperation[Double](ax = 0)),
+        concatOpT = Some(stackOperation[Double](ax = 0)),
         concatOpO = Some(concatPreds)
       )
 
