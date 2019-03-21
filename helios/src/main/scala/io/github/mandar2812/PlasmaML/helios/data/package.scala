@@ -80,6 +80,8 @@ package object data {
 
   type TF_DATA[T, U]           = TFDataSet[(Tensor[T], Tensor[U])]
 
+  type TF_DATA_T[T, U]         = TFDataSet[(DateTime, (Tensor[T], Tensor[U]))]
+
   type TF_DATA_EXT[T, U]       = TFDataSet[((Tensor[T], Tensor[U]), Tensor[U])]
 
   type TF_MC_DATA_EXT[T, U]    = AbstractDataSet[(Tensor[T], Tensor[U]), Tensor[U]]
