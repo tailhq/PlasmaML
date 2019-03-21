@@ -63,8 +63,6 @@ def apply(
 
   val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
 
-  pprint.pprintln(layer_scopes)
-
   val hyper_parameters = List(
     "prior_wt",
     "error_wt",
