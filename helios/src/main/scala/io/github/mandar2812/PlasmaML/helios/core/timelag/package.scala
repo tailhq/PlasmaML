@@ -12,6 +12,7 @@ import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.dynaml.optimization.{CMAES, CoupledSimulatedAnnealing, GridSearch}
 import _root_.io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
+import _root_.io.github.mandar2812.dynaml.DynaMLPipe._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag.utils._
@@ -1210,7 +1211,7 @@ package object timelag {
     architecture: Layer[Output[T], (Output[T], Output[T])],
     hyper_params: List[String],
     loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output[T], Output[T]), Output[T]), Output[L]],
-    fitness_func: DataPipe2[(Tensor[T], Tensor[T]), Tensor[T], Double],
+    fitness_func: DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     iterations: Int                                           = 150000,
     iterations_tuning: Int                                    = 20000,
@@ -1257,26 +1258,6 @@ package object timelag {
 
       val stop_condition_test   = get_stop_condition(iterations, 0.01, epochFlag, data_size, miniBatch)
 
-      val train_config_tuning =
-        dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
-          DataPipe((p: Path) => dtflearn.model.trainConfig(
-            p, optimizer,
-            stop_condition_tuning,
-            Some(get_train_hooks(p, iterations_tuning, epochFlag, data_size, miniBatch))
-          ))
-
-      val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
-        dtflearn.model.trainConfig(
-          summaryDir = tf_summary_dir,
-          stopCriteria = stop_condition_test,
-          trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch)))
-      )
-
-      val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
-
-      val stackOperation = DataPipe[Iterable[Tensor[T]], Tensor[T]](bat =>
-        tfi.stack(bat.toSeq, axis = 0)
-      )
 
       val stackOperationP = DataPipe[Iterable[(Tensor[T], Tensor[T])], (Tensor[T], Tensor[T])](bat => {
         val (bat1, bat2) = bat.unzip
@@ -1284,15 +1265,44 @@ package object timelag {
         (tfi.concatenate(bat1.toSeq, axis = 0), tfi.concatenate(bat2.toSeq, axis = 0))
       })
 
+
+      val tf_data_ops = dtflearn.model.data_ops[Tensor[T], Tensor[T], (Tensor[T], Tensor[T])](
+        shuffleBuffer = 10,
+        batchSize = miniBatch,
+        prefetchSize = 10,
+        groupBuffer = data_size/5,
+        concatOpI = Some(dtfpipe.EagerStack[T]()),
+        concatOpT = Some(dtfpipe.EagerStack[T]())
+      )
+
+      val train_config_tuning =
+        dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
+          DataPipe((p: Path) => dtflearn.model.trainConfig[Tensor[T], Tensor[T], (Tensor[T], Tensor[T])](
+            p, tf_data_ops, optimizer,
+            stop_condition_tuning,
+            Some(get_train_hooks(p, iterations_tuning, epochFlag, data_size, miniBatch))
+          ))
+
+      val train_config_test =
+        dtflearn.model.trainConfig(
+          summaryDir = tf_summary_dir,
+          data_processing = tf_data_ops.copy(concatOpO = Some(stackOperationP)),
+          optimizer = optimizer,
+          stopCriteria = stop_condition_test,
+          trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch)))
+
+
       val dTypeTag = TF[T]
 
       val tunableTFModel = dtflearn.tunable_tf_model[
+        (Tensor[T], Tensor[T]),
         Output[T], Output[T], (Output[T], Output[T]), L,
         Tensor[T], DataType[T], Shape,
         Tensor[T], DataType[T], Shape,
         (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)](
         loss_func_generator, hyper_params,
         tfdata.training_dataset,
+        identityPipe[(Tensor[T], Tensor[T])],
         fitness_func,
         architecture,
         (dTypeTag.dataType, input_shape),
@@ -1301,10 +1311,7 @@ package object timelag {
         data_split_func = Some(
           DataPipe[(Tensor[T], Tensor[T]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
         ),
-        data_processing = tf_data_ops,
-        inMemory = false,
-        concatOpI = Some(stackOperation),
-        concatOpT = Some(stackOperation)
+        inMemory = false
       )
 
       val gs = hyper_optimizer match {
@@ -1351,29 +1358,19 @@ package object timelag {
           config.values.mkString(start = "", sep = ",", end = "")
       )
 
-      val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
-        Output[T], Output[T], (Output[T], Output[T]), L,
-        Tensor[T], DataType[T], Shape,
-        Tensor[T], DataType[T], Shape,
-        (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)](
-        loss_func_generator, architecture,
-        (dTypeTag.dataType, input_shape),
-        (dTypeTag.dataType, Shape(causal_window)),
-        train_config_test,
-        tf_data_ops, inMemory = false,
-        concatOpI = Some(stackOperation),
-        concatOpT = Some(stackOperation),
-        concatOpO = Some(stackOperationP)
-      )
+      val best_model = tunableTFModel.modelFunction(config)
 
-      val best_model = model_function(config)
-
-      best_model.train(tfdata.training_dataset)
+      best_model.train(tfdata.training_dataset, train_config_test)
 
       val extract_features = DataPipe((p: (Tensor[T], Tensor[T])) => p._1)
 
-      val model_predictions_test = best_model.infer_batch(tfdata.test_dataset.map(extract_features))
-      val model_predictions_train = best_model.infer_batch(tfdata.training_dataset.map(extract_features))
+      val model_predictions_test = best_model.infer_batch(
+        tfdata.test_dataset.map(extract_features),
+        train_config_test.data_processing)
+
+      val model_predictions_train = best_model.infer_batch(
+        tfdata.training_dataset.map(extract_features),
+        train_config_test.data_processing)
 
 
       val test_predictions = model_predictions_test match {

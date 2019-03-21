@@ -4,6 +4,8 @@ gpuFlag=${2:-false}
 
 heapSize=${1:-4096m}
 
+echo "Commencing PlasmaML Build with: Executable Heap Size = $heapSize and GPU Flag = $gpuFlag"
+
 sbt -Dheap=${heapSize} -Dgpu=${gpuFlag} stage
 
 chmod +x ./target/universal/stage/bin/plasmaml
@@ -22,6 +24,8 @@ elif [[ "$OSTYPE" == "freebsd"* ]]; then
 else
         bash_file=".bashrc"
 fi
+
+echo "Updating PLASMAML_HOME variable in $bash_file"
 
 sed -i.bak '/export PLASMAML_HOME/d' ~/${bash_file}
 echo 'export PLASMAML_HOME='${DIR} >>~/${bash_file}

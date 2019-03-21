@@ -98,24 +98,18 @@ def apply(
 
 
 
-  val fitness_function = DataPipe2[(Tensor[Double], Tensor[Double]), Tensor[Double], Double]((preds, targets) => {
+  val fitness_function = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]]((preds, targets) => {
 
     val weighted_error = preds._1
       .subtract(targets)
       .square
       .multiply(preds._2)
       .sum(axes = 1)
-      .mean[Int]()
-      .scalar
-      .asInstanceOf[Double]
 
     val entropy = preds._2
       .multiply(Tensor(-1d).castTo[Double])
       .multiply(tfi.log(preds._2))
       .sum(axes = 1)
-      .mean[Int]()
-      .scalar
-      .asInstanceOf[Double]
 
     weighted_error + entropy
   })

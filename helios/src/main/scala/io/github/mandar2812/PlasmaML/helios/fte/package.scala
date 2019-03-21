@@ -13,6 +13,7 @@ import io.github.mandar2812.dynaml.tensorflow.utils._
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
 import io.github.mandar2812.dynaml.probability._
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
 import _root_.io.github.mandar2812.PlasmaML.helios
@@ -692,7 +693,7 @@ package object fte {
     arch: Layer[Output[Double], (Output[Double], Output[Double])],
     hyper_params: List[String],
     loss_func_generator: LG,
-    fitness_func: DataPipe2[(Tensor[Double], Tensor[Double]), Tensor[Double], Double],
+    fitness_func: DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
     iterations: Int                                           = 150000,
@@ -776,35 +777,6 @@ package object fte {
       )
     )
 
-    val train_config_tuning =
-      dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
-        DataPipe((p: Path) => dtflearn.model.trainConfig(
-          p, optimizer,
-        dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
-        Some(
-          dtflearn.model._train_hooks(
-            p,
-            iterations_tuning/3,
-            iterations_tuning/3,
-            iterations_tuning)))
-        )
-
-    val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
-      dtflearn.model.trainConfig(
-        summaryDir = tf_summary_dir,
-        stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
-        trainHooks = Some(
-          dtflearn.model._train_hooks(
-            tf_summary_dir,
-            iterations/3,
-            iterations/3,
-            iterations/2)
-        ))
-    )
-
-
-    val tf_data_ops = dtflearn.model.data_ops(10, miniBatch, 10, data_size/5)
-
     val unzip = DataPipe[
       Iterable[(Tensor[Double], Tensor[Double])],
       (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](_.unzip)
@@ -812,7 +784,39 @@ package object fte {
 
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios.concatOperation[Double](ax = 0))
 
+    val tf_data_ops = dtflearn.model.data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])](
+      10,
+      miniBatch,
+      10,
+      data_size/5,
+      concatOpI = Some(stackOperation[Double](ax = 0)),
+      concatOpT = Some(stackOperation[Double](ax = 0)))
+
+
+    val train_config_tuning =
+      dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
+        DataPipe((p: Path) => dtflearn.model.trainConfig(
+          p, tf_data_ops, optimizer,
+          dtflearn.rel_loss_change_stop(0.005, iterations_tuning),
+          Some(
+            dtflearn.model._train_hooks(p, iterations_tuning/3, iterations_tuning/3, iterations_tuning)))
+        )
+
+    val train_config_test = dtflearn.model.trainConfig[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])](
+        summaryDir = tf_summary_dir,
+        tf_data_ops.copy(concatOpO = Some(concatPreds)), optimizer,
+        stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
+        trainHooks = Some(
+          dtflearn.model._train_hooks(
+            tf_summary_dir,
+            iterations/3,
+            iterations/3,
+            iterations/2)
+        )
+    )
+
     val tunableTFModel: TunableTFModel[
+      (Tensor[Double], Tensor[Double]),
       Output[Double], Output[Double], (Output[Double], Output[Double]), Double,
       Tensor[Double], FLOAT64, Shape,
       Tensor[Double], FLOAT64, Shape,
@@ -820,6 +824,7 @@ package object fte {
       dtflearn.tunable_tf_model(
         loss_func_generator, hyper_params,
         scaled_data.training_dataset,
+        identityPipe[(Tensor[Double], Tensor[Double])],
         fitness_func,
         arch,
         (FLOAT64, input_shape),
@@ -828,11 +833,7 @@ package object fte {
         data_split_func = Some(
           DataPipe[(Tensor[Double], Tensor[Double]), Boolean](_ => scala.util.Random.nextGaussian() <= 0.7)
         ),
-        data_processing = tf_data_ops,
-        inMemory = false,
-        concatOpI = Some(stackOperation[Double](ax = 0)),
-        concatOpT = Some(stackOperation[Double](ax = 0)),
-        concatOpO = Some(concatPreds)
+        inMemory = false
       )
 
 
@@ -883,26 +884,15 @@ package object fte {
         config.values.mkString(start = "", sep = ",", end = "")
     )
 
-    val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
-      Output[Double], Output[Double], (Output[Double], Output[Double]), Double,
-      Tensor[Double], FLOAT64, Shape,
-      Tensor[Double], FLOAT64, Shape,
-      (Tensor[Double], Tensor[Double]), (FLOAT64, FLOAT64), (Shape, Shape)](
-      loss_func_generator, arch, (FLOAT64, input_shape),
-      (FLOAT64, Shape(causal_window)),
-      train_config_test, tf_data_ops,
-      inMemory = false,
-      concatOpI = Some(stackOperation[Double](ax = 0)),
-      concatOpT = Some(stackOperation[Double](ax = 0)),
-      concatOpO = Some(concatPreds)
-    )
+    val best_model = tunableTFModel.modelFunction(config)
 
-    val best_model = model_function(config)
-
-    best_model.train(scaled_data.training_dataset)
+    best_model.train(scaled_data.training_dataset, train_config_test)
 
     val extract_features = DataPipe((p: (Tensor[Double], Tensor[Double])) => p._1)
-    val model_predictions_test = best_model.infer_batch(scaled_data.test_dataset.map(extract_features))
+
+    val model_predictions_test = best_model.infer_batch(
+      scaled_data.test_dataset.map(extract_features),
+      train_config_test.data_processing)
 
     val predictions = model_predictions_test match {
       case Left(tensor) => tensor

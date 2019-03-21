@@ -224,29 +224,21 @@ def apply[T <: SolarImagesSource](
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
-  val fitness_function = DataPipe2[(Tensor[Double], Tensor[Double]), Tensor[Double], Double]((preds, targets) => {
+  val fitness_function = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]]((preds, targets) => {
 
     val weighted_error = preds._1
       .subtract(targets)
       .square
       .multiply(preds._2)
       .sum(axes = 1)
-      .mean()
-      .scalar
-      .asInstanceOf[Double]
 
     val entropy = preds._2
-      .multiply(-1d)
-      .multiply(preds._2.log)
+      .multiply(Tensor(-1d).castTo[Double])
+      .multiply(tfi.log(preds._2))
       .sum(axes = 1)
-      .mean()
-      .scalar
-      .asInstanceOf[Double]
 
     weighted_error + entropy
   })
-
-
 
   val experiment = helios.run_cdt_experiment_omni_hyp(
     dataset, tt_partition, resample = re,

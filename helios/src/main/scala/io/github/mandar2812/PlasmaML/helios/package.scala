@@ -919,7 +919,7 @@ package object helios {
     architecture: Layer[Output[UByte], (Output[Double], Output[Double])],
     hyper_params: List[String],
     loss_func_generator: LG,
-    fitness_func: DataPipe2[(Tensor[Double], Tensor[Double]), Tensor[Double], Double],
+    fitness_func: DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     results_id: String,
     resample: Boolean                                         = false,
@@ -1007,37 +1007,42 @@ package object helios {
 
     val stop_condition_test   = timelag.utils.get_stop_condition(
       iterations, 0.01, epochF = false,
-      data_size, miniBatchSize)
+      data_size, miniBatchSize) 
+      
+      
+    val unzip = DataPipe[
+      Iterable[(Tensor[Double], Tensor[Double])],
+      (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](_.unzip)
+  
+  
+    val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios.concatOperation[Double](ax = 0))
+
+    val tf_data_ops = dtflearn.model.data_ops[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])](
+      10, miniBatchSize, 10, data_size/5
+    )
+    
+
 
     val train_config_tuning =
       dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
-        DataPipe((p: Path) => dtflearn.model.trainConfig(
-          p, optimizer,
+        DataPipe((p: Path) => dtflearn.model.trainConfig[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])](
+          p, tf_data_ops, optimizer,
           stop_condition_tuning,
           Some(timelag.utils.get_train_hooks(p, iterations_tuning, epochFlag = false, data_size, miniBatchSize))
         ))
 
-    val train_config_test = DataPipe[dtflearn.tunable_tf_model.HyperParams, dtflearn.model.Config](_ =>
-      dtflearn.model.trainConfig(
-        summaryDir = tf_summary_dir,
+    val train_config_test =
+      dtflearn.model.trainConfig[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])](
+        summaryDir = tf_summary_dir, 
+        tf_data_ops, optimizer,
         stopCriteria = stop_condition_test,
         trainHooks = Some(
           timelag.utils.get_train_hooks(tf_summary_dir, iterations, epochFlag = false, data_size, miniBatchSize)
         )
       )
-    )
-
-    val tf_data_ops = dtflearn.model.data_ops(10, miniBatchSize, 10, data_size/5)
-
-
-    val unzip = DataPipe[
-      Iterable[(Tensor[Double], Tensor[Double])],
-      (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](_.unzip)
-
-
-    val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios.concatOperation[Double](ax = 0))
 
     val tunableTFModel: TunableTFModel[
+      (Tensor[UByte], Tensor[Double]),
       Output[UByte], Output[Double], (Output[Double], Output[Double]), Double,
       Tensor[UByte], UINT8, Shape,
       Tensor[Double], FLOAT64, Shape,
@@ -1045,6 +1050,7 @@ package object helios {
       dtflearn.tunable_tf_model(
         loss_func_generator, hyper_params,
         norm_tf_data.training_dataset,
+        identityPipe[(Tensor[UByte], Tensor[Double])],
         fitness_func,
         architecture,
         (UINT8, data_shapes._1),
@@ -1053,11 +1059,7 @@ package object helios {
         data_split_func = Some(
           DataPipe[(Tensor[UByte], Tensor[Double]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
         ),
-        data_processing = tf_data_ops,
-        inMemory = false,
-        concatOpI = Some(stackOperation[UByte](ax = 0)),
-        concatOpT = Some(stackOperation[Double](ax = 0)),
-        concatOpO = Some(concatPreds)
+        inMemory = false
       )
 
 
@@ -1105,39 +1107,43 @@ package object helios {
         config.values.mkString(start = "", sep = ",", end = "")
     )
 
-    val model_function = dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
-      Output[UByte], Output[Double], (Output[Double], Output[Double]), Double,
-      Tensor[UByte], UINT8, Shape,
-      Tensor[Double], FLOAT64, Shape,
-      (Tensor[Double], Tensor[Double]), (FLOAT64, FLOAT64), (Shape, Shape)](
-      loss_func_generator, architecture,
-      (UINT8, data_shapes._1),
-      (FLOAT64, data_shapes._2),
-      train_config_test,
-      tf_data_ops, inMemory = false,
-      concatOpI = Some(stackOperation[UByte](ax = 0)),
-      concatOpT = Some(concatOperation[Double](ax = 0)),
-      concatOpO = Some(concatPreds)
-    )
+    val best_model = tunableTFModel.modelFunction(config)
 
-    val best_model = model_function(config)
-
-    best_model.train(norm_tf_data.training_dataset)
+    best_model.train(norm_tf_data.training_dataset, train_config_test)
 
     val extract_features = DataPipe((p: (Tensor[UByte], Tensor[Double])) => p._1)
 
-    val model_predictions_test = best_model.infer_batch(norm_tf_data.test_dataset.map(extract_features))
-    val model_predictions_train = best_model.infer_batch(norm_tf_data.training_dataset.map(extract_features))
+    val model_predictions_test: Either[
+      (Tensor[Double], Tensor[Double]), 
+      DataSet[(Tensor[Double], Tensor[Double])]] = best_model.infer_batch(
+      norm_tf_data.test_dataset.map(extract_features),
+      train_config_test.data_processing.copy(
+        concatOpI = Some(dtfpipe.EagerStack[UByte]()),
+        concatOpT = Some(dtfpipe.EagerStack[Double]()),
+        concatOpO = None
+      )
+    )
+    
+    val model_predictions_train: Either[
+      (Tensor[Double], Tensor[Double]), 
+      DataSet[(Tensor[Double], Tensor[Double])]] = best_model.infer_batch(
+      norm_tf_data.training_dataset.map(extract_features),
+      train_config_test.data_processing.copy(
+        concatOpI = Some(dtfpipe.EagerStack[UByte]()),
+        concatOpT = Some(dtfpipe.EagerStack[Double]()),
+        concatOpO = None
+      )
+    )
 
     val test_predictions = model_predictions_test match {
       case Left(tensor) => tensor
-      case Right(collection) => timelag.utils.collect_predictions(collection)
+      case Right(collection) => concatPreds(collection.data)
     }
 
     val train_predictions = model_predictions_train match {
       case Left(tensor) => tensor
-      case Right(collection) => timelag.utils.collect_predictions(collection)
-    }
+      case Right(collection) => concatPreds(collection.data)
+    } 
 
     val (pred_outputs_train, pred_time_lags_train) = process_predictions(
       train_predictions,
