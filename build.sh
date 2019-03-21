@@ -25,7 +25,7 @@ else
         bash_file=".bashrc"
 fi
 
-echo "Updating PLASMAML_HOME variable in $bash_file"
+echo "Updating PLASMAML_HOME=$DIR variable in $bash_file"
 
 sed -i.bak '/export PLASMAML_HOME/d' ~/${bash_file}
 echo 'export PLASMAML_HOME='${DIR} >>~/${bash_file}
