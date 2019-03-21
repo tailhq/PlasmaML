@@ -108,10 +108,10 @@ def apply(
 
     val entropy = preds._2
       .multiply(Tensor(-1d).castTo[Double])
-      .multiply(tfi.log(preds._2))
+      .multiply(tf.log(preds._2))
       .sum(axes = 1)
 
-    weighted_error + entropy
+    (weighted_error + entropy).castTo[Float]
   })
 
   val dataset: timelag.utils.TLDATA[Double] =
