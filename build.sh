@@ -4,6 +4,8 @@ gpuFlag=${2:-false}
 
 heapSize=${1:-4096m}
 
+updateBashEnv=${3:-true}
+
 echo "Commencing PlasmaML Build with: Executable Heap Size = $heapSize and GPU Flag = $gpuFlag"
 
 sbt -Dheap=${heapSize} -Dgpu=${gpuFlag} stage
@@ -25,8 +27,9 @@ else
         bash_file=".bashrc"
 fi
 
-echo "Updating PLASMAML_HOME=$DIR variable in $bash_file"
-
-sed -i.bak '/export PLASMAML_HOME/d' ~/${bash_file}
-echo 'export PLASMAML_HOME='${DIR} >>~/${bash_file}
-source ~/${bash_file}
+if [[ "$updateBashEnv" == "true" ]]; then
+        echo "Updating PLASMAML_HOME=$DIR variable in $bash_file"
+        sed -i.bak '/export PLASMAML_HOME/d' ~/${bash_file}
+        echo 'export PLASMAML_HOME='${DIR} >>~/${bash_file}
+        source ~/${bash_file}
+fi
