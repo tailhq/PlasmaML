@@ -1266,18 +1266,17 @@ package object timelag {
       })
 
 
-      val tf_data_ops = dtflearn.model.data_ops[Tensor[T], Tensor[T], (Tensor[T], Tensor[T])](
+      val tf_data_ops = dtflearn.model.data_ops[Tensor[T], Tensor[T], (Tensor[T], Tensor[T]), Output[T], Output[T]](
         shuffleBuffer = 10,
         batchSize = miniBatch,
         prefetchSize = 10,
-        groupBuffer = data_size/5,
         concatOpI = Some(dtfpipe.EagerStack[T]()),
         concatOpT = Some(dtfpipe.EagerStack[T]())
       )
 
       val train_config_tuning =
         dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
-          DataPipe((p: Path) => dtflearn.model.trainConfig[Tensor[T], Tensor[T], (Tensor[T], Tensor[T])](
+          DataPipe((p: Path) => dtflearn.model.trainConfig[Tensor[T], Tensor[T], (Tensor[T], Tensor[T]), Output[T], Output[T]](
             p, tf_data_ops, optimizer,
             stop_condition_tuning,
             Some(get_train_hooks(p, iterations_tuning, epochFlag, data_size, miniBatch))

@@ -784,11 +784,10 @@ package object fte {
 
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios.concatOperation[Double](ax = 0))
 
-    val tf_data_ops = dtflearn.model.data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])](
+    val tf_data_ops = dtflearn.model.data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double]), Output[Double], Output[Double]](
       10,
       miniBatch,
       10,
-      data_size/5,
       concatOpI = Some(stackOperation[Double](ax = 0)),
       concatOpT = Some(stackOperation[Double](ax = 0)))
 
@@ -802,7 +801,7 @@ package object fte {
             dtflearn.model._train_hooks(p, iterations_tuning/3, iterations_tuning/3, iterations_tuning)))
         )
 
-    val train_config_test = dtflearn.model.trainConfig[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])](
+    val train_config_test = dtflearn.model.trainConfig[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double]), Output[Double], Output[Double]](
         summaryDir = tf_summary_dir,
         tf_data_ops.copy(concatOpO = Some(concatPreds)), optimizer,
         stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),

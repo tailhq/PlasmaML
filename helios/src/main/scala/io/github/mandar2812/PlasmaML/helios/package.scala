@@ -1017,29 +1017,40 @@ package object helios {
   
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios.concatOperation[Double](ax = 0))
 
-    val tf_data_ops = dtflearn.model.data_ops[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])](
-      10, miniBatchSize, 10, data_size/5
+    val tf_data_ops = dtflearn.model.data_ops[
+      Tensor[UByte], Tensor[Double], 
+      (Tensor[Double], Tensor[Double]), 
+      Output[UByte], Output[Double]](
+      10, miniBatchSize, 10
     )
     
 
 
     val train_config_tuning =
       dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
-        DataPipe((p: Path) => dtflearn.model.trainConfig[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])](
-          p, tf_data_ops, optimizer,
-          stop_condition_tuning,
-          Some(timelag.utils.get_train_hooks(p, iterations_tuning, epochFlag = false, data_size, miniBatchSize))
-        ))
+        DataPipe((p: Path) => 
+        dtflearn.model.trainConfig[
+          Tensor[UByte], Tensor[Double], 
+          (Tensor[Double], Tensor[Double]), 
+          Output[UByte], Output[Double]](
+            p, tf_data_ops, optimizer,
+            stop_condition_tuning,
+            Some(timelag.utils.get_train_hooks(p, iterations_tuning, epochFlag = false, data_size, miniBatchSize))
+          )
+        )
 
     val train_config_test =
-      dtflearn.model.trainConfig[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])](
-        summaryDir = tf_summary_dir, 
-        tf_data_ops, optimizer,
-        stopCriteria = stop_condition_test,
-        trainHooks = Some(
-          timelag.utils.get_train_hooks(tf_summary_dir, iterations, epochFlag = false, data_size, miniBatchSize)
+      dtflearn.model.trainConfig[
+        Tensor[UByte], Tensor[Double], 
+        (Tensor[Double], Tensor[Double]), 
+        Output[UByte], Output[Double]](
+          summaryDir = tf_summary_dir, 
+          tf_data_ops, optimizer,
+          stopCriteria = stop_condition_test,
+          trainHooks = Some(
+            timelag.utils.get_train_hooks(tf_summary_dir, iterations, epochFlag = false, data_size, miniBatchSize)
+          )
         )
-      )
 
     val tunableTFModel: TunableTFModel[
       (Tensor[UByte], Tensor[Double]),
