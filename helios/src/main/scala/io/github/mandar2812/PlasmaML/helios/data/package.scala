@@ -24,7 +24,7 @@ import io.github.mandar2812.dynaml.tensorflow.utils.{
   GaussianScalerTF,
   MinMaxScalerTF
 }
-import io.github.mandar2812.dynaml.DynaMLPipe._
+import io.github.mandar2812.dynaml.DynaMLPipe.{identityPipe => id, _}
 import io.github.mandar2812.dynaml.utils
 import org.joda.time._
 import org.platanios.tensorflow.api._
@@ -108,6 +108,9 @@ package object data {
 
   type SC_TF_DATA[T, U] =
     (TF_DATA[T, U], (ReversibleScaler[Tensor[T]], MinMaxScalerTF[U]))
+
+  type SC_TF_DATA_T[T, U] =
+    (TF_DATA_T[T, U], (ReversibleScaler[Tensor[T]], MinMaxScalerTF[U]))
 
   private def TF_DATA_EXT[T: TF, U: TF: IsFloatOrDouble](
     trData: IMAGE_TS[T, U],
@@ -205,14 +208,14 @@ package object data {
 
       case SDO(AIA094335193, _) =>
         (
-          identityPipe[Image],
+          id[Image],
           4,
           DataPipe((i: Image) => i.argb.flatten.map(_.toByte))
         )
 
       case SDO(HMI171, _) =>
         (
-          identityPipe[Image],
+          id[Image],
           4,
           DataPipe((i: Image) => i.argb.flatten.map(_.toByte))
         )
@@ -242,7 +245,7 @@ package object data {
   val non_corrupted_pattern =
     DataPipe[(Option[Tensor[_]], Seq[Double]), Boolean](_._1.isDefined)
 
-  def load_images_into_tensor = DataPipe((c: Option[Tensor[UByte]]) => c.get)
+  def get_image_tensor = DataPipe((c: Option[Tensor[UByte]]) => c.get)
 
   def available_bytes(p: Path): Int = {
     val in = Files.newInputStream(p.toNIO)
@@ -415,6 +418,37 @@ package object data {
         dataset.copy(
           training_dataset =
             dataset.training_dataset.map(id_scaler[UByte] * targets_scaler)
+        ),
+        (id_scaler[UByte], targets_scaler)
+      )
+    })
+
+  def scale_timed_dataset[U: TF: IsFloatOrDouble]
+    : DataPipe[TF_DATA_T[UByte, U], SC_TF_DATA_T[UByte, U]] =
+    DataPipe((dataset: TF_DATA_T[UByte, U]) => {
+
+      val concat_targets = tfi.stack(
+        dataset.training_dataset
+          .map(DataPipe((p: (DateTime, (Tensor[UByte], Tensor[U]))) => p._2._2))
+          .data
+          .toSeq
+      )
+
+      val (min, max) =
+        (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
+
+      val targets_scaler = MinMaxScalerTF[U](min, max)
+
+      val dt_sc = new ReversibleScaler[DateTime] {
+        override val i: Scaler[DateTime] = Scaler((o: DateTime) => o)
+
+        override def run(data: DateTime): DateTime = data
+      }
+
+      (
+        dataset.copy(
+          training_dataset =
+            dataset.training_dataset.map(dt_sc * (id_scaler[UByte] * targets_scaler))
         ),
         (id_scaler[UByte], targets_scaler)
       )
@@ -816,7 +850,7 @@ package object data {
         )
       )
       .transform(omni_processing)
-      .to_supervised(identityPipe[(DateTime, Seq[Double])])
+      .to_supervised(id[(DateTime, Seq[Double])])
 
     //Extract paths to images, along with a time-stamp
 
@@ -849,7 +883,7 @@ package object data {
       .dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
-      .to_supervised(identityPipe[(DateTime, Seq[Path])])
+      .to_supervised(id[(DateTime, Seq[Path])])
 
     images.join(omni_data)
   }
@@ -899,7 +933,7 @@ package object data {
         )
       )
       .transform(omni_processing)
-      .to_supervised(identityPipe[(DateTime, Seq[Double])])
+      .to_supervised(id[(DateTime, Seq[Double])])
 
     //Extract paths to images, along with a time-stamp
 
@@ -920,7 +954,7 @@ package object data {
         load_mc(images_path, year_month, image_sources, image_dir_tree)
     ) >
       IterableDataPipe(
-        image_dt_roundoff * identityPipe[(SolarImagesSource, Path)]
+        image_dt_roundoff * id[(SolarImagesSource, Path)]
       ) >
       DataPipe((d: Iterable[(DateTime, (SolarImagesSource, Path))]) => {
 
@@ -943,7 +977,7 @@ package object data {
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
       .to_supervised(
-        identityPipe[(DateTime, Map[SolarImagesSource, Seq[Path]])]
+        id[(DateTime, Map[SolarImagesSource, Seq[Path]])]
       )
 
     images.join(omni_data)
@@ -1005,7 +1039,7 @@ package object data {
         )
       )
       .transform(omni_processing)
-      .to_supervised(identityPipe[(DateTime, (Seq[Double], Seq[Double]))])
+      .to_supervised(id[(DateTime, (Seq[Double], Seq[Double]))])
 
     //Extract paths to images, along with a time-stamp
 
@@ -1036,7 +1070,7 @@ package object data {
       .dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
-      .to_supervised(identityPipe[(DateTime, Path)])
+      .to_supervised(id[(DateTime, Path)])
 
     images.join(omni_data)
   }
@@ -1117,7 +1151,7 @@ package object data {
       (year_month: YearMonth) =>
         load_soho_mc(images_path, year_month, image_sources, image_dir_tree).toStream
     ) >
-      StreamDataPipe(image_dt_roundoff * identityPipe[(SOHO, Path)]) >
+      StreamDataPipe(image_dt_roundoff * id[(SOHO, Path)]) >
       DataPipe(
         (d: Stream[(DateTime, (SOHO, Path))]) =>
           d.groupBy(_._1)
@@ -1154,10 +1188,10 @@ package object data {
     selector.iid(data.length).draw.map(data(_))
   }
 
-  def resample_op[T](resample: Boolean) =
+  def resample_op[T](resample_flag: Boolean) =
     DataPipe(
       (d: Iterable[(T, Seq[Double])]) =>
-        if (resample) {
+        if (resample_flag) {
 
           /*
            * Resample training set with
@@ -1178,6 +1212,34 @@ package object data {
           val selector = MultinomialRV(DenseVector(un_prob) / normalizer)
 
           helios.data.resample[(T, Seq[Double])](d.toStream, selector)
+
+        } else d
+    )
+
+  def resample_op_ts[T](resample_flag: Boolean) =
+    DataPipe(
+      (d: Iterable[(DateTime, (T, Seq[Double]))]) =>
+        if (resample_flag) {
+
+          /*
+           * Resample training set with
+           * emphasis on larger ratios
+           * between max and min of a sliding
+           * time window.
+           * */
+          val un_prob: Array[Double] = d
+            .map(p => {
+
+              math.abs(p._2._2.max - p._2._2.min) / math.abs(p._2._2.min)
+            })
+            .map(math.exp)
+            .toArray
+
+          val normalizer = un_prob.sum
+
+          val selector = MultinomialRV(DenseVector(un_prob) / normalizer)
+
+          helios.data.resample[(DateTime, (T, Seq[Double]))](d.toStream, selector)
 
         } else d
     )
@@ -1271,7 +1333,7 @@ package object data {
       )
 
     } else {
-      identityPipe[Iterable[Tensor[UByte]]]
+      id[Iterable[Tensor[UByte]]]
     }
 
     experiment_data.copy[Tensor[UByte]](
@@ -1345,11 +1407,11 @@ package object data {
 
     val trim_time_stamp = DataPipe((p: PATTERN) => p._2)
 
-    val load_only_images = trim_time_stamp > (read_image * identityPipe[Seq[
+    val load_only_images = trim_time_stamp > (read_image * id[Seq[
       Double
     ]])
 
-    val load_only_targets = identityPipe[Tensor[UByte]] * read_targets
+    val load_only_targets = id[Tensor[UByte]] * read_targets
 
     val get_image_history = if (image_history > 0) {
       val slices = utils
@@ -1375,19 +1437,21 @@ package object data {
       )
 
     } else {
-      identityPipe[Iterable[(Tensor[UByte], Seq[Double])]]
+      id[Iterable[(Tensor[UByte], Seq[Double])]]
     }
 
     val processed_data = experiment_data.copy[(Tensor[UByte], Seq[Double])](
       training_dataset = experiment_data.training_dataset
         .map(load_only_images)
         .filter(non_corrupted_pattern)
-        .map(load_images_into_tensor * identityPipe[Seq[Double]])
+        .map(get_image_tensor
+     * id[Seq[Double]])
         .transform(get_image_history),
       test_dataset = experiment_data.test_dataset
         .map(load_only_images)
         .filter(non_corrupted_pattern)
-        .map(load_images_into_tensor * identityPipe[Seq[Double]])
+        .map(get_image_tensor
+     * id[Seq[Double]])
         .transform(get_image_history)
     )
 
@@ -1399,6 +1463,101 @@ package object data {
         .map(load_only_targets)
     )
   }
+
+  /**
+    * Create a processed tensor data set as a [[TF_DATA]] instance.
+    *
+    * @param collated_data A Stream of date times, image paths and outputs.
+    *
+    * @param tt_partition A function which takes each data element and
+    *                     determines if it goes into the train or test split.
+    *
+    * */
+    def time_stamped_data_set[T: TF: IsFloatOrDouble](
+      collated_data: HELIOS_OMNI_DATA,
+      read_image: DataPipe[Seq[Path], Option[Tensor[UByte]]],
+      read_targets: DataPipe[Seq[Double], Tensor[T]],
+      tt_partition: PATTERN => Boolean,
+      resample: Boolean = false,
+      image_history: Int = 0,
+      image_history_downsampling: Int = 0
+    ): TF_DATA_T[UByte, T] = {
+  
+      println("Separating data into train and test.\n")
+      val experiment_data = collated_data.partition(DataPipe(tt_partition))
+  
+      print("Total data size: ")
+      val total_data_size = collated_data.size
+  
+      pprint.pprintln(total_data_size)
+  
+      val train_data_size = experiment_data.training_dataset.size
+  
+      val train_fraction = math.round(
+        100 * train_data_size.toFloat * 100 / total_data_size
+      ) / 100d
+  
+      print_data_splits(train_fraction)
+  
+      val trim_time_stamp = DataPipe((p: PATTERN) => p._2)
+  
+      val load_only_images = 
+        id[DateTime] * (read_image * id[Seq[Double]])
+  
+      val load_only_targets = id[DateTime] * (id[Tensor[UByte]] * read_targets)
+  
+      val get_image_history = if (image_history > 0) {
+        val slices = utils
+          .range(min = 0d, image_history.toDouble, image_history_downsampling)
+          .map(_.toInt)
+  
+        val indices = slices :+ (image_history - 1)
+  
+        DataPipe(
+          (data_stream: Iterable[(DateTime, (Tensor[UByte], Seq[Double]))]) =>
+            data_stream
+              .sliding(image_history)
+              .map(group => {
+  
+                val gr = group.toSeq
+  
+                val images =
+                  tfi.concatenate(indices.map(i => gr(i)._2._1), axis = -1)
+  
+                (gr(indices.last)._1, (images, gr(indices.last)._2._2))
+              })
+              .toIterable
+        )
+  
+      } else {
+        id[Iterable[(DateTime, (Tensor[UByte], Seq[Double]))]]
+      }
+  
+      val non_corrupted_images = 
+        DataPipe[(DateTime, (Option[Tensor[UByte]], Seq[Double])), (Option[Tensor[UByte]], Seq[Double])](_._2) > 
+          non_corrupted_pattern
+
+      val processed_data = experiment_data.copy[(DateTime, (Tensor[UByte], Seq[Double]))](
+        training_dataset = experiment_data.training_dataset
+          .map(load_only_images)
+          .filter(non_corrupted_images)
+          .map(id[DateTime] * (get_image_tensor * id[Seq[Double]]))
+          .transform(get_image_history),
+        test_dataset = experiment_data.test_dataset
+          .map(load_only_images)
+          .filter(non_corrupted_images)
+          .map(id[DateTime] * (get_image_tensor * id[Seq[Double]]))
+          .transform(get_image_history)
+      )
+  
+      processed_data.copy[(DateTime, (Tensor[UByte], Tensor[T]))](
+        training_dataset = processed_data.training_dataset
+          .transform(resample_op_ts[Tensor[UByte]](resample))
+          .map(load_only_targets),
+        test_dataset = processed_data.test_dataset
+          .map(load_only_targets)
+      )
+    }
 
   /**
     * Create a processed tensor data set as a [[AbstractDataSet]] instance.
@@ -1438,7 +1597,7 @@ package object data {
 
     val trim_time_stamp = DataPipe((p: PATTERN_EXT) => p._2)
 
-    val load_only_images = trim_time_stamp > (read_image * identityPipe[
+    val load_only_images = trim_time_stamp > (read_image * id[
       (Seq[Double], Seq[Double])
     ])
 
@@ -1446,7 +1605,7 @@ package object data {
 
     val load_hist_and_targets
       : DataPipe[Patt, (Tensor[UByte], (Tensor[T], Tensor[T]))] =
-      identityPipe[Tensor[UByte]] * (read_targets_history * read_targets)
+      id[Tensor[UByte]] * (read_targets_history * read_targets)
 
     val get_image_history = if (image_history > 0) {
       val slices = utils
@@ -1472,7 +1631,7 @@ package object data {
       )
 
     } else {
-      identityPipe[Iterable[(Tensor[UByte], (Seq[Double], Seq[Double]))]]
+      id[Iterable[(Tensor[UByte], (Seq[Double], Seq[Double]))]]
     }
 
     val processed_data =
@@ -1577,11 +1736,11 @@ package object data {
 
     val trim_time_stamp = DataPipe((p: MC_PATTERN) => p._2)
 
-    val load_only_images = trim_time_stamp > (read_mc_image * identityPipe[Seq[
+    val load_only_images = trim_time_stamp > (read_mc_image * id[Seq[
       Double
     ]])
 
-    val load_only_targets = identityPipe[Tensor[UByte]] * read_targets
+    val load_only_targets = id[Tensor[UByte]] * read_targets
 
     val get_image_history = if (image_history > 0) {
       val slices = utils
@@ -1606,20 +1765,22 @@ package object data {
       )
 
     } else {
-      identityPipe[Iterable[(Tensor[UByte], Seq[Double])]]
+      id[Iterable[(Tensor[UByte], Seq[Double])]]
     }
 
     experiment_data.copy[(Tensor[UByte], Tensor[T])](
       training_dataset = experiment_data.training_dataset
         .map(load_only_images)
         .filter(non_corrupted_pattern)
-        .map(load_images_into_tensor * identityPipe[Seq[Double]])
+        .map(get_image_tensor
+     * id[Seq[Double]])
         .transform(get_image_history > resample_op[Tensor[UByte]](resample))
         .map(load_only_targets),
       test_dataset = experiment_data.test_dataset
         .map(load_only_images)
         .filter(non_corrupted_pattern)
-        .map(load_images_into_tensor * identityPipe[Seq[Double]])
+        .map(get_image_tensor
+     * id[Seq[Double]])
         .transform(get_image_history > resample_op[Tensor[UByte]](resample))
         .map(load_only_targets)
     )

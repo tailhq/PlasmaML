@@ -126,3 +126,4 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
 ).aggregate(mag_core, omni, vanAllen, streamer, helios)
   .settings(aggregate in update := false)
 
+

@@ -309,7 +309,7 @@ package object helios {
     results: Run
   )
 
-  type ModelRunTuning[T, L] = TunedModelRun[
+  type ModelRunTuning[T, L] = TunedModelRunT[
     T,
     Output[UByte],
     (Output[T], Output[T]),
@@ -1252,8 +1252,8 @@ package object helios {
       (arr: Seq[Double]) => dtf.tensor_f64(num_outputs)(arr: _*)
     )
 
-    val dataSet: TF_DATA[UByte, Double] =
-      helios.data.prepare_helios_data_set[Double](
+    val dataSet: TF_DATA_T[UByte, Double] =
+      helios.data.time_stamped_data_set[Double](
         dataset,
         load_image,
         load_targets_into_tensor,
@@ -1263,8 +1263,8 @@ package object helios {
         image_history_downsampling
       )
 
-    val (norm_tf_data, scalers): SC_TF_DATA[UByte, Double] =
-      scale_helios_dataset[Double].run(dataSet)
+    val (norm_tf_data, scalers): SC_TF_DATA_T[UByte, Double] =
+      scale_timed_dataset[Double].run(dataSet)
 
     val causal_horizon = dataset.data.head._2._2.length
 
@@ -1371,7 +1371,7 @@ package object helios {
 
     val tunableTFModel
       : TunableTFModel[
-        (Tensor[UByte], Tensor[Double]), 
+        (DateTime, (Tensor[UByte], Tensor[Double])), 
         Output[UByte], 
         Output[Double], 
         (Output[Double], Output[Double]), Double, 
@@ -1384,14 +1384,14 @@ package object helios {
         loss_func_generator,
         hyper_params,
         norm_tf_data.training_dataset,
-        identityPipe[(Tensor[UByte], Tensor[Double])],
+        DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2),
         fitness_func,
         architecture,
         (UINT8, data_shapes._1),
         (FLOAT64, data_shapes._2),
         train_config_tuning(tf_summary_dir),
         data_split_func = Some(
-          DataPipe[(Tensor[UByte], Tensor[Double]), Boolean](
+          DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), Boolean](
             _ => scala.util.Random.nextDouble() <= 0.7
           )
         ),
@@ -1454,7 +1454,11 @@ package object helios {
 
     val best_model = tunableTFModel.modelFunction(config)
 
-    best_model.train(norm_tf_data.training_dataset, train_config_test)
+    best_model.train(
+      norm_tf_data.training_dataset.map(
+        DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2)
+      ), 
+      train_config_test)
 
     val extract_features = DataPipe(
       (p: (Tensor[UByte], Tensor[Double])) => p._1
@@ -1464,7 +1468,7 @@ package object helios {
       : Either[(Tensor[Double], Tensor[Double]), DataSet[
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
-      norm_tf_data.test_dataset.map(extract_features),
+      norm_tf_data.test_dataset.map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extract_features),
       train_config_test.data_processing.copy(
         concatOpI = Some(dtfpipe.EagerStack[UByte]()),
         concatOpT = Some(dtfpipe.EagerStack[Double]()),
@@ -1476,7 +1480,7 @@ package object helios {
       : Either[(Tensor[Double], Tensor[Double]), DataSet[
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
-      norm_tf_data.training_dataset.map(extract_features),
+      norm_tf_data.training_dataset.map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extract_features),
       train_config_test.data_processing.copy(
         concatOpI = Some(dtfpipe.EagerStack[UByte]()),
         concatOpT = Some(dtfpipe.EagerStack[Double]()),
@@ -1520,7 +1524,7 @@ package object helios {
 
     //The test labels dont require rescaling
     val test_labels = norm_tf_data.test_dataset
-      .map(extractLabels)
+      .map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extractLabels)
       .map(convToSeq)
       .data
       .toSeq
@@ -1528,7 +1532,7 @@ package object helios {
     //The training labels were scaled during processing,
     //hence must be rescaled back to original domains.
     val train_labels = norm_tf_data.training_dataset
-      .map(extractAndUnScLabels)
+      .map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extractAndUnScLabels)
       .map(convToSeq)
       .data
       .toSeq
@@ -1552,7 +1556,7 @@ package object helios {
     val reg_metrics_train =
       new RegressionMetricsTF(pred_outputs_train, actual_targets_train)
 
-    val results: helios.ModelRunTuning[Double, Double] = helios.TunedModelRun(
+    val results: helios.ModelRunTuning[Double, Double] = helios.TunedModelRunT(
       (norm_tf_data, scalers),
       best_model,
       Some(reg_metrics_train),
