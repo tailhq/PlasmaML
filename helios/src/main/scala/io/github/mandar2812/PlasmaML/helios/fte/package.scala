@@ -1053,19 +1053,25 @@ package object fte {
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios
       .concatOperation[Double](ax = 0))
 
-    val tf_data_ops =
-      dtflearn.model
-        .data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double]), Output[
-          Double
-        ], Output[Double]](
-          10,
-          miniBatch,
-          10,
-          concatOpI = Some(stackOperation[Double](ax = 0)),
-          concatOpT = Some(stackOperation[Double](ax = 0))
+    val tf_data_ops: dtflearn.model.Ops[
+      Tensor[Double], Tensor[Double], 
+      (Tensor[Double], Tensor[Double]), 
+      Output[Double], Output[Double]] =
+      dtflearn
+        .model
+        .data_ops(
+          shuffleBuffer = 10,
+          batchSize = miniBatch,
+          prefetchSize = 10
         )
 
-    val train_config_tuning =
+    val train_config_tuning: MetaPipe[
+      Path,
+      dtflearn.tunable_tf_model.HyperParams,
+      dtflearn.model.Config[
+      Tensor[Double], Tensor[Double], 
+      (Tensor[Double], Tensor[Double]), 
+      Output[Double], Output[Double]]] =
       dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
         DataPipe(
           (p: Path) =>
@@ -1085,11 +1091,16 @@ package object fte {
             )
         )
 
-    val train_config_test = dtflearn.model.trainConfig[Tensor[Double], Tensor[
-      Double
-    ], (Tensor[Double], Tensor[Double]), Output[Double], Output[Double]](
+    val train_config_test = dtflearn.model.trainConfig[
+      Tensor[Double], Tensor[Double], 
+      (Tensor[Double], Tensor[Double]), 
+      Output[Double], Output[Double]](
       summaryDir = tf_summary_dir,
-      tf_data_ops.copy(concatOpO = Some(concatPreds)),
+      tf_data_ops.copy(
+        concatOpI = Some(stackOperation[Double](ax = 0)),
+        concatOpT = Some(stackOperation[Double](ax = 0)),
+        concatOpO = Some(concatPreds)
+      ),
       optimizer,
       stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
       trainHooks = Some(
