@@ -14,15 +14,22 @@ import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.analysis.implicits._
 import io.github.mandar2812.dynaml.probability.{DiscreteDistrRV, MultinomialRV}
 import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtfpipe}
-import io.github.mandar2812.dynaml.tensorflow.data.{AbstractDataSet, DataSet, TFDataSet, ZipDataSet}
-import io.github.mandar2812.dynaml.tensorflow.utils.{GaussianScalerTF, MinMaxScalerTF}
+import io.github.mandar2812.dynaml.tensorflow.data.{
+  AbstractDataSet,
+  DataSet,
+  TFDataSet,
+  ZipDataSet
+}
+import io.github.mandar2812.dynaml.tensorflow.utils.{
+  GaussianScalerTF,
+  MinMaxScalerTF
+}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.utils
 import org.joda.time._
 import org.platanios.tensorflow.api._
 import org.json4s._
 import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
-
 
 /**
   * <h3>Helios Data Facility</h3>
@@ -37,36 +44,39 @@ package object data {
   implicit val formats = DefaultFormats
 
   private implicit val dateOrdering = new Ordering[DateTime] {
-    override def compare(x: DateTime, y: DateTime): Int = if(x.isBefore(y)) -1 else 1
+    override def compare(x: DateTime, y: DateTime): Int =
+      if (x.isBefore(y)) -1 else 1
   }
 
-  type IMAGE_PATTERN           = (DateTime, Path)
+  type IMAGE_PATTERN = (DateTime, Path)
 
   /**
     * A simple data pattern, consisting of
     * a time stamp, path to an image, and a sequence of numbers
     * */
-  type PATTERN                 = (DateTime, (Seq[Path], Seq[Double]))
+  type PATTERN = (DateTime, (Seq[Path], Seq[Double]))
 
   /**
     * A pattern, consisting of
     * a time stamp, path to an image, a tuple of numeric sequences
     * */
-  type PATTERN_EXT             = (DateTime, (Path, (Seq[Double], Seq[Double])))
+  type PATTERN_EXT = (DateTime, (Path, (Seq[Double], Seq[Double])))
 
   /**
     * A pattern, consisting of
     * a time stamp, a collection of images from multiple sources,
     * and a sequence of numbers
     * */
-  type MC_PATTERN              = (DateTime, (Map[SolarImagesSource, Seq[Path]], Seq[Double]))
+  type MC_PATTERN = (DateTime, (Map[SolarImagesSource, Seq[Path]], Seq[Double]))
 
+  
   /**
     * A pattern, consisting of
     * a time stamp, a collection of images from multiple sources,
     * and a tuple of sequence of numbers
     * */
-  type MC_PATTERN_EXT          = (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
+  type MC_PATTERN_EXT =
+    (DateTime, (Map[SOHO, Seq[Path]], (Seq[Double], Seq[Double])))
 
   type HELIOS_IMAGE_DATA       = DataSet[IMAGE_PATTERN]
   type HELIOS_OMNI_DATA        = DataSet[PATTERN]
@@ -74,23 +84,30 @@ package object data {
   type HELIOS_OMNI_DATA_EXT    = DataSet[PATTERN_EXT]
   type HELIOS_MC_OMNI_DATA_EXT = Iterable[MC_PATTERN_EXT]
 
-  type IMAGE_TS[T, U]          = (Tensor[T], Tensor[U])
+  type IMAGE_TS[T, U] = (Tensor[T], Tensor[U])
 
-  type TF_IMAGE_DATA[T]        = TFDataSet[Tensor[T]]
+  type TF_IMAGE_DATA[T] = TFDataSet[Tensor[T]]
 
-  type TF_DATA[T, U]           = TFDataSet[(Tensor[T], Tensor[U])]
+  type TF_DATA[T, U] = TFDataSet[(Tensor[T], Tensor[U])]
 
-  type TF_DATA_T[T, U]         = TFDataSet[(DateTime, (Tensor[T], Tensor[U]))]
+  type TF_DATA_T[T, U] = TFDataSet[(DateTime, (Tensor[T], Tensor[U]))]
 
-  type TF_DATA_EXT[T, U]       = TFDataSet[((Tensor[T], Tensor[U]), Tensor[U])]
+  type TF_DATA_EXT[T, U] = TFDataSet[((Tensor[T], Tensor[U]), Tensor[U])]
 
-  type TF_MC_DATA_EXT[T, U]    = AbstractDataSet[(Tensor[T], Tensor[U]), Tensor[U]]
+  type TF_MC_DATA_EXT[T, U] = AbstractDataSet[(Tensor[T], Tensor[U]), Tensor[U]]
 
-  type SC_TF_MC_DATA_EXT[T, U] = (TF_MC_DATA_EXT[T, U], (ReversibleScaler[(Tensor[T], Tensor[U])], MinMaxScalerTF[U]))
+  type SC_TF_MC_DATA_EXT[T, U] = (
+    TF_MC_DATA_EXT[T, U],
+    (ReversibleScaler[(Tensor[T], Tensor[U])], MinMaxScalerTF[U])
+  )
 
-  type SC_TF_DATA_EXT[T, U]    = (TF_DATA_EXT[T, U], (ReversibleScaler[(Tensor[T], Tensor[U])], MinMaxScalerTF[U]))
+  type SC_TF_DATA_EXT[T, U] = (
+    TF_DATA_EXT[T, U],
+    (ReversibleScaler[(Tensor[T], Tensor[U])], MinMaxScalerTF[U])
+  )
 
-  type SC_TF_DATA[T, U]        = (TF_DATA[T, U], (ReversibleScaler[Tensor[T]], MinMaxScalerTF[U]))
+  type SC_TF_DATA[T, U] =
+    (TF_DATA[T, U], (ReversibleScaler[Tensor[T]], MinMaxScalerTF[U]))
 
   private def TF_DATA_EXT[T: TF, U: TF: IsFloatOrDouble](
     trData: IMAGE_TS[T, U],
@@ -98,36 +115,45 @@ package object data {
     sizeTr: Int,
     tData: IMAGE_TS[T, U],
     tLabels: Tensor[U],
-    sizeT: Int): AbstractDataSet[IMAGE_TS[T, U], Tensor[U]] =
+    sizeT: Int
+  ): AbstractDataSet[IMAGE_TS[T, U], Tensor[U]] =
     AbstractDataSet(trData, trLabels, sizeTr, tData, tLabels, sizeT)
-
-
 
   /**
     * Download a resource (image, file) from a sequence of urls to a specified
     * disk location.
     * */
   def download_batch(path: Path)(urls: List[String]): Unit = {
-    urls.par.foreach(s => utils.downloadURL(s, (path/s.split('/').last).toString()))
+    urls.par.foreach(
+      s => utils.downloadURL(s, (path / s.split('/').last).toString())
+    )
   }
 
   /**
     * Perform a bulk download of images within some date range
     * */
-  def download_day_range(download: LocalDate => Unit)(start: LocalDate, end: LocalDate): Unit = {
+  def download_day_range(
+    download: LocalDate => Unit
+  )(start: LocalDate, end: LocalDate): Unit = {
 
-    val num_days = new Duration(start.toDateTimeAtStartOfDay, end.toDateTimeAtStartOfDay).getStandardDays.toInt
+    val num_days = new Duration(
+      start.toDateTimeAtStartOfDay,
+      end.toDateTimeAtStartOfDay
+    ).getStandardDays.toInt
 
     (0 to num_days).map(start.plusDays).par.foreach(download)
   }
 
-  def download_month_range(download: YearMonth => Unit)(start: YearMonth, end: YearMonth): Unit = {
+  def download_month_range(
+    download: YearMonth => Unit
+  )(start: YearMonth, end: YearMonth): Unit = {
 
     val period = new Period(
       start.toLocalDate(1).toDateTimeAtStartOfDay,
-      end.toLocalDate(31).toDateTimeAtStartOfDay)
+      end.toLocalDate(31).toDateTimeAtStartOfDay
+    )
 
-    val num_months = (12*period.getYears) + period.getMonths
+    val num_months = (12 * period.getYears) + period.getMonths
 
     (0 to num_months).map(start.plusMonths).par.foreach(download)
   }
@@ -140,48 +166,64 @@ package object data {
 
   case class SOHO(
     override val instrument: String,
-    override val size: Int = SOHOData.Resolutions.s512) extends
-    SolarImagesSource {
+    override val size: Int = SOHOData.Resolutions.s512
+  ) extends SolarImagesSource {
 
-    override def toString: String = "SOHO_"+instrument+"_"+size
+    override def toString: String = "SOHO_" + instrument + "_" + size
 
   }
 
   case class SDO(
     override val instrument: String,
-    override val size: Int = SDOData.Resolutions.s512) extends
-    SolarImagesSource {
+    override val size: Int = SDOData.Resolutions.s512
+  ) extends SolarImagesSource {
 
-    override def toString: String = "SDO_"+instrument+"_"+size
+    override def toString: String = "SDO_" + instrument + "_" + size
 
   }
 
   case class GOES(
     quantity: String = GOESData.Quantities.XRAY_FLUX_5m,
-    format: String = GOESData.Formats.CSV) extends Source
+    format: String = GOESData.Formats.CSV
+  ) extends Source
 
   case class OMNI(quantity: Int = OMNIData.Quantities.V_SW) extends Source {
-    override def toString: String = "OMNI_"+OMNIData.columnNames(quantity).replace(" ", "_")
+    override def toString: String =
+      "OMNI_" + OMNIData.columnNames(quantity).replace(" ", "_")
   }
 
-  def image_process_metadata[S <: SolarImagesSource](image_source: S)
-  : (DataPipe[Image, Image], Int, DataPipe[Image, Array[Byte]]) = image_source match {
-    case _: SOHO => (
-      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
-      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
+  def image_process_metadata[S <: SolarImagesSource](
+    image_source: S
+  ): (DataPipe[Image, Image], Int, DataPipe[Image, Array[Byte]]) =
+    image_source match {
+      case _: SOHO =>
+        (
+          DataPipe((i: Image) => i.filter(GrayscaleFilter)),
+          1,
+          DataPipe((i: Image) => i.argb.map(_.last.toByte))
+        )
 
-    case SDO(AIA094335193, _) => (
-      identityPipe[Image], 4,
-      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
+      case SDO(AIA094335193, _) =>
+        (
+          identityPipe[Image],
+          4,
+          DataPipe((i: Image) => i.argb.flatten.map(_.toByte))
+        )
 
-    case SDO(HMI171, _) => (
-      identityPipe[Image], 4,
-      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)))
+      case SDO(HMI171, _) =>
+        (
+          identityPipe[Image],
+          4,
+          DataPipe((i: Image) => i.argb.flatten.map(_.toByte))
+        )
 
-    case _: SDO  => (
-      DataPipe((i: Image) => i.filter(GrayscaleFilter)), 1,
-      DataPipe((i: Image) => i.argb.map(_.last.toByte)))
-  }
+      case _: SDO =>
+        (
+          DataPipe((i: Image) => i.filter(GrayscaleFilter)),
+          1,
+          DataPipe((i: Image) => i.argb.map(_.last.toByte))
+        )
+    }
 
   private var size_buffer = 500
 
@@ -197,16 +239,18 @@ package object data {
 
   val read_image = DataPipe((p: Path) => Image.fromPath(p.toNIO))
 
-  val non_corrupted_pattern = DataPipe[(Option[Tensor[_]], Seq[Double]), Boolean](_._1.isDefined)
+  val non_corrupted_pattern =
+    DataPipe[(Option[Tensor[_]], Seq[Double]), Boolean](_._1.isDefined)
 
   def load_images_into_tensor = DataPipe((c: Option[Tensor[UByte]]) => c.get)
 
   def available_bytes(p: Path): Int = {
     val in = Files.newInputStream(p.toNIO)
 
-    val available_bytes: Int = try in.available() catch {
+    val available_bytes: Int = try in.available()
+    catch {
       case _: IOException => -1
-      case _: Exception => -1
+      case _: Exception   => -1
     }
 
     in.close()
@@ -216,59 +260,79 @@ package object data {
 
   def image_to_tensor: MetaPipe21[Int, Int, Array[Byte], Tensor[UByte]] =
     MetaPipe21[Int, Int, Array[Byte], Tensor[UByte]](
-    (size: Int, channels: Int) => (data: Array[Byte]) => {
+      (size: Int, channels: Int) =>
+        (data: Array[Byte]) => {
 
-      //Divide the image into sectors
-      //Construct an image for each sector
-      //Concatenate in column then row wise fashion
-      tfi.concatenate[UByte](
-        data
-          .toIterable
-          .grouped(channels)
-          .grouped(size)
-          .grouped(_image_buffer_size)
-          .map(arr => {
-            val byte_arr: Array[Byte] = arr.flatten.flatten.toArray
-            dtf.tensor_from_buffer[UByte](Shape(_image_buffer_size, size, channels))(byte_arr)
-          })
-          .toSeq,
-        axis = 0
-      )
-    })
+          //Divide the image into sectors
+          //Construct an image for each sector
+          //Concatenate in column then row wise fashion
+          tfi.concatenate[UByte](
+            data.toIterable
+              .grouped(channels)
+              .grouped(size)
+              .grouped(_image_buffer_size)
+              .map(arr => {
+                val byte_arr: Array[Byte] = arr.flatten.flatten.toArray
+                dtf.tensor_from_buffer[UByte](
+                  Shape(_image_buffer_size, size, channels)
+                )(byte_arr)
+              })
+              .toSeq,
+            axis = 0
+          )
+        }
+    )
 
   val image_scale: MetaPipe[Double, Image, Image] = MetaPipe(
     (factor: Double) => (image: Image) => image.copy.scale(factor)
   )
 
   val image_central_patch: MetaPipe21[Double, Int, Image, Image] =
-    MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Image) => {
-      val start = (1.0 - image_magic_ratio)*image_sizes/2
-      val patch_size = image_sizes*image_magic_ratio
+    MetaPipe21(
+      (image_magic_ratio: Double, image_sizes: Int) =>
+        (image: Image) => {
+          val start      = (1.0 - image_magic_ratio) * image_sizes / 2
+          val patch_size = image_sizes * image_magic_ratio
 
-      image.subimage(start.toInt, start.toInt, patch_size.toInt, patch_size.toInt)
-    })
+          image.subimage(
+            start.toInt,
+            start.toInt,
+            patch_size.toInt,
+            patch_size.toInt
+          )
+        }
+    )
 
   def get_patch_range(magic_ratio: Double, image_sizes: Int) = {
-    val start = (1.0 - magic_ratio)*image_sizes/2
-    val patch_size = image_sizes*magic_ratio
+    val start      = (1.0 - magic_ratio) * image_sizes / 2
+    val patch_size = image_sizes * magic_ratio
 
     start.toInt to (start.toInt + patch_size.toInt)
   }
 
-  val extract_central_patch: MetaPipe21[Double, Int, Output[UByte], Output[UByte]] =
-    MetaPipe21((image_magic_ratio: Double, image_sizes: Int) => (image: Output[UByte]) => {
-      val start = (1.0 - image_magic_ratio)*image_sizes/2
-      val patch_size = image_sizes*image_magic_ratio
+  val extract_central_patch
+    : MetaPipe21[Double, Int, Output[UByte], Output[UByte]] =
+    MetaPipe21(
+      (image_magic_ratio: Double, image_sizes: Int) =>
+        (image: Output[UByte]) => {
+          val start      = (1.0 - image_magic_ratio) * image_sizes / 2
+          val patch_size = image_sizes * image_magic_ratio
 
-      val patch_range = start.toInt to (start.toInt + patch_size.toInt)
+          val patch_range = start.toInt to (start.toInt + patch_size.toInt)
 
-      dtfpipe.extract_image_patch[UByte](patch_range, patch_range).run(image)
-    })
+          dtfpipe
+            .extract_image_patch[UByte](patch_range, patch_range)
+            .run(image)
+        }
+    )
 
-  val image_pixel_scaler = MinMaxScalerTF[UByte](Tensor(UByte(0.toByte)), Tensor(UByte(255.toByte)))
+  val image_pixel_scaler =
+    MinMaxScalerTF[UByte](Tensor(UByte(0.toByte)), Tensor(UByte(255.toByte)))
 
   def std_images_and_outputs[T: TF: IsFloatOrDouble]
-  : DataPipe2[Tensor[UByte], Tensor[T], ((Tensor[UByte], Tensor[T]), (MinMaxScalerTF[UByte], MinMaxScalerTF[T]))] =
+    : DataPipe2[Tensor[UByte], Tensor[
+      T
+    ], ((Tensor[UByte], Tensor[T]), (MinMaxScalerTF[UByte], MinMaxScalerTF[T]))] =
     DataPipe2((features: Tensor[UByte], labels: Tensor[T]) => {
 
       val labels_min = labels.min(axes = 0)
@@ -287,7 +351,8 @@ package object data {
       ((features_scaled, labels_scaled), (features_scaler, labels_scaler))
     })
 
-  def gauss_std[T: TF: IsNotQuantized]: DataPipe[Tensor[T], (Tensor[T], GaussianScalerTF[T])] =
+  def gauss_std[T: TF: IsNotQuantized]
+    : DataPipe[Tensor[T], (Tensor[T], GaussianScalerTF[T])] =
     DataPipe((labels: Tensor[T]) => {
 
       val labels_mean = labels.mean(axes = 0)
@@ -295,7 +360,12 @@ package object data {
       val n_data = labels.shape(0).scalar.toDouble
 
       val labels_sd =
-        labels.subtract(labels_mean).square.mean(axes = 0).multiply(Tensor(n_data/(n_data - 1d)).castTo[T]).sqrt
+        labels
+          .subtract(labels_mean)
+          .square
+          .mean(axes = 0)
+          .multiply(Tensor(n_data / (n_data - 1d)).castTo[T])
+          .sqrt
 
       val labels_scaler = GaussianScalerTF[T](labels_mean, labels_sd)
 
@@ -304,7 +374,8 @@ package object data {
       (labels_scaled, labels_scaler)
     })
 
-  def minmax_std[T: TF: IsNotQuantized]: DataPipe[Tensor[T], (Tensor[T], MinMaxScalerTF[T])] =
+  def minmax_std[T: TF: IsNotQuantized]
+    : DataPipe[Tensor[T], (Tensor[T], MinMaxScalerTF[T])] =
     DataPipe((labels: Tensor[T]) => {
 
       val labels_min = labels.min(axes = 0)
@@ -317,79 +388,98 @@ package object data {
       (labels_scaled, labels_scaler)
     })
 
-  protected def id_scaler[T: TF]: ReversibleScaler[Tensor[T]] = new ReversibleScaler[Tensor[T]] {
-    override val i: Scaler[Tensor[T]] = Scaler((o: Tensor[T]) => o)
+  protected def id_scaler[T: TF]: ReversibleScaler[Tensor[T]] =
+    new ReversibleScaler[Tensor[T]] {
+      override val i: Scaler[Tensor[T]] = Scaler((o: Tensor[T]) => o)
 
-    override def run(data: Tensor[T]): Tensor[T] = data
-  }
+      override def run(data: Tensor[T]): Tensor[T] = data
+    }
 
-  def scale_helios_dataset[U: TF: IsFloatOrDouble]: DataPipe[TF_DATA[UByte, U], SC_TF_DATA[UByte, U]] =
+  def scale_helios_dataset[U: TF: IsFloatOrDouble]
+    : DataPipe[TF_DATA[UByte, U], SC_TF_DATA[UByte, U]] =
     DataPipe((dataset: TF_DATA[UByte, U]) => {
 
-    val concat_targets = tfi.stack(
-      dataset.training_dataset.map(DataPipe((p: (Tensor[UByte], Tensor[U])) => p._2)).data.toSeq
-    )
+      val concat_targets = tfi.stack(
+        dataset.training_dataset
+          .map(DataPipe((p: (Tensor[UByte], Tensor[U])) => p._2))
+          .data
+          .toSeq
+      )
 
-    val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
+      val (min, max) =
+        (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
 
-    val targets_scaler = MinMaxScalerTF[U](min, max)
+      val targets_scaler = MinMaxScalerTF[U](min, max)
 
-    (
-      dataset.copy(
-        training_dataset = dataset.training_dataset.map(id_scaler[UByte] * targets_scaler)
-      ),
-      (id_scaler[UByte], targets_scaler)
-    )
-  })
+      (
+        dataset.copy(
+          training_dataset =
+            dataset.training_dataset.map(id_scaler[UByte] * targets_scaler)
+        ),
+        (id_scaler[UByte], targets_scaler)
+      )
+    })
 
   def scale_helios_dataset_mc_ext[U: TF: IsFloatOrDouble]
-  : DataPipe[TF_MC_DATA_EXT[UByte, U], SC_TF_MC_DATA_EXT[UByte, U]] =
+    : DataPipe[TF_MC_DATA_EXT[UByte, U], SC_TF_MC_DATA_EXT[UByte, U]] =
     DataPipe((dataset: TF_MC_DATA_EXT[UByte, U]) => {
 
-    val (norm_tr_images_and_labels, scalers) = std_images_and_outputs.run(dataset.trainData._1, dataset.trainLabels)
-    val (norm_histories, history_scaler) = minmax_std.run(dataset.trainData._2)
+      val (norm_tr_images_and_labels, scalers) =
+        std_images_and_outputs.run(dataset.trainData._1, dataset.trainLabels)
+      val (norm_histories, history_scaler) =
+        minmax_std.run(dataset.trainData._2)
 
-    val features_scaler = scalers._1 * history_scaler
+      val features_scaler = scalers._1 * history_scaler
 
-    (
-      dataset.copy(
-        trainLabels = norm_tr_images_and_labels._2,
-        trainData = (norm_tr_images_and_labels._1, norm_histories),
-        testData = (dataset.testData._1, history_scaler(dataset.testData._2))),
-      (features_scaler, scalers._2)
-    )
-  })
-
-
+      (
+        dataset.copy(
+          trainLabels = norm_tr_images_and_labels._2,
+          trainData = (norm_tr_images_and_labels._1, norm_histories),
+          testData = (dataset.testData._1, history_scaler(dataset.testData._2))
+        ),
+        (features_scaler, scalers._2)
+      )
+    })
 
   def scale_helios_dataset_ext[U: TF: IsFloatOrDouble] =
     DataPipe[TF_DATA_EXT[UByte, U], SC_TF_DATA_EXT[UByte, U]](dataset => {
 
-    val concat_targets = tfi.stack(
-      dataset.training_dataset.map(DataPipe((p: ((Tensor[UByte], Tensor[U]), Tensor[U])) => p._2)).data.toSeq
-    )
+      val concat_targets = tfi.stack(
+        dataset.training_dataset
+          .map(DataPipe((p: ((Tensor[UByte], Tensor[U]), Tensor[U])) => p._2))
+          .data
+          .toSeq
+      )
 
-    val concat_history = tfi.stack(
-      dataset.training_dataset.map(DataPipe((p: ((Tensor[UByte], Tensor[U]), Tensor[U])) => p._1._2)).data.toSeq
-    )
+      val concat_history = tfi.stack(
+        dataset.training_dataset
+          .map(
+            DataPipe((p: ((Tensor[UByte], Tensor[U]), Tensor[U])) => p._1._2)
+          )
+          .data
+          .toSeq
+      )
 
-    val (min, max)     = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
-    val (min_h, max_h) = (concat_history.min(axes = 0), concat_history.max(axes = 0))
+      val (min, max) =
+        (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
+      val (min_h, max_h) =
+        (concat_history.min(axes = 0), concat_history.max(axes = 0))
 
-    val targets_scaler = MinMaxScalerTF[U](min, max)
+      val targets_scaler = MinMaxScalerTF[U](min, max)
 
-    val history_scaler = MinMaxScalerTF[U](min_h, max_h)
+      val history_scaler = MinMaxScalerTF[U](min_h, max_h)
 
-    val inputs_scaler  = id_scaler[UByte] * history_scaler
+      val inputs_scaler = id_scaler[UByte] * history_scaler
 
-    (
-      dataset.copy(
-        training_dataset = dataset.training_dataset.map(inputs_scaler * targets_scaler)
-      ),
-      (inputs_scaler, targets_scaler)
-    )
+      (
+        dataset.copy(
+          training_dataset =
+            dataset.training_dataset.map(inputs_scaler * targets_scaler)
+        ),
+        (inputs_scaler, targets_scaler)
+      )
 
-  })
+    })
 
   /**
     * Download solar images from a specified source.
@@ -406,8 +496,9 @@ package object data {
     * @param end The date up to which images are extracted.
     * */
   def download_image_data(
-    source: data.Source, download_path: Path)(
-    start: LocalDate, end: LocalDate): Unit = source match {
+    source: data.Source,
+    download_path: Path
+  )(start: LocalDate, end: LocalDate): Unit = source match {
 
     case data.SOHO(instrument, size) =>
       SOHOLoader.bulk_download(download_path)(instrument, size)(start, end)
@@ -437,8 +528,9 @@ package object data {
     *                   (i.e. not [[data.GOES]])
     * */
   def download_flux_data(
-    source: data.Source, download_path: Path)(
-    start: YearMonth, end: YearMonth): Unit = source match {
+    source: data.Source,
+    download_path: Path
+  )(start: YearMonth, end: YearMonth): Unit = source match {
 
     case data.GOES(quantity, format) =>
       GOESLoader.bulk_download(download_path)(quantity, format)(start, end)
@@ -448,12 +540,27 @@ package object data {
   }
 
   def load_images[T <: SolarImagesSource](
-    data_path: Path, year_month: YearMonth,
-    image_source: T, dirTreeCreated: Boolean = true): Iterable[(DateTime, Path)] =
+    data_path: Path,
+    year_month: YearMonth,
+    image_source: T,
+    dirTreeCreated: Boolean = true
+  ): Iterable[(DateTime, Path)] =
     try {
       image_source match {
-        case SOHO(i, s) => SOHOLoader.load_images(data_path, year_month, SOHO(i, s), dirTreeCreated)
-        case SDO(i, s)  => SDOLoader.load_images(data_path, year_month, SDO(i, s), dirTreeCreated)
+        case SOHO(i, s) =>
+          SOHOLoader.load_images(
+            data_path,
+            year_month,
+            SOHO(i, s),
+            dirTreeCreated
+          )
+        case SDO(i, s) =>
+          SDOLoader.load_images(
+            data_path,
+            year_month,
+            SDO(i, s),
+            dirTreeCreated
+          )
       }
     } catch {
       case _: MatchError =>
@@ -469,25 +576,51 @@ package object data {
     }
 
   def load_soho_mc(
-    soho_files_path: Path, year_month: YearMonth,
-    soho_sources: Seq[SOHO], dirTreeCreated: Boolean): Iterable[(DateTime, (SOHO, Path))] =
-    SOHOLoader.load_images(soho_files_path, year_month, soho_sources, dirTreeCreated)
+    soho_files_path: Path,
+    year_month: YearMonth,
+    soho_sources: Seq[SOHO],
+    dirTreeCreated: Boolean
+  ): Iterable[(DateTime, (SOHO, Path))] =
+    SOHOLoader.load_images(
+      soho_files_path,
+      year_month,
+      soho_sources,
+      dirTreeCreated
+    )
 
   def load_sdo_mc(
-    sdo_files_path: Path, year_month: YearMonth,
-    sdo_sources: Seq[SDO], dirTreeCreated: Boolean): Iterable[(DateTime, (SDO, Path))] =
-    SDOLoader.load_images(sdo_files_path, year_month, sdo_sources, dirTreeCreated)
+    sdo_files_path: Path,
+    year_month: YearMonth,
+    sdo_sources: Seq[SDO],
+    dirTreeCreated: Boolean
+  ): Iterable[(DateTime, (SDO, Path))] =
+    SDOLoader.load_images(
+      sdo_files_path,
+      year_month,
+      sdo_sources,
+      dirTreeCreated
+    )
 
   def load_mc(
-    files_path: Path, year_month: YearMonth,
-    sources: Seq[SolarImagesSource], dirTreeCreated: Boolean): Iterable[(DateTime, (SolarImagesSource, Path))] = {
+    files_path: Path,
+    year_month: YearMonth,
+    sources: Seq[SolarImagesSource],
+    dirTreeCreated: Boolean
+  ): Iterable[(DateTime, (SolarImagesSource, Path))] = {
 
-    sources.flatMap(s => s match {
+    sources.flatMap(
+      s =>
+        s match {
 
-      case _: SDO => load_images(files_path/'sdo, year_month, s, dirTreeCreated).map(p => (p._1, (s, p._2)))
+          case _: SDO =>
+            load_images(files_path / 'sdo, year_month, s, dirTreeCreated)
+              .map(p => (p._1, (s, p._2)))
 
-      case _: SOHO => load_images(files_path/'soho, year_month, s, dirTreeCreated).map(p => (p._1, (s, p._2)))
-    })
+          case _: SOHO =>
+            load_images(files_path / 'soho, year_month, s, dirTreeCreated)
+              .map(p => (p._1, (s, p._2)))
+        }
+    )
   }
 
   /**
@@ -498,17 +631,18 @@ package object data {
     goes_files_path: Path,
     year_month: YearMonth,
     goes_source: GOES,
-    dirTreeCreated: Boolean = true): Stream[(DateTime, (Double, Double))] =
-    GOESLoader.load_goes_data(
-      goes_files_path, year_month,
-      goes_source, dirTreeCreated)
+    dirTreeCreated: Boolean = true
+  ): Stream[(DateTime, (Double, Double))] =
+    GOESLoader
+      .load_goes_data(goes_files_path, year_month, goes_source, dirTreeCreated)
       .map(p => {
 
-        val data_low_wavelength = p._2.map(_._1).filterNot(_.isNaN)
+        val data_low_wavelength  = p._2.map(_._1).filterNot(_.isNaN)
         val data_high_wavelength = p._2.map(_._2).filterNot(_.isNaN)
 
-        val avg_low_freq = data_low_wavelength.sum/data_low_wavelength.length
-        val avg_high_freq = data_high_wavelength.sum/data_high_wavelength.length
+        val avg_low_freq = data_low_wavelength.sum / data_low_wavelength.length
+        val avg_high_freq = data_high_wavelength.sum / data_high_wavelength
+          .length
 
         (p._1, (avg_low_freq, avg_high_freq))
       })
@@ -530,33 +664,40 @@ package object data {
     *                     for the image data, enabling it to be joined to the GOES data
     *                     based on date time stamps.
     * */
-  def collate_goes_data(
-    year_month: YearMonth)(
+  def collate_goes_data(year_month: YearMonth)(
     goes_source: GOES,
     goes_data_path: Path,
     goes_aggregation: Int,
-    goes_reduce_func: Stream[(DateTime, (Double, Double))] => (DateTime, (Double, Double)),
-    image_source: SOHO, images_path: Path,
+    goes_reduce_func: Stream[(DateTime, (Double, Double))] => (
+      DateTime,
+      (Double, Double)
+    ),
+    image_source: SOHO,
+    images_path: Path,
     dt_round_off: DateTime => DateTime,
-    dirTreeCreated: Boolean = true): Stream[(DateTime, (Path, (Double, Double)))] = {
+    dirTreeCreated: Boolean = true
+  ): Stream[(DateTime, (Path, (Double, Double)))] = {
 
-    val proc_goes_data = load_fluxes(
-      goes_data_path, year_month,
-      goes_source, dirTreeCreated)
-      .grouped(goes_aggregation).map(goes_reduce_func).toMap
+    val proc_goes_data =
+      load_fluxes(goes_data_path, year_month, goes_source, dirTreeCreated)
+        .grouped(goes_aggregation)
+        .map(goes_reduce_func)
+        .toMap
 
-    val proc_image_data = load_images(
-      images_path, year_month,
-      image_source, dirTreeCreated)
-      .map(p => (dt_round_off(p._1), p._2)).toMap
+    val proc_image_data =
+      load_images(images_path, year_month, image_source, dirTreeCreated)
+        .map(p => (dt_round_off(p._1), p._2))
+        .toMap
 
-    proc_image_data.map(kv => {
+    proc_image_data
+      .map(kv => {
 
-      val value =
-        if (proc_goes_data.contains(kv._1)) Some(proc_goes_data(kv._1))
-        else None
+        val value =
+          if (proc_goes_data.contains(kv._1)) Some(proc_goes_data(kv._1))
+          else None
 
-      (kv._1, (kv._2, value))})
+        (kv._1, (kv._2, value))
+      })
       .toStream
       .filter(k => k._2._2.isDefined)
       .map(k => (k._1, (k._2._1, k._2._2.get)))
@@ -579,30 +720,48 @@ package object data {
     *                     based on date time stamps.
     * */
   def collate_goes_data_range(
-    start_year_month: YearMonth, end_year_month: YearMonth)(
+    start_year_month: YearMonth,
+    end_year_month: YearMonth
+  )(
     goes_source: GOES,
     goes_data_path: Path,
     goes_aggregation: Int,
-    goes_reduce_func: Stream[(DateTime, (Double, Double))] => (DateTime, (Double, Double)),
-    image_source: SOHO, images_path: Path,
+    goes_reduce_func: Stream[(DateTime, (Double, Double))] => (
+      DateTime,
+      (Double, Double)
+    ),
+    image_source: SOHO,
+    images_path: Path,
     dt_round_off: DateTime => DateTime,
-    dirTreeCreated: Boolean = true): Stream[(DateTime, (Path, (Double, Double)))] = {
+    dirTreeCreated: Boolean = true
+  ): Stream[(DateTime, (Path, (Double, Double)))] = {
 
-    val prepare_data = (ym: YearMonth) => collate_goes_data(ym)(
-      goes_source, goes_data_path, goes_aggregation, goes_reduce_func,
-      image_source, images_path, dt_round_off)
+    val prepare_data = (ym: YearMonth) =>
+      collate_goes_data(ym)(
+        goes_source,
+        goes_data_path,
+        goes_aggregation,
+        goes_reduce_func,
+        image_source,
+        images_path,
+        dt_round_off
+      )
 
     val period = new Period(
       start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
-      end_year_month.toLocalDate(31).toDateTimeAtStartOfDay)
+      end_year_month.toLocalDate(31).toDateTimeAtStartOfDay
+    )
 
     print("Time period considered (in months): ")
 
-    val num_months = (12*period.getYears) + period.getMonths
+    val num_months = (12 * period.getYears) + period.getMonths
 
     pprint.pprintln(num_months)
 
-    (0 to num_months).map(start_year_month.plusMonths).flatMap(prepare_data).toStream
+    (0 to num_months)
+      .map(start_year_month.plusMonths)
+      .flatMap(prepare_data)
+      .toStream
   }
 
   /**
@@ -615,9 +774,13 @@ package object data {
   def join_omni[T <: SolarImagesSource](
     start_year_month: YearMonth,
     end_year_month: YearMonth,
-    omni_source: OMNI, omni_data_path: Path,
-    deltaT: (Int, Int), image_source: T,
-    images_path: Path, image_dir_tree: Boolean = true): HELIOS_OMNI_DATA = {
+    omni_source: OMNI,
+    omni_data_path: Path,
+    deltaT: (Int, Int),
+    image_source: T,
+    images_path: Path,
+    image_dir_tree: Boolean = true
+  ): HELIOS_OMNI_DATA = {
 
     val (start_instant, end_instant) = (
       start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
@@ -626,53 +789,67 @@ package object data {
 
     val period = new Period(start_instant, end_instant)
 
-
     print("Time period considered (in months): ")
 
-    val num_months = (12*period.getYears) + period.getMonths
+    val num_months = (12 * period.getYears) + period.getMonths
 
     pprint.pprintln(num_months)
-
 
     //Extract OMNI data as stream
 
     //First create the transformation pipe
     val omni_processing =
-      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(
+        OMNIData.Quantities.V_SW
+      ) >
         IterableDataPipe[(DateTime, Seq[Double])](
-          (p: (DateTime, Seq[Double])) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
+          (p: (DateTime, Seq[Double])) =>
+            p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
-
-    val omni_data = dtfdata.dataset(start_year_month.getYear to end_year_month.getYear)
-      .map(DataPipe((i: Int) => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
+    val omni_data = dtfdata
+      .dataset(start_year_month.getYear to end_year_month.getYear)
+      .map(
+        DataPipe(
+          (i: Int) =>
+            omni_data_path.toString() + "/" + OMNIData.getFilePattern(i)
+        )
+      )
       .transform(omni_processing)
       .to_supervised(identityPipe[(DateTime, Seq[Double])])
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff = DataPipe[DateTime, DateTime]((d: DateTime) =>
-      new DateTime(
-        d.getYear, d.getMonthOfYear,
-        d.getDayOfMonth, d.getHourOfDay,
-        0, 0)
+    val image_dt_roundoff = DataPipe[DateTime, DateTime](
+      (d: DateTime) =>
+        new DateTime(
+          d.getYear,
+          d.getMonthOfYear,
+          d.getDayOfMonth,
+          d.getHourOfDay,
+          0,
+          0
+        )
     )
 
+    val image_processing = IterableFlatMapPipe((year_month: YearMonth) => {
+      val images_for_month =
+        load_images[T](images_path, year_month, image_source, image_dir_tree)
 
-    val image_processing = IterableFlatMapPipe(
-      (year_month: YearMonth) => {
-        val images_for_month = load_images[T](images_path, year_month, image_source, image_dir_tree)
+      val grouped_images = images_for_month
+        .map(patt => (image_dt_roundoff(patt._1), patt._2))
+        .groupBy(_._1)
 
-        val grouped_images = images_for_month.map(patt => (image_dt_roundoff(patt._1), patt._2)).groupBy(_._1)
+      grouped_images.map(
+        patt => (patt._1, patt._2.toSeq.sortBy(_._1).map(_._2))
+      )
+    })
 
-        grouped_images.map(patt => (patt._1, patt._2.toSeq.sortBy(_._1).map(_._2)))
-      })
-
-    val images = dtfdata.dataset(0 to num_months)
+    val images = dtfdata
+      .dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
       .to_supervised(identityPipe[(DateTime, Seq[Path])])
-
 
     images.join(omni_data)
   }
@@ -680,9 +857,13 @@ package object data {
   def join_omni(
     start_year_month: YearMonth,
     end_year_month: YearMonth,
-    omni_source: OMNI, omni_data_path: Path,
-    deltaT: (Int, Int), image_sources: Seq[SolarImagesSource],
-    images_path: Path, image_dir_tree: Boolean): HELIOS_MC_OMNI_DATA = {
+    omni_source: OMNI,
+    omni_data_path: Path,
+    deltaT: (Int, Int),
+    image_sources: Seq[SolarImagesSource],
+    images_path: Path,
+    image_dir_tree: Boolean
+  ): HELIOS_MC_OMNI_DATA = {
 
     val (start_instant, end_instant) = (
       start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
@@ -691,60 +872,79 @@ package object data {
 
     val period = new Period(start_instant, end_instant)
 
-
     print("Time period considered (in months): ")
 
-    val num_months = (12*period.getYears) + period.getMonths
+    val num_months = (12 * period.getYears) + period.getMonths
 
     pprint.pprintln(num_months)
-
 
     //Extract OMNI data as stream
 
     //First create the transformation pipe
     val omni_processing =
-      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+      OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(
+        OMNIData.Quantities.V_SW
+      ) >
         IterableDataPipe[(DateTime, Seq[Double])](
-          (p: (DateTime, Seq[Double])) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
+          (p: (DateTime, Seq[Double])) =>
+            p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
-
-    val omni_data = dtfdata.dataset(start_year_month.getYear to end_year_month.getYear)
-      .map(DataPipe((i: Int) => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
+    val omni_data = dtfdata
+      .dataset(start_year_month.getYear to end_year_month.getYear)
+      .map(
+        DataPipe(
+          (i: Int) =>
+            omni_data_path.toString() + "/" + OMNIData.getFilePattern(i)
+        )
+      )
       .transform(omni_processing)
       .to_supervised(identityPipe[(DateTime, Seq[Double])])
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff = DataPipe[DateTime, DateTime]((d: DateTime) =>
-      new DateTime(
-        d.getYear, d.getMonthOfYear,
-        d.getDayOfMonth, d.getHourOfDay,
-        0, 0)
+    val image_dt_roundoff = DataPipe[DateTime, DateTime](
+      (d: DateTime) =>
+        new DateTime(
+          d.getYear,
+          d.getMonthOfYear,
+          d.getDayOfMonth,
+          d.getHourOfDay,
+          0,
+          0
+        )
     )
 
-
-    val image_processing = IterableFlatMapPipe((year_month: YearMonth) =>
-      load_mc(images_path, year_month, image_sources, image_dir_tree)) >
-      IterableDataPipe(image_dt_roundoff * identityPipe[(SolarImagesSource, Path)]) >
+    val image_processing = IterableFlatMapPipe(
+      (year_month: YearMonth) =>
+        load_mc(images_path, year_month, image_sources, image_dir_tree)
+    ) >
+      IterableDataPipe(
+        image_dt_roundoff * identityPipe[(SolarImagesSource, Path)]
+      ) >
       DataPipe((d: Iterable[(DateTime, (SolarImagesSource, Path))]) => {
 
         val images_by_hour = d.groupBy(_._1)
 
         //For each hour, select the first image for each channel
 
-        val chosen_images_by_hour: Iterable[(DateTime, Map[SolarImagesSource, Seq[Path]])] = images_by_hour.mapValues(
-          _.groupBy(_._2._1).map(kv => (kv._1, kv._2.toSeq.sortBy(_._1).map(_._2._2)))
-        )
+        val chosen_images_by_hour
+          : Iterable[(DateTime, Map[SolarImagesSource, Seq[Path]])] =
+          images_by_hour.mapValues(
+            _.groupBy(_._2._1)
+              .map(kv => (kv._1, kv._2.toSeq.sortBy(_._1).map(_._2._2)))
+          )
 
         chosen_images_by_hour
       })
 
-
-    val images = dtfdata.dataset(0 to num_months)
+    val images = dtfdata
+      .dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
-      .to_supervised(identityPipe[(DateTime, Map[SolarImagesSource, Seq[Path]])])
+      .to_supervised(
+        identityPipe[(DateTime, Map[SolarImagesSource, Seq[Path]])]
+      )
 
     images.join(omni_data)
   }
@@ -761,10 +961,14 @@ package object data {
   def join_omni[T <: SolarImagesSource](
     start_year_month: YearMonth,
     end_year_month: YearMonth,
-    omni_source: OMNI, omni_data_path: Path,
-    past_history: Int, deltaT: (Int, Int),
-    image_source: T, images_path: Path,
-    image_dir_tree: Boolean): HELIOS_OMNI_DATA_EXT = {
+    omni_source: OMNI,
+    omni_data_path: Path,
+    past_history: Int,
+    deltaT: (Int, Int),
+    image_source: T,
+    images_path: Path,
+    image_dir_tree: Boolean
+  ): HELIOS_OMNI_DATA_EXT = {
 
     val (start_instant, end_instant) = (
       start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
@@ -773,53 +977,66 @@ package object data {
 
     val period = new Period(start_instant, end_instant)
 
-
     print("Time period considered (in months): ")
 
-    val num_months = (12*period.getYears) + period.getMonths
+    val num_months = (12 * period.getYears) + period.getMonths
 
     pprint.pprintln(num_months)
-
 
     //Extract OMNI data as stream
 
     //First create the transformation pipe
 
     val omni_processing =
-      OMNILoader.omniVarToSlidingTS(past_history, deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
+      OMNILoader.omniVarToSlidingTS(past_history, deltaT._1, deltaT._2)(
+        OMNIData.Quantities.V_SW
+      ) >
         IterableDataPipe[(DateTime, (Seq[Double], Seq[Double]))](
-          (p: (DateTime, (Seq[Double], Seq[Double]))) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
+          (p: (DateTime, (Seq[Double], Seq[Double]))) =>
+            p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
-    val omni_data = dtfdata.dataset(start_year_month.getYear to end_year_month.getYear)
-      .map(DataPipe((i: Int) => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
+    val omni_data = dtfdata
+      .dataset(start_year_month.getYear to end_year_month.getYear)
+      .map(
+        DataPipe(
+          (i: Int) =>
+            omni_data_path.toString() + "/" + OMNIData.getFilePattern(i)
+        )
+      )
       .transform(omni_processing)
       .to_supervised(identityPipe[(DateTime, (Seq[Double], Seq[Double]))])
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) =>
-      new DateTime(
-        d.getYear, d.getMonthOfYear,
-        d.getDayOfMonth, d.getHourOfDay,
-        0, 0)
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe(
+      (d: DateTime) =>
+        new DateTime(
+          d.getYear,
+          d.getMonthOfYear,
+          d.getDayOfMonth,
+          d.getHourOfDay,
+          0,
+          0
+        )
     )
 
+    val image_processing = IterableFlatMapPipe((year_month: YearMonth) => {
+      val images_for_month =
+        load_images[T](images_path, year_month, image_source, image_dir_tree)
 
-    val image_processing = IterableFlatMapPipe(
-      (year_month: YearMonth) => {
-        val images_for_month = load_images[T](images_path, year_month, image_source, image_dir_tree)
+      val grouped_images = images_for_month
+        .map(patt => (image_dt_roundoff(patt._1), patt._2))
+        .groupBy(_._1)
 
-        val grouped_images = images_for_month.map(patt => (image_dt_roundoff(patt._1), patt._2)).groupBy(_._1)
+      grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
+    })
 
-        grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
-      })
-
-    val images = dtfdata.dataset(0 to num_months)
+    val images = dtfdata
+      .dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
       .to_supervised(identityPipe[(DateTime, Path)])
-
 
     images.join(omni_data)
   }
@@ -836,10 +1053,14 @@ package object data {
   def join_omni(
     start_year_month: YearMonth,
     end_year_month: YearMonth,
-    omni_source: OMNI, omni_data_path: Path,
-    past_history: Int, deltaT: (Int, Int),
-    image_sources: Seq[SOHO], images_path: Path,
-    image_dir_tree: Boolean): HELIOS_MC_OMNI_DATA_EXT = {
+    omni_source: OMNI,
+    omni_data_path: Path,
+    past_history: Int,
+    deltaT: (Int, Int),
+    image_sources: Seq[SOHO],
+    images_path: Path,
+    image_dir_tree: Boolean
+  ): HELIOS_MC_OMNI_DATA_EXT = {
 
     val (start_instant, end_instant) = (
       start_year_month.toLocalDate(1).toDateTimeAtStartOfDay,
@@ -848,55 +1069,74 @@ package object data {
 
     val period = new Period(start_instant, end_instant)
 
-
     print("Time period considered (in months): ")
 
-    val num_months = (12*period.getYears) + period.getMonths
+    val num_months = (12 * period.getYears) + period.getMonths
 
     pprint.pprintln(num_months)
-
 
     //Extract OMNI data as stream
 
     //First create the transformation pipe
 
     val omni_processing =
-      OMNILoader.omniVarToSlidingTS(past_history, deltaT._1, deltaT._2)(OMNIData.Quantities.V_SW) >
-        DataPipe[
-          Iterable[(DateTime, (Seq[Double], Seq[Double]))],
-          Stream[(DateTime, (Seq[Double], Seq[Double]))]](_.toStream) >
-        StreamDataPipe[(DateTime, (Seq[Double], Seq[Double]
-          ))](
-          (p: (DateTime, (Seq[Double], Seq[Double]))) => p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
+      OMNILoader.omniVarToSlidingTS(past_history, deltaT._1, deltaT._2)(
+        OMNIData.Quantities.V_SW
+      ) >
+        DataPipe[Iterable[(DateTime, (Seq[Double], Seq[Double]))], Stream[
+          (DateTime, (Seq[Double], Seq[Double]))
+        ]](_.toStream) >
+        StreamDataPipe[(DateTime, (Seq[Double], Seq[Double]))](
+          (p: (DateTime, (Seq[Double], Seq[Double]))) =>
+            p._1.isAfter(start_instant) && p._1.isBefore(end_instant)
         )
 
     val years = (start_year_month.getYear to end_year_month.getYear).toStream
 
-    val omni_data = omni_processing(years.map(i => omni_data_path.toString()+"/"+OMNIData.getFilePattern(i)))
+    val omni_data = omni_processing(
+      years
+        .map(i => omni_data_path.toString() + "/" + OMNIData.getFilePattern(i))
+    )
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) => {
-      new DateTime(d.getYear, d.getMonthOfYear, d.getDayOfMonth, d.getHourOfDay, 0, 0)
-    })
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe(
+      (d: DateTime) => {
+        new DateTime(
+          d.getYear,
+          d.getMonthOfYear,
+          d.getDayOfMonth,
+          d.getHourOfDay,
+          0,
+          0
+        )
+      }
+    )
 
-    val image_processing = StreamFlatMapPipe((year_month: YearMonth) =>
-      load_soho_mc(images_path, year_month, image_sources, image_dir_tree).toStream) >
+    val image_processing = StreamFlatMapPipe(
+      (year_month: YearMonth) =>
+        load_soho_mc(images_path, year_month, image_sources, image_dir_tree).toStream
+    ) >
       StreamDataPipe(image_dt_roundoff * identityPipe[(SOHO, Path)]) >
-      DataPipe((d: Stream[(DateTime, (SOHO, Path))]) =>
-        d.groupBy(_._1).mapValues(_.map(_._2).groupBy(_._1).mapValues(_.map(_._2).toSeq))
+      DataPipe(
+        (d: Stream[(DateTime, (SOHO, Path))]) =>
+          d.groupBy(_._1)
+            .mapValues(_.map(_._2).groupBy(_._1).mapValues(_.map(_._2).toSeq))
       )
 
-    val images = image_processing((0 to num_months).map(start_year_month.plusMonths).toStream)
+    val images = image_processing(
+      (0 to num_months).map(start_year_month.plusMonths).toStream
+    )
 
-    omni_data.map(o => {
-      val image_option = images.get(o._1)
-      (o._1, image_option, o._2)
-    }).filter(_._2.isDefined)
+    omni_data
+      .map(o => {
+        val image_option = images.get(o._1)
+        (o._1, image_option, o._2)
+      })
+      .filter(_._2.isDefined)
       .map(d => (d._1, (d._2.get, d._3)))
 
   }
-
 
   /**
     * Resample data according to a provided
@@ -904,7 +1144,8 @@ package object data {
     * */
   def resample[T](
     data: Stream[T],
-    selector: DiscreteDistrRV[Int]): Stream[T] = {
+    selector: DiscreteDistrRV[Int]
+  ): Stream[T] = {
 
     //Resample training set ot
     //emphasize extreme events.
@@ -913,56 +1154,68 @@ package object data {
     selector.iid(data.length).draw.map(data(_))
   }
 
-  def resample_op[T](resample: Boolean) = DataPipe((d: Iterable[(T, Seq[Double])]) => if(resample) {
+  def resample_op[T](resample: Boolean) =
+    DataPipe(
+      (d: Iterable[(T, Seq[Double])]) =>
+        if (resample) {
 
-    /*
-    * Resample training set with
-    * emphasis on larger ratios
-    * between max and min of a sliding
-    * time window.
-    * */
-    val un_prob: Array[Double] = d.map(p => {
+          /*
+           * Resample training set with
+           * emphasis on larger ratios
+           * between max and min of a sliding
+           * time window.
+           * */
+          val un_prob: Array[Double] = d
+            .map(p => {
 
-      math.abs(p._2.max - p._2.min)/math.abs(p._2.min)
-    }).map(math.exp).toArray
+              math.abs(p._2.max - p._2.min) / math.abs(p._2.min)
+            })
+            .map(math.exp)
+            .toArray
 
-    val normalizer = un_prob.sum
+          val normalizer = un_prob.sum
 
-    val selector = MultinomialRV(DenseVector(un_prob)/normalizer)
+          val selector = MultinomialRV(DenseVector(un_prob) / normalizer)
 
-    helios.data.resample[(T, Seq[Double])](d.toStream, selector)
+          helios.data.resample[(T, Seq[Double])](d.toStream, selector)
 
-  } else d)
-
+        } else d
+    )
 
   private def print_data_splits(train_fraction: Double): Unit = {
     print("Training: % ")
     pprint.pprintln(train_fraction)
 
     print("Test:     % ")
-    val test_fraction = math.round(100*(100f - train_fraction.toFloat))/100d
+    val test_fraction = math.round(100 * (100f - train_fraction.toFloat)) / 100d
     pprint.pprintln(test_fraction)
   }
 
-  def create_double_tensor_buffered(buff_size: Int)(coll: Iterable[Seq[Double]], size: Int): Tensor[Double] = {
+  def create_double_tensor_buffered(
+    buff_size: Int
+  )(coll: Iterable[Seq[Double]], size: Int): Tensor[Double] = {
 
     val dimensions = coll.head.length
 
     println()
-    val tensor_splits = coll.grouped(buff_size).toIterable.zipWithIndex.map(splitAndIndex => {
+    val tensor_splits = coll
+      .grouped(buff_size)
+      .toIterable
+      .zipWithIndex
+      .map(splitAndIndex => {
 
-      val split_seq = splitAndIndex._1.toSeq
+        val split_seq = splitAndIndex._1.toSeq
 
-      val progress = splitAndIndex._2*buff_size*100.0/size
+        val progress = splitAndIndex._2 * buff_size * 100.0 / size
 
-      print("Progress %:\t")
-      pprint.pprintln(progress)
+        print("Progress %:\t")
+        pprint.pprintln(progress)
 
-      dtf.tensor_from[Double](
-        split_seq.length, dimensions)(
-        split_seq.flatten[Double])
+        dtf.tensor_from[Double](split_seq.length, dimensions)(
+          split_seq.flatten[Double]
+        )
 
-    })
+      })
 
     dtf.concatenate(tensor_splits.toSeq, axis = 0)
   }
@@ -972,12 +1225,11 @@ package object data {
     read_image: DataPipe[Path, Tensor[UByte]],
     tt_partition: IMAGE_PATTERN => Boolean,
     image_history: Int,
-    image_history_downsampling: Int): TF_IMAGE_DATA[UByte] = {
-
+    image_history_downsampling: Int
+  ): TF_IMAGE_DATA[UByte] = {
 
     println("Separating data into train and test.\n")
     val experiment_data = collated_data.partition(DataPipe(tt_partition))
-
 
     print("Total data size: ")
     val total_data_size = collated_data.size
@@ -986,7 +1238,9 @@ package object data {
 
     val train_data_size = experiment_data.training_dataset.size
 
-    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
+    val train_fraction = math.round(
+      100 * train_data_size.toFloat * 100 / total_data_size
+    ) / 100d
 
     print_data_splits(train_fraction)
 
@@ -994,43 +1248,55 @@ package object data {
 
     val load_only_images = trim_time_stamp > read_image
 
-
-    val get_image_history = if(image_history > 0) {
-      val slices = utils.range(
-        min = 0d, image_history.toDouble,
-        image_history_downsampling).map(_.toInt)
+    val get_image_history = if (image_history > 0) {
+      val slices = utils
+        .range(min = 0d, image_history.toDouble, image_history_downsampling)
+        .map(_.toInt)
 
       val indices = slices :+ (image_history - 1)
 
-      DataPipe((data_stream: Iterable[Tensor[UByte]]) => data_stream.sliding(image_history).map(group => {
+      DataPipe(
+        (data_stream: Iterable[Tensor[UByte]]) =>
+          data_stream
+            .sliding(image_history)
+            .map(group => {
 
-        val gr = group.toSeq
+              val gr = group.toSeq
 
-        val images = tfi.concatenate(indices.map(gr(_)), axis = -1)
+              val images = tfi.concatenate(indices.map(gr(_)), axis = -1)
 
-        images
-      }).toIterable)
+              images
+            })
+            .toIterable
+      )
 
     } else {
       identityPipe[Iterable[Tensor[UByte]]]
     }
 
     experiment_data.copy[Tensor[UByte]](
-      training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
-      test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
+      training_dataset = experiment_data.training_dataset
+        .map(load_only_images)
+        .transform(get_image_history),
+      test_dataset = experiment_data.test_dataset
+        .map(load_only_images)
+        .transform(get_image_history)
     )
   }
 
   def write_helios_data_set(
     dataset: HELIOS_OMNI_DATA,
     directory: Path,
-    identifier: String): Unit = {
+    identifier: String
+  ): Unit = {
 
     val pattern_to_map = DataPipe[PATTERN, Map[String, Any]](
-      p => Map(
-        "timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
-        "images" -> p._2._1.map(x => x.toString),
-        "targets" -> p._2._2)
+      p =>
+        Map(
+          "timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+          "images"    -> p._2._1.map(x => x.toString),
+          "targets"   -> p._2._2
+        )
     )
 
     val map_to_json = DataPipe[Map[String, Any], String](p => s"write_json(p)")
@@ -1039,7 +1305,7 @@ package object data {
 
     val json_records = dataset.map(process_pattern).data.mkString(",\n")
 
-    write.over(directory/s"$identifier.csv", s"[$json_records]")
+    write.over(directory / s"$identifier.csv", s"[$json_records]")
   }
 
   /**
@@ -1058,11 +1324,11 @@ package object data {
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false,
     image_history: Int = 0,
-    image_history_downsampling: Int = 0): TF_DATA[UByte, T] = {
+    image_history_downsampling: Int = 0
+  ): TF_DATA[UByte, T] = {
 
     println("Separating data into train and test.\n")
     val experiment_data = collated_data.partition(DataPipe(tt_partition))
-
 
     print("Total data size: ")
     val total_data_size = collated_data.size
@@ -1071,37 +1337,46 @@ package object data {
 
     val train_data_size = experiment_data.training_dataset.size
 
-    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
+    val train_fraction = math.round(
+      100 * train_data_size.toFloat * 100 / total_data_size
+    ) / 100d
 
     print_data_splits(train_fraction)
 
     val trim_time_stamp = DataPipe((p: PATTERN) => p._2)
 
-    val load_only_images = trim_time_stamp > (read_image * identityPipe[Seq[Double]])
+    val load_only_images = trim_time_stamp > (read_image * identityPipe[Seq[
+      Double
+    ]])
 
     val load_only_targets = identityPipe[Tensor[UByte]] * read_targets
 
-    val get_image_history = if(image_history > 0) {
-      val slices = utils.range(
-        min = 0d, image_history.toDouble,
-        image_history_downsampling).map(_.toInt)
+    val get_image_history = if (image_history > 0) {
+      val slices = utils
+        .range(min = 0d, image_history.toDouble, image_history_downsampling)
+        .map(_.toInt)
 
       val indices = slices :+ (image_history - 1)
 
       DataPipe(
-        (data_stream: Iterable[(Tensor[UByte], Seq[Double])]) => data_stream.sliding(image_history).map(group => {
+        (data_stream: Iterable[(Tensor[UByte], Seq[Double])]) =>
+          data_stream
+            .sliding(image_history)
+            .map(group => {
 
-        val gr = group.toSeq
+              val gr = group.toSeq
 
-        val images = tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
+              val images =
+                tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
 
-        (images, gr(indices.last)._2)
-      }).toIterable)
+              (images, gr(indices.last)._2)
+            })
+            .toIterable
+      )
 
     } else {
       identityPipe[Iterable[(Tensor[UByte], Seq[Double])]]
     }
-
 
     val processed_data = experiment_data.copy[(Tensor[UByte], Seq[Double])](
       training_dataset = experiment_data.training_dataset
@@ -1142,11 +1417,11 @@ package object data {
     tt_partition: PATTERN_EXT => Boolean,
     resample: Boolean = false,
     image_history: Int = 0,
-    image_history_downsampling: Int = 0): TF_DATA_EXT[UByte, T] = {
+    image_history_downsampling: Int = 0
+  ): TF_DATA_EXT[UByte, T] = {
 
     println("Separating data into train and test.\n")
     val experiment_data = collated_data.partition(DataPipe(tt_partition))
-
 
     print("Total data size: ")
     val total_data_size = collated_data.size
@@ -1155,76 +1430,96 @@ package object data {
 
     val train_data_size = experiment_data.training_dataset.size
 
-    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
+    val train_fraction = math.round(
+      100 * train_data_size.toFloat * 100 / total_data_size
+    ) / 100d
 
     print_data_splits(train_fraction)
 
     val trim_time_stamp = DataPipe((p: PATTERN_EXT) => p._2)
 
-    val load_only_images = trim_time_stamp > (read_image * identityPipe[(Seq[Double], Seq[Double])])
+    val load_only_images = trim_time_stamp > (read_image * identityPipe[
+      (Seq[Double], Seq[Double])
+    ])
 
     type Patt = (Tensor[UByte], (Seq[Double], Seq[Double]))
 
-    val load_hist_and_targets: DataPipe[Patt, (Tensor[UByte], (Tensor[T], Tensor[T]))] =
+    val load_hist_and_targets
+      : DataPipe[Patt, (Tensor[UByte], (Tensor[T], Tensor[T]))] =
       identityPipe[Tensor[UByte]] * (read_targets_history * read_targets)
 
-    val get_image_history = if(image_history > 0) {
-      val slices = utils.range(
-        min = 0d, image_history.toDouble,
-        image_history_downsampling).map(_.toInt)
+    val get_image_history = if (image_history > 0) {
+      val slices = utils
+        .range(min = 0d, image_history.toDouble, image_history_downsampling)
+        .map(_.toInt)
 
       val indices = slices :+ (image_history - 1)
 
-      DataPipe((data_stream: Iterable[(Tensor[UByte], (Seq[Double], Seq[Double]))]) =>
-        data_stream.sliding(image_history).map(group => {
+      DataPipe(
+        (data_stream: Iterable[(Tensor[UByte], (Seq[Double], Seq[Double]))]) =>
+          data_stream
+            .sliding(image_history)
+            .map(group => {
 
-          val gr = group.toSeq
+              val gr = group.toSeq
 
-          val images = tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
+              val images =
+                tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
 
-          (images, gr(indices.last)._2)
-        }).toIterable)
+              (images, gr(indices.last)._2)
+            })
+            .toIterable
+      )
 
     } else {
       identityPipe[Iterable[(Tensor[UByte], (Seq[Double], Seq[Double]))]]
     }
 
-
-    val processed_data = experiment_data.copy[(Tensor[UByte], (Seq[Double], Seq[Double]))](
-      training_dataset = experiment_data.training_dataset.map(load_only_images).transform(get_image_history),
-      test_dataset = experiment_data.test_dataset.map(load_only_images).transform(get_image_history)
-    )
+    val processed_data =
+      experiment_data.copy[(Tensor[UByte], (Seq[Double], Seq[Double]))](
+        training_dataset = experiment_data.training_dataset
+          .map(load_only_images)
+          .transform(get_image_history),
+        test_dataset = experiment_data.test_dataset
+          .map(load_only_images)
+          .transform(get_image_history)
+      )
 
     /*
-    * If the `resample` flag is set to true,
-    * balance the occurrences of high and low
-    * flux events through re-sampling.
-    *
-    * */
-
+     * If the `resample` flag is set to true,
+     * balance the occurrences of high and low
+     * flux events through re-sampling.
+     *
+     * */
 
     type Coll = Iterable[Patt]
 
-    val resample_op: DataPipe[Coll, Coll] = DataPipe[Coll, Coll]((d: Coll) => if(resample) {
+    val resample_op: DataPipe[Coll, Coll] = DataPipe[Coll, Coll](
+      (d: Coll) =>
+        if (resample) {
 
-      /*
-      * Resample training set with
-      * emphasis on larger ratios
-      * between max and min of a sliding
-      * time window.
-      * */
-      val un_prob: Array[Double] = d.map(p => {
+          /*
+           * Resample training set with
+           * emphasis on larger ratios
+           * between max and min of a sliding
+           * time window.
+           * */
+          val un_prob: Array[Double] = d
+            .map(p => {
 
-        math.abs(p._2._2.max - p._2._2.min)/math.abs(p._2._2.min)
-      }).map(math.exp).toArray
+              math.abs(p._2._2.max - p._2._2.min) / math.abs(p._2._2.min)
+            })
+            .map(math.exp)
+            .toArray
 
-      val normalizer = un_prob.sum
+          val normalizer = un_prob.sum
 
-      val selector = MultinomialRV(DenseVector(un_prob)/normalizer)
+          val selector = MultinomialRV(DenseVector(un_prob) / normalizer)
 
-      helios.data.resample[Patt](d.toStream, selector)
+          helios.data.resample[Patt](d.toStream, selector)
 
-    } else d)
+        } else d
+    )
 
     val pattern_rearrange = DataPipe(
       (pattern: (Tensor[UByte], (Tensor[T], Tensor[T]))) =>
@@ -1254,16 +1549,18 @@ package object data {
   def prepare_mc_helios_data_set[T: TF: IsFloatOrDouble](
     image_sources: Seq[SolarImagesSource],
     collated_data: HELIOS_MC_OMNI_DATA,
-    read_mc_image: DataPipe[Map[SolarImagesSource, Seq[Path]], Option[Tensor[UByte]]],
+    read_mc_image: DataPipe[Map[SolarImagesSource, Seq[Path]], Option[
+      Tensor[UByte]
+    ]],
     read_targets: DataPipe[Seq[Double], Tensor[T]],
     tt_partition: MC_PATTERN => Boolean,
     resample: Boolean = false,
     image_history: Int = 0,
-    image_history_downsampling: Int = 0): TF_DATA[UByte, T] = {
+    image_history_downsampling: Int = 0
+  ): TF_DATA[UByte, T] = {
 
     println("Separating data into train and test.\n")
     val experiment_data = collated_data.partition(DataPipe(tt_partition))
-
 
     print("Total data size: ")
     val total_data_size = collated_data.size
@@ -1272,36 +1569,45 @@ package object data {
 
     val train_data_size = experiment_data.training_dataset.size
 
-    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
+    val train_fraction = math.round(
+      100 * train_data_size.toFloat * 100 / total_data_size
+    ) / 100d
 
     print_data_splits(train_fraction)
 
     val trim_time_stamp = DataPipe((p: MC_PATTERN) => p._2)
 
-    val load_only_images = trim_time_stamp > (read_mc_image * identityPipe[Seq[Double]])
+    val load_only_images = trim_time_stamp > (read_mc_image * identityPipe[Seq[
+      Double
+    ]])
 
     val load_only_targets = identityPipe[Tensor[UByte]] * read_targets
 
-    val get_image_history = if(image_history > 0) {
-      val slices = utils.range(
-        min = 0d, image_history.toDouble,
-        image_history_downsampling).map(_.toInt)
+    val get_image_history = if (image_history > 0) {
+      val slices = utils
+        .range(min = 0d, image_history.toDouble, image_history_downsampling)
+        .map(_.toInt)
 
       val indices = slices :+ (image_history - 1)
 
       DataPipe(
-        (data_stream: Iterable[(Tensor[UByte], Seq[Double])]) => data_stream.sliding(image_history).map(group => {
-          val gr = group.toSeq
+        (data_stream: Iterable[(Tensor[UByte], Seq[Double])]) =>
+          data_stream
+            .sliding(image_history)
+            .map(group => {
+              val gr = group.toSeq
 
-          val images: Tensor[UByte] = tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
+              val images: Tensor[UByte] =
+                tfi.concatenate(indices.map(i => gr(i)._1), axis = -1)
 
-          (images, gr(indices.last)._2)}).toIterable
+              (images, gr(indices.last)._2)
+            })
+            .toIterable
       )
 
     } else {
       identityPipe[Iterable[(Tensor[UByte], Seq[Double])]]
     }
-
 
     experiment_data.copy[(Tensor[UByte], Tensor[T])](
       training_dataset = experiment_data.training_dataset
@@ -1319,14 +1625,14 @@ package object data {
     )
   }
 
-
   def prepare_mc_helios_ts_data_set[T: TF: IsFloatOrDouble](
     image_sources: Seq[SOHO],
     collated_data: HELIOS_MC_OMNI_DATA_EXT,
     tt_partition: MC_PATTERN_EXT => Boolean,
     image_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
-    resample: Boolean): TF_MC_DATA_EXT[UByte, T] = {
+    resample: Boolean
+  ): TF_MC_DATA_EXT[UByte, T] = {
 
     println()
     println("Filtering complete data patterns")
@@ -1354,106 +1660,132 @@ package object data {
     val train_data_size = train_set.toIterator.length
     val test_data_size  = test_set.toIterator.length
 
-    val train_fraction = math.round(100*train_data_size.toFloat*100/total_data_size)/100d
+    val train_fraction = math.round(
+      100 * train_data_size.toFloat * 100 / total_data_size
+    ) / 100d
 
     print_data_splits(train_fraction)
-
 
     //Calculate the height, width and number of channels
     //in the images
     val (scaled_height, scaled_width, num_channels) = {
 
-      val scaled_image = image_process(
-        train_set.head._2._1.keys.head)(
-        Image.fromPath(train_set.head._2._1.values.head.head.toNIO))
+      val scaled_image = image_process(train_set.head._2._1.keys.head)(
+        Image.fromPath(train_set.head._2._1.values.head.head.toNIO)
+      )
 
       (scaled_image.height, scaled_image.width, image_sources.length)
 
     }
 
-    val working_set = TF_DATA_EXT(
-      null, null, train_data_size,
-      null, null, test_data_size)
+    val working_set =
+      TF_DATA_EXT(null, null, train_data_size, null, null, test_data_size)
 
     /*
-    * If the `resample` flag is set to true,
-    * balance the occurence of high and low
-    * flux events through re-sampling.
-    *
-    * */
-    val processed_train_set = if(resample) {
+     * If the `resample` flag is set to true,
+     * balance the occurence of high and low
+     * flux events through re-sampling.
+     *
+     * */
+    val processed_train_set = if (resample) {
 
       /*
-      * Resample training set with
-      * emphasis on larger ratios
-      * between max and min of a sliding
-      * time window.
-      * */
-      val un_prob = train_set.map(p => {
+       * Resample training set with
+       * emphasis on larger ratios
+       * between max and min of a sliding
+       * time window.
+       * */
+      val un_prob = train_set
+        .map(p => {
 
-        math.abs(p._2._2._2.max - p._2._2._2.min)/math.abs(p._2._2._2.min)
-      }).map(math.exp)
+          math.abs(p._2._2._2.max - p._2._2._2.min) / math.abs(p._2._2._2.min)
+        })
+        .map(math.exp)
 
       val normalizer = un_prob.sum
 
-      val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
+      val selector = MultinomialRV(DenseVector(un_prob.toArray) / normalizer)
 
       helios.data.resample(train_set.toStream, selector)
     } else train_set
 
+    def split_features_and_labels(
+      coll: HELIOS_MC_OMNI_DATA_EXT
+    ): (Iterable[(Map[SOHO, Seq[Path]], Seq[Double])], Iterable[Seq[Double]]) =
+      coll
+        .map(entry => {
 
-    def split_features_and_labels(coll: HELIOS_MC_OMNI_DATA_EXT)
-    : (Iterable[(Map[SOHO, Seq[Path]], Seq[Double])], Iterable[Seq[Double]]) = coll.map(entry => {
+          val (_, (images_map, (data_history, data_label))) = entry
 
-      val (_, (images_map, (data_history, data_label))) = entry
+          ((images_map, data_history), data_label)
 
-      ((images_map, data_history), data_label)
-
-    }).unzip
-
-
+        })
+        .unzip
 
     println()
     //Construct training features and labels
     println("Processing Training Data Set")
-    val (features_train, labels_train) = split_features_and_labels(processed_train_set.toStream)
+    val (features_train, labels_train) = split_features_and_labels(
+      processed_train_set.toStream
+    )
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_train = (
-      dtfdata.create_image_tensor_buffered(size_buffer,
-        image_sources, image_process, images_to_bytes,
-        scaled_height, scaled_width, num_channels)(
-        features_train.map(_._1), train_data_size),
-      create_double_tensor_buffered(size_buffer)(features_train.map(_._2), train_data_size).castTo[T]
+      dtfdata.create_image_tensor_buffered(
+        size_buffer,
+        image_sources,
+        image_process,
+        images_to_bytes,
+        scaled_height,
+        scaled_width,
+        num_channels
+      )(features_train.map(_._1), train_data_size),
+      create_double_tensor_buffered(size_buffer)(
+        features_train.map(_._2),
+        train_data_size
+      ).castTo[T]
     )
 
     println("Loading targets")
-    val labels_tensor_train   = create_double_tensor_buffered(size_buffer)(labels_train, train_data_size).castTo[T]
+    val labels_tensor_train =
+      create_double_tensor_buffered(size_buffer)(labels_train, train_data_size)
+        .castTo[T]
 
     println()
     //Construct test features and labels
     println("Processing Test Data Set")
-    val (features_test, labels_test) = split_features_and_labels(test_set.toStream)
+    val (features_test, labels_test) = split_features_and_labels(
+      test_set.toStream
+    )
 
     println("Loading \n\t1) image features \n\t2) time series history")
     val features_tensor_test = (
-      dtfdata.create_image_tensor_buffered(size_buffer,
-        image_sources, image_process, images_to_bytes,
-        scaled_height, scaled_width, num_channels)(
-        features_test.map(_._1), test_data_size),
+      dtfdata.create_image_tensor_buffered(
+        size_buffer,
+        image_sources,
+        image_process,
+        images_to_bytes,
+        scaled_height,
+        scaled_width,
+        num_channels
+      )(features_test.map(_._1), test_data_size),
       create_double_tensor_buffered(size_buffer)(
-        features_test.map(_._2), test_data_size).castTo[T]
+        features_test.map(_._2),
+        test_data_size
+      ).castTo[T]
     )
 
     println("Loading targets")
-    val labels_tensor_test   = create_double_tensor_buffered(size_buffer)(labels_test, test_data_size).castTo[T]
+    val labels_tensor_test =
+      create_double_tensor_buffered(size_buffer)(labels_test, test_data_size)
+        .castTo[T]
 
     println("Helios data set created\n")
     working_set.copy(
-      trainData   = features_tensor_train,
+      trainData = features_tensor_train,
       trainLabels = labels_tensor_train,
-      testData    = features_tensor_test,
-      testLabels  = labels_tensor_test
+      testData = features_tensor_test,
+      testLabels = labels_tensor_test
     )
   }
 
@@ -1472,9 +1804,11 @@ package object data {
   def prepare_helios_goes_data_set[T: TF: IsFloatOrDouble](
     collated_data: Stream[(DateTime, (Path, (Double, Double)))],
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
-    scaleDownFactor: Int = 4, resample: Boolean = false): HeliosDataSet[UByte, T] = {
+    scaleDownFactor: Int = 4,
+    resample: Boolean = false
+  ): HeliosDataSet[UByte, T] = {
 
-    val scaleDown = 1/math.pow(2, scaleDownFactor)
+    val scaleDown = 1 / math.pow(2, scaleDownFactor)
 
     print("Scaling down images by a factor of ")
     pprint.pprintln(math.pow(2, scaleDownFactor))
@@ -1495,69 +1829,91 @@ package object data {
 
     }
 
-    val working_set = HeliosDataSet(
-      null, null, train_set.length,
-      null, null, test_set.length)
+    val working_set =
+      HeliosDataSet(null, null, train_set.length, null, null, test_set.length)
 
     /*
-    * If the `resample` flag is set to true,
-    * balance the occurence of high and low
-    * flux events through re-sampling.
-    *
-    * */
-    val processed_train_set = if(resample) {
+     * If the `resample` flag is set to true,
+     * balance the occurence of high and low
+     * flux events through re-sampling.
+     *
+     * */
+    val processed_train_set = if (resample) {
       //Resample training set ot
       //emphasize extreme events.
 
-      val un_prob = train_set.map(_._2._2._1).map(math.exp)
+      val un_prob    = train_set.map(_._2._2._1).map(math.exp)
       val normalizer = un_prob.sum
-      val selector = MultinomialRV(DenseVector(un_prob.toArray)/normalizer)
+      val selector   = MultinomialRV(DenseVector(un_prob.toArray) / normalizer)
 
       helios.data.resample(train_set, selector)
     } else train_set
 
-    val (features_train, labels_train): (Stream[Array[Byte]], Stream[Seq[Double]]) =
-      processed_train_set.map(entry => {
-        val (_, (path, data_label)) = entry
+    val (features_train, labels_train): (
+      Stream[Array[Byte]],
+      Stream[Seq[Double]]
+    ) =
+      processed_train_set
+        .map(entry => {
+          val (_, (path, data_label)) = entry
 
-        val im = Image.fromPath(path.toNIO)
+          val im = Image.fromPath(path.toNIO)
 
-        val scaled_image = im.copy.scale(scaleDown)
+          val scaled_image = im.copy.scale(scaleDown)
 
-        (scaled_image.argb.flatten.map(_.toByte), Seq(data_label._1, data_label._2))
+          (
+            scaled_image.argb.flatten.map(_.toByte),
+            Seq(data_label._1, data_label._2)
+          )
 
-      }).unzip
+        })
+        .unzip
 
     val features_tensor_train = dtf.tensor_from_buffer[UByte](
-      processed_train_set.length, scaled_height, scaled_width, num_channels)(
-      features_train.toArray.flatten[Byte])
+      processed_train_set.length,
+      scaled_height,
+      scaled_width,
+      num_channels
+    )(features_train.toArray.flatten[Byte])
 
-    val labels_tensor_train = dtf.tensor_from[Double](train_set.length, 2)(labels_train.flatten[Double]).castTo[T]
+    val labels_tensor_train = dtf
+      .tensor_from[Double](train_set.length, 2)(labels_train.flatten[Double])
+      .castTo[T]
 
+    val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) =
+      test_set
+        .map(entry => {
+          val (_, (path, data_label)) = entry
 
-    val (features_test, labels_test): (Stream[Array[Byte]], Stream[Seq[Double]]) = test_set.map(entry => {
-      val (_, (path, data_label)) = entry
+          val im = Image.fromPath(path.toNIO)
 
-      val im = Image.fromPath(path.toNIO)
+          val scaled_image = im.copy.scale(scaleDown)
 
-      val scaled_image = im.copy.scale(scaleDown)
+          (
+            scaled_image.argb.flatten.map(_.toByte),
+            Seq(data_label._1, data_label._2)
+          )
 
-      (scaled_image.argb.flatten.map(_.toByte), Seq(data_label._1, data_label._2))
-
-    }).unzip
+        })
+        .unzip
 
     val features_tensor_test = dtf.tensor_from_buffer[UByte](
-      test_set.length, scaled_height, scaled_width, num_channels)(
-      features_test.toArray.flatten[Byte])
+      test_set.length,
+      scaled_height,
+      scaled_width,
+      num_channels
+    )(features_test.toArray.flatten[Byte])
 
-    val labels_tensor_test = dtf.tensor_from[Double](test_set.length, 2)(labels_test.flatten[Double]).castTo[T]
+    val labels_tensor_test = dtf
+      .tensor_from[Double](test_set.length, 2)(labels_test.flatten[Double])
+      .castTo[T]
 
     println("Helios data set created\n")
     working_set.copy(
-      trainData   = features_tensor_train,
+      trainData = features_tensor_train,
       trainLabels = labels_tensor_train,
-      testData    = features_tensor_test,
-      testLabels  = labels_tensor_test
+      testData = features_tensor_test,
+      testLabels = labels_tensor_test
     )
   }
 
@@ -1572,41 +1928,44 @@ package object data {
     * @param year_end The end time of the data.
     * */
   def generate_data_goes(
-    year_start: Int = 2001, year_end: Int = 2005,
-    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512))
-  : Stream[(DateTime, (Path, (Double, Double)))] = {
+    year_start: Int = 2001,
+    year_end: Int = 2005,
+    image_source: SOHO = SOHO(SOHOData.Instruments.MDIMAG, 512)
+  ): Stream[(DateTime, (Path, (Double, Double)))] = {
 
     /*
      * Mind your surroundings!
      * */
     val os_name = System.getProperty("os.name")
 
-    println("OS: "+os_name)
+    println("OS: " + os_name)
 
     val user_name = System.getProperty("user.name")
 
-    println("Running as user: "+user_name)
+    println("Running as user: " + user_name)
 
-    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+    val home_dir_prefix =
+      if (os_name.startsWith("Mac")) root / "Users" else root / 'home
 
     require(year_end > year_start, "Data set must encompass more than one year")
 
     /*
-    * Create a collated data set,
-    * extract GOES flux data and join it
-    * with eit195 (green filter) images.
-    * */
+     * Create a collated data set,
+     * extract GOES flux data and join it
+     * with eit195 (green filter) images.
+     * */
 
     print("Looking for data in directory ")
-    val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
+    val data_dir = home_dir_prefix / user_name / "data_repo" / 'helios
     pprint.pprintln(data_dir)
 
-    val soho_dir = data_dir/'soho
-    val goes_dir = data_dir/'goes
+    val soho_dir = data_dir / 'soho
+    val goes_dir = data_dir / 'goes
 
     val reduce_fn = (gr: Stream[(DateTime, (Double, Double))]) => {
 
-      val (max_flux_short, max_flux_long) = (gr.map(_._2._1).max, gr.map(_._2._2).max)
+      val (max_flux_short, max_flux_long) =
+        (gr.map(_._2._1).max, gr.map(_._2._2).max)
 
       (gr.head._1, (math.log10(max_flux_short), math.log10(max_flux_long)))
     }
@@ -1615,27 +1974,32 @@ package object data {
 
       val num_minutes = 5
 
-      val minutes: Int = d.getMinuteOfHour/num_minutes
+      val minutes: Int = d.getMinuteOfHour / num_minutes
 
       new DateTime(
-        d.getYear, d.getMonthOfYear,
-        d.getDayOfMonth, d.getHourOfDay,
-        minutes*num_minutes)
+        d.getYear,
+        d.getMonthOfYear,
+        d.getDayOfMonth,
+        d.getHourOfDay,
+        minutes * num_minutes
+      )
     }
 
     println("Preparing data-set as a Stream ")
-    println("Start: "+year_start+" End: "+year_end)
-
+    println("Start: " + year_start + " End: " + year_end)
 
     collate_goes_data_range(
-      new YearMonth(year_start, 1), new YearMonth(year_end, 12))(
+      new YearMonth(year_start, 1),
+      new YearMonth(year_end, 12)
+    )(
       GOES(GOESData.Quantities.XRAY_FLUX_5m),
       goes_dir,
       goes_aggregation = 1,
       goes_reduce_func = reduce_fn,
       image_source,
       soho_dir,
-      dt_round_off = round_date)
+      dt_round_off = round_date
+    )
 
   }
 
@@ -1653,32 +2017,34 @@ package object data {
   def generate_image_data[T <: SolarImagesSource](
     year_range: Range,
     image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
-    images_data_dir: Option[Path] = None): HELIOS_IMAGE_DATA = {
+    images_data_dir: Option[Path] = None
+  ): HELIOS_IMAGE_DATA = {
 
     /*
      * Mind your surroundings!
      * */
     val os_name = System.getProperty("os.name")
 
-    println("OS: "+os_name)
+    println("OS: " + os_name)
 
     val user_name = System.getProperty("user.name")
 
-    println("Running as user: "+user_name)
+    println("Running as user: " + user_name)
 
-    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+    val home_dir_prefix =
+      if (os_name.startsWith("Mac")) root / "Users" else root / 'home
 
     print("Looking for data in directory ")
     val data_dir = images_data_dir match {
-      case None       =>  home_dir_prefix/user_name/"data_repo"/'helios
-      case Some(path) =>  path
+      case None       => home_dir_prefix / user_name / "data_repo" / 'helios
+      case Some(path) => path
     }
 
     pprint.pprintln(data_dir)
 
     val images_dir = image_source match {
-      case _: SOHO => data_dir/'soho
-      case _: SDO  => data_dir/'sdo
+      case _: SOHO => data_dir / 'soho
+      case _: SDO  => data_dir / 'sdo
       case _       => data_dir
     }
 
@@ -1701,37 +2067,42 @@ package object data {
 
     val period = new Period(start_instant, end_instant)
 
-
     print("Time period considered (in months): ")
 
-    val num_months = (12*period.getYears) + period.getMonths
+    val num_months = (12 * period.getYears) + period.getMonths
 
     pprint.pprintln(num_months)
 
     //Extract paths to images, along with a time-stamp
 
-    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe((d: DateTime) =>
-      new DateTime(
-        d.getYear, d.getMonthOfYear,
-        d.getDayOfMonth, d.getHourOfDay,
-        0, 0)
+    val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe(
+      (d: DateTime) =>
+        new DateTime(
+          d.getYear,
+          d.getMonthOfYear,
+          d.getDayOfMonth,
+          d.getHourOfDay,
+          0,
+          0
+        )
     )
 
+    val image_processing = IterableFlatMapPipe((year_month: YearMonth) => {
+      val images_for_month =
+        load_images[T](images_dir, year_month, image_source, true)
 
-    val image_processing = IterableFlatMapPipe(
-      (year_month: YearMonth) => {
-        val images_for_month = load_images[T](images_dir, year_month, image_source, true)
+      val grouped_images = images_for_month
+        .map(patt => (image_dt_roundoff(patt._1), patt._2))
+        .groupBy(_._1)
 
-        val grouped_images = images_for_month.map(patt => (image_dt_roundoff(patt._1), patt._2)).groupBy(_._1)
+      grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
+    })
 
-        grouped_images.map(patt => (patt._1, patt._2.toSeq.minBy(_._1)._2))
-      })
-
-    dtfdata.dataset(0 to num_months)
+    dtfdata
+      .dataset(0 to num_months)
       .map(DataPipe((i: Int) => start_year_month.plusMonths(i)))
       .transform(image_processing)
   }
-
 
   /**
     * Generate a starting data set for OMNI/L1 prediction tasks.
@@ -1749,32 +2120,34 @@ package object data {
     image_source: T = SOHO(SOHOData.Instruments.MDIMAG, 512),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     deltaT: (Int, Int) = (18, 56),
-    images_data_dir: Option[Path] = None): HELIOS_OMNI_DATA = {
+    images_data_dir: Option[Path] = None
+  ): HELIOS_OMNI_DATA = {
 
     /*
      * Mind your surroundings!
      * */
     val os_name = System.getProperty("os.name")
 
-    println("OS: "+os_name)
+    println("OS: " + os_name)
 
     val user_name = System.getProperty("user.name")
 
-    println("Running as user: "+user_name)
+    println("Running as user: " + user_name)
 
-    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+    val home_dir_prefix =
+      if (os_name.startsWith("Mac")) root / "Users" else root / 'home
 
     print("Looking for data in directory ")
     val data_dir = images_data_dir match {
-      case None       =>  home_dir_prefix/user_name/"data_repo"/'helios
-      case Some(path) =>  path
+      case None       => home_dir_prefix / user_name / "data_repo" / 'helios
+      case Some(path) => path
     }
 
     pprint.pprintln(data_dir)
 
     val images_dir = image_source match {
-      case _: SOHO => data_dir/'soho
-      case _: SDO  => data_dir/'sdo
+      case _: SOHO => data_dir / 'soho
+      case _: SDO  => data_dir / 'sdo
       case _       => data_dir
     }
 
@@ -1788,8 +2161,12 @@ package object data {
     join_omni[T](
       new YearMonth(year_range.min, 1),
       new YearMonth(year_range.max, 12),
-      omni_source, pwd/"data", deltaT,
-      image_source, images_dir)
+      omni_source,
+      pwd / "data",
+      deltaT,
+      image_source,
+      images_dir
+    )
   }
 
   /**
@@ -1808,25 +2185,27 @@ package object data {
     image_sources: Seq[SolarImagesSource],
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     deltaT: (Int, Int) = (18, 56),
-    images_data_dir: Option[Path] = None): HELIOS_MC_OMNI_DATA = {
+    images_data_dir: Option[Path] = None
+  ): HELIOS_MC_OMNI_DATA = {
 
     /*
      * Mind your surroundings!
      * */
     val os_name = System.getProperty("os.name")
 
-    println("OS: "+os_name)
+    println("OS: " + os_name)
 
     val user_name = System.getProperty("user.name")
 
-    println("Running as user: "+user_name)
+    println("Running as user: " + user_name)
 
-    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+    val home_dir_prefix =
+      if (os_name.startsWith("Mac")) root / "Users" else root / 'home
 
     print("Looking for data in directory ")
     val data_dir = images_data_dir match {
-      case None       =>  home_dir_prefix/user_name/"data_repo"/'helios
-      case Some(path) =>  path
+      case None       => home_dir_prefix / user_name / "data_repo" / 'helios
+      case Some(path) => path
     }
 
     pprint.pprintln(data_dir)
@@ -1841,11 +2220,14 @@ package object data {
     join_omni(
       new YearMonth(year_range.min, 1),
       new YearMonth(year_range.max, 12),
-      omni_source, pwd/"data", deltaT,
-      image_sources, data_dir, image_dir_tree = true)
+      omni_source,
+      pwd / "data",
+      deltaT,
+      image_sources,
+      data_dir,
+      image_dir_tree = true
+    )
   }
-
-
 
   /**
     * Generate a starting data set for OMNI/L1 prediction tasks.
@@ -1864,35 +2246,37 @@ package object data {
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     history: Int = 8,
     deltaT: (Int, Int) = (18, 56),
-    images_data_dir: Option[Path] = None): HELIOS_OMNI_DATA_EXT = {
+    images_data_dir: Option[Path] = None
+  ): HELIOS_OMNI_DATA_EXT = {
 
     /*
      * Mind your surroundings!
      * */
     val os_name = System.getProperty("os.name")
 
-    println("OS: "+os_name)
+    println("OS: " + os_name)
 
     val user_name = System.getProperty("user.name")
 
-    println("Running as user: "+user_name)
+    println("Running as user: " + user_name)
 
-    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+    val home_dir_prefix =
+      if (os_name.startsWith("Mac")) root / "Users" else root / 'home
 
     //require(year_end > year_start, "Data set must encompass more than one year")
 
     print("Looking for data in directory ")
 
     val data_dir = images_data_dir match {
-      case None       =>  home_dir_prefix/user_name/"data_repo"/'helios
-      case Some(path) =>  path
+      case None       => home_dir_prefix / user_name / "data_repo" / 'helios
+      case Some(path) => path
     }
 
     pprint.pprintln(data_dir)
 
     val images_dir = image_source match {
-      case _: SOHO => data_dir/'soho
-      case _: SDO  => data_dir/'sdo
+      case _: SOHO => data_dir / 'soho
+      case _: SDO  => data_dir / 'sdo
       case _       => data_dir
     }
 
@@ -1903,15 +2287,18 @@ package object data {
     pprint.pprintln(year_range.max)
     println()
 
-
     join_omni[T](
       new YearMonth(year_range.min, 1),
       new YearMonth(year_range.max, 12),
-      omni_source, pwd/"data", history, deltaT,
-      image_source, images_dir,
-      image_dir_tree = true)
+      omni_source,
+      pwd / "data",
+      history,
+      deltaT,
+      image_source,
+      images_dir,
+      image_dir_tree = true
+    )
   }
-
 
   /**
     * Generate a starting data set for OMNI/L1 prediction tasks.
@@ -1928,28 +2315,30 @@ package object data {
     image_sources: Seq[SOHO] = Seq(SOHO(SOHOData.Instruments.MDIMAG, 512)),
     omni_source: OMNI = OMNI(OMNIData.Quantities.V_SW),
     history: Int = 8,
-    deltaT: (Int, Int) = (18, 56)): HELIOS_MC_OMNI_DATA_EXT = {
+    deltaT: (Int, Int) = (18, 56)
+  ): HELIOS_MC_OMNI_DATA_EXT = {
 
     /*
      * Mind your surroundings!
      * */
     val os_name = System.getProperty("os.name")
 
-    println("OS: "+os_name)
+    println("OS: " + os_name)
 
     val user_name = System.getProperty("user.name")
 
-    println("Running as user: "+user_name)
+    println("Running as user: " + user_name)
 
-    val home_dir_prefix = if(os_name.startsWith("Mac")) root/"Users" else root/'home
+    val home_dir_prefix =
+      if (os_name.startsWith("Mac")) root / "Users" else root / 'home
 
     //require(year_end > year_start, "Data set must encompass more than one year")
 
     print("Looking for data in directory ")
-    val data_dir = home_dir_prefix/user_name/"data_repo"/'helios
+    val data_dir = home_dir_prefix / user_name / "data_repo" / 'helios
     pprint.pprintln(data_dir)
 
-    val soho_dir = data_dir/'soho
+    val soho_dir = data_dir / 'soho
 
     println("Preparing data-set as a Stream ")
     print("Start: ")
@@ -1961,10 +2350,14 @@ package object data {
     join_omni(
       new YearMonth(year_range.min, 1),
       new YearMonth(year_range.max, 12),
-      omni_source, pwd/"data", history, deltaT,
-      image_sources, soho_dir,
-      image_dir_tree = true)
+      omni_source,
+      pwd / "data",
+      history,
+      deltaT,
+      image_sources,
+      soho_dir,
+      image_dir_tree = true
+    )
   }
-
 
 }

@@ -50,7 +50,7 @@ package object fte {
       override val layerType = s"LocalQuadraticFit"
 
       override def forwardWithoutContext(
-          input: Output[Double]
+        input: Output[Double]
       )(implicit mode: Mode) = {
 
         val aa = tf.variable[Double]("aa", Shape(), RandomNormalInitializer())
@@ -86,7 +86,7 @@ package object fte {
   val read_time_stamps = DataPipe((s: Array[String]) => {
 
     val datetime_pattern = "YYYY.MM.dd_HH:mm:ss"
-    val dt = format.DateTimeFormat.forPattern(datetime_pattern)
+    val dt               = format.DateTimeFormat.forPattern(datetime_pattern)
 
     val limits = (DateTime.parse(s(1), dt), DateTime.parse(s(3), dt))
 
@@ -105,9 +105,9 @@ package object fte {
   )
 
   case class FTEPattern(
-      longitude: Double,
-      latitude: Double,
-      fte: Option[Double]
+    longitude: Double,
+    latitude: Double,
+    fte: Option[Double]
   )
 
   val process_fte_file = {
@@ -148,7 +148,7 @@ package object fte {
     *                                           found in the specified location
     * */
   def get_fte_for_rotation(
-      data_path: Path
+    data_path: Path
   )(cr: Int): Iterable[(Int, Iterable[FTEPattern])] =
     try {
       Iterable((cr, process_fte_file(data_path)(cr)))
@@ -200,16 +200,16 @@ package object fte {
     * The FTE values are loaded in a [[Tensor]] object.
     * */
   def load_fte_data(
-      data_path: Path,
-      carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
-      log_flag: Boolean,
-      start: DateTime,
-      end: DateTime
+    data_path: Path,
+    carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
+    log_flag: Boolean,
+    start: DateTime,
+    end: DateTime
   )(
-      deltaTFTE: Int,
-      fte_step: Int,
-      latitude_limit: Double,
-      conv_flag: Boolean
+    deltaTFTE: Int,
+    fte_step: Int,
+    latitude_limit: Double,
+    conv_flag: Boolean
   ): ZipDataSet[DateTime, Tensor[Double]] = {
 
     val start_rotation =
@@ -288,7 +288,7 @@ package object fte {
         .sliding(2)
         .filter(p => new Duration(p.head._1, p.last._1).getStandardHours > 1)
         .flatMap(i => {
-          val duration = new Duration(i.head._1, i.last._1).getStandardHours
+          val duration  = new Duration(i.head._1, i.last._1).getStandardHours
           val delta_fte = (i.last._2 - i.head._2) / duration.toDouble
 
           (1 until duration.toInt)
@@ -352,9 +352,9 @@ package object fte {
     *         sliding time histories of the solar wind.
     * */
   def load_solar_wind_data(start: DateTime, end: DateTime)(
-      deltaT: (Int, Int),
-      log_flag: Boolean,
-      quantity: Int = OMNIData.Quantities.V_SW
+    deltaT: (Int, Int),
+    log_flag: Boolean,
+    quantity: Int = OMNIData.Quantities.V_SW
   ): ZipDataSet[DateTime, Tensor[Double]] = {
 
     val omni_processing =
@@ -390,13 +390,13 @@ package object fte {
   }
 
   type SC_DATA = (
-      helios.data.TF_DATA[Double, Double],
-      (GaussianScalerTF[Double], GaussianScalerTF[Double])
+    helios.data.TF_DATA[Double, Double],
+    (GaussianScalerTF[Double], GaussianScalerTF[Double])
   )
 
   type SC_DATA_T = (
-      helios.data.TF_DATA_T[Double, Double],
-      (GaussianScalerTF[Double], GaussianScalerTF[Double])
+    helios.data.TF_DATA_T[Double, Double],
+    (GaussianScalerTF[Double], GaussianScalerTF[Double])
   )
 
   def scale_timed_data[T: TF: IsFloatOrDouble] =
@@ -424,9 +424,9 @@ package object fte {
         .mean(axes = 0)
         .multiply(Tensor(n / (n - 1)).castTo[T])
         .sqrt
-      
+
       val mean_f = concat_features.mean(axes = 0)
-      
+
       val std_f = concat_features
         .subtract(mean_f)
         .square
@@ -439,7 +439,9 @@ package object fte {
       val features_scaler = GaussianScalerTF(mean_f, std_f)
 
       val scale_training_data = identityPipe[DateTime] * (features_scaler * targets_scaler)
-      val scale_test_data     = identityPipe[DateTime] * (features_scaler * identityPipe[Tensor[T]])
+      val scale_test_data = identityPipe[DateTime] * (features_scaler * identityPipe[
+        Tensor[T]
+      ])
 
       (
         dataset.copy(
@@ -510,21 +512,21 @@ package object fte {
   object FTExperiment {
 
     case class FTEConfig(
-        data_limits: (Int, Int),
-        deltaTFTE: Int,
-        fteStep: Int,
-        latitude_limit: Double,
-        log_scale_fte: Boolean
+      data_limits: (Int, Int),
+      deltaTFTE: Int,
+      fteStep: Int,
+      latitude_limit: Double,
+      log_scale_fte: Boolean
     )
 
     case class OMNIConfig(deltaT: (Int, Int), log_flag: Boolean)
 
     case class Config(
-        fte_config: FTEConfig,
-        omni_config: OMNIConfig,
-        multi_output: Boolean = true,
-        probabilistic_time_lags: Boolean = true,
-        timelag_prediction: String = "mode"
+      fte_config: FTEConfig,
+      omni_config: OMNIConfig,
+      multi_output: Boolean = true,
+      probabilistic_time_lags: Boolean = true,
+      timelag_prediction: String = "mode"
     ) extends helios.Config
 
     var config = Config(
@@ -558,33 +560,33 @@ package object fte {
   }
 
   def exp_cdt(
-      num_neurons: Seq[Int] = Seq(30, 30),
-      activation_func: Int => Activation[Double] = 
-        (i: Int) => timelag.utils.getReLUAct(1, i),
-      optimizer: tf.train.Optimizer = tf.train.Adam(0.001f),
-      year_range: Range = 2011 to 2017,
-      test_year: Int = 2015,
-      sw_threshold: Double = 700d,
-      deltaT: (Int, Int) = (48, 72),
-      deltaTFTE: Int = 5,
-      fteStep: Int = 1,
-      latitude_limit: Double = 40d,
-      reg: Double = 0.0001,
-      p_wt: Double = 0.75,
-      e_wt: Double = 1.0,
-      specificity: Double = 1.5,
-      temperature: Double = 1.0,
-      divergence: helios.learn.cdt_loss.Divergence =
-        helios.learn.cdt_loss.KullbackLeibler,
-      mo_flag: Boolean = true,
-      prob_timelags: Boolean = true,
-      log_scale_fte: Boolean = false,
-      log_scale_omni: Boolean = false,
-      conv_flag: Boolean = false,
-      iterations: Int = 10000,
-      miniBatch: Int = 32,
-      fte_data_path: Path = home / 'Downloads / 'fte,
-      summary_top_dir: Path = home / 'tmp
+    num_neurons: Seq[Int] = Seq(30, 30),
+    activation_func: Int => Activation[Double] = (i: Int) =>
+      timelag.utils.getReLUAct(1, i),
+    optimizer: tf.train.Optimizer = tf.train.Adam(0.001f),
+    year_range: Range = 2011 to 2017,
+    test_year: Int = 2015,
+    sw_threshold: Double = 700d,
+    deltaT: (Int, Int) = (48, 72),
+    deltaTFTE: Int = 5,
+    fteStep: Int = 1,
+    latitude_limit: Double = 40d,
+    reg: Double = 0.0001,
+    p_wt: Double = 0.75,
+    e_wt: Double = 1.0,
+    specificity: Double = 1.5,
+    temperature: Double = 1.0,
+    divergence: helios.learn.cdt_loss.Divergence =
+      helios.learn.cdt_loss.KullbackLeibler,
+    mo_flag: Boolean = true,
+    prob_timelags: Boolean = true,
+    log_scale_fte: Boolean = false,
+    log_scale_omni: Boolean = false,
+    conv_flag: Boolean = false,
+    iterations: Int = 10000,
+    miniBatch: Int = 32,
+    fte_data_path: Path = home / 'Downloads / 'fte,
+    summary_top_dir: Path = home / 'tmp
   ) = {
 
     val sum_dir_prefix = "fte_omni"
@@ -953,43 +955,41 @@ package object fte {
   ]
 
   def exp_cdt_tuning(
-      arch: Layer[Output[Double], (Output[Double], Output[Double])],
-      hyper_params: List[String],
-      loss_func_generator: LG,
-      fitness_func: DataPipe2[
-        (Output[Double], Output[Double]), 
-        Output[Double], Output[Float]],
-      hyper_prior: Map[
-        String, 
-        ContinuousRVWithDistr[
-          Double, 
-          ContinuousDistr[Double]]],
-      hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
-      iterations: Int = 150000,
-      iterations_tuning: Int = 20000,
-      num_samples: Int = 20,
-      hyper_optimizer: String = "gs",
-      miniBatch: Int = 32,
-      optimizer: tf.train.Optimizer = tf.train.AdaDelta(0.001f),
-      year_range: Range = 2011 to 2017,
-      test_year: Int = 2015,
-      sw_threshold: Double = 700d,
-      quantity: Int = OMNIData.Quantities.V_SW,
-      deltaT: (Int, Int) = (48, 72),
-      deltaTFTE: Int = 5,
-      fteStep: Int = 1,
-      latitude_limit: Double = 40d,
-      divergence: helios.learn.cdt_loss.Divergence =
-        helios.learn.cdt_loss.KullbackLeibler,
-      log_scale_fte: Boolean = false,
-      log_scale_omni: Boolean = false,
-      conv_flag: Boolean = false,
-      fte_data_path: Path = home / 'Downloads / 'fte,
-      summary_top_dir: Path = home / 'tmp,
-      hyp_opt_iterations: Option[Int] = Some(5)
+    arch: Layer[Output[Double], (Output[Double], Output[Double])],
+    hyper_params: List[String],
+    loss_func_generator: LG,
+    fitness_func: DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[
+      Float
+    ]],
+    hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[
+      Double
+    ]]],
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
+    iterations: Int = 150000,
+    iterations_tuning: Int = 20000,
+    num_samples: Int = 20,
+    hyper_optimizer: String = "gs",
+    miniBatch: Int = 32,
+    optimizer: tf.train.Optimizer = tf.train.AdaDelta(0.001f),
+    year_range: Range = 2011 to 2017,
+    test_year: Int = 2015,
+    sw_threshold: Double = 700d,
+    quantity: Int = OMNIData.Quantities.V_SW,
+    deltaT: (Int, Int) = (48, 72),
+    deltaTFTE: Int = 5,
+    fteStep: Int = 1,
+    latitude_limit: Double = 40d,
+    divergence: helios.learn.cdt_loss.Divergence =
+      helios.learn.cdt_loss.KullbackLeibler,
+    log_scale_fte: Boolean = false,
+    log_scale_omni: Boolean = false,
+    conv_flag: Boolean = false,
+    fte_data_path: Path = home / 'Downloads / 'fte,
+    summary_top_dir: Path = home / 'tmp,
+    hyp_opt_iterations: Option[Int] = Some(5)
   ): helios.Experiment[Double, ModelRunTuning, FTExperiment.Config] = {
 
-    val mo_flag: Boolean = true
+    val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
 
     val sum_dir_prefix = if (conv_flag) "fte_omni_conv" else "fte_omni"
@@ -1044,24 +1044,22 @@ package object fte {
     val data_size = dataset.training_dataset.size
 
     println("Scaling data attributes")
-    val (scaled_data, scalers): SC_DATA_T = scale_timed_data[Double].run(dataset)
+    val (scaled_data, scalers): SC_DATA_T =
+      scale_timed_data[Double].run(dataset)
 
     val unzip =
-      DataPipe[
-        Iterable[(Tensor[Double], Tensor[Double])], 
-        (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
+      DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
         _.unzip
       )
 
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios
       .concatOperation[Double](ax = 0))
 
-    val tf_data_ops = 
-      dtflearn.model.data_ops[
-        Tensor[Double], 
-        Tensor[Double], 
-        (Tensor[Double], Tensor[Double]), 
-        Output[Double], Output[Double]](
+    val tf_data_ops =
+      dtflearn.model
+        .data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double]), Output[
+          Double
+        ], Output[Double]](
           10,
           miniBatch,
           10,
@@ -1089,36 +1087,47 @@ package object fte {
             )
         )
 
-    val train_config_test = dtflearn.model.trainConfig[
-      Tensor[Double], Tensor[Double], 
-      (Tensor[Double], Tensor[Double]), 
-      Output[Double], Output[Double]](
-        summaryDir = tf_summary_dir,
-        tf_data_ops.copy(concatOpO = Some(concatPreds)),
-        optimizer,
-        stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
-        trainHooks = Some(
-          dtflearn.model._train_hooks(
-            tf_summary_dir,
-            iterations / 3,
-            iterations / 3,
-            iterations / 2
-          )
+    val train_config_test = dtflearn.model.trainConfig[Tensor[Double], Tensor[
+      Double
+    ], (Tensor[Double], Tensor[Double]), Output[Double], Output[Double]](
+      summaryDir = tf_summary_dir,
+      tf_data_ops.copy(concatOpO = Some(concatPreds)),
+      optimizer,
+      stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
+      trainHooks = Some(
+        dtflearn.model._train_hooks(
+          tf_summary_dir,
+          iterations / 3,
+          iterations / 3,
+          iterations / 2
         )
       )
+    )
 
     val tunableTFModel: TunableTFModel[
-      (DateTime, (Tensor[Double], Tensor[Double])), Output[Double], 
-      Output[Double], (Output[Double], Output[Double]), Double, 
-      Tensor[Double], FLOAT64, Shape, 
-      Tensor[Double], FLOAT64, Shape, 
-      (Tensor[Double], Tensor[Double]), 
-      (FLOAT64, FLOAT64), (Shape, Shape)] =
+      (DateTime, (Tensor[Double], Tensor[Double])),
+      Output[Double],
+      Output[Double],
+      (Output[Double], Output[Double]),
+      Double,
+      Tensor[Double],
+      FLOAT64,
+      Shape,
+      Tensor[Double],
+      FLOAT64,
+      Shape,
+      (Tensor[Double], Tensor[Double]),
+      (FLOAT64, FLOAT64),
+      (Shape, Shape)
+    ] =
       dtflearn.tunable_tf_model(
         loss_func_generator,
         hyper_params,
         scaled_data.training_dataset,
-        DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), (Tensor[Double], Tensor[Double])](_._2),
+        DataPipe[
+          (DateTime, (Tensor[Double], Tensor[Double])),
+          (Tensor[Double], Tensor[Double])
+        ](_._2),
         fitness_func,
         arch,
         (FLOAT64, input_shape),
@@ -1188,15 +1197,17 @@ package object fte {
 
     val best_model = tunableTFModel.modelFunction(config)
 
-    val extract_tensors = DataPipe((p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2)
+    val extract_tensors = DataPipe(
+      (p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2
+    )
 
     best_model.train(
-      scaled_data
-        .training_dataset
+      scaled_data.training_dataset
         .map(
           extract_tensors
-        ), 
-      train_config_test)
+        ),
+      train_config_test
+    )
 
     val extract_features = DataPipe(
       (p: (Tensor[Double], Tensor[Double])) => p._1
@@ -1303,25 +1314,24 @@ package object fte {
   }
 
   def exp_single_output(
-      num_neurons: Seq[Int] = Seq(30, 30),
-      activation_func: Int => Activation[Double] =
-        timelag.utils.getReLUAct(1, _),
-      optimizer: tf.train.Optimizer = tf.train.Adam(0.001f),
-      year_range: Range = 2011 to 2017,
-      test_year: Int = 2015,
-      sw_threshold: Double = 700d,
-      deltaT: Int = 96,
-      deltaTFTE: Int = 5,
-      fteStep: Int = 1,
-      latitude_limit: Double = 40d,
-      reg: Double = 0.0001,
-      log_scale_fte: Boolean = false,
-      log_scale_omni: Boolean = false,
-      conv_flag: Boolean = false,
-      iterations: Int = 10000,
-      miniBatch: Int = 32,
-      fte_data_path: Path = home / 'Downloads / 'fte,
-      summary_top_dir: Path = home / 'tmp
+    num_neurons: Seq[Int] = Seq(30, 30),
+    activation_func: Int => Activation[Double] = timelag.utils.getReLUAct(1, _),
+    optimizer: tf.train.Optimizer = tf.train.Adam(0.001f),
+    year_range: Range = 2011 to 2017,
+    test_year: Int = 2015,
+    sw_threshold: Double = 700d,
+    deltaT: Int = 96,
+    deltaTFTE: Int = 5,
+    fteStep: Int = 1,
+    latitude_limit: Double = 40d,
+    reg: Double = 0.0001,
+    log_scale_fte: Boolean = false,
+    log_scale_omni: Boolean = false,
+    conv_flag: Boolean = false,
+    iterations: Int = 10000,
+    miniBatch: Int = 32,
+    fte_data_path: Path = home / 'Downloads / 'fte,
+    summary_top_dir: Path = home / 'tmp
   ) = {
 
     val sum_dir_prefix = "fte_omni"
@@ -1548,17 +1558,17 @@ package object fte {
 
     implicit val ev = concatTensorSplits[Double]
 
-    val predictions
-        : Tensor[Double] = dtfutils.buffered_preds[Output[Double], Output[
-      Double
-    ], Output[Double], Output[Double], Double, Tensor[Double], FLOAT64, Shape, Tensor[
-      Double
-    ], FLOAT64, Shape, Tensor[Double], Tensor[Double], Tensor[Double]](
-      estimator,
-      tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._1), axis = 0),
-      500,
-      nTest
-    )
+    val predictions: Tensor[Double] =
+      dtfutils.buffered_preds[Output[Double], Output[
+        Double
+      ], Output[Double], Output[Double], Double, Tensor[Double], FLOAT64, Shape, Tensor[
+        Double
+      ], FLOAT64, Shape, Tensor[Double], Tensor[Double], Tensor[Double]](
+        estimator,
+        tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._1), axis = 0),
+        500,
+        nTest
+      )
 
     val pred_targets = scalers._2.i(predictions).reshape(Shape(nTest))
 
