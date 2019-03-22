@@ -25,7 +25,7 @@ def apply(
   sw_threshold: Double                              = 700d,
   divergence_term: helios.learn.cdt_loss.Divergence = helios.learn.cdt_loss.KullbackLeibler,
   network_size: Seq[Int]                            = Seq(100, 60),
-  activation_func: Int => Activation[Double]        = (i: Int) => timelag.utils.getReLUAct[Double](1, i),
+  activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) => timelag.utils.getReLUAct[Double](1, i),
   history_fte: Int                                  = 10,
   fte_step: Int                                     = 2,
   crop_latitude: Double                             = 40d,
