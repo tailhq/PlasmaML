@@ -165,6 +165,32 @@ package object helios {
     override type ESTIMATOR = dtflearn.SupEstimatorTF[In, Output[T], ArchOut, ArchOut, Loss, (ArchOut, (In, Output[T]))]
   }
 
+  case class TunedModelRunT[T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
+    data_and_scales: (TFDataSet[(DateTime, (IT, Tensor[T]))], (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])),
+    model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[T], Shape, ITT, IDD, ISS],
+    metrics_train: Option[RegressionMetricsTF[T]],
+    metrics_test: Option[RegressionMetricsTF[T]],
+    summary_dir: Path,
+    training_preds: Option[ITT],
+    test_preds: Option[ITT],
+    training_outputs: Option[ITT] = None,
+    test_outputs: Option[ITT]     = None) extends
+    ModelRun[T] {
+
+    override type DATA_PATTERN = (DateTime, (IT, Tensor[T]))
+
+    override type SCALERS = (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])
+
+    override type MODEL = TFModel[
+      In, Output[T], ArchOut, Loss, IT, ID, IS,
+      Tensor[T], DataType[T], Shape, ITT, IDD, ISS]
+
+    override type ESTIMATOR =
+      Option[dtflearn.SupEstimatorTF[In, Output[T], ArchOut, ArchOut, Loss, (ArchOut, (In, Output[T]))]]
+
+    override val estimator: ESTIMATOR = model.estimator
+  }
+
   case class TunedModelRun[T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
     data_and_scales: (TFDataSet[(IT, Tensor[T])], (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])),
     model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[T], Shape, ITT, IDD, ISS],

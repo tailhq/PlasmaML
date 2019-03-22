@@ -1,6 +1,6 @@
 import ammonite.ops._
 
-val summary_dir_juniper    = root/'export/'scratch1/System.getProperty("user.name")/'summaries
+val summary_dir_juniper    = root/'export/'scratch3/System.getProperty("user.name")/'summaries
 val summary_dir_wax        = root/'export/'scratch2/System.getProperty("user.name")/'summaries
 val data_juniper           = root/'export/'scratch2/System.getProperty("user.name")/"data_repo"/'helios
 

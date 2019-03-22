@@ -31,7 +31,7 @@ import _root_.io.github.mandar2812.dynaml.models.TunableTFModel.HyperParams
 
 package object fte {
 
-  type ModelRunTuning = TunedModelRun[
+  type ModelRunTuning = TunedModelRunT[
     Double,
     Output[Double],
     (Output[Double], Output[Double]),
@@ -1044,15 +1044,7 @@ package object fte {
     val data_size = dataset.training_dataset.size
 
     println("Scaling data attributes")
-    val (scaled_data, scalers): SC_DATA = scale_dataset[Double].run(
-      dataset.copy(
-        training_dataset = dataset.training_dataset
-          .map((p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2),
-        test_dataset = dataset.test_dataset.map(
-          (p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2
-        )
-      )
-    )
+    val (scaled_data, scalers): SC_DATA_T = scale_timed_data[Double].run(dataset)
 
     val unzip =
       DataPipe[
@@ -1064,16 +1056,18 @@ package object fte {
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios
       .concatOperation[Double](ax = 0))
 
-    val tf_data_ops = dtflearn.model
-      .data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double]), Output[
-        Double
-      ], Output[Double]](
-        10,
-        miniBatch,
-        10,
-        concatOpI = Some(stackOperation[Double](ax = 0)),
-        concatOpT = Some(stackOperation[Double](ax = 0))
-      )
+    val tf_data_ops = 
+      dtflearn.model.data_ops[
+        Tensor[Double], 
+        Tensor[Double], 
+        (Tensor[Double], Tensor[Double]), 
+        Output[Double], Output[Double]](
+          10,
+          miniBatch,
+          10,
+          concatOpI = Some(stackOperation[Double](ax = 0)),
+          concatOpT = Some(stackOperation[Double](ax = 0))
+        )
 
     val train_config_tuning =
       dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
@@ -1114,7 +1108,7 @@ package object fte {
       )
 
     val tunableTFModel: TunableTFModel[
-      (Tensor[Double], Tensor[Double]), Output[Double], 
+      (DateTime, (Tensor[Double], Tensor[Double])), Output[Double], 
       Output[Double], (Output[Double], Output[Double]), Double, 
       Tensor[Double], FLOAT64, Shape, 
       Tensor[Double], FLOAT64, Shape, 
@@ -1124,14 +1118,14 @@ package object fte {
         loss_func_generator,
         hyper_params,
         scaled_data.training_dataset,
-        identityPipe[(Tensor[Double], Tensor[Double])],
+        DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), (Tensor[Double], Tensor[Double])](_._2),
         fitness_func,
         arch,
         (FLOAT64, input_shape),
         (FLOAT64, Shape(causal_window)),
         train_config_tuning(tf_summary_dir),
         data_split_func = Some(
-          DataPipe[(Tensor[Double], Tensor[Double]), Boolean](
+          DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), Boolean](
             _ => scala.util.Random.nextGaussian() <= 0.7
           )
         ),
@@ -1194,14 +1188,22 @@ package object fte {
 
     val best_model = tunableTFModel.modelFunction(config)
 
-    best_model.train(scaled_data.training_dataset, train_config_test)
+    val extract_tensors = DataPipe((p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2)
+
+    best_model.train(
+      scaled_data
+        .training_dataset
+        .map(
+          extract_tensors
+        ), 
+      train_config_test)
 
     val extract_features = DataPipe(
       (p: (Tensor[Double], Tensor[Double])) => p._1
     )
 
     val model_predictions_test = best_model.infer_batch(
-      scaled_data.test_dataset.map(extract_features),
+      scaled_data.test_dataset.map(extract_tensors > extract_features),
       train_config_test.data_processing
     )
 
@@ -1245,7 +1247,7 @@ package object fte {
     }
 
     val test_labels = scaled_data.test_dataset.data
-      .map(_._2)
+      .map(_._2._2)
       .map(t => dtfutils.toDoubleSeq(t).toSeq)
       .toSeq
 
@@ -1274,7 +1276,7 @@ package object fte {
       FTExperiment.OMNIConfig(deltaT, log_scale_omni)
     )
 
-    val results = helios.TunedModelRun(
+    val results = helios.TunedModelRunT(
       (scaled_data, scalers),
       best_model,
       None,
