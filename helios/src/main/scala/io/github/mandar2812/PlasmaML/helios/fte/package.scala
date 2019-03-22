@@ -405,14 +405,12 @@ package object fte {
       type P = (DateTime, (Tensor[T], Tensor[T]))
 
       val concat_features = tfi.stack(
-        dataset.training_dataset.map(DataPipe((p: P) => p._2._1)).data.toSeq
+        dataset.training_dataset.map(tup2_2[DateTime, (Tensor[T], Tensor[T])] > tup2_1[Tensor[T], Tensor[T]]).data.toSeq
       )
 
       val concat_targets = tfi.stack(
-        dataset.training_dataset.map(DataPipe((p: P) => p._2._2)).data.toSeq
+        dataset.training_dataset.map(tup2_2[DateTime, (Tensor[T], Tensor[T])] > tup2_2[Tensor[T], Tensor[T]]).data.toSeq
       )
-
-      //val (min, max) = (concat_targets.min(axes = 0), concat_targets.max(axes = 0))
 
       val n = concat_features.shape(0)
 
@@ -458,14 +456,14 @@ package object fte {
 
       val concat_features = tfi.stack(
         dataset.training_dataset
-          .map(DataPipe((p: (Tensor[T], Tensor[T])) => p._1))
+          .map(tup2_1[Tensor[T], Tensor[T]])
           .data
           .toSeq
       )
 
       val concat_targets = tfi.stack(
         dataset.training_dataset
-          .map(DataPipe((p: (Tensor[T], Tensor[T])) => p._2))
+          .map(tup2_2[Tensor[T], Tensor[T]])
           .data
           .toSeq
       )
@@ -1124,10 +1122,7 @@ package object fte {
         loss_func_generator,
         hyper_params,
         scaled_data.training_dataset,
-        DataPipe[
-          (DateTime, (Tensor[Double], Tensor[Double])),
-          (Tensor[Double], Tensor[Double])
-        ](_._2),
+        tup2_2[DateTime, (Tensor[Double], Tensor[Double])],
         fitness_func,
         arch,
         (FLOAT64, input_shape),
@@ -1197,9 +1192,7 @@ package object fte {
 
     val best_model = tunableTFModel.modelFunction(config)
 
-    val extract_tensors = DataPipe(
-      (p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2
-    )
+    val extract_tensors = tup2_2[DateTime, (Tensor[Double], Tensor[Double])]
 
     best_model.train(
       scaled_data.training_dataset
@@ -1209,9 +1202,7 @@ package object fte {
       train_config_test
     )
 
-    val extract_features = DataPipe(
-      (p: (Tensor[Double], Tensor[Double])) => p._1
-    )
+    val extract_features = tup2_1[Tensor[Double], Tensor[Double]]
 
     val model_predictions_test = best_model.infer_batch(
       scaled_data.test_dataset.map(extract_tensors > extract_features),

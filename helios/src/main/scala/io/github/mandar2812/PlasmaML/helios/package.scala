@@ -1295,13 +1295,8 @@ package object helios {
       miniBatchSize
     )
 
-    val unzip =
-      DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
-        _.unzip
-      )
-
-    val concatPreds =
-      unzip > 
+    val concatPreds = 
+      unzip[Tensor[Double], Tensor[Double]] > 
         (
           dtfpipe.EagerConcatenate[Double]() * 
             dtfpipe.EagerConcatenate[Double]()
@@ -1384,7 +1379,7 @@ package object helios {
         loss_func_generator,
         hyper_params,
         norm_tf_data.training_dataset,
-        DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2),
+        tup2_2[DateTime, (Tensor[UByte], Tensor[Double])],
         fitness_func,
         architecture,
         (UINT8, data_shapes._1),
@@ -1460,15 +1455,13 @@ package object helios {
       ), 
       train_config_test)
 
-    val extract_features = DataPipe(
-      (p: (Tensor[UByte], Tensor[Double])) => p._1
-    )
+    val extract_features = tup2_2[DateTime, (Tensor[UByte], Tensor[Double])] > tup2_1[Tensor[UByte], Tensor[Double]]
 
     val model_predictions_test
       : Either[(Tensor[Double], Tensor[Double]), DataSet[
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
-      norm_tf_data.test_dataset.map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extract_features),
+      norm_tf_data.test_dataset.map(extract_features),
       train_config_test.data_processing.copy(
         concatOpI = Some(dtfpipe.EagerStack[UByte]()),
         concatOpT = Some(dtfpipe.EagerStack[Double]()),
@@ -1480,7 +1473,7 @@ package object helios {
       : Either[(Tensor[Double], Tensor[Double]), DataSet[
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
-      norm_tf_data.training_dataset.map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extract_features),
+      norm_tf_data.training_dataset.map(extract_features),
       train_config_test.data_processing.copy(
         concatOpI = Some(dtfpipe.EagerStack[UByte]()),
         concatOpT = Some(dtfpipe.EagerStack[Double]()),
@@ -1516,7 +1509,7 @@ package object helios {
       Some(scalers._2)
     )
 
-    val extractLabels        = DataPipe((p: (Tensor[UByte], Tensor[Double])) => p._2)
+    val extractLabels        = tup2_2[DateTime, (Tensor[UByte], Tensor[Double])] > tup2_2[Tensor[UByte], Tensor[Double]]
     val extractAndUnScLabels = extractLabels > scalers._2.i
     val convToSeq = DataPipe(
       (t: Tensor[Double]) => dtfutils.toDoubleSeq(t).toSeq
@@ -1524,7 +1517,7 @@ package object helios {
 
     //The test labels dont require rescaling
     val test_labels = norm_tf_data.test_dataset
-      .map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extractLabels)
+      .map(extractLabels)
       .map(convToSeq)
       .data
       .toSeq
@@ -1532,7 +1525,7 @@ package object helios {
     //The training labels were scaled during processing,
     //hence must be rescaled back to original domains.
     val train_labels = norm_tf_data.training_dataset
-      .map(DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2) > extractAndUnScLabels)
+      .map(extractAndUnScLabels)
       .map(convToSeq)
       .data
       .toSeq

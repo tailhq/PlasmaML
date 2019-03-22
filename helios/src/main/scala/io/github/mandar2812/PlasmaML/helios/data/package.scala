@@ -404,7 +404,7 @@ package object data {
 
       val concat_targets = tfi.stack(
         dataset.training_dataset
-          .map(DataPipe((p: (Tensor[UByte], Tensor[U])) => p._2))
+          .map(tup2_2[Tensor[UByte], Tensor[U]])
           .data
           .toSeq
       )
@@ -429,7 +429,7 @@ package object data {
 
       val concat_targets = tfi.stack(
         dataset.training_dataset
-          .map(DataPipe((p: (DateTime, (Tensor[UByte], Tensor[U]))) => p._2._2))
+          .map(tup2_2[DateTime, (Tensor[UByte], Tensor[U])] > tup2_2[Tensor[UByte], Tensor[U]])
           .data
           .toSeq
       )
@@ -480,7 +480,7 @@ package object data {
 
       val concat_targets = tfi.stack(
         dataset.training_dataset
-          .map(DataPipe((p: ((Tensor[UByte], Tensor[U]), Tensor[U])) => p._2))
+          .map(tup2_2[(Tensor[UByte], Tensor[U]), Tensor[U]])
           .data
           .toSeq
       )
@@ -488,7 +488,7 @@ package object data {
       val concat_history = tfi.stack(
         dataset.training_dataset
           .map(
-            DataPipe((p: ((Tensor[UByte], Tensor[U]), Tensor[U])) => p._1._2)
+            tup2_1[(Tensor[UByte], Tensor[U]), Tensor[U]] > tup2_2[Tensor[UByte], Tensor[U]]
           )
           .data
           .toSeq
