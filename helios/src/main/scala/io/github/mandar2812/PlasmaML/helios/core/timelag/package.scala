@@ -1276,11 +1276,13 @@ package object timelag {
 
       val train_config_tuning =
         dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
-          DataPipe((p: Path) => dtflearn.model.trainConfig[Tensor[T], Tensor[T], (Tensor[T], Tensor[T]), Output[T], Output[T]](
-            p, tf_data_ops, optimizer,
-            stop_condition_tuning,
-            Some(get_train_hooks(p, iterations_tuning, epochFlag, data_size, miniBatch))
-          ))
+          DataPipe((p: Path) => 
+            dtflearn.model.trainConfig[Tensor[T], Tensor[T], (Tensor[T], Tensor[T]), Output[T], Output[T]](
+              p, tf_data_ops, optimizer,
+              stop_condition_tuning,
+              Some(get_train_hooks(p, iterations_tuning, epochFlag, data_size, miniBatch))
+            )
+          )
 
       val train_config_test =
         dtflearn.model.trainConfig(

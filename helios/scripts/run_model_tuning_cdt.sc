@@ -73,10 +73,10 @@ def apply(
 
   val hyper_prior = Map(
     "prior_wt"    -> UniformRV(0.5, 1.5),
-    "error_wt"    -> UniformRV(0.75, 1.5),
-    "temperature" -> UniformRV(0.75, 2.0),
+    "error_wt"    -> UniformRV(0.5, 1.5),
+    "temperature" -> UniformRV(1d, 2.0),
     "specificity" -> UniformRV(0.5, 2.5),
-    "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+    "reg"         -> UniformRV(0d, math.pow(10d, -3d))
   )
 
   val hyp_scaling = hyper_prior.map(p =>

@@ -1561,11 +1561,13 @@ package object fte {
     implicit val ev = concatTensorSplits[Double]
 
     val predictions: Tensor[Double] =
-      dtfutils.buffered_preds[Output[Double], Output[
-        Double
-      ], Output[Double], Output[Double], Double, Tensor[Double], FLOAT64, Shape, Tensor[
-        Double
-      ], FLOAT64, Shape, Tensor[Double], Tensor[Double], Tensor[Double]](
+      dtfutils.buffered_preds[
+        Output[Double], Output[Double], 
+        Output[Double], Output[Double], Double, 
+        Tensor[Double], FLOAT64, Shape, 
+        Tensor[Double], FLOAT64, Shape, 
+        Tensor[Double], Tensor[Double], 
+        Tensor[Double]](
         estimator,
         tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._1), axis = 0),
         500,
