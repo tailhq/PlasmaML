@@ -1060,7 +1060,7 @@ package object fte {
       dtflearn.model.data_ops(
         shuffleBuffer = 10,
         batchSize = miniBatch,
-        prefetchSize = 10
+        prefetchSize = 2
       )
 
     val train_config_tuning: MetaPipe[
@@ -1221,18 +1221,17 @@ package object fte {
 
     } else predictions._2
 
-    val pred_targets: Tensor[Double] = if (mo_flag) {
-      val all_preds =
-        if (prob_timelags) scalers._2.i(predictions._1)
-        else scalers._2.i(predictions._1)
+    val unscaled_preds_test = scalers._2.i(predictions._1)
 
+    val pred_targets: Tensor[Double] = if (mo_flag) {
+      
       val repeated_times =
         tfi.stack(Seq.fill(causal_window)(pred_time_lags_test.floor), axis = -1)
 
       val conv_kernel =
         repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
 
-      all_preds
+      unscaled_preds_test
         .multiply(conv_kernel)
         .sum(axes = 1)
         .divide(conv_kernel.sum(axes = 1))
@@ -1279,14 +1278,21 @@ package object fte {
       None,
       Some((final_predictions, pred_time_lags_test))
     )
+    
+
+    helios.write_predictions[Double](
+      (unscaled_preds_test, predictions._2),
+      tf_summary_dir, 
+      "test_"+ dt.toString("YYYY-MM-dd-HH-mm")
+    )
+
+    
 
     helios.write_processed_predictions(
       dtfutils.toDoubleSeq(final_predictions).toSeq,
       final_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
-      tf_summary_dir / ("scatter_test-" + DateTime
-        .now()
-        .toString("YYYY-MM-dd-HH-mm") + ".csv")
+      tf_summary_dir / ("scatter_test-" + dt.toString("YYYY-MM-dd-HH-mm") + ".csv")
     )
 
     helios.Experiment(

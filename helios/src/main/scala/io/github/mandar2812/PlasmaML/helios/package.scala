@@ -604,6 +604,25 @@ package object helios {
     )
   }
 
+  def write_predictions[T: TF: IsFloatOrDouble](
+    outputs: (Tensor[T], Tensor[T]),
+    summary_dir: Path, identifier: String): Unit = {
+    
+    val h = outputs._1.shape(1)
+    val h2 = outputs._2.shape(1)
+
+    write.over(
+      summary_dir/s"predictions_${identifier}.csv",
+      dtfutils.toDoubleSeq(outputs._1).grouped(h).map(_.mkString(",")).mkString("\n")
+    )
+  
+    write.over(
+      summary_dir/s"probabilities_${identifier}.csv",
+      dtfutils.toDoubleSeq(outputs._2).grouped(h2).map(_.mkString(",")).mkString("\n")
+    )
+    
+  }
+
   def write_processed_predictions(
     preds: Seq[Double],
     targets: Seq[Double],
@@ -1305,7 +1324,7 @@ package object helios {
     val tf_data_ops = dtflearn.model.data_ops[Output[UByte], Output[Double]](
       shuffleBuffer = 10,
       batchSize = miniBatchSize,
-      prefetchSize = 10
+      prefetchSize = 2
     )
 
     val train_config_tuning =
@@ -1545,6 +1564,7 @@ package object helios {
 
     val time_stamp = DateTime.now().toString("YYYY-MM-dd-HH-mm")
 
+
     val partitioned_data_collection = dataset.partition(DataPipe(tt_partition))
 
     //Write the train and test collections
@@ -1557,21 +1577,23 @@ package object helios {
     write_helios_data_set(
       partitioned_data_collection.test_dataset,
       tf_summary_dir,
-      s"test_data_$time_stamp,json"
+      s"test_data_$time_stamp.json"
     )
 
     //Write model outputs for test data
-    timelag.utils.write_model_outputs(
-      test_predictions,
-      tf_summary_dir,
-      s"test_$time_stamp"
+    helios.write_predictions[Double](
+      (scalers._2.i(test_predictions._1), test_predictions._2),
+      tf_summary_dir, 
+      s"test_${time_stamp}"
     )
+
     //Write model outputs for training data
-    timelag.utils.write_model_outputs(
-      train_predictions,
-      tf_summary_dir,
-      s"train_$time_stamp"
+    helios.write_predictions[Double](
+      (scalers._2.i(train_predictions._1), train_predictions._2),
+      tf_summary_dir, 
+      s"train_${time_stamp}"
     )
+
 
     //Write the predictions for test data
     write_processed_predictions(
