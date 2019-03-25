@@ -234,7 +234,7 @@ package object fte {
       .map(
         identityPipe[Int] * IterableDataPipe[FTEPattern, FTEPattern](clamp_fte)
       )
-      .to_zip(identityPipe)
+      .to_zip(identityPipe[(Int, Iterable[FTEPattern])])
 
     val fte_data = carrington_rotation_table.join(fte)
 
@@ -253,25 +253,21 @@ package object fte {
         )
     )
 
-    val load_slice_to_tensor = DataPipe(
+    val load_slice_to_tensor = DataPipe[Seq[FTEPattern], Tensor[Double]](
       (s: Seq[FTEPattern]) =>
-        Tensor[Double](s.map(_.fte.get).map(log_transformation))
-          .reshape(Shape(s.length))
+        Tensor[Double](s.map(_.fte.get).map(log_transformation)).reshape(Shape(s.length))
     )
 
-    val sort_by_date = DataPipe(
-      (s: Iterable[(DateTime, Seq[FTEPattern])]) => s.toSeq.sortBy(_._1)
+    val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[(DateTime, Seq[FTEPattern])]](
+      _.toSeq.sortBy(_._1)
     )
 
     val processed_fte_data = {
       fte_data
         .flatMap(process_rotation)
         .transform(
-          DataPipe(
-            (data: Iterable[(DateTime, FTEPattern)]) =>
-              data
-                .groupBy(_._1)
-                .map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_.latitude)))
+          DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[(DateTime, Seq[FTEPattern])]](
+            _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_.latitude)))
           )
         )
         .filter(DataPipe(_._2.length == 180))
@@ -279,10 +275,11 @@ package object fte {
         .map(image_dt_roundoff * identityPipe[Seq[FTEPattern]])
         .transform(sort_by_date)
         .map(identityPipe[DateTime] * load_slice_to_tensor)
-        .to_zip(identityPipe)
+        .to_zip(identityPipe[(DateTime, Tensor[Double])])
     }
 
     println("Interpolating FTE values to fill hourly cadence requirement")
+
     val interpolated_fte = dtfdata.dataset(
       processed_fte_data.data
         .sliding(2)
@@ -331,7 +328,7 @@ package object fte {
     processed_fte_data
       .concatenate(interpolated_fte)
       .transform(
-        (data: Iterable[(DateTime, Tensor[Double])]) => data.toSeq.sortBy(_._1)
+        DataPipe[Iterable[(DateTime, Tensor[Double])], Iterable[(DateTime, Tensor[Double])]](_.toSeq.sortBy(_._1).toIterable)
       )
       .transform(generate_history)
       .to_zip(identityPipe[(DateTime, Tensor[Double])])
@@ -1053,25 +1050,23 @@ package object fte {
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios
       .concatOperation[Double](ax = 0))
 
-    val tf_data_ops: dtflearn.model.Ops[
-      Tensor[Double], Tensor[Double], 
-      (Tensor[Double], Tensor[Double]), 
-      Output[Double], Output[Double]] =
-      dtflearn
-        .model
-        .data_ops(
-          shuffleBuffer = 10,
-          batchSize = miniBatch,
-          prefetchSize = 10
-        )
+    val tf_handle_ops_test = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])](
+        concatOpI = Some(stackOperation[Double](ax = 0)),
+        concatOpT = Some(stackOperation[Double](ax = 0)),
+        concatOpO = Some(concatPreds)
+    )
+
+    val tf_data_ops: dtflearn.model.Ops[Output[Double], Output[Double]] =
+      dtflearn.model.data_ops(
+        shuffleBuffer = 10,
+        batchSize = miniBatch,
+        prefetchSize = 10
+      )
 
     val train_config_tuning: MetaPipe[
       Path,
       dtflearn.tunable_tf_model.HyperParams,
-      dtflearn.model.Config[
-      Tensor[Double], Tensor[Double], 
-      (Tensor[Double], Tensor[Double]), 
-      Output[Double], Output[Double]]] =
+      dtflearn.model.Config[Output[Double], Output[Double]]] =
       dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
         DataPipe(
           (p: Path) =>
@@ -1091,16 +1086,9 @@ package object fte {
             )
         )
 
-    val train_config_test = dtflearn.model.trainConfig[
-      Tensor[Double], Tensor[Double], 
-      (Tensor[Double], Tensor[Double]), 
-      Output[Double], Output[Double]](
+    val train_config_test = dtflearn.model.trainConfig[Output[Double], Output[Double]](
       summaryDir = tf_summary_dir,
-      tf_data_ops.copy(
-        concatOpI = Some(stackOperation[Double](ax = 0)),
-        concatOpT = Some(stackOperation[Double](ax = 0)),
-        concatOpO = Some(concatPreds)
-      ),
+      tf_data_ops,
       optimizer,
       stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
       trainHooks = Some(
@@ -1144,7 +1132,8 @@ package object fte {
             _ => scala.util.Random.nextGaussian() <= 0.7
           )
         ),
-        inMemory = false
+        inMemory = false, 
+        tf_handle_ops = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])]()
       )
 
     val gs = hyper_optimizer match {
@@ -1201,23 +1190,15 @@ package object fte {
         config.values.mkString(start = "", sep = ",", end = "")
     )
 
-    val best_model = tunableTFModel.modelFunction(config)
+    val best_model = tunableTFModel.train_model(config, Some(train_config_test))
 
     val extract_tensors = tup2_2[DateTime, (Tensor[Double], Tensor[Double])]
-
-    best_model.train(
-      scaled_data.training_dataset
-        .map(
-          extract_tensors
-        ),
-      train_config_test
-    )
 
     val extract_features = tup2_1[Tensor[Double], Tensor[Double]]
 
     val model_predictions_test = best_model.infer_batch(
       scaled_data.test_dataset.map(extract_tensors > extract_features),
-      train_config_test.data_processing
+      train_config_test.data_processing, tf_handle_ops_test
     )
 
     val predictions = model_predictions_test match {

@@ -489,7 +489,7 @@ object OmniOSA {
     DataPipe((dataAndScales: DataAndScales) => {
       val trainingData = dataAndScales._1
       implicit val ev = VectorField(dataAndScales._1.head._1.length)
-      implicit val transform = DataPipe((data: Data) => data.toSeq)
+      implicit val transform = DataPipe[Data, Seq[(Features, Output)]]((data: Data) => data.toSeq)
 
       val kSc = CovarianceFunction(dataAndScales._2._1)
       val targetSampleVariance = math.pow(dataAndScales._2._2(0).sigma, 2.0)

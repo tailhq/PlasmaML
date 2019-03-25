@@ -1302,29 +1302,17 @@ package object helios {
             dtfpipe.EagerConcatenate[Double]()
         )
 
-    val tf_data_ops = dtflearn
-      .model
-      .data_ops[
-        Tensor[UByte], 
-        Tensor[Double], 
-        (Tensor[Double], Tensor[Double]), 
-        Output[UByte], Output[Double]](
-        shuffleBuffer = 10,
-        batchSize = miniBatchSize,
-        prefetchSize = 10
-      )
+    val tf_data_ops = dtflearn.model.data_ops[Output[UByte], Output[Double]](
+      shuffleBuffer = 10,
+      batchSize = miniBatchSize,
+      prefetchSize = 10
+    )
 
     val train_config_tuning =
       dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
         DataPipe(
           (p: Path) =>
-            dtflearn.model.trainConfig[
-              Tensor[UByte],
-              Tensor[Double],
-              (Tensor[Double], Tensor[Double]),
-              Output[UByte],
-              Output[Double]
-            ](
+            dtflearn.model.trainConfig[Output[UByte], Output[Double]](
               p,
               tf_data_ops,
               optimizer,
@@ -1343,12 +1331,7 @@ package object helios {
 
     val train_config_test =
       dtflearn.model
-        .trainConfig[
-          Tensor[UByte], 
-          Tensor[Double], 
-          (Tensor[Double], Tensor[Double]), 
-          Output[UByte], 
-          Output[Double]](
+        .trainConfig[Output[UByte], Output[Double]](
           summaryDir = tf_summary_dir,
           tf_data_ops,
           optimizer,
@@ -1363,6 +1346,8 @@ package object helios {
             )
           )
         )
+
+    val handle_ops = dtflearn.model.tf_data_ops[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])]()
 
     val tunableTFModel
       : TunableTFModel[
@@ -1390,7 +1375,8 @@ package object helios {
             _ => scala.util.Random.nextDouble() <= 0.7
           )
         ),
-        inMemory = false
+        inMemory = false, 
+        tf_handle_ops = handle_ops
       )
 
     val gs = hyper_optimizer match {
@@ -1447,13 +1433,7 @@ package object helios {
         config.values.mkString(start = "", sep = ",", end = "")
     )
 
-    val best_model = tunableTFModel.modelFunction(config)
-
-    best_model.train(
-      norm_tf_data.training_dataset.map(
-        DataPipe[(DateTime, (Tensor[UByte], Tensor[Double])), (Tensor[UByte], Tensor[Double])](_._2)
-      ), 
-      train_config_test)
+    val best_model = tunableTFModel.train_model(config, Some(train_config_test))
 
     val extract_features = tup2_2[DateTime, (Tensor[UByte], Tensor[Double])] > tup2_1[Tensor[UByte], Tensor[Double]]
 
@@ -1462,11 +1442,7 @@ package object helios {
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
       norm_tf_data.test_dataset.map(extract_features),
-      train_config_test.data_processing.copy(
-        concatOpI = Some(dtfpipe.EagerStack[UByte]()),
-        concatOpT = Some(dtfpipe.EagerStack[Double]()),
-        concatOpO = None
-      )
+      train_config_test.data_processing, handle_ops.copy(concatOpO = Some(concatPreds))
     )
 
     val model_predictions_train
@@ -1474,11 +1450,7 @@ package object helios {
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
       norm_tf_data.training_dataset.map(extract_features),
-      train_config_test.data_processing.copy(
-        concatOpI = Some(dtfpipe.EagerStack[UByte]()),
-        concatOpT = Some(dtfpipe.EagerStack[Double]()),
-        concatOpO = None
-      )
+      train_config_test.data_processing, handle_ops.copy(concatOpO = Some(concatPreds))
     )
 
     val test_predictions = model_predictions_test match {

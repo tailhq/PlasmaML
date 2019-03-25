@@ -221,7 +221,7 @@ object OMNILoader {
     * }}}
     * */
   def omniVarToSlidingTS(deltaT: Int, time_window: Int)(targetColumn: Int = OMNIData.Quantities.V_SW) =
-    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq()) > DataPipe[Stream[String], Iterable[String]](_.toIterable)) >
       processWithDateTime >
       IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_time_window(deltaT, time_window)
@@ -246,7 +246,7 @@ object OMNILoader {
     past: Int, deltaT: Int,
     time_window: Int)(
     targetColumn: Int) =
-    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq()) > DataPipe[Stream[String], Iterable[String]](_.toIterable)) >
       processWithDateTime >
       IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_and_backward_time_window(past, (deltaT, time_window))

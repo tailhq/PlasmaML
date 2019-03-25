@@ -167,7 +167,7 @@ object OmniMSA {
     phi: DataPipe[Features, DenseVector[Double]]):
   (MVStudentsTModel[Data, Features] , DataScales) = {
 
-    implicit val transform = DataPipe((d: Data) => d.toSeq)
+    implicit val transform = DataPipe[Data, Seq[(Features, Targets)]]((d: Data) => d.toSeq)
 
     val modelTrain = DataPipe((dataAndScales: (Data, DataScales)) => {
       val multiVariateSTModel = MVStudentsTModel[Data, Features](kernel, noise, phi) _

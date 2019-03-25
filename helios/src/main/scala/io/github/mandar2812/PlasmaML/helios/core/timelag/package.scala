@@ -700,6 +700,7 @@ package object timelag {
   }
 
 
+
   /**
     * <h4>Causal Time Lag: Joint Inference</h4>
     *
@@ -1266,19 +1267,23 @@ package object timelag {
       })
 
 
-      val tf_data_ops = dtflearn.model.data_ops[Tensor[T], Tensor[T], (Tensor[T], Tensor[T]), Output[T], Output[T]](
+      val data_ops = dtflearn.model.data_ops[Output[T], Output[T]](
         shuffleBuffer = 10,
         batchSize = miniBatch,
-        prefetchSize = 10,
+        prefetchSize = 10
+      )
+
+      val tf_handle_ops = dtflearn.model.tf_data_ops[Tensor[T], Tensor[T], (Tensor[T], Tensor[T])](
         concatOpI = Some(dtfpipe.EagerStack[T]()),
-        concatOpT = Some(dtfpipe.EagerStack[T]())
+        concatOpT = Some(dtfpipe.EagerStack[T]()),
+        concatOpO = Some(stackOperationP)
       )
 
       val train_config_tuning =
         dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
           DataPipe((p: Path) => 
-            dtflearn.model.trainConfig[Tensor[T], Tensor[T], (Tensor[T], Tensor[T]), Output[T], Output[T]](
-              p, tf_data_ops, optimizer,
+            dtflearn.model.trainConfig[Output[T], Output[T]](
+              p, data_ops, optimizer,
               stop_condition_tuning,
               Some(get_train_hooks(p, iterations_tuning, epochFlag, data_size, miniBatch))
             )
@@ -1287,7 +1292,7 @@ package object timelag {
       val train_config_test =
         dtflearn.model.trainConfig(
           summaryDir = tf_summary_dir,
-          data_processing = tf_data_ops.copy(concatOpO = Some(stackOperationP)),
+          data_processing = data_ops,
           optimizer = optimizer,
           stopCriteria = stop_condition_test,
           trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch)))
@@ -1312,7 +1317,8 @@ package object timelag {
         data_split_func = Some(
           DataPipe[(Tensor[T], Tensor[T]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
         ),
-        inMemory = false
+        inMemory = false, 
+        tf_handle_ops = tf_handle_ops
       )
 
       val gs = hyper_optimizer match {
@@ -1359,19 +1365,19 @@ package object timelag {
           config.values.mkString(start = "", sep = ",", end = "")
       )
 
-      val best_model = tunableTFModel.modelFunction(config)
+      val best_model = tunableTFModel.train_model(config, Some(train_config_test))
 
-      best_model.train(tfdata.training_dataset, train_config_test)
+      //best_model.train(tfdata.training_dataset, train_config_test)
 
       val extract_features = DataPipe((p: (Tensor[T], Tensor[T])) => p._1)
 
       val model_predictions_test = best_model.infer_batch(
         tfdata.test_dataset.map(extract_features),
-        train_config_test.data_processing)
+        train_config_test.data_processing, tf_handle_ops)
 
       val model_predictions_train = best_model.infer_batch(
         tfdata.training_dataset.map(extract_features),
-        train_config_test.data_processing)
+        train_config_test.data_processing, tf_handle_ops)
 
 
       val test_predictions = model_predictions_test match {
