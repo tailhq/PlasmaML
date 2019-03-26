@@ -407,7 +407,7 @@ package object fte {
 
   type SC_DATA_T = (
     helios.data.TF_DATA_T[Double, Double],
-    (GaussianScalerTF[Double], GaussianScalerTF[Double])
+    (Scaler[Tensor[Double]], GaussianScalerTF[Double])
   )
 
   def scale_timed_data[T: TF: IsFloatOrDouble] =

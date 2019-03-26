@@ -42,8 +42,10 @@ import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
   * */
 package object helios {
 
-  def tup2Split[D: TF, E: TF]
-    : MetaPipe12[(Tensor[D], Tensor[E]), Int, Int, (Tensor[D], Tensor[E])] =
+  def tup2Split[
+    D: TF,
+    E: TF
+  ]: MetaPipe12[(Tensor[D], Tensor[E]), Int, Int, (Tensor[D], Tensor[E])] =
     MetaPipe12(
       (workingData: (Tensor[D], Tensor[E])) =>
         (index_start: Int, index_end: Int) =>
@@ -53,8 +55,10 @@ package object helios {
           )
     )
 
-  def concatTup2Splits[D: TF, E: TF]
-    : DataPipe[Iterable[(Tensor[D], Tensor[E])], (Tensor[D], Tensor[E])] =
+  def concatTup2Splits[
+    D: TF,
+    E: TF
+  ]: DataPipe[Iterable[(Tensor[D], Tensor[E])], (Tensor[D], Tensor[E])] =
     DataPipe((ds: Iterable[(Tensor[D], Tensor[E])]) => {
 
       val separated_splits: (Iterable[Tensor[D]], Iterable[Tensor[E]]) =
@@ -70,11 +74,14 @@ package object helios {
   /**
     * Calculate RMSE of a tensorflow based estimator.
     * */
-  def calculate_rmse[P: TF: IsFloatOrDouble](n: Int, n_part: Int)(
-    labels_mean: Tensor[P],
+  def calculate_rmse[P: TF: IsFloatOrDouble](
+    n: Int,
+    n_part: Int
+  )(labels_mean: Tensor[P],
     labels_stddev: Tensor[P]
-  )(images: Tensor[P], labels: Tensor[P])(
-    infer: Tensor[P] => Tensor[P]
+  )(images: Tensor[P],
+    labels: Tensor[P]
+  )(infer: Tensor[P] => Tensor[P]
   ): Float = {
 
     def accuracy(im: Tensor[P], lab: Tensor[P]): Float = {
@@ -172,18 +179,18 @@ package object helios {
   }
 
   case class SupervisedModelRun[T, In, ArchOut, Loss, IT, ITT](
-    data_and_scales: (
-      TFDataSet[(IT, Tensor[T])],
-      (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])
-    ),
+    data_and_scales: (TFDataSet[(IT, Tensor[T])], (ReversibleScaler[IT],
+        ReversibleScaler[Tensor[T]])),
     model: dtflearn.SupervisedModel[In, Output[T], ArchOut, ArchOut, Loss],
-    estimator: dtflearn.SupEstimatorTF[In, Output[T], ArchOut, ArchOut, Loss, (ArchOut, (In, Output[T]))],
+    estimator: dtflearn.SupEstimatorTF[In, Output[T], ArchOut, ArchOut, Loss, (ArchOut, (In, Output[
+          T
+        ]))],
     metrics_train: Option[RegressionMetricsTF[T]],
     metrics_test: Option[RegressionMetricsTF[T]],
     summary_dir: Path,
     training_preds: Option[ITT],
-    test_preds: Option[ITT]
-  ) extends ModelRun[T] {
+    test_preds: Option[ITT])
+      extends ModelRun[T] {
 
     override type DATA_PATTERN = (IT, Tensor[T])
 
@@ -197,10 +204,8 @@ package object helios {
   }
 
   case class TunedModelRunT[T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
-    data_and_scales: (
-      TFDataSet[(DateTime, (IT, Tensor[T]))],
-      (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])
-    ),
+    data_and_scales: (TFDataSet[(DateTime, (IT, Tensor[T]))], (Scaler[IT],
+        ReversibleScaler[Tensor[T]])),
     model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[
       T
     ], Shape, ITT, IDD, ISS],
@@ -210,12 +215,12 @@ package object helios {
     training_preds: Option[ITT],
     test_preds: Option[ITT],
     training_outputs: Option[ITT] = None,
-    test_outputs: Option[ITT] = None
-  ) extends ModelRun[T] {
+    test_outputs: Option[ITT] = None)
+      extends ModelRun[T] {
 
     override type DATA_PATTERN = (DateTime, (IT, Tensor[T]))
 
-    override type SCALERS = (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])
+    override type SCALERS = (Scaler[IT], ReversibleScaler[Tensor[T]])
 
     override type MODEL =
       TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[
@@ -236,10 +241,8 @@ package object helios {
   }
 
   case class TunedModelRun[T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
-    data_and_scales: (
-      TFDataSet[(IT, Tensor[T])],
-      (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])
-    ),
+    data_and_scales: (TFDataSet[(IT, Tensor[T])], (ReversibleScaler[IT],
+        ReversibleScaler[Tensor[T]])),
     model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[
       T
     ], Shape, ITT, IDD, ISS],
@@ -249,8 +252,8 @@ package object helios {
     training_preds: Option[ITT],
     test_preds: Option[ITT],
     training_outputs: Option[ITT] = None,
-    test_outputs: Option[ITT] = None
-  ) extends ModelRun[T] {
+    test_outputs: Option[ITT] = None)
+      extends ModelRun[T] {
 
     override type DATA_PATTERN = (IT, Tensor[T])
 
@@ -279,8 +282,8 @@ package object helios {
   case class ExperimentConfig(
     multi_output: Boolean,
     probabilistic_time_lags: Boolean,
-    timelag_prediction: String
-  ) extends Config
+    timelag_prediction: String)
+      extends Config
 
   case class ImageExpConfig(
     image_sources: Seq[SolarImagesSource],
@@ -294,20 +297,18 @@ package object helios {
     targets_shape: Shape,
     divergence: Option[helios.learn.cdt_loss.Divergence] = None,
     target_prob: Option[helios.learn.cdt_loss.TargetDistribution] = None,
-    reg_type: Option[String] = Some("L2")
-  ) extends Config
+    reg_type: Option[String] = Some("L2"))
+      extends Config
 
   case class ExperimentResult[DATA, T, In, ArchOut, Loss, IT, ITT](
     config: ExperimentConfig,
     train_data: DATA,
     test_data: DATA,
-    results: SupervisedModelRun[T, In, ArchOut, Loss, IT, ITT]
-  )
+    results: SupervisedModelRun[T, In, ArchOut, Loss, IT, ITT])
 
   case class Experiment[T, Run <: ModelRun[T], Conf <: Config](
     config: Conf,
-    results: Run
-  )
+    results: Run)
 
   type ModelRunTuning[T, L] = TunedModelRunT[
     T,
@@ -425,8 +426,7 @@ package object helios {
     tt_partition: ((DateTime, (Path, (Double, Double)))) => Boolean,
     resample: Boolean = false,
     longWavelength: Boolean = false
-  )(
-    results_id: String,
+  )(results_id: String,
     max_iterations: Int,
     tempdir: Path = home / "tmp",
     arch: Layer[Output[UByte], Output[Float]] = learn.cnn_goes_v1,
@@ -606,21 +606,31 @@ package object helios {
 
   def write_predictions[T: TF: IsFloatOrDouble](
     outputs: (Tensor[T], Tensor[T]),
-    summary_dir: Path, identifier: String): Unit = {
-    
-    val h = outputs._1.shape(1)
+    summary_dir: Path,
+    identifier: String
+  ): Unit = {
+
+    val h  = outputs._1.shape(1)
     val h2 = outputs._2.shape(1)
 
     write.over(
-      summary_dir/s"predictions_${identifier}.csv",
-      dtfutils.toDoubleSeq(outputs._1).grouped(h).map(_.mkString(",")).mkString("\n")
+      summary_dir / s"predictions_${identifier}.csv",
+      dtfutils
+        .toDoubleSeq(outputs._1)
+        .grouped(h)
+        .map(_.mkString(","))
+        .mkString("\n")
     )
-  
+
     write.over(
-      summary_dir/s"probabilities_${identifier}.csv",
-      dtfutils.toDoubleSeq(outputs._2).grouped(h2).map(_.mkString(",")).mkString("\n")
+      summary_dir / s"probabilities_${identifier}.csv",
+      dtfutils
+        .toDoubleSeq(outputs._2)
+        .grouped(h2)
+        .map(_.mkString(","))
+        .mkString("\n")
     )
-    
+
   }
 
   def write_processed_predictions(
@@ -670,15 +680,13 @@ package object helios {
     tt_partition: IMAGE_PATTERN => Boolean,
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
-    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe(
-      (i: Image) => i.argb.flatten.map(_.toByte)
-    ),
+    image_to_bytearr: DataPipe[Image, Array[Byte]] =
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     processed_image_size: (Int, Int) = (-1, -1),
     num_channels_image: Int = 4,
     image_history: Int = 0,
     image_history_downsampling: Int = 1
-  )(
-    results_id: String,
+  )(results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home / "tmp",
     arch: Layer[Output[UByte], (Output[Float], Output[Float])],
@@ -744,7 +752,9 @@ package object helios {
 
         override def forwardWithoutContext(
           input: Output[T]
-        )(implicit mode: Mode): Seq[Output[T]] = {
+        )(
+          implicit mode: Mode
+        ): Seq[Output[T]] = {
 
           tf.splitEvenly(input, image_history_downsampling + 1, -1)
         }
@@ -824,15 +834,13 @@ package object helios {
     tt_partition: PATTERN => Boolean,
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
-    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe(
-      (i: Image) => i.argb.flatten.map(_.toByte)
-    ),
+    image_to_bytearr: DataPipe[Image, Array[Byte]] =
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     processed_image_size: (Int, Int) = (-1, -1),
     num_channels_image: Int = 4,
     image_history: Int = 0,
     image_history_downsampling: Int = 1
-  )(
-    results_id: String,
+  )(results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home / "tmp",
     arch: Layer[Output[UByte], (Output[Double], Output[Double])],
@@ -844,14 +852,9 @@ package object helios {
     optimizer: Optimizer = tf.train.AdaDelta(0.001f),
     miniBatchSize: Int = 16,
     reuseExistingModel: Boolean = false
-  ): ExperimentResult[
-    HELIOS_OMNI_DATA, 
-    Double, 
-    Output[UByte],
-    (Output[Double], Output[Double]), 
-    Double, 
-    Tensor[UByte], 
-    (Tensor[Double], Tensor[Double])] = {
+  ): ExperimentResult[HELIOS_OMNI_DATA, Double, Output[UByte], (Output[Double], Output[Double]), Double, Tensor[
+    UByte
+  ], (Tensor[Double], Tensor[Double])] = {
 
     //The directories to write model parameters and summaries.
     val resDirName =
@@ -955,15 +958,9 @@ package object helios {
     val loss = lossFunc >> tf.learn.ScalarSummary("Loss", "ModelLoss")
 
     //Now create the model
-    val (model, estimator) = dtflearn.build_tf_model[
-      Output[UByte], 
-      Output[Double], 
-      (Output[Double], Output[Double]), 
-      (Output[Double], Output[Double]), Double, 
-      ((Output[Double], Output[Double]), 
-      (Output[UByte], Output[Double])), 
-      UINT8, Shape, 
-      FLOAT64, Shape](
+    val (model, estimator) = dtflearn.build_tf_model[Output[UByte], Output[
+      Double
+    ], (Output[Double], Output[Double]), (Output[Double], Output[Double]), Double, ((Output[Double], Output[Double]), (Output[UByte], Output[Double])), UINT8, Shape, FLOAT64, Shape](
       arch,
       input,
       trainInput,
@@ -1192,22 +1189,22 @@ package object helios {
     hyper_params: List[String],
     loss_func_generator: LG,
     fitness_func: DataPipe2[
-      (Output[Double], Output[Double]), Output[Double], 
+      (Output[Double], Output[Double]),
+      Output[Double],
       Output[Float]
     ],
     hyper_prior: Map[
-      String, 
+      String,
       ContinuousRVWithDistr[
-        Double, 
+        Double,
         ContinuousDistr[Double]
       ]
     ],
     results_id: String,
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
-    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe(
-      (i: Image) => i.argb.flatten.map(_.toByte)
-    ),
+    image_to_bytearr: DataPipe[Image, Array[Byte]] =
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     processed_image_size: (Int, Int) = (-1, -1),
     num_channels_image: Int = 4,
     image_history: Int = 0,
@@ -1315,10 +1312,10 @@ package object helios {
       miniBatchSize
     )
 
-    val concatPreds = 
-      unzip[Tensor[Double], Tensor[Double]] > 
+    val concatPreds =
+      unzip[Tensor[Double], Tensor[Double]] >
         (
-          dtfpipe.EagerConcatenate[Double]() * 
+          dtfpipe.EagerConcatenate[Double]() *
             dtfpipe.EagerConcatenate[Double]()
         )
 
@@ -1349,26 +1346,25 @@ package object helios {
             )
         )
 
-    
-        val checkpoints =
-        if (exists ! tf_summary_dir)
-          ls ! tf_summary_dir |? (_.isFile) |? (_.segments.last
-            .contains("model.ckpt-"))
-        else Seq()
-  
-      val checkpoint_max =
-        if (checkpoints.isEmpty) 0
-        else
-          (checkpoints | (_.segments.last
-            .split("-")
-            .last
-            .split('.')
-            .head
-            .toInt)).max
-  
-      val max_iterations =
-        if (iterations > checkpoint_max) iterations - checkpoint_max else 0
-    
+    val checkpoints =
+      if (exists ! tf_summary_dir)
+        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.last
+          .contains("model.ckpt-"))
+      else Seq()
+
+    val checkpoint_max =
+      if (checkpoints.isEmpty) 0
+      else
+        (checkpoints | (_.segments.last
+          .split("-")
+          .last
+          .split('.')
+          .head
+          .toInt)).max
+
+    val max_iterations =
+      if (iterations > checkpoint_max) iterations - checkpoint_max else 0
+
     val train_config_test =
       dtflearn.model
         .trainConfig[Output[UByte], Output[Double]](
@@ -1387,19 +1383,25 @@ package object helios {
           )
         )
 
-    val handle_ops = dtflearn.model.tf_data_ops[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])]()
+    val handle_ops = dtflearn.model
+      .tf_data_ops[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])]()
 
-    val tunableTFModel
-      : TunableTFModel[
-        (DateTime, (Tensor[UByte], Tensor[Double])), 
-        Output[UByte], 
-        Output[Double], 
-        (Output[Double], Output[Double]), Double, 
-        Tensor[UByte], UINT8, Shape, 
-        Tensor[Double], FLOAT64, Shape, 
-        (Tensor[Double], Tensor[Double]), 
-        (FLOAT64, FLOAT64), 
-        (Shape, Shape)] =
+    val tunableTFModel: TunableTFModel[
+      (DateTime, (Tensor[UByte], Tensor[Double])),
+      Output[UByte],
+      Output[Double],
+      (Output[Double], Output[Double]),
+      Double,
+      Tensor[UByte],
+      UINT8,
+      Shape,
+      Tensor[Double],
+      FLOAT64,
+      Shape,
+      (Tensor[Double], Tensor[Double]),
+      (FLOAT64, FLOAT64),
+      (Shape, Shape)
+    ] =
       dtflearn.tunable_tf_model(
         loss_func_generator,
         hyper_params,
@@ -1415,7 +1417,7 @@ package object helios {
             _ => scala.util.Random.nextDouble() <= 0.7
           )
         ),
-        inMemory = false, 
+        inMemory = false,
         tf_handle_ops = handle_ops
       )
 
@@ -1428,9 +1430,9 @@ package object helios {
           ).setMaxIterations(
             hyp_opt_iterations.getOrElse(5)
           )
-  
+
         case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
-  
+
         case "cma" =>
           new CMAES[tunableTFModel.type](
             tunableTFModel,
@@ -1438,14 +1440,14 @@ package object helios {
             learning_rate = 0.8,
             hyp_mapping
           ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
-  
+
         case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
       }
-  
+
       gs.setPrior(hyper_prior)
-  
+
       gs.setNumSamples(num_hyp_samples)
-  
+
       println(
         "--------------------------------------------------------------------"
       )
@@ -1453,9 +1455,9 @@ package object helios {
       println(
         "--------------------------------------------------------------------"
       )
-  
+
       val (_, best_config) = gs.optimize(hyper_prior.mapValues(_.draw))
-  
+
       println(
         "--------------------------------------------------------------------"
       )
@@ -1465,47 +1467,51 @@ package object helios {
       println(
         "--------------------------------------------------------------------"
       )
-  
+
       println("Training final model based on chosen configuration")
-  
+
       write.over(
         tf_summary_dir / "state.csv",
         best_config.keys.mkString(start = "", sep = ",", end = "\n") +
           best_config.values.mkString(start = "", sep = ",", end = "")
       )
-      
+
       best_config
     }
 
-    val config: Map[String, Double] = if(exists! tf_summary_dir/"state.csv") {
-      try {
-        val best_config: Map[String, Double] = {
-          val lines = read.lines! tf_summary_dir/"state.csv"
-          val keys = lines.head.split(',')
-          val values = lines.last.split(',').map(_.toDouble)
-          keys.zip(values).toMap
+    val config: Map[String, Double] =
+      if (exists ! tf_summary_dir / "state.csv") {
+        try {
+          val best_config: Map[String, Double] = {
+            val lines  = read.lines ! tf_summary_dir / "state.csv"
+            val keys   = lines.head.split(',')
+            val values = lines.last.split(',').map(_.toDouble)
+            keys.zip(values).toMap
+          }
+
+          println("\nReading from existing best state\n")
+          best_config
+        } catch {
+          case _: Exception => run_tuning()
         }
-
-        println("\nReading from existing best state\n")
-        best_config
-      } catch {
-        case _: Exception => run_tuning()
+      } else {
+        run_tuning()
       }
-    } else {
-      run_tuning()
-    }
-
 
     val best_model = tunableTFModel.train_model(config, Some(train_config_test))
 
-    val extract_features = tup2_2[DateTime, (Tensor[UByte], Tensor[Double])] > tup2_1[Tensor[UByte], Tensor[Double]]
+    val extract_features = tup2_2[DateTime, (Tensor[UByte], Tensor[Double])] > tup2_1[
+      Tensor[UByte],
+      Tensor[Double]
+    ]
 
     val model_predictions_test
       : Either[(Tensor[Double], Tensor[Double]), DataSet[
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
       norm_tf_data.test_dataset.map(extract_features),
-      train_config_test.data_processing, handle_ops.copy(concatOpO = Some(concatPreds))
+      train_config_test.data_processing,
+      handle_ops.copy(concatOpO = Some(concatPreds))
     )
 
     val model_predictions_train
@@ -1513,7 +1519,8 @@ package object helios {
         (Tensor[Double], Tensor[Double])
       ]] = best_model.infer_batch(
       norm_tf_data.training_dataset.map(extract_features),
-      train_config_test.data_processing, handle_ops.copy(concatOpO = Some(concatPreds))
+      train_config_test.data_processing,
+      handle_ops.copy(concatOpO = Some(concatPreds))
     )
 
     val test_predictions = model_predictions_test match {
@@ -1544,7 +1551,10 @@ package object helios {
       Some(scalers._2)
     )
 
-    val extractLabels        = tup2_2[DateTime, (Tensor[UByte], Tensor[Double])] > tup2_2[Tensor[UByte], Tensor[Double]]
+    val extractLabels = tup2_2[DateTime, (Tensor[UByte], Tensor[Double])] > tup2_2[
+      Tensor[UByte],
+      Tensor[Double]
+    ]
     val extractAndUnScLabels = extractLabels > scalers._2.i
     val convToSeq = DataPipe(
       (t: Tensor[Double]) => dtfutils.toDoubleSeq(t).toSeq
@@ -1608,7 +1618,6 @@ package object helios {
 
     val time_stamp = DateTime.now().toString("YYYY-MM-dd-HH-mm")
 
-
     val partitioned_data_collection = dataset.partition(DataPipe(tt_partition))
 
     //Write the train and test collections
@@ -1627,17 +1636,16 @@ package object helios {
     //Write model outputs for test data
     helios.write_predictions[Double](
       (scalers._2.i(test_predictions._1), test_predictions._2),
-      tf_summary_dir, 
+      tf_summary_dir,
       s"test_${time_stamp}"
     )
 
     //Write model outputs for training data
     helios.write_predictions[Double](
       (scalers._2.i(train_predictions._1), train_predictions._2),
-      tf_summary_dir, 
+      tf_summary_dir,
       s"train_${time_stamp}"
     )
-
 
     //Write the predictions for test data
     write_processed_predictions(
@@ -1689,15 +1697,13 @@ package object helios {
     tt_partition: PATTERN_EXT => Boolean,
     resample: Boolean = false,
     preprocess_image: DataPipe[Image, Image] = identityPipe[Image],
-    image_to_bytearr: DataPipe[Image, Array[Byte]] = DataPipe(
-      (i: Image) => i.argb.flatten.map(_.toByte)
-    ),
+    image_to_bytearr: DataPipe[Image, Array[Byte]] =
+      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
     processed_image_size: (Int, Int) = (-1, -1),
     num_channels_image: Int = 4,
     image_history: Int = 0,
     image_history_downsampling: Int = 1
-  )(
-    results_id: String,
+  )(results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home / "tmp",
     arch: Layer[
@@ -1981,8 +1987,7 @@ package object helios {
     num_channels_image: Int = 4,
     image_history: Int = 0,
     image_history_downsampling: Int = 1
-  )(
-    results_id: String,
+  )(results_id: String,
     stop_criteria: StopCriteria,
     tempdir: Path = home / "tmp",
     arch: Layer[Output[UByte], (Output[Double], Output[Double])],
@@ -2277,8 +2282,7 @@ package object helios {
     image_pre_process: Map[SOHO, DataPipe[Image, Image]],
     images_to_bytes: DataPipe[Seq[Image], Array[Byte]],
     num_channels_image: Int = 4
-  )(
-    results_id: String,
+  )(results_id: String,
     stop_criteria: StopCriteria = dtflearn.max_iter_stop(5000),
     tempdir: Path = home / "tmp",
     arch: Layer[
