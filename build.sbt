@@ -109,7 +109,8 @@ lazy val PlasmaML = (project in file(".")).enablePlugins(JavaAppPackaging, Build
     // -J params will be added as jvm parameters
     s"-J-Xmx$heapSize",
     "-J-Xms64m",
-    "-XX:HeapBaseMinAddress=32G"
+    "-XX:HeapBaseMinAddress=32G",
+    "-XX:+UseG1GC"
   ),
   dataDirectory := new File("data/"),
   initialCommands in console :="""io.github.mandar2812.PlasmaML.PlasmaML.main(Array())""",
