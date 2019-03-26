@@ -42,7 +42,8 @@ def apply[T <: SolarImagesSource](
   regularization_type: String                           = "L2",
   hyper_optimizer: String                               = "gs",
   num_hyp_samples: Int                                  = 20,
-  hyp_opt_iterations: Option[Int]                       = Some(5))
+  hyp_opt_iterations: Option[Int]                       = Some(5),
+  existing_exp: Option[Path]                            = None)
 : helios.Experiment[Double, helios.ModelRunTuning[Double, Double], helios.ImageExpConfig] = {
 
   //Data with MDI images
@@ -260,7 +261,8 @@ def apply[T <: SolarImagesSource](
     hyper_optimizer = hyper_optimizer,
     hyp_mapping = hyp_mapping,
     hyp_opt_iterations = hyp_opt_iterations,
-    num_hyp_samples = num_hyp_samples)
+    num_hyp_samples = num_hyp_samples, 
+    existing_exp = existing_exp)
 
   experiment.copy(config = experiment.config.copy(image_sources = Seq(image_source)))
 }

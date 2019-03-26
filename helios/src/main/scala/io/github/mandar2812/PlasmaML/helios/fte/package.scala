@@ -51,7 +51,9 @@ package object fte {
 
       override def forwardWithoutContext(
         input: Output[Double]
-      )(implicit mode: Mode) = {
+      )(
+        implicit mode: Mode
+      ) = {
 
         val aa = tf.variable[Double]("aa", Shape(), RandomNormalInitializer())
         val bb = tf.variable[Double]("bb", Shape(), RandomNormalInitializer())
@@ -104,11 +106,14 @@ package object fte {
         data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
   )
 
-  case class FTEPattern(
-    longitude: Double,
-    latitude: Double,
-    fte: Option[Double]
-  )
+  case class FTEPattern(data: (Double, Double, Option[Double])) extends AnyVal {
+
+    def _1: Double         = data._1
+    def _2: Double         = data._2
+    def _3: Option[Double] = data._3
+  }
+
+  //type FTEPattern = FTEPattern
 
   val process_fte_file = {
     fte_file >> (
@@ -149,7 +154,8 @@ package object fte {
     * */
   def get_fte_for_rotation(
     data_path: Path
-  )(cr: Int): Iterable[(Int, Iterable[FTEPattern])] =
+  )(cr: Int
+  ): Iterable[(Int, Iterable[FTEPattern])] =
     try {
       Iterable((cr, process_fte_file(data_path)(cr)))
     } catch {
@@ -169,7 +175,7 @@ package object fte {
         p =>
           (
             rotation.end.toInstant
-              .minus((time_jump * p.longitude).toLong)
+              .minus((time_jump * p._1).toLong)
               .toDateTime,
             p
           )
@@ -205,8 +211,7 @@ package object fte {
     log_flag: Boolean,
     start: DateTime,
     end: DateTime
-  )(
-    deltaTFTE: Int,
+  )(deltaTFTE: Int,
     fte_step: Int,
     latitude_limit: Double,
     conv_flag: Boolean
@@ -219,10 +224,10 @@ package object fte {
       carrington_rotation_table.filter(_._2.contains(end)).data.head._1
 
     val clamp_fte: FTEPattern => FTEPattern = (p: FTEPattern) =>
-      p.fte match {
+      p._3 match {
         case Some(f) =>
           if (math.abs(f) <= 1000d) p
-          else p.copy(fte = Some(1000d * math.signum(f)))
+          else FTEPattern(p._1, p._2, Some(1000d * math.signum(f)))
         case None => p
       }
 
@@ -249,16 +254,19 @@ package object fte {
       (pattern: (DateTime, Seq[FTEPattern])) =>
         (
           pattern._1,
-          pattern._2.filter(ftep => math.abs(ftep.latitude) <= latitude_limit)
+          pattern._2.filter(ftep => math.abs(ftep._2) <= latitude_limit)
         )
     )
 
     val load_slice_to_tensor = DataPipe[Seq[FTEPattern], Tensor[Double]](
       (s: Seq[FTEPattern]) =>
-        Tensor[Double](s.map(_.fte.get).map(log_transformation)).reshape(Shape(s.length))
+        Tensor[Double](s.map(_._3.get).map(log_transformation))
+          .reshape(Shape(s.length))
     )
 
-    val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[(DateTime, Seq[FTEPattern])]](
+    val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
+      (DateTime, Seq[FTEPattern])
+    ]](
       _.toSeq.sortBy(_._1)
     )
 
@@ -266,8 +274,10 @@ package object fte {
       fte_data
         .flatMap(process_rotation)
         .transform(
-          DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[(DateTime, Seq[FTEPattern])]](
-            _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_.latitude)))
+          DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[
+            (DateTime, Seq[FTEPattern])
+          ]](
+            _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
           )
         )
         .filter(DataPipe(_._2.length == 180))
@@ -328,7 +338,9 @@ package object fte {
     processed_fte_data
       .concatenate(interpolated_fte)
       .transform(
-        DataPipe[Iterable[(DateTime, Tensor[Double])], Iterable[(DateTime, Tensor[Double])]](_.toSeq.sortBy(_._1).toIterable)
+        DataPipe[Iterable[(DateTime, Tensor[Double])], Iterable[
+          (DateTime, Tensor[Double])
+        ]](_.toSeq.sortBy(_._1).toIterable)
       )
       .transform(generate_history)
       .to_zip(identityPipe[(DateTime, Tensor[Double])])
@@ -348,8 +360,10 @@ package object fte {
     * @return A [[ZipDataSet]] with time indexed tensors containing
     *         sliding time histories of the solar wind.
     * */
-  def load_solar_wind_data(start: DateTime, end: DateTime)(
-    deltaT: (Int, Int),
+  def load_solar_wind_data(
+    start: DateTime,
+    end: DateTime
+  )(deltaT: (Int, Int),
     log_flag: Boolean,
     quantity: Int = OMNIData.Quantities.V_SW
   ): ZipDataSet[DateTime, Tensor[Double]] = {
@@ -402,11 +416,25 @@ package object fte {
       type P = (DateTime, (Tensor[T], Tensor[T]))
 
       val concat_features = tfi.stack(
-        dataset.training_dataset.map(tup2_2[DateTime, (Tensor[T], Tensor[T])] > tup2_1[Tensor[T], Tensor[T]]).data.toSeq
+        dataset.training_dataset
+          .map(
+            tup2_2[DateTime, (Tensor[T], Tensor[T])] > tup2_1[Tensor[T], Tensor[
+              T
+            ]]
+          )
+          .data
+          .toSeq
       )
 
       val concat_targets = tfi.stack(
-        dataset.training_dataset.map(tup2_2[DateTime, (Tensor[T], Tensor[T])] > tup2_2[Tensor[T], Tensor[T]]).data.toSeq
+        dataset.training_dataset
+          .map(
+            tup2_2[DateTime, (Tensor[T], Tensor[T])] > tup2_2[Tensor[T], Tensor[
+              T
+            ]]
+          )
+          .data
+          .toSeq
       )
 
       val n = concat_features.shape(0)
@@ -511,8 +539,7 @@ package object fte {
       deltaTFTE: Int,
       fteStep: Int,
       latitude_limit: Double,
-      log_scale_fte: Boolean
-    )
+      log_scale_fte: Boolean)
 
     case class OMNIConfig(deltaT: (Int, Int), log_flag: Boolean)
 
@@ -521,8 +548,8 @@ package object fte {
       omni_config: OMNIConfig,
       multi_output: Boolean = true,
       probabilistic_time_lags: Boolean = true,
-      timelag_prediction: String = "mode"
-    ) extends helios.Config
+      timelag_prediction: String = "mode")
+        extends helios.Config
 
     var config = Config(
       FTEConfig((0, 0), 0, 1, 90d, log_scale_fte = false),
@@ -981,7 +1008,8 @@ package object fte {
     conv_flag: Boolean = false,
     fte_data_path: Path = home / 'Downloads / 'fte,
     summary_top_dir: Path = home / 'tmp,
-    hyp_opt_iterations: Option[Int] = Some(5)
+    hyp_opt_iterations: Option[Int] = Some(5),
+    existing_exp: Option[Path] = None
   ): helios.Experiment[Double, ModelRunTuning, FTExperiment.Config] = {
 
     val mo_flag: Boolean       = true
@@ -996,7 +1024,7 @@ package object fte {
       else sum_dir_prefix + "_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
     }
 
-    val tf_summary_dir = summary_top_dir / summary_dir_index
+    val tf_summary_dir = existing_exp.getOrElse(summary_top_dir / summary_dir_index)
 
     val (test_start, test_end) = (
       new DateTime(test_year, 1, 1, 0, 0),
@@ -1050,10 +1078,12 @@ package object fte {
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios
       .concatOperation[Double](ax = 0))
 
-    val tf_handle_ops_test = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])](
-        concatOpI = Some(stackOperation[Double](ax = 0)),
-        concatOpT = Some(stackOperation[Double](ax = 0)),
-        concatOpO = Some(concatPreds)
+    val tf_handle_ops_test = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[
+      Double
+    ], (Tensor[Double], Tensor[Double])](
+      concatOpI = Some(stackOperation[Double](ax = 0)),
+      concatOpT = Some(stackOperation[Double](ax = 0)),
+      concatOpO = Some(concatPreds)
     )
 
     val tf_data_ops: dtflearn.model.Ops[Output[Double], Output[Double]] =
@@ -1066,7 +1096,8 @@ package object fte {
     val train_config_tuning: MetaPipe[
       Path,
       dtflearn.tunable_tf_model.HyperParams,
-      dtflearn.model.Config[Output[Double], Output[Double]]] =
+      dtflearn.model.Config[Output[Double], Output[Double]]
+    ] =
       dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
         DataPipe(
           (p: Path) =>
@@ -1086,20 +1117,40 @@ package object fte {
             )
         )
 
-    val train_config_test = dtflearn.model.trainConfig[Output[Double], Output[Double]](
-      summaryDir = tf_summary_dir,
-      tf_data_ops,
-      optimizer,
-      stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
-      trainHooks = Some(
-        dtflearn.model._train_hooks(
-          tf_summary_dir,
-          iterations / 3,
-          iterations / 3,
-          iterations / 2
+    val checkpoints =
+      if (exists ! tf_summary_dir)
+        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.last
+          .contains("model.ckpt-"))
+      else Seq()
+
+    val checkpoint_max =
+      if (checkpoints.isEmpty) 0
+      else
+        (checkpoints | (_.segments.last
+          .split("-")
+          .last
+          .split('.')
+          .head
+          .toInt)).max
+
+    val max_iterations =
+      if (iterations > checkpoint_max) iterations - checkpoint_max else 0
+
+    val train_config_test =
+      dtflearn.model.trainConfig[Output[Double], Output[Double]](
+        summaryDir = tf_summary_dir,
+        tf_data_ops,
+        optimizer,
+        stopCriteria = dtflearn.rel_loss_change_stop(0.005, max_iterations),
+        trainHooks = Some(
+          dtflearn.model._train_hooks(
+            tf_summary_dir,
+            max_iterations / 3,
+            max_iterations / 3,
+            max_iterations / 2
+          )
         )
       )
-    )
 
     val tunableTFModel: TunableTFModel[
       (DateTime, (Tensor[Double], Tensor[Double])),
@@ -1132,50 +1183,83 @@ package object fte {
             _ => scala.util.Random.nextGaussian() <= 0.7
           )
         ),
-        inMemory = false, 
-        tf_handle_ops = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[Double], (Tensor[Double], Tensor[Double])]()
+        inMemory = false,
+        tf_handle_ops = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[
+          Double
+        ], (Tensor[Double], Tensor[Double])]()
       )
 
-    val gs = hyper_optimizer match {
-      case "csa" =>
-        new CoupledSimulatedAnnealing[tunableTFModel.type](
-          tunableTFModel,
-          hyp_mapping
-        ).setMaxIterations(
-          hyp_opt_iterations.getOrElse(5)
-        )
 
-      case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
+    val run_tuning = () => {
+      val gs = hyper_optimizer match {
+        case "csa" =>
+          new CoupledSimulatedAnnealing[tunableTFModel.type](
+            tunableTFModel,
+            hyp_mapping
+          ).setMaxIterations(
+            hyp_opt_iterations.getOrElse(5)
+          )
+  
+        case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
+  
+        case "cma" =>
+          new CMAES[tunableTFModel.type](
+            tunableTFModel,
+            hyper_params,
+            learning_rate = 0.8,
+            hyp_mapping
+          ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+  
+        case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+      }
+  
+      gs.setPrior(hyper_prior)
+  
+      gs.setNumSamples(num_samples)
+  
+      println(
+        "--------------------------------------------------------------------"
+      )
+      println("Initiating model tuning")
+      println(
+        "--------------------------------------------------------------------"
+      )
+  
+      val (_, best_config) = gs.optimize(hyper_prior.mapValues(_.draw))
+  
+      println(
+        "--------------------------------------------------------------------"
+      )
+      println("\nModel tuning complete")
 
-      case "cma" =>
-        new CMAES[tunableTFModel.type](
-          tunableTFModel,
-          hyper_params,
-          learning_rate = 0.8,
-          hyp_mapping
-        ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+      write.over(
+      tf_summary_dir / "state.csv",
+      best_config.keys.mkString(start = "", sep = ",", end = "\n") +
+        best_config.values.mkString(start = "", sep = ",", end = "")
+      )
 
-      case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+      best_config
     }
 
-    gs.setPrior(hyper_prior)
+    val config: Map[String, Double] = if(exists! tf_summary_dir/"state.csv") {
+      try {
+        val best_config: Map[String, Double] = {
+          val lines = read.lines! tf_summary_dir/"state.csv"
+          val keys = lines.head.split(',')
+          val values = lines.last.split(',').map(_.toDouble)
+          keys.zip(values).toMap
+        }
 
-    gs.setNumSamples(num_samples)
+        println("\nReading from existing best state\n")
+        best_config
+      } catch {
+        case _: Exception => run_tuning()
+      }
+    } else {
+      run_tuning()
+    }
 
-    println(
-      "--------------------------------------------------------------------"
-    )
-    println("Initiating model tuning")
-    println(
-      "--------------------------------------------------------------------"
-    )
 
-    val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
-
-    println(
-      "--------------------------------------------------------------------"
-    )
-    println("\nModel tuning complete")
     println("Chosen configuration:")
     pprint.pprintln(config)
     println(
@@ -1184,11 +1268,7 @@ package object fte {
 
     println("Training final model based on chosen configuration")
 
-    write(
-      tf_summary_dir / "state.csv",
-      config.keys.mkString(start = "", sep = ",", end = "\n") +
-        config.values.mkString(start = "", sep = ",", end = "")
-    )
+    
 
     val best_model = tunableTFModel.train_model(config, Some(train_config_test))
 
@@ -1198,7 +1278,8 @@ package object fte {
 
     val model_predictions_test = best_model.infer_batch(
       scaled_data.test_dataset.map(extract_tensors > extract_features),
-      train_config_test.data_processing, tf_handle_ops_test
+      train_config_test.data_processing,
+      tf_handle_ops_test
     )
 
     val predictions = model_predictions_test match {
@@ -1224,7 +1305,7 @@ package object fte {
     val unscaled_preds_test = scalers._2.i(predictions._1)
 
     val pred_targets: Tensor[Double] = if (mo_flag) {
-      
+
       val repeated_times =
         tfi.stack(Seq.fill(causal_window)(pred_time_lags_test.floor), axis = -1)
 
@@ -1278,21 +1359,19 @@ package object fte {
       None,
       Some((final_predictions, pred_time_lags_test))
     )
-    
 
     helios.write_predictions[Double](
       (unscaled_preds_test, predictions._2),
-      tf_summary_dir, 
-      "test_"+ dt.toString("YYYY-MM-dd-HH-mm")
+      tf_summary_dir,
+      "test_" + dt.toString("YYYY-MM-dd-HH-mm")
     )
-
-    
 
     helios.write_processed_predictions(
       dtfutils.toDoubleSeq(final_predictions).toSeq,
       final_targets,
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
-      tf_summary_dir / ("scatter_test-" + dt.toString("YYYY-MM-dd-HH-mm") + ".csv")
+      tf_summary_dir / ("scatter_test-" + dt
+        .toString("YYYY-MM-dd-HH-mm") + ".csv")
     )
 
     helios.Experiment(
@@ -1548,13 +1627,11 @@ package object fte {
     implicit val ev = concatTensorSplits[Double]
 
     val predictions: Tensor[Double] =
-      dtfutils.buffered_preds[
-        Output[Double], Output[Double], 
-        Output[Double], Output[Double], Double, 
-        Tensor[Double], FLOAT64, Shape, 
-        Tensor[Double], FLOAT64, Shape, 
-        Tensor[Double], Tensor[Double], 
-        Tensor[Double]](
+      dtfutils.buffered_preds[Output[Double], Output[Double], Output[Double], Output[
+        Double
+      ], Double, Tensor[Double], FLOAT64, Shape, Tensor[Double], FLOAT64, Shape, Tensor[
+        Double
+      ], Tensor[Double], Tensor[Double]](
         estimator,
         tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._1), axis = 0),
         500,

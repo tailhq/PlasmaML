@@ -1220,13 +1220,14 @@ package object helios {
     num_hyp_samples: Int = 20,
     hyper_optimizer: String = "gs",
     hyp_opt_iterations: Option[Int] = Some(5),
-    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
+    existing_exp: Option[Path] = None
   ): Experiment[Double, ModelRunTuning[Double, Double], ImageExpConfig] = {
 
     //The directories to write model parameters and summaries.
     val resDirName = "helios_omni_" + results_id
 
-    val tf_summary_dir = summaries_top_dir / resDirName
+    val tf_summary_dir = existing_exp.getOrElse(summaries_top_dir / resDirName)
 
     val num_outputs = dataset.data.head._2._2.length
 
@@ -1348,6 +1349,26 @@ package object helios {
             )
         )
 
+    
+        val checkpoints =
+        if (exists ! tf_summary_dir)
+          ls ! tf_summary_dir |? (_.isFile) |? (_.segments.last
+            .contains("model.ckpt-"))
+        else Seq()
+  
+      val checkpoint_max =
+        if (checkpoints.isEmpty) 0
+        else
+          (checkpoints | (_.segments.last
+            .split("-")
+            .last
+            .split('.')
+            .head
+            .toInt)).max
+  
+      val max_iterations =
+        if (iterations > checkpoint_max) iterations - checkpoint_max else 0
+    
     val train_config_test =
       dtflearn.model
         .trainConfig[Output[UByte], Output[Double]](
@@ -1358,7 +1379,7 @@ package object helios {
           trainHooks = Some(
             timelag.utils.get_train_hooks(
               tf_summary_dir,
-              iterations,
+              max_iterations,
               epochFlag = false,
               data_size,
               miniBatchSize
@@ -1398,59 +1419,82 @@ package object helios {
         tf_handle_ops = handle_ops
       )
 
-    val gs = hyper_optimizer match {
-      case "csa" =>
-        new CoupledSimulatedAnnealing[tunableTFModel.type](
-          tunableTFModel,
-          hyp_mapping
-        ).setMaxIterations(
-          hyp_opt_iterations.getOrElse(5)
-        )
-
-      case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
-
-      case "cma" =>
-        new CMAES[tunableTFModel.type](
-          tunableTFModel,
-          hyper_params,
-          learning_rate = 0.8,
-          hyp_mapping
-        ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
-
-      case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+    val run_tuning = () => {
+      val gs = hyper_optimizer match {
+        case "csa" =>
+          new CoupledSimulatedAnnealing[tunableTFModel.type](
+            tunableTFModel,
+            hyp_mapping
+          ).setMaxIterations(
+            hyp_opt_iterations.getOrElse(5)
+          )
+  
+        case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
+  
+        case "cma" =>
+          new CMAES[tunableTFModel.type](
+            tunableTFModel,
+            hyper_params,
+            learning_rate = 0.8,
+            hyp_mapping
+          ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+  
+        case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+      }
+  
+      gs.setPrior(hyper_prior)
+  
+      gs.setNumSamples(num_hyp_samples)
+  
+      println(
+        "--------------------------------------------------------------------"
+      )
+      println("Initiating model tuning")
+      println(
+        "--------------------------------------------------------------------"
+      )
+  
+      val (_, best_config) = gs.optimize(hyper_prior.mapValues(_.draw))
+  
+      println(
+        "--------------------------------------------------------------------"
+      )
+      println("\nModel tuning complete")
+      println("Chosen configuration:")
+      pprint.pprintln(best_config)
+      println(
+        "--------------------------------------------------------------------"
+      )
+  
+      println("Training final model based on chosen configuration")
+  
+      write.over(
+        tf_summary_dir / "state.csv",
+        best_config.keys.mkString(start = "", sep = ",", end = "\n") +
+          best_config.values.mkString(start = "", sep = ",", end = "")
+      )
+      
+      best_config
     }
 
-    gs.setPrior(hyper_prior)
+    val config: Map[String, Double] = if(exists! tf_summary_dir/"state.csv") {
+      try {
+        val best_config: Map[String, Double] = {
+          val lines = read.lines! tf_summary_dir/"state.csv"
+          val keys = lines.head.split(',')
+          val values = lines.last.split(',').map(_.toDouble)
+          keys.zip(values).toMap
+        }
 
-    gs.setNumSamples(num_hyp_samples)
+        println("\nReading from existing best state\n")
+        best_config
+      } catch {
+        case _: Exception => run_tuning()
+      }
+    } else {
+      run_tuning()
+    }
 
-    println(
-      "--------------------------------------------------------------------"
-    )
-    println("Initiating model tuning")
-    println(
-      "--------------------------------------------------------------------"
-    )
-
-    val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
-
-    println(
-      "--------------------------------------------------------------------"
-    )
-    println("\nModel tuning complete")
-    println("Chosen configuration:")
-    pprint.pprintln(config)
-    println(
-      "--------------------------------------------------------------------"
-    )
-
-    println("Training final model based on chosen configuration")
-
-    write(
-      tf_summary_dir / "state.csv",
-      config.keys.mkString(start = "", sep = ",", end = "\n") +
-        config.values.mkString(start = "", sep = ",", end = "")
-    )
 
     val best_model = tunableTFModel.train_model(config, Some(train_config_test))
 
@@ -2409,115 +2453,5 @@ package object helios {
       norm_tf_data
     )
   }
-
-  /*def run_experiment_omni_dynamic_time_scales(
-    collated_data: Stream[PATTERN],
-    tt_partition: PATTERN => Boolean,
-    resample: Boolean = false)(
-    results_id: String, max_iterations: Int,
-    tempdir: Path = home/"tmp",
-    arch: Layer[Output, (Output, Output)]) = {
-
-    val resDirName = "helios_omni_"+results_id
-
-    val tf_summary_dir = tempdir/resDirName
-
-    val checkpoints =
-      if (exists! tf_summary_dir) ls! tf_summary_dir |? (_.isFile) |? (_.segments.last.contains("model.ckpt-"))
-      else Seq()
-
-    val checkpoint_max =
-      if(checkpoints.isEmpty) 0
-      else (checkpoints | (_.segments.last.split("-").last.split('.').head.toInt)).max
-
-    val iterations = if(max_iterations > checkpoint_max) max_iterations - checkpoint_max else 0
-
-
-    /*
- * After data has been joined/collated,
- * start loading it into tensors
- *
- * */
-
-    val dataSet = helios.data.create_helios_data_set(
-      collated_data,
-      tt_partition,
-      image_process = DataPipe((i: Image) => i.copy.scale(1.0/math.pow(2.0, 2.0))),
-      DataPipe((i: Image) => i.argb.flatten.map(_.toByte)),
-      4, resample)
-
-    val trainImages = tf.data.datasetFromTensorSlices(dataSet.trainData)
-
-    val train_labels = dataSet.trainLabels
-
-    val labels_mean = dataSet.trainLabels.mean(axes = Tensor(0))
-
-    val labels_stddev = dataSet.trainLabels.subtract(labels_mean).square.mean(axes = Tensor(0)).sqrt
-
-    val norm_train_labels = train_labels.subtract(labels_mean).divide(labels_stddev)
-
-    val trainLabels = tf.data.datasetFromTensorSlices(norm_train_labels)
-
-    val trainData =
-      trainImages.zip(trainLabels)
-        .repeat()
-        .shuffle(10000)
-        .batch(64)
-        .prefetch(10)
-
-    /*
- * Start building tensorflow network/graph
- * */
-    println("Building the regression model.")
-    val input = tf.learn.Input(
-      UINT8,
-      Shape(
-        -1,
-        dataSet.trainData.shape(1),
-        dataSet.trainData.shape(2),
-        dataSet.trainData.shape(3))
-    )
-
-    val num_outputs = collated_data.head._2._2.length
-
-    val trainInput = tf.learn.Input(FLOAT64, Shape(-1, num_outputs))
-
-    val trainingInputLayer = tf.learn.Cast("TrainInput", INT64)
-
-    val lossFunc = DynamicRBFSWLoss("Loss/DynamicRBFWeightedL2", num_outputs)
-
-    val loss = lossFunc >>
-      tf.learn.Mean("Loss/Mean") >>
-      tf.learn.ScalarSummary("Loss", "ModelLoss")
-
-    val optimizer = tf.train.AdaGrad(0.002)
-
-    val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
-
-    //Now create the model
-    val (model, estimator) = dtflearn.build_tf_model(
-      arch, input, trainInput, trainingInputLayer,
-      loss, optimizer, summariesDir,
-      dtflearn.max_iter_stop(iterations))(
-      trainData)
-
-    val predictions: (Tensor, Tensor) = estimator.infer(() => dataSet.testData)
-
-    val pred_targets = predictions._1
-      .multiply(labels_stddev(0))
-      .add(labels_mean(0))
-
-    val pred_time_lags = predictions._2(::, 1)
-
-    val pred_time_scales = predictions._2(::, 2)
-
-    val metrics = new HeliosOmniTSMetrics(
-      dtf.stack(Seq(pred_targets, pred_time_lags), axis = 1), dataSet.testLabels,
-      dataSet.testLabels.shape(1),
-      pred_time_scales
-    )
-
-    (model, estimator, metrics, tf_summary_dir, labels_mean, labels_stddev, collated_data)
-  }*/
 
 }

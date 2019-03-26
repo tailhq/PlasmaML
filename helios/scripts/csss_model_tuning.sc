@@ -45,7 +45,8 @@ def apply(
     optimization_algo: tf.train.Optimizer = tf.train.AdaDelta(0.01f),
     summary_dir: Path = home / 'tmp,
     hyp_opt_iterations: Option[Int] = Some(5),
-    reg_type: String = "L2"
+    reg_type: String = "L2",
+    existing_exp: Option[Path] = None
 ): helios.Experiment[Double, fte.ModelRunTuning, fte.FTExperiment.Config] = {
 
   val num_pred_dims = timelag.utils.get_num_output_dims(
@@ -255,6 +256,7 @@ def apply(
     deltaT = causal_window,
     divergence = divergence_term,
     summary_top_dir = summary_dir,
-    hyp_opt_iterations = hyp_opt_iterations
+    hyp_opt_iterations = hyp_opt_iterations,
+    existing_exp = existing_exp
   )
 }
