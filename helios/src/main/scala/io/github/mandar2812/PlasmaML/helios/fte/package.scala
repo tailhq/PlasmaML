@@ -259,9 +259,9 @@ package object fte {
     )
 
     val load_slice_to_tensor = DataPipe[Seq[FTEPattern], Tensor[Double]](
-      (s: Seq[FTEPattern]) =>
-        Tensor[Double](s.map(_._3.get).map(log_transformation))
-          .reshape(Shape(s.length))
+      (s: Seq[FTEPattern]) => dtf.tensor_f64(s.length)(s.map(_._3.get).map(log_transformation):_*)
+        //Tensor[Double](s.map(_._3.get).map(log_transformation))
+          //.reshape(Shape(s.length))
     )
 
     val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
@@ -1145,9 +1145,9 @@ package object fte {
         trainHooks = Some(
           dtflearn.model._train_hooks(
             tf_summary_dir,
-            max_iterations / 3,
-            max_iterations / 3,
-            max_iterations / 2
+            math.max(max_iterations / 3, 1).toInt,
+            math.max(max_iterations / 3, 1).toInt,
+            math.max(max_iterations / 2, 1).toInt
           )
         )
       )
