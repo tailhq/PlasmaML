@@ -113,7 +113,7 @@ object OMNILoader {
     * reads an OMNI file cleans it and extracts the columns specified
     * by targetColumn and exogenousInputs.
     * */
-  def omniFileToStream(targetColumn: Int, exogenousInputs: Seq[Int]): DataPipe[String, Stream[String]] =
+  def omniFileToStream(targetColumn: Int, exogenousInputs: Seq[Int]): DataPipe[String, Iterable[String]] =
     fileToStream >
     replaceWhiteSpaces >
     extractTrainingFeatures(
@@ -221,7 +221,7 @@ object OMNILoader {
     * }}}
     * */
   def omniVarToSlidingTS(deltaT: Int, time_window: Int)(targetColumn: Int = OMNIData.Quantities.V_SW) =
-    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq()) > DataPipe[Stream[String], Iterable[String]](_.toIterable)) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
       processWithDateTime >
       IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_time_window(deltaT, time_window)
@@ -246,7 +246,7 @@ object OMNILoader {
     past: Int, deltaT: Int,
     time_window: Int)(
     targetColumn: Int) =
-    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq()) > DataPipe[Stream[String], Iterable[String]](_.toIterable)) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
       processWithDateTime >
       IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
       forward_and_backward_time_window(past, (deltaT, time_window))
@@ -271,7 +271,7 @@ object OMNILoader {
   def omniDataToSlidingTS(deltaT: Int, time_window: Int)(
     targetColumn: Int = OMNIData.Quantities.V_SW,
     exogenous_inputs: Seq[Int] = Seq()) =
-    StreamFlatMapPipe(omniFileToStream(targetColumn, exogenous_inputs)) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, exogenous_inputs)) >
       processWithDateTime >
       mv_forward_time_window(deltaT, time_window)
 

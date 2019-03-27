@@ -108,7 +108,7 @@ object VanAllenDataFlows {
     * leading and trailing characters and return a parsable json string
     * */
   def stripFileHeader(keepHeader: Boolean = false) =
-    DataPipe((stream: Stream[String]) => {
+    DataPipe((stream: Iterable[String]) => {
       val (content, header) = stream.partition(_.head != headerLead)
       val processedHeader = header.map(line =>
         line.takeRight(line.length-2)
@@ -210,7 +210,7 @@ object VanAllenDataFlows {
   }
 
   def extractColumns(columnsSelected: List[Int], sep:String = ",") =
-    DataPipe((lines: Stream[String]) =>
+    DataPipe((lines: Iterable[String]) =>
       lines.filter(l => {
         val spl = l.split(",")
         spl.length > columnsSelected.max && columnsSelected.forall(spl(_) != "")
@@ -255,7 +255,7 @@ object VanAllenDataFlows {
             logger.info("No file found: " + category + " probe " + probe + " for " + year + "/" + doy)
             Stream()
         }
-      }).reduceLeft[Stream[String]](_++_)
+      }).reduceLeft[Iterable[String]](_++_)
       (probe, data)
     }).toMap
 
@@ -315,10 +315,10 @@ object VanAllenDataFlows {
         DataPipe((s: Iterator[String]) => s.toStream) >
           DynaMLPipe.trimLines > DynaMLPipe.replaceWhiteSpaces >
           extractColumns(columnsSelected) >
-          DataPipe((s: Stream[String]) => s.toIterator)) run _
+          DataPipe((s: Iterable[String]) => s.toIterator))
 
 
-      (probe, data.mapPartitions(processPartition))
+      (probe, data.mapPartitions(processPartition.run))
     }).toMap
   }
 

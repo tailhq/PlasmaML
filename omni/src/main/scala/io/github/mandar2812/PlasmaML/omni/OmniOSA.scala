@@ -20,7 +20,7 @@ import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.kernels.LocalScalarKernel
 import io.github.mandar2812.dynaml.optimization.GridSearch
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.models.gp.GPRegression
 import io.github.mandar2812.dynaml.analysis.VectorField
@@ -48,7 +48,7 @@ object OmniOSA {
   type Features = DenseVector[Double]
   type Output = Double
 
-  type Data = Stream[(Features, Output)]
+  type Data = Iterable[(Features, Output)]
   type Scales = (GaussianScaler, GaussianScaler)
   type DataAndScales = (Data, Scales)
 
@@ -217,7 +217,7 @@ object OmniOSA {
   //Set the validation data sections to empty
   var validationDataSections: Stream[DateSection] = Stream.empty[DateSection]
 
-  val extractNarmaxFeatures = StreamDataPipe((couple: (TimeStamp, Features)) => {
+  val extractNarmaxFeatures = IterableDataPipe((couple: (TimeStamp, Features)) => {
     val features = couple._2
     //Calculate the coupling function p^0.5 V^4/3 Bt sin^6(theta)
     val Bt = math.sqrt(math.pow(features(2), 2) + math.pow(features(3), 2))
@@ -234,7 +234,7 @@ object OmniOSA {
     * in its string form and converts it to a usable time lagged
     * data set for training an AR model.
     * */
-  def prepareData(start: String, end: String): DataPipe[Stream[String], Data] = {
+  def prepareData(start: String, end: String): DataPipe[Iterable[String], Data] = {
 
     val hoursOffset = if(exogenousInputs.isEmpty) p_target else math.max(p_target, p_ex.max)
 
@@ -255,7 +255,7 @@ object OmniOSA {
           dayofYearformatter.parseDateTime(
             year.toInt.toString + "/" + day.toInt.toString +
               "/" + hour.toInt.toString).getMillis/1000.0 }) >
-          StreamDataPipe((couple: (Double, Features)) =>
+          IterableDataPipe((couple: (Double, Features)) =>
             couple._1 >= startStamp && couple._1 <= endStamp) >
           extractNarmaxFeatures >
           deltaOperationARX(List(p_target)++p_ex)
@@ -267,7 +267,7 @@ object OmniOSA {
             year.toInt.toString + "/" + day.toInt.toString +
               "/" + hour.toInt.toString)
             .getMillis/1000.0 }) >
-          StreamDataPipe((couple: (Double, Double)) =>
+          IterableDataPipe((couple: (Double, Double)) =>
             couple._1 >= startStamp && couple._1 <= endStamp) >
           deltaOperation(p_target, 0)
 
@@ -277,7 +277,7 @@ object OmniOSA {
           dayofYearformatter.parseDateTime(
             year.toInt.toString + "/" + day.toInt.toString +
               "/" + hour.toInt.toString).getMillis/1000.0 }) >
-          StreamDataPipe((couple: (Double, Features)) =>
+          IterableDataPipe((couple: (Double, Features)) =>
             couple._1 >= startStamp && couple._1 <= endStamp) >
           deltaOperationARX(List(p_target)++p_ex)
     }
@@ -302,19 +302,20 @@ object OmniOSA {
     * processes each segment then collates them.
     * */
   def compileSegments =
-    StreamDataPipe(processTimeSegment) >
-    DataPipe((segments: Stream[Data]) => {
+    IterableDataPipe(processTimeSegment) >
+    DataPipe((segments: Iterable[Data]) => {
       segments.foldLeft(Stream.empty[(Features, Output)])((segA, segB) => segA ++ segB)
     })
 
   //Pipelines for conversion of targets to and fro vector to double
   val preNormalisation =
-    StreamDataPipe((record: (Features, Output)) => (record._1, DenseVector(record._2)))
+    IterableDataPipe((record: (Features, Output)) => (record._1, DenseVector(record._2)))
 
   val postNormalisation =
-    StreamDataPipe((record: (Features, Features)) => (record._1, record._2(0)))
+    IterableDataPipe((record: (Features, Features)) => (record._1, record._2(0)))
 
 
+  
   //Define the global optimization parameters
   var globalOpt: String = "GS"
   var gridSize: Int = 3
@@ -383,8 +384,8 @@ object OmniOSA {
     * */
   def extractValidationSectionsPipe(num_storms: Int = 10) = fileToStream >
     replaceWhiteSpaces >
-    StreamDataPipe(getStormTimeRanges()) >
-    DataPipe((s: Stream[DateSection]) => s.takeRight(num_storms))
+    IterableDataPipe(getStormTimeRanges()) >
+    DataPipe((s: Iterable[DateSection]) => s.takeRight(num_storms))
 
   def validationDataPipeline(scales: (GaussianScaler, GaussianScaler)) = compileSegments
 
@@ -397,13 +398,13 @@ object OmniOSA {
 
     type OptData = (DenseMatrix[Double], Features)
 
-    val flowpre = dataPipeline > DataPipe((data: DataAndScales) => data._1)
+    val flowpre = dataPipeline > DataPipe((data: DataAndScales) => data._1.toStream)
     val pipe =
       new GLMPipe[
         OptData,
         Stream[DateSection]](flowpre.run) >
         trainParametricModel[
-          Data, Features, Features, Output, OptData,
+          Stream[(Features, Output)], Features, Features, Output, OptData,
           GeneralizedLinearModel[OptData]](reg)
 
     pipe(Stream(("2008/01/01/00", "2008/12/31/23")))
@@ -433,7 +434,7 @@ object OmniOSA {
 
       val model = new GPRegression(
         (kSc>kernel)*targetSampleVariance, (kSc>noise)*targetSampleVariance,
-        trainingData, meanF)
+        trainingData.toStream, meanF)
 
       val modelTuner = globalOpt match {
         case "GS" =>
@@ -542,7 +543,7 @@ object OmniOSA {
       val pipeline1 =
       fileToStream >
         replaceWhiteSpaces >
-        StreamFlatMapPipe(getStormTimeRanges() > processTimeSegment)
+        IterableFlatMapPipe(getStormTimeRanges() > processTimeSegment)
 
       //Pipeline2 takes the storm time data and performs predictions
       //and generates a RegressionMetrics object
@@ -551,11 +552,12 @@ object OmniOSA {
         modelAndScales._1
           .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
           .toStream) >
-        StreamDataPipe((c: (Features, Features)) => (c._1(0), c._2(0))) >
-        DataPipe((results: Stream[(Double, Double)]) =>
-          new RegressionMetrics(results.toList, results.length)
+        IterableDataPipe((c: (Features, Features)) => (c._1(0), c._2(0))) >
+        DataPipe((results: Iterable[(Double, Double)]) => {
+          val sc = results.toList
+          new RegressionMetrics(sc, sc.length)
             .setName(modelType+" "+columnNames(targetColumn)+"; OSA")
-        )
+        })
 
       val stormFilePipeline = pipeline1 > pipeline2
       stormFilePipeline(dataDir+testFile)
@@ -577,20 +579,21 @@ object OmniOSA {
       val pipeline1 =
         fileToStream >
         replaceWhiteSpaces >
-        StreamFlatMapPipe(getStormTimeRanges() > processTimeSegment)
+        IterableFlatMapPipe(getStormTimeRanges() > processTimeSegment)
 
       //Pipeline2 takes the storm time data and performs predictions
       //and generates a RegressionMetrics object
       val pipeline2 =
         DataPipe((testData: Data) =>
           modelAndScales._1
-            .test(testData).map(t => (DenseVector(t._3), DenseVector(t._2)))
+            .test(testData.toSeq).map(t => (DenseVector(t._3), DenseVector(t._2)))
             .toStream) >
-        StreamDataPipe((c: (Features, Features)) => (c._1(0), c._2(0))) >
-        DataPipe((results: Stream[(Double, Double)]) =>
-          new RegressionMetrics(results.toList, results.length)
+        IterableDataPipe((c: (Features, Features)) => (c._1(0), c._2(0))) >
+        DataPipe((results: Iterable[(Double, Double)]) => {
+          val sc = results.toList
+          new RegressionMetrics(sc, sc.length)
             .setName(modelType+" "+columnNames(targetColumn)+"; OSA")
-        )
+        })
 
       val stormFilePipeline = pipeline1 > pipeline2
       stormFilePipeline(dataDir+testFile)
@@ -606,10 +609,10 @@ object OmniOSA {
       val pipeline1 =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe(getStormTimeRanges(hoursOffset) > processTimeSegment)
+          IterableDataPipe(getStormTimeRanges(hoursOffset) > processTimeSegment)
 
       val pipeline2 =
-        DataPipe((storms: Stream[Data]) => {
+        DataPipe((storms: Iterable[Data]) => {
           //For each storm generate predictions
           //and output them in the appropriate file
 
@@ -619,7 +622,7 @@ object OmniOSA {
             val stormData = stormCouple._1
             //Generate Predictions
             val stormPredictions =
-              model.test(stormData)
+              model.test(stormData.toSeq)
                 .map(preds => Seq(preds._2, preds._3, preds._4, preds._5))
                 .toStream
             //Write values to a file dump
@@ -645,10 +648,10 @@ object OmniOSA {
       val pipeline1 =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe(getStormTimeRanges(hoursOffset) > processTimeSegment)
+          IterableDataPipe(getStormTimeRanges(hoursOffset) > processTimeSegment)
 
       val pipeline2 =
-        DataPipe((storms: Stream[Data]) => {
+        DataPipe((storms: Iterable[Data]) => {
           //For each storm generate predictions
           //and output them in the appropriate file
 

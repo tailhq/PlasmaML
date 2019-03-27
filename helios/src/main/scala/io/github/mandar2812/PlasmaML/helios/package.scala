@@ -655,7 +655,7 @@ package object helios {
 
     val process_pipe = DataPipe[Path, String](_.toString()) >
       fileToStream >
-      StreamDataPipe(split_line)
+      IterableDataPipe(split_line)
 
     val scatter_data = process_pipe(results_path)
 
@@ -1383,8 +1383,13 @@ package object helios {
           )
         )
 
-    val handle_ops = dtflearn.model
-      .tf_data_ops[Tensor[UByte], Tensor[Double], (Tensor[Double], Tensor[Double])]()
+    val handle_ops = dtflearn.model.tf_data_handle_ops[
+      (DateTime, (Tensor[UByte], Tensor[Double])), 
+      Tensor[UByte], 
+      Tensor[Double], 
+      (Tensor[Double], Tensor[Double]), 
+      Output[UByte], 
+      Output[Double]](patternToTensor = Some(tup2_2[DateTime, (Tensor[UByte], Tensor[Double])]))
 
     val tunableTFModel: TunableTFModel[
       (DateTime, (Tensor[UByte], Tensor[Double])),
@@ -1406,7 +1411,7 @@ package object helios {
         loss_func_generator,
         hyper_params,
         norm_tf_data.training_dataset,
-        tup2_2[DateTime, (Tensor[UByte], Tensor[Double])],
+        handle_ops,
         fitness_func,
         architecture,
         (UINT8, data_shapes._1),
@@ -1417,8 +1422,7 @@ package object helios {
             _ => scala.util.Random.nextDouble() <= 0.7
           )
         ),
-        inMemory = false,
-        tf_handle_ops = handle_ops
+        inMemory = false
       )
 
     val run_tuning = () => {

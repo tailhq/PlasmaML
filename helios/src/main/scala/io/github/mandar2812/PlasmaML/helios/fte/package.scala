@@ -72,7 +72,7 @@ package object fte {
   //Load the Carrington Rotation Table
   val carrington_rotation_table: Path = pwd / 'data / "CR_Table.rdb"
 
-  val process_carrington_file: DataPipe[Path, Stream[Array[String]]] =
+  val process_carrington_file: DataPipe[Path, Iterable[Array[String]]] =
     DataPipe((p: Path) => (read.lines ! p).toStream) >
       dropHead >
       dropHead >
@@ -1078,9 +1078,22 @@ package object fte {
     val concatPreds = unzip > (helios.concatOperation[Double](ax = 0) * helios
       .concatOperation[Double](ax = 0))
 
-    val tf_handle_ops_test = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[
-      Double
-    ], (Tensor[Double], Tensor[Double])](
+      val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
+        (DateTime, (Tensor[Double], Tensor[Double])),
+        Tensor[Double], Tensor[Double], 
+        (Tensor[Double], Tensor[Double]),
+        Output[Double], Output[Double]
+        ](
+          patternToTensor = Some(tup2_2[DateTime, (Tensor[Double], Tensor[Double])] > identityPipe[(Tensor[Double], Tensor[Double])])
+      )
+    
+    val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
+      (DateTime, (Tensor[Double], Tensor[Double])),
+      Tensor[Double], Tensor[Double], 
+      (Tensor[Double], Tensor[Double]),
+      Output[Double], Output[Double]
+      ](
+        patternToTensor = Some(tup2_2[DateTime, (Tensor[Double], Tensor[Double])] > identityPipe[(Tensor[Double], Tensor[Double])]),
       concatOpI = Some(stackOperation[Double](ax = 0)),
       concatOpT = Some(stackOperation[Double](ax = 0)),
       concatOpO = Some(concatPreds)
@@ -1172,7 +1185,7 @@ package object fte {
         loss_func_generator,
         hyper_params,
         scaled_data.training_dataset,
-        tup2_2[DateTime, (Tensor[Double], Tensor[Double])],
+        tf_handle_ops_tuning,
         fitness_func,
         arch,
         (FLOAT64, input_shape),
@@ -1183,10 +1196,7 @@ package object fte {
             _ => scala.util.Random.nextGaussian() <= 0.7
           )
         ),
-        inMemory = false,
-        tf_handle_ops = dtflearn.model.tf_data_ops[Tensor[Double], Tensor[
-          Double
-        ], (Tensor[Double], Tensor[Double])]()
+        inMemory = false
       )
 
 

@@ -8,7 +8,7 @@ import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.models.stp.StudentTRegression
 import io.github.mandar2812.dynaml.optimization.{AbstractCSA, CoupledSimulatedAnnealing, GridSearch}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes._
 
 import scala.util.Random
 
@@ -32,13 +32,13 @@ object StreamerShowerEmulator {
       Map()
     ) >
     removeMissingLines >
-    DataPipe((data: Stream[String]) => {
-      val size = data.length
+    DataPipe((data: Iterable[String]) => {
+      val size = data.toSeq.length
       val fraction: Double = (trainingSize + testSize)/size.toDouble
       //Sub sample a fraction of the total data set.
       data.filter(_ => Random.nextDouble <= fraction)
     }) >
-    StreamDataPipe((line: String) => {
+    IterableDataPipe((line: String) => {
       val split = line.split(",")
       val features = split.take(4).map(_.toDouble).map(math.log)
       val counts = split.takeRight(4).map(_.toDouble).map(c => if(c != 0.0) c else c + 1.0).map(math.log)
@@ -49,7 +49,7 @@ object StreamerShowerEmulator {
         (DenseVector(features++Array(math.log(couple._1))), counts(couple._2))
       })
     }) >
-    DataPipe((d: Stream[List[(DenseVector[Double], Double)]]) => {
+    DataPipe((d: Iterable[List[(DenseVector[Double], Double)]]) => {
       d.reduce(_++_).toStream
     }) >
     DataPipe((data: Stream[(DenseVector[Double], Double)]) => {
@@ -75,13 +75,13 @@ object StreamerShowerEmulator {
     val flow = preprocess >
       generateData >
       DataPipe((dataAndScales: (
-        Stream[(DenseVector[Double], DenseVector[Double])],
-          Stream[(DenseVector[Double], DenseVector[Double])],
+        Iterable[(DenseVector[Double], DenseVector[Double])],
+        Iterable[(DenseVector[Double], DenseVector[Double])],
           (GaussianScaler, GaussianScaler))) => {
 
         val model = new GPRegression(
           kernel, noise,
-          dataAndScales._1.map(p => (p._1, p._2(0))))
+          dataAndScales._1.map(p => (p._1, p._2(0))).toSeq)
 
         val gs = globalOpt match {
           case "CSA" =>
@@ -102,7 +102,7 @@ object StreamerShowerEmulator {
 
         val (tunedGP, _) = gs.optimize(startConf)
 
-        val predictions = tunedGP.test(dataAndScales._2.map(p => (p._1, p._2(0))))
+        val predictions = tunedGP.test(dataAndScales._2.map(p => (p._1, p._2(0))).toSeq)
           .map(p => (DenseVector(p._3), DenseVector(p._2))).toStream
 
         val scAndL = (dataAndScales._3._2.i*dataAndScales._3._2.i)(predictions).map(c => (c._1(0), c._2(0)))
@@ -122,14 +122,14 @@ object StreamerShowerEmulator {
     val flow = preprocess >
       generateData >
       DataPipe((dataAndScales: (
-        Stream[(DenseVector[Double], DenseVector[Double])],
-          Stream[(DenseVector[Double], DenseVector[Double])],
+        Iterable[(DenseVector[Double], DenseVector[Double])],
+        Iterable[(DenseVector[Double], DenseVector[Double])],
           (GaussianScaler, GaussianScaler))) => {
 
         val model = new StudentTRegression(
           mu,
           kernel, noise,
-          dataAndScales._1.map(p => (p._1, p._2(0))))
+          dataAndScales._1.map(p => (p._1, p._2(0))).toSeq)
 
         val gs = globalOpt match {
           case "CSA" =>
@@ -150,7 +150,7 @@ object StreamerShowerEmulator {
 
         val (tunedGP, _) = gs.optimize(startConf)
 
-        val predictions = tunedGP.test(dataAndScales._2.map(p => (p._1, p._2(0))))
+        val predictions = tunedGP.test(dataAndScales._2.map(p => (p._1, p._2(0))).toSeq)
           .map(p => (DenseVector(p._3), DenseVector(p._2))).toStream
 
         val scAndL = (dataAndScales._3._2.i*dataAndScales._3._2.i)(predictions).map(c => (c._1(0), c._2(0)))

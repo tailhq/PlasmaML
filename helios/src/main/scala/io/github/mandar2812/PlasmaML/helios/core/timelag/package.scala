@@ -1273,7 +1273,8 @@ package object timelag {
         prefetchSize = 10
       )
 
-      val tf_handle_ops = dtflearn.model.tf_data_ops[Tensor[T], Tensor[T], (Tensor[T], Tensor[T])](
+      val tf_handle_ops = dtflearn.model.tf_data_handle_ops[(Tensor[T], Tensor[T]), Tensor[T], Tensor[T], (Tensor[T], Tensor[T]), Output[T], Output[T]](
+        patternToTensor = Some(identityPipe[(Tensor[T], Tensor[T])]),
         concatOpI = Some(dtfpipe.EagerStack[T]()),
         concatOpT = Some(dtfpipe.EagerStack[T]()),
         concatOpO = Some(stackOperationP)
@@ -1308,7 +1309,7 @@ package object timelag {
         (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)](
         loss_func_generator, hyper_params,
         tfdata.training_dataset,
-        identityPipe[(Tensor[T], Tensor[T])],
+        tf_handle_ops,
         fitness_func,
         architecture,
         (dTypeTag.dataType, input_shape),
@@ -1317,8 +1318,7 @@ package object timelag {
         data_split_func = Some(
           DataPipe[(Tensor[T], Tensor[T]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
         ),
-        inMemory = false, 
-        tf_handle_ops = tf_handle_ops
+        inMemory = false
       )
 
       val gs = hyper_optimizer match {

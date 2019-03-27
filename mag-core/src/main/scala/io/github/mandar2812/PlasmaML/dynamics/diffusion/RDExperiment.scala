@@ -4,7 +4,7 @@ import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.numerics.Bessel
 import breeze.stats.distributions._
 import io.github.mandar2812.dynaml.graphics.charts.Highcharts.{histogram, hold, legend, line, scatter, spline, title, unhold, xAxis, yAxis}
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.probability.{GaussianRV, MultinomialRV, RandomVariable}
 import io.github.mandar2812.dynaml.utils.{combine, getStats}
@@ -578,14 +578,14 @@ object RDExperiment {
 
   val readFile         = DataPipe((p: Path) => (read.lines! p).toStream)
 
-  val processLines     = StreamDataPipe((s: String) => s.split(',').map(_.toDouble))
+  val processLines     = IterableDataPipe((s: String) => s.split(',').map(_.toDouble))
 
-  val readObservations = readFile > processLines > StreamDataPipe((a: Array[Double]) => ((a.head, a(1)), a.last))
+  val readObservations = readFile > processLines > IterableDataPipe((a: Array[Double]) => ((a.head, a(1)), a.last))
 
-  val readColocation   = readFile > processLines > StreamDataPipe((a: Array[Double]) => (a.head, a(1)))
+  val readColocation   = readFile > processLines > IterableDataPipe((a: Array[Double]) => (a.head, a(1)))
 
   def readAsMap(h: Seq[String]) =
-    readFile > dropHead > processLines > StreamDataPipe((s: Array[Double]) => h.zip(s).toMap)
+    readFile > dropHead > processLines > IterableDataPipe((s: Array[Double]) => h.zip(s).toMap)
 
   def loadCachedResults(resultsPath: Path) = {
 
@@ -603,7 +603,7 @@ object RDExperiment {
 
 
     val model_params = (read.lines! resultsPath/"model_info.csv").head.split(',').toSeq
-    val model_info   = (readFile > dropHead > StreamDataPipe((s: String) => s.split(',')))(resultsPath/"model_info.csv")
+    val model_info   = (readFile > dropHead > IterableDataPipe((s: String) => s.split(',')))(resultsPath/"model_info.csv")
 
     val m_info       = model_params.zip(model_info.head).toMap
 
@@ -612,7 +612,7 @@ object RDExperiment {
 
     val basisInfo = (m_info("type"), (m_info("nL").toInt, m_info("nT").toInt))
 
-    val solution  = (readFile > processLines > StreamDataPipe((v: Array[Double]) => DenseVector(v)))(
+    val solution  = (readFile > processLines > IterableDataPipe((v: Array[Double]) => DenseVector(v)))(
       resultsPath/"diffusion_solution.csv"
     )
 
