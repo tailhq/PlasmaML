@@ -240,8 +240,8 @@ package object helios {
     override val estimator: ESTIMATOR = model.estimator
   }
 
-  case class TunedModelRun[T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
-    data_and_scales: (TFDataSet[(IT, Tensor[T])], (ReversibleScaler[IT],
+  case class TunedModelRun[InputPattern, T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
+    data_and_scales: (TFDataSet[(DateTime, (InputPattern, Tensor[T]))], (Scaler[InputPattern],
         ReversibleScaler[Tensor[T]])),
     model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[
       T
@@ -255,9 +255,9 @@ package object helios {
     test_outputs: Option[ITT] = None)
       extends ModelRun[T] {
 
-    override type DATA_PATTERN = (IT, Tensor[T])
+    override type DATA_PATTERN = (DateTime, (InputPattern, Tensor[T]))
 
-    override type SCALERS = (ReversibleScaler[IT], ReversibleScaler[Tensor[T]])
+    override type SCALERS = (Scaler[InputPattern], ReversibleScaler[Tensor[T]])
 
     override type MODEL =
       TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[

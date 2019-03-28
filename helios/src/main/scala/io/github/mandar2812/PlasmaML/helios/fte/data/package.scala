@@ -11,6 +11,8 @@ import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtflearn, dtfutils}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
 import io.github.mandar2812.dynaml.probability._
 import io.github.mandar2812.dynaml.DynaMLPipe._
+import io.github.mandar2812.dynaml.utils._
+import io.github.mandar2812.dynaml.{utils => dutils}
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
@@ -429,6 +431,82 @@ package object data {
 
     })
 
+  
+  def scale_timed_data2[T: TF: IsFloatOrDouble](fraction: Double) =
+    DataPipe((dataset: helios.data.TF_DATA_T2[DenseVector[Double], T]) => {
+
+      type P = (DateTime, (DenseVector[Double], Tensor[T]))
+
+      val features = dataset.training_dataset
+      .map(
+        tup2_2[DateTime, (DenseVector[Double], Tensor[T])] > tup2_1[DenseVector[Double], Tensor[T]]
+      )
+      .data
+
+      
+      val perform_lossy_pca = 
+        calculatePCAScalesFeatures(false) > 
+        tup2_2[Iterable[DenseVector[Double]], PCAScaler] >
+        compressPCA(fraction)
+
+      val scale_features = 
+        DataPipe[Iterable[DenseVector[Double]], (Iterable[DenseVector[Double]], GaussianScaler)](ds => {
+          val (mean, variance) = dutils.getStats(ds)
+          val gs = GaussianScaler(mean, variance)
+
+          (ds.map(gs(_)), gs)
+        }) > 
+          (perform_lossy_pca * identityPipe[GaussianScaler]) >
+          DataPipe2[
+            CompressedPCAScaler, 
+            GaussianScaler, 
+            Scaler[DenseVector[Double]]](
+              (pca, gs) => gs > pca
+          )
+
+      val concat_targets = tfi.stack(
+        dataset.training_dataset
+          .map(
+            tup2_2[DateTime, (DenseVector[Double], Tensor[T])] > tup2_2[DenseVector[Double], Tensor[
+              T
+            ]]
+          )
+          .data
+          .toSeq
+      )
+
+      val n = concat_targets.shape(0)
+
+      val mean_t = concat_targets.mean(axes = 0)
+
+      val std_t = concat_targets
+        .subtract(mean_t)
+        .square
+        .mean(axes = 0)
+        .multiply(Tensor(n / (n - 1)).castTo[T])
+        .sqrt
+
+
+      val targets_scaler = GaussianScalerTF(mean_t, std_t)
+
+      val features_scaler = scale_features(features)
+
+      val scale_training_data = identityPipe[DateTime] * (features_scaler * targets_scaler)
+      val scale_test_data = identityPipe[DateTime] * (features_scaler * identityPipe[
+        Tensor[T]
+      ])
+
+      (
+        dataset.copy(
+          training_dataset = dataset.training_dataset.map(scale_training_data),
+          test_dataset = dataset.test_dataset.map(scale_test_data)
+        ),
+        (features_scaler, targets_scaler)
+      )
+
+    })
+
+  
   def scale_dataset[T: TF: IsFloatOrDouble] =
     DataPipe((dataset: helios.data.TF_DATA[T, T]) => {
 

@@ -3,6 +3,7 @@ package io.github.mandar2812.PlasmaML.helios
 import ammonite.ops._
 import org.joda.time._
 import breeze.stats._
+import breeze.linalg.{DenseVector, DenseMatrix}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.evaluation._
@@ -32,7 +33,8 @@ import _root_.io.github.mandar2812.dynaml.models.TunableTFModel.HyperParams
 
 package object fte {
 
-  type ModelRunTuning = TunedModelRunT[
+  type ModelRunTuning = helios.TunedModelRun[
+    DenseVector[Double],
     Double,
     Output[Double],
     (Output[Double], Output[Double]),
@@ -579,7 +581,7 @@ package object fte {
     )
 
     val tt_partition = DataPipe(
-      (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
+      (p: (DateTime, (DenseVector[Double], Tensor[Double]))) =>
         if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
           false
         else
@@ -587,7 +589,7 @@ package object fte {
     )
 
     println("\nProcessing FTE Data")
-    val fte_data = load_fte_data(
+    val fte_data = load_fte_data_bdv(
       fte_data_path,
       carrington_rotations,
       log_scale_fte,
@@ -604,13 +606,25 @@ package object fte {
 
     val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
 
-    val input_shape = dataset.training_dataset.data.head._2._1.shape
-
     val data_size = dataset.training_dataset.size
 
+    val scaling_op = scale_timed_data2[Double](fraction = 0.81)
+
     println("Scaling data attributes")
-    val (scaled_data, scalers): SC_DATA_T =
-      scale_timed_data[Double].run(dataset)
+    val (scaled_data, scalers): helios.data.SC_TF_DATA_T2[DenseVector[Double], Double] =
+      scaling_op.run(dataset)
+
+
+    val input_shape = Shape(scaled_data.training_dataset.data.head._2._1.size)
+    
+    val load_pattern_in_tensor = 
+      tup2_2[DateTime, (DenseVector[Double], Tensor[Double])] > 
+        (
+          DataPipe(
+            (dv: DenseVector[Double]) => dtf.tensor_f64(input_shape(0))(dv.toArray.toSeq:_*)
+          ) * 
+          identityPipe[Tensor[Double]]
+        )
 
     val unzip =
       DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
@@ -621,33 +635,24 @@ package object fte {
       .concatOperation[Double](ax = 0))
 
     val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
-      (DateTime, (Tensor[Double], Tensor[Double])),
+      (DateTime, (DenseVector[Double], Tensor[Double])),
       Tensor[Double],
       Tensor[Double],
       (Tensor[Double], Tensor[Double]),
       Output[Double],
       Output[Double]
-    ](
-      patternToTensor = Some(
-        tup2_2[DateTime, (Tensor[Double], Tensor[Double])] > identityPipe[
-          (Tensor[Double], Tensor[Double])
-        ]
-      )
-    )
+    ](patternToTensor = Some(load_pattern_in_tensor))
+    
 
     val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
-      (DateTime, (Tensor[Double], Tensor[Double])),
+      (DateTime, (DenseVector[Double], Tensor[Double])),
       Tensor[Double],
       Tensor[Double],
       (Tensor[Double], Tensor[Double]),
       Output[Double],
       Output[Double]
     ](
-      patternToTensor = Some(
-        tup2_2[DateTime, (Tensor[Double], Tensor[Double])] > identityPipe[
-          (Tensor[Double], Tensor[Double])
-        ]
-      ),
+      patternToTensor = Some(load_pattern_in_tensor),
       concatOpI = Some(stackOperation[Double](ax = 0)),
       concatOpT = Some(stackOperation[Double](ax = 0)),
       concatOpO = Some(concatPreds)
@@ -720,7 +725,7 @@ package object fte {
       )
 
     val tunableTFModel: TunableTFModel[
-      (DateTime, (Tensor[Double], Tensor[Double])),
+      (DateTime, (DenseVector[Double], Tensor[Double])),
       Output[Double],
       Output[Double],
       (Output[Double], Output[Double]),
@@ -746,7 +751,7 @@ package object fte {
         (FLOAT64, Shape(causal_window)),
         train_config_tuning(tf_summary_dir),
         data_split_func = Some(
-          DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), Boolean](
+          DataPipe[(DateTime, (DenseVector[Double], Tensor[Double])), Boolean](
             _ => scala.util.Random.nextGaussian() <= 0.7
           )
         ),
@@ -833,7 +838,7 @@ package object fte {
 
     val best_model = tunableTFModel.train_model(config, Some(train_config_test))
 
-    val extract_tensors = tup2_2[DateTime, (Tensor[Double], Tensor[Double])]
+    val extract_tensors = load_pattern_in_tensor
 
     val extract_features = tup2_1[Tensor[Double], Tensor[Double]]
 
@@ -911,7 +916,7 @@ package object fte {
       FTExperiment.OMNIConfig(deltaT, log_scale_omni)
     )
 
-    val results = helios.TunedModelRunT(
+    val results = helios.TunedModelRun(
       (scaled_data, scalers),
       best_model,
       None,

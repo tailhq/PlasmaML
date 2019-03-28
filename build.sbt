@@ -3,7 +3,7 @@ import java.io.File
 import sbt._
 import Dependencies._
 
-val mainVersion = "v0.1"
+val mainVersion = "v0.1.1"
 
 val heapSize = Option(System.getProperty("heap")).getOrElse("8096m")
 

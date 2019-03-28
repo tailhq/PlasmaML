@@ -92,6 +92,8 @@ package object data {
 
   type TF_DATA_T[T, U] = TFDataSet[(DateTime, (Tensor[T], Tensor[U]))]
 
+  type TF_DATA_T2[T, U] = TFDataSet[(DateTime, (T, Tensor[U]))]
+
   type TF_DATA_EXT[T, U] = TFDataSet[((Tensor[T], Tensor[U]), Tensor[U])]
 
   type TF_MC_DATA_EXT[T, U] = AbstractDataSet[(Tensor[T], Tensor[U]), Tensor[U]]
@@ -111,6 +113,9 @@ package object data {
 
   type SC_TF_DATA_T[T, U] =
     (TF_DATA_T[T, U], (ReversibleScaler[Tensor[T]], MinMaxScalerTF[U]))
+
+  type SC_TF_DATA_T2[T, U] =
+    (TF_DATA_T2[T, U], (Scaler[T], GaussianScalerTF[U]))
 
   private def TF_DATA_EXT[T: TF, U: TF: IsFloatOrDouble](
     trData: IMAGE_TS[T, U],
