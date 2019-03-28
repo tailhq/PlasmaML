@@ -614,16 +614,16 @@ package object fte {
     val (scaled_data, scalers): helios.data.SC_TF_DATA_T2[DenseVector[Double], Double] =
       scaling_op.run(dataset)
 
-
     val input_shape = Shape(scaled_data.training_dataset.data.head._2._1.size)
-    
-    val load_pattern_in_tensor = 
-      tup2_2[DateTime, (DenseVector[Double], Tensor[Double])] > 
+
+    val load_pattern_in_tensor =
+      tup2_2[DateTime, (DenseVector[Double], Tensor[Double])] >
         (
           DataPipe(
-            (dv: DenseVector[Double]) => dtf.tensor_f64(input_shape(0))(dv.toArray.toSeq:_*)
-          ) * 
-          identityPipe[Tensor[Double]]
+            (dv: DenseVector[Double]) =>
+              dtf.tensor_f64(input_shape(0))(dv.toArray.toSeq: _*)
+          ) *
+            identityPipe[Tensor[Double]]
         )
 
     val unzip =
@@ -641,8 +641,11 @@ package object fte {
       (Tensor[Double], Tensor[Double]),
       Output[Double],
       Output[Double]
-    ](patternToTensor = Some(load_pattern_in_tensor))
-    
+    ](
+      patternToTensor = Some(load_pattern_in_tensor),
+      concatOpI = Some(stackOperation[Double](ax = 0)),
+      concatOpT = Some(stackOperation[Double](ax = 0))
+    )
 
     val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
       (DateTime, (DenseVector[Double], Tensor[Double])),
