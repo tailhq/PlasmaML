@@ -454,7 +454,7 @@ package object utils {
     * method to scale data before training.
     * */
   def scale_data_v2[T: TF: IsFloatOrDouble] = DataPipe(
-    fte.scale_dataset[T], id[(Tensor[T], Tensor[T])]
+    fte.data.scale_dataset[T], id[(Tensor[T], Tensor[T])]
   )
 
   /**

@@ -233,7 +233,8 @@ L: TF : IsFloatOrDouble](
   error_wt: Double = 1.0,
   temperature: Double = 1.0,
   specificity: Double = 1.0,
-  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler) extends
+  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler,
+  target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann) extends
   Loss[(Output[P], Output[P]), L](name) {
 
   override val layerType: String = s"CTL[horizon:$size_causal_window]"
@@ -244,14 +245,23 @@ L: TF : IsFloatOrDouble](
 
     val model_errors = input._2
 
-    val target_prob = divergence match {
-      case CausalDynamicTimeLag.Hellinger => model_errors
+    val target_prob = target_distribution match {
+      case CausalDynamicTimeLag.Boltzmann => model_errors
         .square
-        .multiply(Tensor(-1).castTo[P])
-        .divide(Tensor(temperature).castTo[P]).softmax()
-      case _ => dtf.tensor_f64(
+        .multiply(Tensor(-1).toOutput.castTo[P])
+        .divide(Tensor(temperature).castTo[P])
+        .softmax()
+
+      case CausalDynamicTimeLag.Uniform => dtf.tensor_f64(
         1, size_causal_window)(
-        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput.castTo[P]
+        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*
+      ).toOutput.castTo[P]
+
+      case _ => model_errors
+        .square
+        .multiply(Tensor(-1).toOutput.castTo[P])
+        .divide(Tensor(temperature).castTo[P])
+        .softmax()
     }
 
 
