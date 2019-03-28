@@ -690,7 +690,7 @@ package object data {
       .transform(
         DataPipe[Iterable[(DateTime, DenseVector[Double])], Iterable[
           (DateTime, DenseVector[Double])
-        ]](_.toSeq.sortBy(_._1).toIterable)
+        ]](_.toSeq.sortBy(_._1))
       )
       .transform(generate_history)
       .to_zip(identityPipe[(DateTime, DenseVector[Double])])
