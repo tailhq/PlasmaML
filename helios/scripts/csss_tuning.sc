@@ -6,6 +6,8 @@ import ammonite.ops.ImplicitWd._
 val experiments = ls! env.summary_dir |? (_.isDir) |? (_.segments.last.contains("fte"))
 
 val csss_exp = csss_model_tuning(
+  start_year = 2008,
+  end_year = 2017,
   test_year = 2015,
   sw_threshold = 600d,
   crop_latitude = 30d,
