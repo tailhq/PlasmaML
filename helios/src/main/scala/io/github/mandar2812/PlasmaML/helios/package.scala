@@ -274,7 +274,7 @@ package object helios {
         (ArchOut, (In, Output[T]))
       ]]
 
-    override val estimator: ESTIMATOR = model.estimator.get
+    override val estimator: ESTIMATOR = model.estimator
   }
 
   private[helios] trait Config
