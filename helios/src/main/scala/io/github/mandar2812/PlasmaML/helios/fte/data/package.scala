@@ -56,8 +56,15 @@ package object data {
 
   val fte_file = MetaPipe(
     (data_path: Path) =>
-      (carrington_rotation: Int) =>
-        data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
+      (carrington_rotation: Int) => {
+        val hmi_file  = data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
+        val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
+
+        if (exists ! hmi_file) (read.lines ! hmi_file).toIterable.drop(4)
+        else
+          /* if(exists! gong_file) */ (read.lines ! gong_file).toIterable
+            .drop(3)
+      }
   )
 
   case class FTEPattern(data: (Double, Double, Option[Double])) extends AnyVal {
@@ -71,9 +78,7 @@ package object data {
 
   val process_fte_file = {
     fte_file >> (
-      DataPipe((p: Path) => (read.lines ! p).toStream) >
-        Seq.fill(4)(dropHead).reduceLeft(_ > _) >
-        trimLines >
+      trimLines >
         replaceWhiteSpaces >
         splitLine >
         IterableDataPipe((s: Array[String]) => s.length == 5) >
@@ -116,8 +121,11 @@ package object data {
       case _: java.nio.file.NoSuchFileException => Iterable()
     }
 
-  val process_rotation = DataPipe(
-    (rotation_data: (Int, (CarringtonRotation, Iterable[FTEPattern]))) => {
+  val process_rotation
+    : DataPipe[(Int, (CarringtonRotation, Iterable[FTEPattern])), Iterable[
+      (DateTime, FTEPattern)
+    ]] = DataPipe(
+    (rotation_data) => {
 
       val (_, (rotation, fte)) = rotation_data
 
@@ -125,12 +133,15 @@ package object data {
 
       val time_jump = duration.getMillis / 360.0
 
+      val time_stamp = (p: FTEPattern) =>
+        rotation.end.toInstant
+          .minus((time_jump * p._1).toLong)
+          .toDateTime
+
       fte.map(
         p =>
           (
-            rotation.end.toInstant
-              .minus((time_jump * p._1).toLong)
-              .toDateTime,
+            time_stamp(p),
             p
           )
       )
@@ -225,20 +236,22 @@ package object data {
       _.toSeq.sortBy(_._1)
     )
 
+    val sort_by_latitude = DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[
+      (DateTime, Seq[FTEPattern])
+    ]](
+      _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
+    )
+
     val processed_fte_data = {
       fte_data
-        .flatMap(process_rotation)
-        .transform(
-          DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[
-            (DateTime, Seq[FTEPattern])
-          ]](
-            _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
-          )
+        .flatMap(
+          process_rotation >
+            IterableDataPipe(image_dt_roundoff * identityPipe[FTEPattern]) >
+            sort_by_latitude >
+            sort_by_date
         )
         .filter(DataPipe(_._2.length == 180))
         .map(crop_data_by_latitude)
-        .map(image_dt_roundoff * identityPipe[Seq[FTEPattern]])
-        .transform(sort_by_date)
         .map(identityPipe[DateTime] * load_slice_to_tensor)
         .to_zip(identityPipe[(DateTime, Tensor[Double])])
     }
@@ -284,7 +297,7 @@ package object data {
     val generate_history = DataPipe(
       (s: Iterable[(DateTime, Tensor[Double])]) =>
         if (deltaTFTE > 0)
-          s.sliding((deltaTFTE + 1) * fte_step).map(load_history).toIterable
+          s.sliding((deltaTFTE * fte_step) + 1).map(load_history).toIterable
         else if (conv_flag)
           s.map(c => (c._1, c._2.reshape(Shape(c._2.shape(0), 1, 1))))
         else s
@@ -431,45 +444,51 @@ package object data {
 
     })
 
-  
   def scale_timed_data2[T: TF: IsFloatOrDouble](fraction: Double) =
     DataPipe((dataset: helios.data.TF_DATA_T2[DenseVector[Double], T]) => {
 
       type P = (DateTime, (DenseVector[Double], Tensor[T]))
 
       val features = dataset.training_dataset
-      .map(
-        tup2_2[DateTime, (DenseVector[Double], Tensor[T])] > tup2_1[DenseVector[Double], Tensor[T]]
-      )
-      .data
+        .map(
+          tup2_2[DateTime, (DenseVector[Double], Tensor[T])] > tup2_1[
+            DenseVector[Double],
+            Tensor[T]
+          ]
+        )
+        .data
 
-      
-      val perform_lossy_pca = 
-        calculatePCAScalesFeatures(false) > 
-        tup2_2[Iterable[DenseVector[Double]], PCAScaler] >
-        compressPCA(fraction)
+      val perform_lossy_pca =
+        calculatePCAScalesFeatures(false) >
+          tup2_2[Iterable[DenseVector[Double]], PCAScaler] >
+          compressPCA(fraction)
 
-      val scale_features = 
-        DataPipe[Iterable[DenseVector[Double]], (Iterable[DenseVector[Double]], GaussianScaler)](ds => {
+      val scale_features =
+        DataPipe[
+          Iterable[DenseVector[Double]],
+          (Iterable[DenseVector[Double]], GaussianScaler)
+        ](ds => {
           val (mean, variance) = dutils.getStats(ds)
-          val gs = GaussianScaler(mean, variance)
+          val gs               = GaussianScaler(mean, variance)
 
           (ds.map(gs(_)), gs)
-        }) > 
+        }) >
           (perform_lossy_pca * identityPipe[GaussianScaler]) >
-          DataPipe2[
-            CompressedPCAScaler, 
-            GaussianScaler, 
-            Scaler[DenseVector[Double]]](
-              (pca, gs) => gs > pca
+          DataPipe2[CompressedPCAScaler, GaussianScaler, Scaler[
+            DenseVector[Double]
+          ]](
+            (pca, gs) => gs > pca
           )
 
       val concat_targets = tfi.stack(
         dataset.training_dataset
           .map(
-            tup2_2[DateTime, (DenseVector[Double], Tensor[T])] > tup2_2[DenseVector[Double], Tensor[
-              T
-            ]]
+            tup2_2[DateTime, (DenseVector[Double], Tensor[T])] > tup2_2[
+              DenseVector[Double],
+              Tensor[
+                T
+              ]
+            ]
           )
           .data
           .toSeq
@@ -485,7 +504,6 @@ package object data {
         .mean(axes = 0)
         .multiply(Tensor(n / (n - 1)).castTo[T])
         .sqrt
-
 
       val targets_scaler = GaussianScalerTF(mean_t, std_t)
 
@@ -506,7 +524,6 @@ package object data {
 
     })
 
-  
   def scale_dataset[T: TF: IsFloatOrDouble] =
     DataPipe((dataset: helios.data.TF_DATA[T, T]) => {
 
@@ -625,20 +642,22 @@ package object data {
       _.toSeq.sortBy(_._1)
     )
 
+    val sort_by_latitude = DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[
+      (DateTime, Seq[FTEPattern])
+    ]](
+      _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
+    )
+
     val processed_fte_data = {
       fte_data
-        .flatMap(process_rotation)
-        .transform(
-          DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[
-            (DateTime, Seq[FTEPattern])
-          ]](
-            _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
-          )
+        .flatMap(
+          process_rotation >
+            IterableDataPipe(image_dt_roundoff * identityPipe[FTEPattern]) >
+            sort_by_latitude >
+            sort_by_date
         )
         .filter(DataPipe(_._2.length == 180))
         .map(crop_data_by_latitude)
-        .map(image_dt_roundoff * identityPipe[Seq[FTEPattern]])
-        .transform(sort_by_date)
         .map(identityPipe[DateTime] * load_slice_to_tensor)
         .to_zip(identityPipe[(DateTime, DenseVector[Double])])
     }
@@ -681,7 +700,7 @@ package object data {
     val generate_history = DataPipe(
       (s: Iterable[(DateTime, DenseVector[Double])]) =>
         if (deltaTFTE > 0)
-          s.sliding((deltaTFTE + 1) * fte_step).map(load_history).toIterable
+          s.sliding((deltaTFTE * fte_step) + 1).map(load_history).toIterable
         else s
     )
 
