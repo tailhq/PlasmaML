@@ -662,7 +662,7 @@ package object fte {
       dtflearn.model.data_ops(
         shuffleBuffer = 10,
         batchSize = miniBatch,
-        prefetchSize = 2
+        prefetchSize = 10
       )
 
     val train_config_tuning: MetaPipe[
