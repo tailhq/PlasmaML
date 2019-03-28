@@ -5,7 +5,10 @@ import io.github.mandar2812.dynaml.DynaMLPipe
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.kernels._
 import io.github.mandar2812.dynaml.models.gp.GPRegression
-import io.github.mandar2812.dynaml.optimization.{GradBasedGlobalOptimizer, GridSearch}
+import io.github.mandar2812.dynaml.optimization.{
+  GradBasedGlobalOptimizer,
+  GridSearch
+}
 import io.github.mandar2812.dynaml.pipes.DataPipe
 
 import scala.util.Random
@@ -18,52 +21,80 @@ import scala.util.Random
   */
 object TestGPOmni {
 
-  def apply (kernel: LocalScalarKernel[DenseVector[Double]],
-             year: Int, yeartest: Int,
-             bandwidth: Double,
-             noise: LocalScalarKernel[DenseVector[Double]],
-             num_training: Int,
-             num_test: Int, columns: List[Int],
-             grid: Int, step: Double,
-             randomSample: Boolean,
-             globalOpt: String,
-             stepSize: Double,
-             maxIt: Int): Unit = {
+  def apply(
+    kernel: LocalScalarKernel[DenseVector[Double]],
+    year: Int,
+    yeartest: Int,
+    bandwidth: Double,
+    noise: LocalScalarKernel[DenseVector[Double]],
+    num_training: Int,
+    num_test: Int,
+    columns: List[Int],
+    grid: Int,
+    step: Double,
+    randomSample: Boolean,
+    globalOpt: String,
+    stepSize: Double,
+    maxIt: Int
+  ): Unit = {
 
-    runExperiment(year, yeartest, kernel, bandwidth,
-      noise, num_training, num_test, columns,
-      grid, step, globalOpt, randomSample,
-      Map("tolerance" -> "0.0001",
-        "step" -> stepSize.toString,
-        "maxIterations" -> maxIt.toString))
+    runExperiment(
+      year,
+      yeartest,
+      kernel,
+      bandwidth,
+      noise,
+      num_training,
+      num_test,
+      columns,
+      grid,
+      step,
+      globalOpt,
+      randomSample,
+      Map(
+        "tolerance"     -> "0.0001",
+        "step"          -> stepSize.toString,
+        "maxIterations" -> maxIt.toString
+      )
+    )
 
   }
 
-  def runExperiment(year: Int = 2006, yeartest: Int = 2007,
-                    kernel: LocalScalarKernel[DenseVector[Double]],
-                    bandwidth: Double = 0.5,
-                    noise: LocalScalarKernel[DenseVector[Double]],
-                    num_training: Int = 200, num_test: Int = 50,
-                    columns: List[Int] = List(40,16,21,23,24,22,25),
-                    grid: Int = 5, step: Double = 0.2,
-                    globalOpt: String = "ML", randomSample: Boolean = false,
-                    opt: Map[String, String]): Unit = {
-
-
+  def runExperiment(
+    year: Int = 2006,
+    yeartest: Int = 2007,
+    kernel: LocalScalarKernel[DenseVector[Double]],
+    bandwidth: Double = 0.5,
+    noise: LocalScalarKernel[DenseVector[Double]],
+    num_training: Int = 200,
+    num_test: Int = 50,
+    columns: List[Int] = List(40, 16, 21, 23, 24, 22, 25),
+    grid: Int = 5,
+    step: Double = 0.2,
+    globalOpt: String = "ML",
+    randomSample: Boolean = false,
+    opt: Map[String, String]
+  ): Unit = {
 
     //function to train and test a GP Regression model
     //accepts training and test splits separately.
     val modelTrainTest =
-      (trainTest: ((Stream[(DenseVector[Double], Double)],
-        Stream[(DenseVector[Double], Double)]),
-        (DenseVector[Double], DenseVector[Double]))) => {
-        val model = new GPRegression(kernel, noise, trainingdata = trainTest._1._1.toSeq)
+      (trainTest: (
+        (
+          Iterable[(DenseVector[Double], Double)],
+          Iterable[(DenseVector[Double], Double)]
+        ),
+        (DenseVector[Double], DenseVector[Double])
+      )) => {
+        val model =
+          new GPRegression(kernel, noise, trainingdata = trainTest._1._1.toSeq)
 
         val gs = globalOpt match {
-          case "GS" => new GridSearch[model.type](model)
-            .setGridSize(grid)
-            .setStepSize(step)
-            .setLogScale(false)
+          case "GS" =>
+            new GridSearch[model.type](model)
+              .setGridSize(grid)
+              .setStepSize(step)
+              .setLogScale(false)
 
           case "ML" => new GradBasedGlobalOptimizer[GPRegression](model)
         }
@@ -77,14 +108,21 @@ object TestGPOmni {
         val scoresAndLabelsPipe =
           DataPipe(
             (res: Seq[(DenseVector[Double], Double, Double, Double, Double)]) =>
-              res.map(i => (i._3, i._2)).toList) > DataPipe((list: List[(Double, Double)]) =>
-            list.map{l => (l._1*trainTest._2._2(-1) + trainTest._2._1(-1),
-              l._2*trainTest._2._2(-1) + trainTest._2._1(-1))})
+              res.map(i => (i._3, i._2)).toList
+          ) > DataPipe(
+            (list: List[(Double, Double)]) =>
+              list.map { l =>
+                (
+                  l._1 * trainTest._2._2(-1) + trainTest._2._1(-1),
+                  l._2 * trainTest._2._2(-1) + trainTest._2._1(-1)
+                )
+              }
+          )
 
         val scoresAndLabels = scoresAndLabelsPipe.run(res)
 
-        val metrics = new RegressionMetrics(scoresAndLabels,
-          scoresAndLabels.length)
+        val metrics =
+          new RegressionMetrics(scoresAndLabels, scoresAndLabels.length)
 
         //println(scoresAndLabels)
         metrics.print()
@@ -100,61 +138,81 @@ object TestGPOmni {
 
     val preProcessPipe = DynaMLPipe.fileToStream >
       DynaMLPipe.replaceWhiteSpaces >
-      DynaMLPipe.extractTrainingFeatures(columns,
-        Map(16 -> "999.9", 21 -> "999.9",
-          24 -> "9999.", 23 -> "999.9",
-          40 -> "99999", 22 -> "9999999.",
-          25 -> "999.9", 28 -> "99.99",
-          27 -> "9.999", 39 -> "999")) >
+      DynaMLPipe.extractTrainingFeatures(
+        columns,
+        Map(
+          16 -> "999.9",
+          21 -> "999.9",
+          24 -> "9999.",
+          23 -> "999.9",
+          40 -> "99999",
+          22 -> "9999999.",
+          25 -> "999.9",
+          28 -> "99.99",
+          27 -> "9.999",
+          39 -> "999"
+        )
+      ) >
       DynaMLPipe.removeMissingLines >
       DynaMLPipe.splitFeaturesAndTargets
 
     /*
-    * Create the final pipe composed as follows
-    *
-    * train, test
-    *   |       |
-    *   |-------|
-    *   |       |
-    *   v       v
-    * p_train, p_test : pre-process
-    *   |       |
-    *   |-------|
-    *   |       |
-    *   v       v
-    * s_train, s_test : sub-sample
-    *   |       |
-    *   |-------|
-    *   |       |
-    *   v       v
-    * norm_tr, norm_te : mean center and standardize
-    *   |       |
-    *   |-------|
-    *   |       |
-    *   v       v
-    *   |       |
-    *  |-----------------|
-    *  | Train, tune and |
-    *  | test the model. |
-    *  | Output graphs,  |
-    *  | metrics         |
-    *  |_________________|
-    *
-    * */
+     * Create the final pipe composed as follows
+     *
+     * train, test
+     *   |       |
+     *   |-------|
+     *   |       |
+     *   v       v
+     * p_train, p_test : pre-process
+     *   |       |
+     *   |-------|
+     *   |       |
+     *   v       v
+     * s_train, s_test : sub-sample
+     *   |       |
+     *   |-------|
+     *   |       |
+     *   v       v
+     * norm_tr, norm_te : mean center and standardize
+     *   |       |
+     *   |-------|
+     *   |       |
+     *   v       v
+     *   |       |
+     *  |-----------------|
+     *  | Train, tune and |
+     *  | test the model. |
+     *  | Output graphs,  |
+     *  | metrics         |
+     *  |_________________|
+     *
+     * */
     val trainTestPipe = DynaMLPipe.duplicate(preProcessPipe) >
-      DataPipe((data: (Stream[(DenseVector[Double], Double)],
-        Stream[(DenseVector[Double], Double)])) => {
-        if(!randomSample)
-          (data._1.take(num_training), data._2.takeRight(num_test))
-        else
-          (data._1.filter(_ => Random.nextDouble() <= num_training/data._1.size.toDouble),
-            data._2.filter(_ => Random.nextDouble() <= num_test/data._2.size.toDouble))
-      }) >
+      DataPipe(
+        (data: (
+          Iterable[(DenseVector[Double], Double)],
+          Iterable[(DenseVector[Double], Double)]
+        )) => {
+          if (!randomSample)
+            (data._1.take(num_training), data._2.takeRight(num_test))
+          else
+            (
+              data._1.filter(
+                _ => Random.nextDouble() <= num_training / data._1.size.toDouble
+              ),
+              data._2.filter(
+                _ => Random.nextDouble() <= num_test / data._2.size.toDouble
+              )
+            )
+        }
+      ) >
       DynaMLPipe.trainTestGaussianStandardization >
       DataPipe(modelTrainTest)
 
-
-    trainTestPipe.run(("data/omni2_"+year+".csv", "data/omni2_"+yeartest+".csv"))
+    trainTestPipe.run(
+      ("data/omni2_" + year + ".csv", "data/omni2_" + yeartest + ".csv")
+    )
   }
 
 }

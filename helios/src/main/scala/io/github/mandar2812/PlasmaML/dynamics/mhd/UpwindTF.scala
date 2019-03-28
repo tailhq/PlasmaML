@@ -20,16 +20,18 @@ import org.platanios.tensorflow.api.ops.variables.{ConstantInitializer, Initiali
   * @param nR Number of divisions of the radial domain.
   * @param omegaInit Initialiser for the solar rotation speed.
   * */
-case class UpwindTF(
+case class UpwindTF[P: TF: IsFloatOrDouble](
   override val name: String,
   rDomain: (Double, Double), nR: Int,
   vmin: Double = 200, vmax: Double = 1200,
-  omegaInit: Initializer = RandomUniformInitializer(0.01, 1.0))
-  extends Layer[Output, Output](name) {
+  omegaInit: Initializer = RandomUniformInitializer(0.01f, 1.0f))
+  extends Layer[Output[P], Output[P]](name) {
 
   override val layerType: String = s"Upwind1D[r:$rDomain, nR:$nR]"
 
-  protected val (beta, gamma) = (Tensor(vmax.toFloat).subtract(vmin.toFloat), Tensor(vmin.toFloat))
+  protected val (beta, gamma) = (
+    Tensor(vmax.toFloat).subtract(vmin.toFloat).castTo[P],
+    Tensor(vmin.toFloat).castTo[P])
 
   /**
     * The Carrington longitude lies
@@ -39,63 +41,62 @@ case class UpwindTF(
 
   protected val deltaR: Float = (rDomain._2.toFloat - rDomain._1.toFloat)/nR
 
-  override protected def _forward(input: Output)(implicit mode: Mode): Output = {
+  override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): Output[P] = {
 
     val nTheta = input.shape(-1)
 
     val deltaTheta: Float = (thetaDomain._2.toFloat - thetaDomain._1.toFloat)/nTheta
 
-    val dv_dtheta = tf.constant(
-      dtf.tensor_f32(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
-        (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*),
-      input.dataType, Shape(nTheta, nTheta),
+    val dv_dtheta = tf.constant[P](
+      dtf.tensor_f64(nTheta, nTheta)(DenseMatrix.tabulate(nTheta, nTheta)(
+        (i, j) => if(i == j) -1.0 else if(j == (i+1)%nTheta) 1.0 else 0.0).t.toArray:_*).castTo[P],
+      Shape(nTheta, nTheta),
       "DeltaV")
 
     //Rotational speed of the sun, as a trainable parameter
-    val omega_rot = tf.variable("OmegaRot", input.dataType, Shape(), omegaInit)
-    val alpha     = tf.variable("alpha", input.dataType, Shape(), ConstantInitializer(0.15))
+    val omega_rot = tf.variable[P]("OmegaRot", Shape(), omegaInit)
+    val alpha     = tf.variable[P]("alpha", Shape(), ConstantInitializer(0.15))
 
     //Propagate solar wind, from r = rmin to r = rmax
     val velocity_profile = tf.stack(
       (1 to nR).scanLeft(input)((x, _) => {
 
-        val invV = x.multiply(beta).add(gamma).pow(-1f)
+        val invV = x.multiply(beta).add(gamma).pow(Tensor(-1f).castTo[P])
 
         x.add(x.tensorDot(dv_dtheta, Seq(1), Seq(0))
           .multiply(invV)
           .multiply(omega_rot)
-          .multiply(deltaR/deltaTheta))
+          .multiply(Tensor(deltaR/deltaTheta).castTo[P]))
       }),
       axis = -1)
 
     //Compute residual acceleration
     val rH = 50.0
 
-    val r = tf.constant(
-      dtf.tensor_f32(nR + 1)(
+    val r = tf.constant[P](
+      dtf.tensor_f64(nR + 1)(
         utils.range(rDomain._1, rDomain._2, nR) :+ rDomain._2 :_*
-      ).divide(rH),
-      input.dataType,
+      ).divide(rH).castTo[P],
       Shape(nR + 1))
 
     val v_acc = tf
       .stack(Seq.fill(nR + 1)(input.multiply(alpha)), axis = -1)
       .multiply(
-        r.multiply(-1.0)
-          .exp.multiply(-1.0)
-          .add(1.0)
+        r.multiply(Tensor(-1.0).castTo[P])
+          .exp.multiply(Tensor(-1.0).castTo[P])
+          .add(Tensor(1.0).castTo[P])
       )
 
     velocity_profile.add(v_acc)
   }
 }
 
-case class UpwindPropogate(
+case class UpwindPropogate[P: TF: IsFloatOrDouble](
   override val name: String,
   rDomain: (Double, Double),
   nR: Int, nTheta: Int,
   omegaInit: Initializer = RandomUniformInitializer())
-  extends Layer[Output, Output](name) {
+  extends Layer[Output[P], Output[P]](name) {
 
   override val layerType: String = s"UpwindPropogate[r:$rDomain, nR:$nR, nTheta:$nTheta]"
 
@@ -110,25 +111,25 @@ case class UpwindPropogate(
     (thetaDomain._2 - thetaDomain._1)/nTheta
   )
 
-  override protected def _forward(input: Output)(implicit mode: Mode): Output = {
+  override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): Output[P] = {
 
     val velocities = input(::, 0, ::)
 
-    val sliding_avg_tensor = dtf.tensor_f32(
+    val sliding_avg_tensor = dtf.tensor_f64(
       nR, nR + 1)(
       DenseMatrix.tabulate(nR, nR + 1)(
         (i, j) => if(i == j) 0.5 else if(j == (i+1)) 0.5 else 0.0
       ).t.toArray:_*
-    )
+    ).castTo[P]
 
-    val sliding_avg = tf.constant(
+    val sliding_avg = tf.constant[P](
       sliding_avg_tensor,
-      FLOAT64, Shape(nR, nR+1), "VAvgOp")
+      Shape(nR, nR+1), "VAvgOp")
 
     val deltat = velocities.tensorDot(sliding_avg, Seq(1), Seq(0))
-      .pow(-1d)
-      .multiply(deltaR)
-      .sum()
+      .pow(Tensor(-1d).castTo[P])
+      .multiply(Tensor(deltaR).castTo[P])
+      .sum[Int]()
 
     val v = input(::, 0, -1).reshape(Shape())
 

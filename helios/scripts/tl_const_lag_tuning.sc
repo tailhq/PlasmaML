@@ -22,11 +22,11 @@ def main(
   alpha: Double                                              = 0.0,
   train_test_separate: Boolean                               = false,
   num_neurons: Seq[Int]                                      = Seq(40),
-  activation_func: Int => Activation                         = timelag.utils.getReLUAct(1),
+  activation_func: Int => Activation[Double]                 = timelag.utils.getReLUAct[Double](1, _),
   iterations: Int                                            = 150000,
   iterations_tuning: Int                                     = 20000,
   miniBatch: Int                                             = 32,
-  optimizer: Optimizer                                       = tf.train.AdaDelta(0.01),
+  optimizer: Optimizer                                       = tf.train.AdaDelta(0.01f),
   sum_dir_prefix: String                                     = "const_lag",
   prior_type: Seq[helios.learn.cdt_loss.Divergence]          = Seq(helios.learn.cdt_loss.KullbackLeibler),
   target_prob: Seq[helios.learn.cdt_loss.TargetDistribution] = Seq(helios.learn.cdt_loss.Boltzmann),
@@ -38,15 +38,15 @@ def main(
   hyp_opt_iterations: Option[Int]                            = Some(5),
   epochFlag: Boolean                                         = false,
   regularization_types: Seq[String]                          = Seq("L2"))
-: Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
+: Seq[timelag.ExperimentResult[Double, Double, timelag.TunedModelRun[Double, Double]]] = {
 
 
   val beta = 100f
   //Output computation
-  val compute_v = DataPipe[Tensor, Float]((v: Tensor) => v.square.mean().scalar.asInstanceOf[Float]*beta/d)
+  val compute_v = DataPipe[Tensor[Double], Float]((v: Tensor[Double]) => v.square.mean().scalar.asInstanceOf[Float]*beta/d)
 
-  val compute_output: DataPipe[Tensor, (Float, Float)] = DataPipe(
-    (x: Tensor) => {
+  val compute_output: DataPipe[Tensor[Double], (Float, Float)] = DataPipe(
+    (x: Tensor[Double]) => {
 
       val out = compute_v(x)
 
@@ -67,7 +67,8 @@ def main(
     regularization_types
   )
 
-  experiment_results.map(experiment_result => experiment_result.copy(
-    config = experiment_result.config.copy(output_mapping = Some(compute_v))
+  experiment_results.map(experiment_result =>
+    experiment_result.copy[Double, Double, timelag.TunedModelRun[Double, Double]](
+      config = experiment_result.config.copy[Double](output_mapping = Some(compute_v))
   ))
 }

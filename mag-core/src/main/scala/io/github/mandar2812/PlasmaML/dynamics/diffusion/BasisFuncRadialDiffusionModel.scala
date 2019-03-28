@@ -361,11 +361,11 @@ object BasisFuncRadialDiffusionModel {
     lambda_alpha: Double, lambda_beta: Double,
     lambda_a: Double, lambda_b: Double)(file: String): Stream[DenseVector[Double]] = {
 
-    val strToVector = StreamDataPipe((p: String) => DenseVector(p.split(",").map(_.toDouble)))
+    val strToVector = IterableDataPipe((p: String) => DenseVector(p.split(",").map(_.toDouble)))
 
     val load_results = fileToStream > strToVector
 
-    val post_samples = load_results(".cache/"+file)
+    val post_samples: Stream[DenseVector[Double]] = load_results.run(".cache/"+file).toStream
 
     scatter(post_samples.map(c => (c(0), c(2))))
     hold()

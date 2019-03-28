@@ -24,7 +24,10 @@ import org.platanios.tensorflow.api.ops.Output
   * @param batch The batch size for each training epoch.
   * @author mandar2812
   * */
-case class RBFWeightedSWLoss(
+case class RBFWeightedSWLoss[
+P: TF: IsFloatOrDouble,
+T: TF: IsNumeric: IsNotQuantized,
+L: TF : IsFloatOrDouble](
   override val name:    String,
   size_causal_window:   Int,
   kernel_time_scale:    Double = 3d,
@@ -33,26 +36,28 @@ case class RBFWeightedSWLoss(
   prior_scaling:        Double = 1.0,
   batch:                Int    = -1,
   scale_lags: Boolean = true)
-  extends Loss[((Output, Output), Output)](name) {
+  extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"RBFSW[horizon:$size_causal_window, timescale:$kernel_time_scale]"
 
-  override protected def _forward(input: ((Output, Output), Output))(implicit mode: Mode): Output = {
+  override def forwardWithoutContext(
+    input: ((Output[P], Output[P]), Output[T]))(
+    implicit mode: Mode): Output[L] = {
 
     val predictions   = input._1._1
-    val timelags = input._1._2
+    val timelags      = input._1._2
     val targets       = input._2
 
 
     //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
     val batchSize =
-      if(batch == -1) predictions.size.toInt/predictions.shape.toTensor().prod().scalar.asInstanceOf[Int]
+      if(batch == -1) predictions.size.toInt/predictions.shape.toTensor.prod[Int]().scalar.asInstanceOf[Int]
       else batch
 
     //Sort the predicted targets and time lags, obtaining
     //the ranks of each element.
-    val rank_preds = predictions.topK(batchSize)._2.cast(FLOAT32)
-    val rank_unsc_lags = timelags.topK(batchSize)._2.cast(FLOAT32)
+    val rank_preds = predictions.topK(batchSize)._2.castTo[P]
+    val rank_unsc_lags = timelags.topK(batchSize)._2.castTo[P]
 
     //Standardize (mean center) the ranked tensors
     val (ranked_preds_mean, ranked_unscaled_lags_mean) = (rank_preds.mean(), rank_unsc_lags.mean())
@@ -70,21 +75,21 @@ case class RBFWeightedSWLoss(
 
     val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(predictions), axis = -1)
 
-    val index_times: Output = Tensor(
+    val index_times: Output[P] = Tensor(
       (0 until size_causal_window).map(_.toDouble)
     ).reshape(
       Shape(size_causal_window)
-    )
+    ).castTo[P].toOutput
 
     //Calculate the convolution kernel of the loss function.
     val convolution_kernel = repeated_times.subtract(index_times)
       .abs
-      .pow(kernel_norm_exponent)
-      .multiply(-1.0/kernel_norm_exponent)
-      .divide(kernel_time_scale)
+      .pow(Tensor(kernel_norm_exponent).castTo[P].toOutput)
+      .multiply(Tensor(-1.0).castTo[P]/Tensor(kernel_norm_exponent).castTo[P])
+      .divide(Tensor(kernel_time_scale).castTo[P])
       .exp
 
-    val target_err = repeated_preds.subtract(targets)
+    val target_err = repeated_preds.subtract(targets.castTo[P])
 
     //Convolve the kernel with the loss tensor, yielding the weighted loss tensor
     val weighted_loss_tensor = target_err
@@ -102,43 +107,43 @@ case class RBFWeightedSWLoss(
     val prior =
       norm_ranked_targets.multiply(norm_ranked_unsc_lags)
         .mean()
-        .subtract(corr_cutoff)
-        .multiply(prior_scaling)
+        .subtract(Tensor(corr_cutoff).castTo[P].toOutput)
+        .multiply(Tensor(prior_scaling).castTo[P].toOutput)
 
     val offset: Double = (1.0 - math.abs(corr_cutoff))*prior_scaling
 
-    weighted_loss_tensor.add(prior).add(offset)
+    weighted_loss_tensor.add(prior).add(Tensor(offset).castTo[P].toOutput).castTo[L]
   }
 }
 
 
 object RBFWeightedSWLoss {
 
-  def output_mapping(
+  def output_mapping[P: TF: IsFloatOrDouble](
     name: String,
     size_causal_window: Int,
     kernel_time_scale: Double = 3d,
-    scale_lags: Boolean = true): Layer[Output, (Output, Output)] =
-    new Layer[Output, (Output, Output)](name) {
+    scale_lags: Boolean = true): Layer[Output[P], (Output[P], Output[P])] =
+    new Layer[Output[P], (Output[P], Output[P])](name) {
 
       override val layerType: String = s"OutputRBFSW[horizon:$size_causal_window, timescale:$kernel_time_scale]"
 
-      private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+      private[this] val scaling = Tensor(size_causal_window.toDouble-1d).castTo[P]
 
-      val alpha = Tensor(1.0)
-      val nu    = Tensor(1.0)
-      val q     = Tensor(1.0)
+      val alpha = Tensor(1.0).castTo[P].toOutput
+      val nu    = Tensor(1.0).castTo[P].toOutput
+      val q     = Tensor(1.0).castTo[P].toOutput
 
-      override protected def _forward(input: Output)(implicit mode: Mode): (Output, Output) = {
+      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): (Output[P], Output[P]) = {
 
         val lags = if (scale_lags) {
           input(::, -1)
-            .multiply(alpha.add(1E-6).square.multiply(-1.0))
+            .multiply(alpha.add(Tensor(1E-6).castTo[P].toOutput).square.multiply(Tensor(-1.0).castTo[P].toOutput))
             .exp
             .multiply(q.square)
-            .add(1.0)
-            .pow(nu.square.pow(-1.0).multiply(-1.0))
-            .multiply(scaling)
+            .add(Tensor(1.0).castTo[P].toOutput)
+            .pow(nu.square.pow(Tensor(-1.0).castTo[P].toOutput).multiply(Tensor(-1.0).castTo[P].toOutput))
+            .multiply(scaling.toOutput)
         } else {
           input(::, -1)
         }

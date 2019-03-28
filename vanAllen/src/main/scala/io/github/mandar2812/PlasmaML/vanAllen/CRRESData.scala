@@ -1,7 +1,7 @@
 package io.github.mandar2812.PlasmaML.vanAllen
 
 import io.github.mandar2812.PlasmaML.SPDFData
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes.{DataPipe, IterableDataPipe}
 import io.github.mandar2812.dynaml.{DynaMLPipe, utils}
 import org.apache.log4j.Logger
 
@@ -34,10 +34,10 @@ object CRRESData {
 
     val ftpIndexProcess = DataPipe((s: String) => s.split("\\n").toStream) >
       DynaMLPipe.replaceWhiteSpaces >
-      StreamDataPipe((line: String) => line.split(",").last) >
-      StreamDataPipe((fileStr: String) => fileStr.contains(".cdf")) >
-      StreamDataPipe((fileStr: String) => SPDFData.nasa_spdf_baseurl + crres_uri + year+ "/" + fileStr) >
-      StreamDataPipe((url: String) => {
+      IterableDataPipe((line: String) => line.split(",").last) >
+      IterableDataPipe((fileStr: String) => fileStr.contains(".cdf")) >
+      IterableDataPipe((fileStr: String) => SPDFData.nasa_spdf_baseurl + crres_uri + year+ "/" + fileStr) >
+      IterableDataPipe((url: String) => {
         val filename = url.split("/").last
         logger.info("Downloading file: "+filename)
         utils.downloadURL(url, dataRoot + filename)

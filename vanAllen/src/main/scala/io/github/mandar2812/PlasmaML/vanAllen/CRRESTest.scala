@@ -13,7 +13,7 @@ import io.github.mandar2812.dynaml.models.gp.{AbstractGPRegressionModel, GPRegre
 import io.github.mandar2812.dynaml.models.lm.{GeneralizedLinearModel, RegularizedGLM}
 import io.github.mandar2812.dynaml.models.neuralnets.{AutoEncoder, FeedForwardNetwork}
 import io.github.mandar2812.dynaml.models.neuralnets.TransferFunctions._
-import io.github.mandar2812.dynaml.pipes.{StreamDataPipe, _}
+import io.github.mandar2812.dynaml.pipes.{IterableDataPipe, _}
 import io.github.mandar2812.dynaml.utils.{GaussianScaler, MinMaxScaler}
 import io.github.mandar2812.dynaml.utils._
 import org.apache.spark.mllib.linalg.Vectors
@@ -68,8 +68,8 @@ object CRRESTest {
   type Output = Double
   type VecOutput = DenseVector[Double]
 
-  type VecData = Stream[(Features, VecOutput)]
-  type Data = Stream[(Features, Output)]
+  type VecData = Iterable[(Features, VecOutput)]
+  type Data = Iterable[(Features, Output)]
   type Scales = (GaussianScaler, GaussianScaler)
   type DataAndScales = (Data, Scales)
 
@@ -154,14 +154,14 @@ object CRRESTest {
 
   def preProcess(num_train: Int, num_test: Int) =
     collateData >
-      StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, DenseVector(math.log(s._2)))) >
-      DataPipe((data: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+      IterableDataPipe((s: (DenseVector[Double], Double)) => (s._1, DenseVector(math.log(s._2)))) >
+      DataPipe((data: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
         (data.take(num_train), data.takeRight(num_test))
       })
 
   def precalculateScales(): Unit = {
     val process = collateData >
-      StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, DenseVector(math.log(s._2)))) >
+      IterableDataPipe((s: (DenseVector[Double], Double)) => (s._1, DenseVector(math.log(s._2)))) >
       gaussianScaling
 
     //(featuresSc, targetsSc) = process(fileIds)._2
@@ -189,7 +189,7 @@ object CRRESTest {
     })
 
   val extractTimeSeriesSymh = (Tfunc: (Double, Double, Double, Double) => Long) =>
-    DataPipe((lines: Stream[String]) => lines.map{line =>
+    DataPipe((lines: Iterable[String]) => lines.map{line =>
       val splits = line.split(",")
       val timestamp = Tfunc(splits(0).toDouble, splits(1).toDouble, splits(2).toDouble, splits(3).toDouble)
       val feat = DenseVector(splits.slice(4, splits.length).map(_.toDouble))
@@ -219,8 +219,8 @@ object CRRESTest {
           filteredFlux.sum/filteredFlux.length)
       })
     }) >
-    StreamDataPipe((p: (Features, Output)) => p._1(1) <= 7.0 && p._1(1) >= 3.0) >
-    StreamDataPipe((p: (Features, Output)) =>
+    IterableDataPipe((p: (Features, Output)) => p._1(1) <= 7.0 && p._1(1) >= 3.0) >
+    IterableDataPipe((p: (Features, Output)) =>
       (p._1(p._1.length-1).toLong, (p._1(0 to -2), p._2)))
 
   val prepPipeSymH = fileToStream >
@@ -245,9 +245,9 @@ object CRRESTest {
       (dt.getMillis/1000.0).toLong
     })
 
-  val collateData = StreamDataPipe((s: String) =>
+  val collateData = IterableDataPipe((s: String) =>
     (dataRoot+"crres/crres_h0_mea_"+s+"_v01.cdf", "data/omni_min"+s.take(4)+".csv")) >
-    StreamDataPipe((s: (String, String)) => {
+    IterableDataPipe((s: (String, String)) => {
       val (crresData, symhData) = (prepCRRES * prepPipeSymH)(s)
 
       (crresData ++ symhData).groupBy(_._1).mapValues({
@@ -261,7 +261,7 @@ object CRRESTest {
         .filter(l => l._2 != Double.NaN && l._1.length > 2)
         .toStream
     }) >
-    DataPipe((seq: Stream[Data]) => seq.reduce((x,y) => x ++ y))
+    DataPipe((seq: Iterable[Data]) => seq.reduce((x,y) => x ++ y))
 
   def apply(kernel: VectorKernel,
             noiseKernel: VectorKernel =
@@ -271,7 +271,7 @@ object CRRESTest {
 
     val gpPipe = new GPRegressionPipe[
       (VecData, VecData, (ReversibleScaler[Features], ReversibleScaler[Features])), Features](
-      (dataCouple) => dataCouple._1.take(num_train).map(c => (c._1, c._2(0))),
+      (dataCouple) => dataCouple._1.take(num_train).map(c => (c._1, c._2(0))).toSeq,
       kernel, noiseKernel)
 
     val buildModel = DataPipe((trainTest: (VecData, VecData, Scales)) => {
@@ -292,24 +292,24 @@ object CRRESTest {
 
         val tunedModel = trainTest._1
 
-        val predRes = tunedModel.test(trainTest._2.map(c => (c._1, c._2(0))))
+        val predRes = tunedModel.test(trainTest._2.map(c => (c._1, c._2(0))).toSeq)
 
         val scoresAndLabelsPipe = DataPipe(
           (res: Seq[(Features, Output, Output, Output, Output)]) =>
             res.map(i => (DenseVector(i._3), DenseVector(i._2))).toStream) >
-          StreamDataPipe((l: (VecOutput, VecOutput)) => sc.i(l)) >
-          StreamDataPipe((l: (VecOutput, VecOutput)) => (l._1(0), l._2(0)))
+          IterableDataPipe((l: (VecOutput, VecOutput)) => sc.i(l)) >
+          IterableDataPipe((l: (VecOutput, VecOutput)) => (l._1(0), l._2(0)))
 
-        val scoresAndLabels = scoresAndLabelsPipe(predRes)
+        val scoresAndLabels = scoresAndLabelsPipe(predRes).toList
 
-        new RegressionMetrics(scoresAndLabels.toList, scoresAndLabels.length)
+        new RegressionMetrics(scoresAndLabels, scoresAndLabels.length)
       })
 
     val prepare = collateData >
-      StreamDataPipe((s: (Features, Output)) => (s._1, DenseVector(math.log(s._2)))) >
+      IterableDataPipe((s: (Features, Output)) => (s._1, DenseVector(math.log(s._2)))) >
       DataPipe((s: VecData) => {
         val shuffledData = Random.shuffle(s)
-        val len = shuffledData.length
+        val len = shuffledData.toSeq.length
         (shuffledData.take(len-num_test), shuffledData.takeRight(num_test))
       })
 
@@ -325,11 +325,11 @@ object CRRESTest {
             num_test: Int) = {
 
     val finalPipe = collateData >
-      StreamDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
-      StreamDataPipe(
+      IterableDataPipe((s: (DenseVector[Double], Double)) => (s._1, math.log(s._2))) >
+      IterableDataPipe(
         (couple: (DenseVector[Double], Double)) =>
           (couple._1, DenseVector(couple._2))) >
-      DataPipe((data: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+      DataPipe((data: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
         (data.take(num_train), data.takeRight(num_test))
       }) >
       crresScale >
@@ -347,7 +347,7 @@ object CRRESTest {
           .setRegParam(0.0)
           .setSparsityWeight(OptConfig.sparsity)
 
-        autoEncoder.learn(tt._1.map(p => (p._1, p._1)))
+        autoEncoder.learn(tt._1.map(p => (p._1, p._1)).toStream)
 
         //transform inputs for train and test
 
@@ -356,9 +356,10 @@ object CRRESTest {
           tt._2.map(pattern => (autoEncoder(pattern._1), pattern._2))
           )
 
+        val new_train_data = new_tt._1.map(t => (t._1, t._2(0))).toStream
         val glm = new RegularizedGLM(
-          new_tt._1.map(t => (t._1, t._2(0))),
-          new_tt._1.length, identity[Features])
+          new_train_data,
+          new_train_data.length, identity[Features])
 
         glm.setState(Map("regularization" -> OptConfig.reg))
 
@@ -381,9 +382,9 @@ object CRRESTest {
   def apply(num_test: Int, file: String) = {
 
     val pipe = prepCRRES >
-      StreamDataPipe((p: (Long, (Features, Output))) => p._2) >
+      IterableDataPipe((p: (Long, (Features, Output))) => p._2) >
       DataPipe((s: Data) => s.takeRight(num_test)) >
-      StreamDataPipe((p: (Features, Output)) => {
+      IterableDataPipe((p: (Features, Output)) => {
         val (mlt, lshell, flux) = (p._1(0), p._1(1), p._2)
         val n_threshold = 10*math.pow(lshell/6.6, 4.0)
         flux >= n_threshold match {
@@ -396,8 +397,9 @@ object CRRESTest {
         }
 
       }) >
-      DataPipe((s: Stream[(Double, Double)]) => {
-        new RegressionMetrics(s.map(c => (math.log(c._1), math.log(c._2))).toList, s.length)
+      DataPipe((s: Iterable[(Double, Double)]) => {
+        val sc = s.map(c => (math.log(c._1), math.log(c._2))).toList
+        new RegressionMetrics(sc, sc.length)
       })
 
     pipe(file)
@@ -413,17 +415,17 @@ object CRRESTest {
     }
 
     val prepPipe = prepCRRES >
-      StreamDataPipe((p: (Long, (Features, Output))) => p._2._2)
+      IterableDataPipe((p: (Long, (Features, Output))) => p._2._2)
 
     val compositePipe =
-      StreamDataPipe((s: String) => dataRoot+"crres/crres_h0_mea_"+s+"_v01.cdf") >
-        StreamDataPipe((s: String) => prepPipe(s)) >
-        DataPipe((seq: Stream[Stream[Double]]) => seq.reduce((x,y) => x ++ y)) >
-        DataPipe((xs: Stream[Double]) => {
-          val F = cumulativeDist(xs)
+      IterableDataPipe((s: String) => dataRoot+"crres/crres_h0_mea_"+s+"_v01.cdf") >
+        IterableDataPipe((s: String) => prepPipe(s)) >
+        DataPipe((seq: Iterable[Iterable[Double]]) => seq.reduce((x,y) => x ++ y)) >
+        DataPipe((xs: Iterable[Double]) => {
+          val F = cumulativeDist(xs.toStream)
           xs.map(v => (math.log(v), math.log(-1.0 * math.log(1.0 - F(v)))))
         }) >
-        StreamDataPipe((c: (Double, Double)) => c._2 != Double.PositiveInfinity)
+        IterableDataPipe((c: (Double, Double)) => c._2 != Double.PositiveInfinity)
 
     val fileStrs = Stream(
       "19900728", "19900807", "19900817",
@@ -445,8 +447,8 @@ object CRRESpsdModels {
   type Output = Double
 
   type VecOutput = DenseVector[Output]
-  type VecData = Stream[(Features, VecOutput)]
-  type Data = Stream[(Features, Output)]
+  type VecData = Iterable[(Features, VecOutput)]
+  type Data = Iterable[(Features, Output)]
   type Scales = (GaussianScaler, GaussianScaler)
   type DataAndScales = (Data, Scales)
 
@@ -478,8 +480,8 @@ object CRRESpsdModels {
       ) >
       removeMissingLines >
       splitFeaturesAndTargets >
-      StreamDataPipe((c: (Features, Output)) => (log(c._1), DenseVector(math.log(c._2)))) >
-      StreamDataPipe((c: (Features, VecOutput)) => c._2(0) >= -15.0) >
+      IterableDataPipe((c: (Features, Output)) => (log(c._1), DenseVector(math.log(c._2)))) >
+      IterableDataPipe((c: (Features, VecOutput)) => c._2(0) >= -15.0) >
       DataPipe((s: VecData) => {
         val shuffledData = Random.shuffle(s)
         (shuffledData.take(200000), shuffledData.takeRight(num_test))
@@ -489,7 +491,7 @@ object CRRESpsdModels {
     val gpPipe = new GPRegressionPipe[
       (VecData, VecData, (ReversibleScaler[Features], ReversibleScaler[VecOutput])),
       Features](
-      (dataCouple) => dataCouple._1.take(num_train).map(c => (c._1, c._2(0))),
+      (dataCouple) => dataCouple._1.take(num_train).map(c => (c._1, c._2(0))).toSeq,
       kernel, noiseKernel)
 
     val buildModel = DataPipe((trainTest: (VecData, VecData, Scales)) => {
@@ -510,17 +512,17 @@ object CRRESpsdModels {
 
         val tunedModel = trainTest._1
 
-        val predRes = tunedModel.test(trainTest._2.map(c => (c._1, c._2(0))))
+        val predRes = tunedModel.test(trainTest._2.map(c => (c._1, c._2(0))).toSeq)
 
         val scoresAndLabelsPipe = DataPipe(
           (res: Seq[(Features, Double, Double, Double, Double)]) =>
             res.map(i => (DenseVector(i._3), DenseVector(i._2))).toStream) >
-          StreamDataPipe((l: (Features, VecOutput)) => sc.i(l)) >
-          StreamDataPipe((l: (Features, VecOutput)) => (l._1(0), l._2(0)))
+          IterableDataPipe((l: (Features, VecOutput)) => sc.i(l)) >
+          IterableDataPipe((l: (Features, VecOutput)) => (l._1(0), l._2(0)))
 
-        val scoresAndLabels = scoresAndLabelsPipe(predRes)
+        val scoresAndLabels = scoresAndLabelsPipe(predRes).toList
 
-        new RegressionMetrics(scoresAndLabels.toList, scoresAndLabels.length)
+        new RegressionMetrics(scoresAndLabels, scoresAndLabels.length)
       })
 
     val flow = fileProcess > buildModel > modelTest

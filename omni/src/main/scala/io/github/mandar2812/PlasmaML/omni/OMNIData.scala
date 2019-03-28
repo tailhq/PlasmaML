@@ -113,7 +113,7 @@ object OMNILoader {
     * reads an OMNI file cleans it and extracts the columns specified
     * by targetColumn and exogenousInputs.
     * */
-  def omniFileToStream(targetColumn: Int, exogenousInputs: Seq[Int]): DataPipe[String, Stream[String]] =
+  def omniFileToStream(targetColumn: Int, exogenousInputs: Seq[Int]): DataPipe[String, Iterable[String]] =
     fileToStream >
     replaceWhiteSpaces >
     extractTrainingFeatures(
@@ -271,7 +271,7 @@ object OMNILoader {
   def omniDataToSlidingTS(deltaT: Int, time_window: Int)(
     targetColumn: Int = OMNIData.Quantities.V_SW,
     exogenous_inputs: Seq[Int] = Seq()) =
-    StreamFlatMapPipe(omniFileToStream(targetColumn, exogenous_inputs)) >
+    IterableFlatMapPipe(omniFileToStream(targetColumn, exogenous_inputs)) >
       processWithDateTime >
       mv_forward_time_window(deltaT, time_window)
 

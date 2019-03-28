@@ -11,7 +11,7 @@ import io.github.mandar2812.dynaml.models.gp.{AbstractGPRegressionModel, Kroneck
 import io.github.mandar2812.dynaml.models.neuralnets._
 import io.github.mandar2812.dynaml.models.stp.MOStudentTRegression
 import io.github.mandar2812.dynaml.optimization._
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes.{DataPipe, IterableDataPipe}
 import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.wavelets.{GroupedHaarWaveletFilter, HaarWaveletFilter}
 import org.apache.log4j.Logger
@@ -68,7 +68,7 @@ object OmniMultiOutputModels {
     removeMissingLines
 
   val deltaOperationMult = (deltaT: Int, deltaTargets: Int) =>
-    DataPipe((lines: Stream[(Double, Double)]) =>
+    DataPipe((lines: Iterable[(Double, Double)]) =>
       lines.toList.sliding(deltaT+deltaTargets).map((history) => {
         val features = DenseVector(history.take(deltaT).map(_._2).toArray)
         val outputs = DenseVector(history.takeRight(deltaTargets).map(_._2).toArray)
@@ -76,7 +76,7 @@ object OmniMultiOutputModels {
       }).toStream)
 
   val deltaOperationARXMult = (deltaT: List[Int], deltaTargets: Int) =>
-    DataPipe((lines: Stream[(Double, DenseVector[Double])]) =>
+    DataPipe((lines: Iterable[(Double, DenseVector[Double])]) =>
       lines.toList.sliding(deltaT.max+deltaTargets).map((history) => {
 
         val hist = history.take(deltaT.max).map(_._2)
@@ -115,7 +115,7 @@ object OmniMultiOutputModels {
   def gHFeat = GroupedHaarWaveletFilter(Array.fill(exogenousInputs.length+1)(orderFeat))
   def gHTarg = HaarWaveletFilter(orderTarget)
 
-  def haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+  def haarWaveletPipe = IterableDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
     if (useWaveletBasis)
       (gHFeat(featAndTarg._1), featAndTarg._2)
     else
@@ -137,7 +137,7 @@ object OmniMultiOutputModels {
       val stormsPipe =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe((stormEventData: String) => {
+          IterableDataPipe((stormEventData: String) => {
             val stormMetaFields = stormEventData.split(',')
 
             val eventId = stormMetaFields(0)
@@ -150,12 +150,12 @@ object OmniMultiOutputModels {
             (startDate+"/"+startHour,
               endDate+"/"+endHour)
           }) >
-          DataPipe((s: Stream[(String, String)]) =>
+          DataPipe((s: Iterable[(String, String)]) =>
             s.take(numStormsStart) ++ s.takeRight(n) ++
               /*Stream(("2015/03/17/00", "2015/03/18/23")) ++*/
               Stream(("2015/06/22/08", "2015/06/23/20")) ++
               Stream(("2008/01/02/00", "2008/01/03/00"))) >
-          StreamDataPipe((storm: (String, String)) => {
+          IterableDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
             val (trainingStartDate, trainingEndDate) =
@@ -165,10 +165,10 @@ object OmniMultiOutputModels {
             val (trStampStart, trStampEnd) =
               (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-            val filterData = StreamDataPipe((couple: (Double, Double)) =>
+            val filterData = IterableDataPipe((couple: (Double, Double)) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
-            val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+            val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
             val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -195,7 +195,7 @@ object OmniMultiOutputModels {
             getTraining("data/omni2_"+trainingStartDate.getYear+".csv")
 
           }) >
-          DataPipe((s: Stream[Stream[(DenseVector[Double], DenseVector[Double])]]) => {
+          DataPipe((s: Iterable[Iterable[(DenseVector[Double], DenseVector[Double])]]) => {
             s.reduce((p,q) => p ++ q)
           })
 
@@ -203,12 +203,14 @@ object OmniMultiOutputModels {
     }
 
     val modelTuning = (dataAndScales: (
-      Stream[(DenseVector[Double], DenseVector[Double])],
+      Iterable[(DenseVector[Double], DenseVector[Double])],
         (GaussianScaler, GaussianScaler))) => {
+      
+      val training_data = dataAndScales._1.toStream
 
       val model = new MOGPRegressionModel[DenseVector[Double]](
-        kernel, noise, dataAndScales._1,
-        dataAndScales._1.length, pT)
+        kernel, noise, training_data,
+        training_data.length, pT)
 
       val gs = globalOpt match {
         case "CSA" =>
@@ -276,7 +278,7 @@ object OmniMultiOutputModels {
       val stormsPipe =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe((stormEventData: String) => {
+          IterableDataPipe((stormEventData: String) => {
             val stormMetaFields = stormEventData.split(',')
 
             val eventId = stormMetaFields(0)
@@ -289,12 +291,12 @@ object OmniMultiOutputModels {
             (startDate+"/"+startHour,
               endDate+"/"+endHour)
           }) >
-          DataPipe((s: Stream[(String, String)]) =>
+          DataPipe((s: Iterable[(String, String)]) =>
             s.take(numStormsStart) ++ s.takeRight(n) ++
               /*Stream(("2015/03/17/00", "2015/03/18/23")) ++*/
               Stream(("2015/06/22/08", "2015/06/23/20")) ++
               Stream(("2008/01/02/00", "2008/01/03/00"))) >
-          StreamDataPipe((storm: (String, String)) => {
+          IterableDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
             val (trainingStartDate, trainingEndDate) =
@@ -304,10 +306,10 @@ object OmniMultiOutputModels {
             val (trStampStart, trStampEnd) =
               (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-            val filterData = StreamDataPipe((couple: (Double, Double)) =>
+            val filterData = IterableDataPipe((couple: (Double, Double)) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
-            val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+            val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
             val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -334,7 +336,7 @@ object OmniMultiOutputModels {
             getTraining("data/omni2_"+trainingStartDate.getYear+".csv")
 
           }) >
-          DataPipe((s: Stream[Stream[(DenseVector[Double], DenseVector[Double])]]) => {
+          DataPipe((s: Iterable[Iterable[(DenseVector[Double], DenseVector[Double])]]) => {
             s.reduce((p,q) => p ++ q)
           })
 
@@ -342,12 +344,13 @@ object OmniMultiOutputModels {
     }
 
     val modelTuning = (dataAndScales: (
-      Stream[(DenseVector[Double], DenseVector[Double])],
+      Iterable[(DenseVector[Double], DenseVector[Double])],
         (GaussianScaler, GaussianScaler))) => {
 
+      val training_data = dataAndScales._1.toStream
       val model = new KroneckerMOGPModel[DenseVector[Double]](
-        kernel, noise, coRegK, dataAndScales._1,
-        dataAndScales._1.length, pT)
+        kernel, noise, coRegK, training_data,
+        training_data.length, pT)
 
       val gs = globalOpt match {
         case "CSA" =>
@@ -411,7 +414,7 @@ object OmniMultiOutputModels {
       val stormsPipe =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe((stormEventData: String) => {
+          IterableDataPipe((stormEventData: String) => {
             val stormMetaFields = stormEventData.split(',')
 
             val eventId = stormMetaFields(0)
@@ -424,12 +427,12 @@ object OmniMultiOutputModels {
             (startDate+"/"+startHour,
               endDate+"/"+endHour)
           }) >
-          DataPipe((s: Stream[(String, String)]) =>
+          DataPipe((s: Iterable[(String, String)]) =>
             s.take(numStormsStart) ++ s.takeRight(n) ++
               Stream(("2015/03/17/00", "2015/03/18/23")) ++
               Stream(("2015/06/22/08", "2015/06/23/20")) ++
               Stream(("2008/01/02/00", "2008/02/02/00"))) >
-          StreamDataPipe((storm: (String, String)) => {
+          IterableDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
             val (trainingStartDate, trainingEndDate) =
@@ -439,10 +442,10 @@ object OmniMultiOutputModels {
             val (trStampStart, trStampEnd) =
               (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-            val filterData = StreamDataPipe((couple: (Double, Double)) =>
+            val filterData = IterableDataPipe((couple: (Double, Double)) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
-            val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+            val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
             val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -469,7 +472,7 @@ object OmniMultiOutputModels {
             getTraining("data/omni2_"+trainingStartDate.getYear+".csv")
 
           }) >
-          DataPipe((s: Stream[Stream[(DenseVector[Double], DenseVector[Double])]]) => {
+          DataPipe((s: Iterable[Iterable[(DenseVector[Double], DenseVector[Double])]]) => {
             s.reduce((p,q) => p ++ q)
           })
 
@@ -477,12 +480,13 @@ object OmniMultiOutputModels {
     }
 
     val modelTuning = (dataAndScales: (
-      Stream[(DenseVector[Double], DenseVector[Double])],
+      Iterable[(DenseVector[Double], DenseVector[Double])],
         (GaussianScaler, GaussianScaler))) => {
 
+      val training_data = dataAndScales._1.toStream
       val model = new MOStudentTRegression[DenseVector[Double]](
-        mu, kernel, noise, dataAndScales._1,
-        dataAndScales._1.length, pT)
+        mu, kernel, noise, training_data,
+        training_data.length, pT)
 
       val gs = globalOpt match {
         case "CSA" =>
@@ -527,7 +531,7 @@ object OmniMultiOutputModels {
       val stormsPipe =
         fileToStream >
           replaceWhiteSpaces >
-          StreamDataPipe((stormEventData: String) => {
+          IterableDataPipe((stormEventData: String) => {
             val stormMetaFields = stormEventData.split(',')
 
             val eventId = stormMetaFields(0)
@@ -540,12 +544,12 @@ object OmniMultiOutputModels {
             (startDate+"/"+startHour,
               endDate+"/"+endHour)
           }) >
-          DataPipe((s: Stream[(String, String)]) =>
+          DataPipe((s: Iterable[(String, String)]) =>
             s.take(numStormsStart) ++ s.takeRight(n) ++
               Stream(("2015/03/17/00", "2015/03/18/23")) ++
               Stream(("2015/06/22/08", "2015/06/23/20")) ++
               Stream(("2008/01/02/00", "2008/02/02/00"))) >
-          StreamDataPipe((storm: (String, String)) => {
+          IterableDataPipe((storm: (String, String)) => {
             // for each storm construct a data set
 
             val (trainingStartDate, trainingEndDate) =
@@ -555,10 +559,10 @@ object OmniMultiOutputModels {
             val (trStampStart, trStampEnd) =
               (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-            val filterData = StreamDataPipe((couple: (Double, Double)) =>
+            val filterData = IterableDataPipe((couple: (Double, Double)) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
-            val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+            val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
               couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
             val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -585,7 +589,7 @@ object OmniMultiOutputModels {
             getTraining("data/omni2_"+trainingStartDate.getYear+".csv")
 
           }) >
-          DataPipe((s: Stream[Stream[(DenseVector[Double], DenseVector[Double])]]) => {
+          DataPipe((s: Iterable[Iterable[(DenseVector[Double], DenseVector[Double])]]) => {
             s.reduce((p,q) => p ++ q)
           })
 
@@ -593,12 +597,13 @@ object OmniMultiOutputModels {
     }
 
     val modelTuning = (dataAndScales: (
-      Stream[(DenseVector[Double], DenseVector[Double])],
+      Iterable[(DenseVector[Double], DenseVector[Double])],
         (GaussianScaler, GaussianScaler))) => {
 
+      val training_data = dataAndScales._1.toStream
       val model = new MOGPRegressionModel[DenseVector[Double]](
-        kernel, noise, dataAndScales._1,
-        dataAndScales._1.length, pT)
+        kernel, noise, training_data,
+        training_data.length, pT)
 
       val gs = globalOpt match {
         case "CSA" =>
@@ -647,10 +652,10 @@ object OmniMultiOutputModels {
     val (trStampStart, trStampEnd) =
       (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+    val filterData = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
-    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+    val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
     val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -670,12 +675,13 @@ object OmniMultiOutputModels {
     }
 
     val modelTuning = (dataAndScales: (
-      Stream[(DenseVector[Double], DenseVector[Double])],
+      Iterable[(DenseVector[Double], DenseVector[Double])],
         (GaussianScaler, GaussianScaler))) => {
 
+      val training_data = dataAndScales._1.toStream
       val model = new MOGPRegressionModel[DenseVector[Double]](
-        kernel, noise, dataAndScales._1,
-        dataAndScales._1.length, pT)
+        kernel, noise, training_data,
+        training_data.length, pT)
 
       val gs = globalOpt match {
         case "CSA" =>
@@ -709,7 +715,7 @@ object OmniMultiOutputModels {
   }
 
   def test[M <: ContinuousProcessModel[
-    Stream[(DenseVector[Double], DenseVector[Double])],
+    Iterable[(DenseVector[Double], DenseVector[Double])],
     (DenseVector[Double], Int), Double, _]](model: M, sc: (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
@@ -717,7 +723,7 @@ object OmniMultiOutputModels {
 
     val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
-    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+    val haarWaveletPipe = IterableDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
       if (useWaveletBasis)
         (DenseVector(featAndTarg._1
           .toArray
@@ -735,10 +741,10 @@ object OmniMultiOutputModels {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+    val filterData = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
-    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+    val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -760,8 +766,8 @@ object OmniMultiOutputModels {
     val flow = preProcess >
       prepareFeaturesAndOutputs >
       haarWaveletPipe >
-      DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
-      DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+      DataPipe((testDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
+      DataPipe((nTestDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
         model.test(nTestDat)
           .map(t => (t._1._2, (t._3, t._2)))
           .groupBy(_._1).toSeq
@@ -780,7 +786,7 @@ object OmniMultiOutputModels {
   }
 
   def testOnset(
-    model: AbstractGPRegressionModel[Stream[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
+    model: AbstractGPRegressionModel[Iterable[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
     sc: (GaussianScaler, GaussianScaler)) = {
 
     val (pF, pT) = (math.pow(2,orderFeat).toInt,math.pow(2, orderTarget).toInt)
@@ -788,7 +794,7 @@ object OmniMultiOutputModels {
 
     val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
-    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+    val haarWaveletPipe = IterableDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
       if (useWaveletBasis)
         (DenseVector(featAndTarg._1
           .toArray
@@ -806,10 +812,10 @@ object OmniMultiOutputModels {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+    val filterData = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
-    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+    val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -829,7 +835,7 @@ object OmniMultiOutputModels {
     }
 
     val postProcessPipe =
-      DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+      DataPipe((nTestDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
         model.test(nTestDat)
           .map(t => (t._1, (t._3, t._2, t._4)))
           .groupBy(_._1._2).toSeq
@@ -872,14 +878,14 @@ object OmniMultiOutputModels {
     val flow = preProcess >
       prepareFeaturesAndOutputs >
       haarWaveletPipe >
-      DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
+      DataPipe((testDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
       postProcessPipe
 
     flow("data/omni2_"+testStartDate.getYear+".csv")
   }
 
   def generateOnsetPredictions(
-    model: AbstractGPRegressionModel[Stream[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
+    model: AbstractGPRegressionModel[Iterable[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
     sc: (GaussianScaler, GaussianScaler),
     predictionIndex: Int = 3) = {
 
@@ -894,10 +900,10 @@ object OmniMultiOutputModels {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+    val filterData = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
-    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+    val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -917,7 +923,7 @@ object OmniMultiOutputModels {
     }
 
     val postProcessPipe =
-      DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+      DataPipe((nTestDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
         model.test(nTestDat)
           .filter(_._1._2 == predictionIndex)
           .map(t => (t._1, (t._3, t._2, t._4)))
@@ -954,7 +960,7 @@ object OmniMultiOutputModels {
     val flow = preProcess >
       prepareFeaturesAndOutputs >
       haarWaveletPipe >
-      DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
+      DataPipe((testDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
       postProcessPipe
 
     flow("data/omni2_"+testStartDate.getYear+".csv")
@@ -962,7 +968,7 @@ object OmniMultiOutputModels {
 
 
   def generatePredictions(
-    model: AbstractGPRegressionModel[Stream[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
+    model: AbstractGPRegressionModel[Iterable[(DenseVector[Double], DenseVector[Double])], (DenseVector[Double], Int)],
     sc: (GaussianScaler, GaussianScaler),
     predictionIndex: Int = 3) = {
 
@@ -971,7 +977,7 @@ object OmniMultiOutputModels {
 
     val (hFeat, _) = (haarWaveletFilter(orderFeat), haarWaveletFilter(orderTarget))
 
-    val haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+    val haarWaveletPipe = IterableDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
       if (useWaveletBasis)
         (DenseVector(featAndTarg._1
           .toArray
@@ -989,10 +995,10 @@ object OmniMultiOutputModels {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+    val filterData = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
-    val filterDataARX = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+    val filterDataARX = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val prepareFeaturesAndOutputs = if(exogenousInputs.isEmpty) {
@@ -1014,14 +1020,14 @@ object OmniMultiOutputModels {
     val flow = preProcess >
       prepareFeaturesAndOutputs >
       haarWaveletPipe >
-      DataPipe((testDat: Stream[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
-      DataPipe((nTestDat: Stream[(DenseVector[Double], DenseVector[Double])]) => {
+      DataPipe((testDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => (sc._1*sc._2)(testDat)) >
+      DataPipe((nTestDat: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
         //Generate Predictions for each point
         val preds = model.test(nTestDat)
 
         preds.filter(_._1._2 == predictionIndex).map(c => (c._2, c._3, c._4, c._5)).toStream//.head
       }) >
-      StreamDataPipe((d: (Double, Double, Double, Double)) => {
+      IterableDataPipe((d: (Double, Double, Double, Double)) => {
         val (scMean, scSigma) = (sc._2.mean(predictionIndex), sc._2.sigma(predictionIndex))
 
         (d._1*scSigma + scMean, d._2*scSigma + scMean, d._3*scSigma + scMean, d._4*scSigma + scMean)
@@ -1043,7 +1049,7 @@ object OmniMultiOutputModels {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+    val filterData = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val prepareFeaturesAndOutputs = extractTimeSeries((year,day,hour) => {
@@ -1055,10 +1061,11 @@ object OmniMultiOutputModels {
 
     val flow = preProcess >
       prepareFeaturesAndOutputs >
-      StreamDataPipe((c: (DenseVector[Double], DenseVector[Double])) =>
+      IterableDataPipe((c: (DenseVector[Double], DenseVector[Double])) =>
         (DenseVector.fill[Double](c._2.length)(c._1(c._1.length-1)), c._2)) >
-      DataPipe((d: Stream[(DenseVector[Double], DenseVector[Double])]) => {
-        new MultiRegressionMetrics(d.toList, d.length)
+      DataPipe((d: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
+        val sc = d.toList
+        new MultiRegressionMetrics(sc, sc.length)
       })
 
     flow("data/omni2_"+testStartDate.getYear+".csv")
@@ -1080,7 +1087,7 @@ object DstPersistenceMOExperiment {
     val stormsPipe =
       fileToStream >
         replaceWhiteSpaces >
-        StreamDataPipe((stormEventData: String) => {
+        IterableDataPipe((stormEventData: String) => {
           val stormMetaFields = stormEventData.split(',')
 
           val eventId = stormMetaFields(0)
@@ -1102,7 +1109,7 @@ object DstPersistenceMOExperiment {
 
           OmniMultiOutputModels.test()
         }) >
-        DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
+        DataPipe((metrics: Iterable[MultiRegressionMetrics]) =>
           metrics.reduce((m,n) => m++n).setName("Persistence Dst; OSA"))
 
     stormsPipe("data/geomagnetic_storms.csv")
@@ -1141,21 +1148,21 @@ object DstMOGPExperiment {
 
   def test(
     model: AbstractGPRegressionModel[
-    Stream[(DenseVector[Double], DenseVector[Double])],
+    Iterable[(DenseVector[Double], DenseVector[Double])],
     (DenseVector[Double], Int)],
     scaler: (GaussianScaler, GaussianScaler)) = {
 
     val processResults = if(!stormAverages) {
-      DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>
+      DataPipe((metrics: Iterable[Iterable[RegressionMetrics]]) =>
         metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2)))
     } else {
-      StreamDataPipe((m: Iterable[RegressionMetrics]) => m.map(_.kpi():/63.0)) >
-      DataPipe((metrics: Stream[Iterable[DenseVector[Double]]]) =>
+      IterableDataPipe((m: Iterable[RegressionMetrics]) => m.map(_.kpi():/63.0)) >
+      DataPipe((metrics: Iterable[Iterable[DenseVector[Double]]]) =>
         metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 + pair._2)))
     }
 
     val processResultsOnsetClassification =
-      DataPipe((metrics: Stream[Iterable[BinaryClassificationMetrics]]) => {
+      DataPipe((metrics: Iterable[Iterable[BinaryClassificationMetrics]]) => {
         metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2))
       })
 
@@ -1163,8 +1170,8 @@ object DstMOGPExperiment {
       case false =>
         fileToStream >
           replaceWhiteSpaces >
-          //DataPipe((st: Stream[String]) => st.take(43)) >
-          StreamDataPipe((stormEventData: String) => {
+          //DataPipe((st: Iterable[String]) => st.take(43)) >
+          IterableDataPipe((stormEventData: String) => {
             val stormMetaFields = stormEventData.split(',')
 
             val eventId = stormMetaFields(0)
@@ -1190,8 +1197,8 @@ object DstMOGPExperiment {
       case true =>
         fileToStream >
           replaceWhiteSpaces >
-          //DataPipe((st: Stream[String]) => st.take(43)) >
-          StreamDataPipe((stormEventData: String) => {
+          //DataPipe((st: Iterable[String]) => st.take(43)) >
+          IterableDataPipe((stormEventData: String) => {
             val stormMetaFields = stormEventData.split(',')
 
             val eventId = stormMetaFields(0)
@@ -1221,28 +1228,28 @@ object DstMOGPExperiment {
   }
 
   def testRegression[M <: ContinuousProcessModel[
-    Stream[(DenseVector[Double], DenseVector[Double])],
+    Iterable[(DenseVector[Double], DenseVector[Double])],
     (DenseVector[Double], Int), Double, _]](model: M, scaler: (GaussianScaler, GaussianScaler)) = {
 
     val processResults = if(!stormAverages) {
-      DataPipe((metrics: Stream[Iterable[RegressionMetrics]]) =>
+      DataPipe((metrics: Iterable[Iterable[RegressionMetrics]]) =>
         metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2)))
     } else {
-      StreamDataPipe((m: Iterable[RegressionMetrics]) => m.map(_.kpi():/63.0)) >
-        DataPipe((metrics: Stream[Iterable[DenseVector[Double]]]) =>
+      IterableDataPipe((m: Iterable[RegressionMetrics]) => m.map(_.kpi():/63.0)) >
+        DataPipe((metrics: Iterable[Iterable[DenseVector[Double]]]) =>
           metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 + pair._2)))
     }
 
     val processResultsOnsetClassification =
-      DataPipe((metrics: Stream[Iterable[BinaryClassificationMetrics]]) => {
+      DataPipe((metrics: Iterable[Iterable[BinaryClassificationMetrics]]) => {
         metrics.reduceLeft((m,n) => m.zip(n).map(pair => pair._1 ++ pair._2))
       })
 
     val stormsPipe =
         fileToStream >
           replaceWhiteSpaces >
-          //DataPipe((st: Stream[String]) => st.take(43)) >
-          StreamDataPipe((stormEventData: String) => {
+          //DataPipe((st: Iterable[String]) => st.take(43)) >
+          IterableDataPipe((stormEventData: String) => {
             val stormMetaFields = stormEventData.split(',')
 
             val eventId = stormMetaFields(0)

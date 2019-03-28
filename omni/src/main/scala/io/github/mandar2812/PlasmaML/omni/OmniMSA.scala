@@ -33,15 +33,15 @@ object OmniMSA {
   * */
   type Features = DenseVector[Double]
   type Targets = DenseVector[Double]
-  type Data = Stream[(Features, Targets)]
-  type ScoresAndLabels = Stream[(Targets, Targets)]
+  type Data = Iterable[(Features, Targets)]
+  type ScoresAndLabels = Iterable[(Targets, Targets)]
   type DataScales = (GaussianScaler, GaussianScaler)
   type LayerParams = (DenseMatrix[Double], DenseVector[Double])
 
 
   var quietTimeSegment = ("2014/01/10/00", "2014/12/30/00")
 
-  def haarWaveletPipe = StreamDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
+  def haarWaveletPipe = IterableDataPipe((featAndTarg: (DenseVector[Double], DenseVector[Double])) =>
     if (useWaveletBasis)
       (gHFeat(featAndTarg._1), gHTarg(featAndTarg._2))
     else
@@ -55,7 +55,7 @@ object OmniMSA {
 
     val prepareTrainingData = fileToStream >
       replaceWhiteSpaces >
-      StreamDataPipe((stormEventData: String) => {
+      IterableDataPipe((stormEventData: String) => {
         val stormMetaFields = stormEventData.split(',')
 
         val startDate = stormMetaFields(1)
@@ -66,9 +66,9 @@ object OmniMSA {
 
         (startDate+"/"+startHour, endDate+"/"+endHour)
       }) >
-      DataPipe((s: Stream[(String, String)]) =>
+      DataPipe((s: Iterable[(String, String)]) =>
         s ++ Stream(quietTimeSegment)) >
-      StreamFlatMapPipe((storm: (String, String)) => {
+      IterableFlatMapPipe((storm: (String, String)) => {
         // for each storm construct a data set
 
         val (trainingStartDate, trainingEndDate) =
@@ -78,7 +78,7 @@ object OmniMSA {
         val (trStampStart, trStampEnd) =
           (trainingStartDate.getMillis/1000.0, trainingEndDate.getMillis/1000.0)
 
-        val filterData = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+        val filterData = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
           couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
         val generateDataSegment = preProcess >
@@ -147,7 +147,7 @@ object OmniMSA {
 
       val model = GenericFFNeuralNet(
         backPropOptimizer,
-        dataAndScales._1, identityPipe[Data],
+        dataAndScales._1, DataPipe[Data, Stream[(Features, Targets)]](_.toStream),
         weightsInitializer)
 
       model.learn()
@@ -167,13 +167,13 @@ object OmniMSA {
     phi: DataPipe[Features, DenseVector[Double]]):
   (MVStudentsTModel[Data, Features] , DataScales) = {
 
-    implicit val transform = DataPipe((d: Data) => d.toSeq)
+    implicit val transform = DataPipe[Data, Seq[(Features, Targets)]]((d: Data) => d.toSeq)
 
     val modelTrain = DataPipe((dataAndScales: (Data, DataScales)) => {
       val multiVariateSTModel = MVStudentsTModel[Data, Features](kernel, noise, phi) _
 
       val num_outputs = dataAndScales._2._2.mean.length
-      val initial_model = multiVariateSTModel(dataAndScales._1, dataAndScales._1.length, num_outputs)
+      val initial_model = multiVariateSTModel(dataAndScales._1, dataAndScales._1.toSeq.length, num_outputs)
 
       val gs = globalOpt match {
 
@@ -213,7 +213,7 @@ object OmniMSA {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val testDataFilter = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+    val testDataFilter = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val scaleFeatures: DataPipe[Features, Features] =
@@ -242,9 +242,10 @@ object OmniMSA {
         revSc(model.test(forSc(data)).toStream.map(t => (t._3, t._2)))
       }) >
       DataPipe((predictions: ScoresAndLabels) => {
+        val sc = predictions.toList
         val metrics = new MultiRegressionMetrics(
-          predictions.toList,
-          predictions.length)
+          sc,
+          sc.length)
         metrics.setName(names(column)+" "+pT+" hour forecast")
       })
 
@@ -272,7 +273,7 @@ object OmniMSA {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val testDataFilter = StreamDataPipe((couple: (Double, DenseVector[Double])) =>
+    val testDataFilter = IterableDataPipe((couple: (Double, DenseVector[Double])) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val scaleData: DataPipe[Features, Features] =
@@ -296,11 +297,12 @@ object OmniMSA {
       }) >
       testDataFilter >
       OmniMultiOutputModels.deltaOperationARXMult(List.fill(1+exogenousInputs.length)(pF), pT) >
-      StreamDataPipe(modelPredict*identityPipe[Targets]) >
+      IterableDataPipe(modelPredict*identityPipe[Targets]) >
       DataPipe((predictions: ScoresAndLabels) => {
+        val sc = predictions.toList
         val metrics = new MultiRegressionMetrics(
-          predictions.toList,
-          predictions.length)
+          sc,
+          sc.length)
         metrics.setName(names(column)+" "+pT+" hour forecast")
       })
 
@@ -320,7 +322,7 @@ object OmniMSA {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val filterData = StreamDataPipe((couple: (Double, Double)) =>
+    val filterData = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val prepareFeaturesAndOutputs = extractTimeSeries((year,day,hour) => {
@@ -332,10 +334,11 @@ object OmniMSA {
 
     val flow = preProcess >
       prepareFeaturesAndOutputs >
-      StreamDataPipe((c: (Features, Targets)) =>
+      IterableDataPipe((c: (Features, Targets)) =>
         (DenseVector.fill[Double](c._2.length)(c._1(c._1.length-1)), c._2)) >
-      DataPipe((d: Stream[(DenseVector[Double], DenseVector[Double])]) => {
-        new MultiRegressionMetrics(d.toList, d.length)
+      DataPipe((d: Iterable[(DenseVector[Double], DenseVector[Double])]) => {
+        val sc = d.toList
+        new MultiRegressionMetrics(sc, sc.length)
       })
 
     flow("data/omni2_"+testStartDate.getYear+".csv")
@@ -381,15 +384,15 @@ object OmniMSA {
 
     val (tStampStart, tStampEnd) = (testStartDate.getMillis/1000.0, testEndDate.getMillis/1000.0)
 
-    val trainPipe = StreamDataPipe((couple: (Double, Double)) =>
+    val trainPipe = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= trStampStart && couple._1 <= trStampEnd)
 
-    val testPipe = StreamDataPipe((couple: (Double, Double)) =>
+    val testPipe = IterableDataPipe((couple: (Double, Double)) =>
       couple._1 >= tStampStart && couple._1 <= tStampEnd)
 
     val postPipe = deltaOperationMult(pF,pT)
 
-    val haarWaveletPipe = StreamDataPipe((featAndTarg: (Features, Targets)) =>
+    val haarWaveletPipe = IterableDataPipe((featAndTarg: (Features, Targets)) =>
       (hFeat*hTarg)(featAndTarg))
 
     val modelTrainTestWavelet =
@@ -413,22 +416,23 @@ object OmniMSA {
 
         val model = GenericFFNeuralNet(
           backPropOptimizer,
-          trainTest._1, identityPipe[Stream[(Features, Targets)]],
+          trainTest._1, DataPipe[Data, Stream[(Features, Targets)]](_.toStream),
           weightsInitializer)
 
 
         model.learn()
 
         val testSetToResult = DataPipe(
-          (testSet: Stream[(Features, Targets)]) => testSet.map(c => (model.predict(c._1), c._2))) >
-          StreamDataPipe(
+          (testSet: Iterable[(Features, Targets)]) => testSet.map(c => (model.predict(c._1), c._2))) >
+          IterableDataPipe(
             (tuple: (Targets, Targets)) => reverseTargetsScaler(tuple)) >
-          StreamDataPipe(
+          IterableDataPipe(
             (tuple: (Targets, Targets)) => (hTarg.i*hTarg.i)(tuple)) >
-          DataPipe((scoresAndLabels: Stream[(Targets, Targets)]) => {
+          DataPipe((scoresAndLabels: Iterable[(Targets, Targets)]) => {
+            val sc = scoresAndLabels.toList
             val metrics = new MultiRegressionMetrics(
-              scoresAndLabels.toList,
-              scoresAndLabels.length)
+              sc,
+              sc.length)
             metrics.setName(names(column)+" "+pT+" hour forecast")
           })
 
@@ -455,19 +459,20 @@ object OmniMSA {
 
       val model = GenericFFNeuralNet(
         backPropOptimizer,
-        trainTest._1, identityPipe[Data],
+        trainTest._1, DataPipe[Data, Stream[(Features, Targets)]](_.toStream),
         weightsInitializer)
 
 
       model.learn()
 
       val testSetToResult = DataPipe((testSet: Data) => testSet.map(c => (model.predict(c._1), c._2))) >
-        StreamDataPipe((tuple: (Targets, Targets)) =>
+        IterableDataPipe((tuple: (Targets, Targets)) =>
           reverseTargetsScaler(tuple)) >
         DataPipe((predictions: ScoresAndLabels) => {
+          val sc = predictions.toList
           val metrics = new MultiRegressionMetrics(
-            predictions.toList,
-            predictions.length)
+            sc,
+            sc.length)
           metrics.setName(names(column)+" "+pT+" hour forecast")
         })
 
@@ -549,8 +554,8 @@ object DstMSAExperiment {
     val stormsPipe =
       fileToStream >
         replaceWhiteSpaces >
-        DataPipe((st: Stream[String]) => st.take(43)) >
-        StreamDataPipe((stormEventData: String) => {
+        DataPipe((st: Iterable[String]) => st.take(43)) >
+        IterableDataPipe((stormEventData: String) => {
           val stormMetaFields = stormEventData.split(',')
 
           val startDate = stormMetaFields(1)
@@ -566,7 +571,7 @@ object DstMSAExperiment {
 
           OmniMSA.test(model, scaler)
         }) >
-        DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
+        DataPipe((metrics: Iterable[MultiRegressionMetrics]) =>
           metrics.reduce((m,n) => m++n))
 
     stormsPipe("data/geomagnetic_storms.csv")
@@ -594,8 +599,8 @@ object DstMSAExperiment {
     val stormsPipe =
       fileToStream >
         replaceWhiteSpaces >
-        DataPipe((st: Stream[String]) => st.take(43)) >
-        StreamDataPipe((stormEventData: String) => {
+        DataPipe((st: Iterable[String]) => st.take(43)) >
+        IterableDataPipe((stormEventData: String) => {
           val stormMetaFields = stormEventData.split(',')
 
           val startDate = stormMetaFields(1)
@@ -611,7 +616,7 @@ object DstMSAExperiment {
 
           OmniMSA.test(model, scaler)
         }) >
-        DataPipe((metrics: Stream[MultiRegressionMetrics]) =>
+        DataPipe((metrics: Iterable[MultiRegressionMetrics]) =>
           metrics.reduce((m,n) => m++n))
 
     stormsPipe("data/geomagnetic_storms.csv")

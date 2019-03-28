@@ -3,8 +3,8 @@ import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
-import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L2Regularization, L1Regularization}
+import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.ammonite.ops._
 import breeze.numerics.sigmoid
@@ -13,7 +13,7 @@ import org.platanios.tensorflow.api.learn.layers.Activation
 
 @main
 def apply(
-  compute_output: DataPipe[Tensor, (Float, Float)],
+  compute_output: DataPipe[Tensor[Double], (Float, Float)],
   d: Int                                                      = 10,
   confounding: Seq[Double]                                    = Seq(0d, 0.25, 0.5, 0.75),
   size_training: Int                                          = 1000,
@@ -24,11 +24,11 @@ def apply(
   alpha: Double                                               = 0.0,
   train_test_separate: Boolean                                = false,
   num_neurons: Seq[Int]                                       = Seq(40),
-  activation_func: Int => Activation                          = timelag.utils.getReLUAct(1),
+  activation_func: Int => Activation[Double]                  = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
   iterations: Int                                             = 150000,
   iterations_tuning: Int                                      = 20000,
   miniBatch: Int                                              = 32,
-  optimizer: Optimizer                                        = tf.train.AdaDelta(0.01),
+  optimizer: Optimizer                                        = tf.train.AdaDelta(0.01f),
   sum_dir_prefix: String                                      = "cdt",
   prior_types: Seq[helios.learn.cdt_loss.Divergence]          = Seq(helios.learn.cdt_loss.KullbackLeibler),
   target_probs: Seq[helios.learn.cdt_loss.TargetDistribution] = Seq(helios.learn.cdt_loss.Boltzmann),
@@ -40,7 +40,7 @@ def apply(
   hyp_opt_iterations: Option[Int]                             = Some(5),
   epochFlag: Boolean                                          = false,
   regularization_types: Seq[String]                           = Seq("L2"))
-: Seq[timelag.ExperimentResult[timelag.TunedModelRun]] = {
+: Seq[timelag.ExperimentResult[Double, Double, timelag.TunedModelRun[Double, Double]]] = {
 
   val mo_flag = true
   val prob_timelags = true
@@ -48,17 +48,20 @@ def apply(
   val num_pred_dims = timelag.utils.get_num_output_dims(sliding_window, mo_flag, prob_timelags, dist_type)
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons, "FLOAT32")
+    timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons, "FLOAT64")
 
-  val output_mapping = timelag.utils.get_output_mapping(
+  val output_mapping = timelag.utils.get_output_mapping[Double](
     sliding_window, mo_flag,
     prob_timelags, dist_type)
 
   //Prediction architecture
-  val architecture = dtflearn.feedforward_stack(
-    activation_func, FLOAT32)(
-    net_layer_sizes.tail) >>
-    output_mapping
+  val architecture =
+    dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
+      output_mapping
+
+  val scope = dtfutils.get_scope(architecture) _
+
+  val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
 
   val hyper_parameters = List(
     "prior_wt",
@@ -70,10 +73,10 @@ def apply(
 
   val hyper_prior = Map(
     "prior_wt"    -> UniformRV(0.5, 1.5),
-    "error_wt"    -> UniformRV(0.75, 1.5),
-    "temperature" -> UniformRV(0.75, 2.0),
+    "error_wt"    -> UniformRV(0.5, 1.5),
+    "temperature" -> UniformRV(1d, 2.0),
     "specificity" -> UniformRV(0.5, 2.5),
-    "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+    "reg"         -> UniformRV(0d, math.pow(10d, -3d))
   )
 
   val hyp_scaling = hyper_prior.map(p =>
@@ -93,36 +96,30 @@ def apply(
 
 
 
-  val fitness_function = DataPipe2[(Tensor, Tensor), Tensor, Double]((preds, targets) => {
+  val fitness_function = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]]((preds, targets) => {
 
     val weighted_error = preds._1
       .subtract(targets)
       .square
       .multiply(preds._2)
       .sum(axes = 1)
-      .mean()
-      .scalar
-      .asInstanceOf[Double]
 
     val entropy = preds._2
-      .multiply(-1d)
-      .multiply(preds._2.log)
+      .multiply(Tensor(-1d).castTo[Double])
+      .multiply(tf.log(preds._2))
       .sum(axes = 1)
-      .mean()
-      .scalar
-      .asInstanceOf[Double]
 
-    weighted_error + entropy
+    (weighted_error + entropy).castTo[Float]
   })
 
-  val dataset: timelag.utils.TLDATA =
-    timelag.utils.generate_data(
+  val dataset: timelag.utils.TLDATA[Double] =
+    timelag.utils.generate_data[Double](
       compute_output, sliding_window,
       d, size_training, noiserot,
       alpha, noise)
 
-  val dataset_test: timelag.utils.TLDATA =
-    timelag.utils.generate_data(
+  val dataset_test: timelag.utils.TLDATA[Double] =
+    timelag.utils.generate_data[Double](
       compute_output, sliding_window,
       d, size_test, noiserot, alpha,
       noise)
@@ -136,7 +133,7 @@ def apply(
 
     val loss_func_generator = (h: Map[String, Double]) => {
 
-      val lossFunc = timelag.utils.get_loss(
+      val lossFunc = timelag.utils.get_loss[Double, Double, Double](
         sliding_window, mo_flag,
         prob_timelags,
         prior_wt = h("prior_wt"),
@@ -148,9 +145,21 @@ def apply(
 
       val reg_layer =
         if(regularization_type == "L1")
-          L1Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+          L1Regularization[Double](
+            layer_scopes,
+            layer_parameter_names,
+            layer_datatypes,
+            layer_shapes,
+            h("reg"),
+            "L1Reg")
         else
-          L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+          L2Regularization[Double](
+            layer_scopes,
+            layer_parameter_names,
+            layer_datatypes,
+            layer_shapes,
+            h("reg"),
+            "L2Reg")
 
       lossFunc >>
         reg_layer >>
@@ -174,8 +183,8 @@ def apply(
       confounding_factor = c)
 
 
-    result.copy(
-      config = result.config.copy(
+    result.copy[Double, Double, timelag.TunedModelRun[Double, Double]](
+      config = result.config.copy[Double](
         divergence = Some(prior_type),
         target_prob = Some(target_prob),
         reg_type = Some(regularization_type)

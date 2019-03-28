@@ -25,16 +25,16 @@ package object utils {
 
   //Define some types for convenience.
 
-  type PATTERN     = ((Int, Tensor), (Float, Float))
-  type SLIDINGPATT = (Int, (Tensor, Stream[Double], Float))
+  type PATTERN[T]     = ((Int, Tensor[T]), (Float, Float))
+  type SLIDINGPATT[T] = (Int, (Tensor[T], Stream[Double], Float))
 
-  type DATA        = Stream[PATTERN]
-  type SLIDINGDATA = Stream[SLIDINGPATT]
-  type TLDATA      = (DATA, SLIDINGDATA)
+  type DATA[T]        = Stream[PATTERN[T]]
+  type SLIDINGDATA[T] = Stream[SLIDINGPATT[T]]
+  type TLDATA[T]      = (DATA[T], SLIDINGDATA[T])
 
-  type PROCDATA    = (HeliosDataSet, (Tensor, Tensor))
+  type PROCDATA[T]    = (HeliosDataSet[T, T], (Tensor[T], Tensor[T]))
 
-  type PROCDATA2   = (TFDataSet[(Tensor, Tensor)], (Tensor, Tensor))
+  type PROCDATA2[T]   = (TFDataSet[(Tensor[T], Tensor[T])], (Tensor[T], Tensor[T]))
 
   type NNPROP      = (Seq[Int], Seq[Shape], Seq[String], Seq[String])
 
@@ -42,24 +42,22 @@ package object utils {
   def id[T]: DataPipe[T, T] = Pipe.identityPipe[T]
 
   //A Polynomial layer builder
-  val layer_poly: Int => String => Activation = (power: Int) => (n: String) => new Activation(n) {
-    override val layerType = "Poly"
-
-    override protected def _forward(input: Output)(implicit mode: Mode): Output = {
-      input.pow(power)
-
-    }
+  def layer_poly[T: TF: IsFloatOrDouble](power: Int)(n: String): Activation[T] = new Activation(n) {
+      override val layerType = "Poly"
+      override def forwardWithoutContext(input: Output[T])(implicit mode: Mode): Output[T] = {
+        input.pow(Tensor(power).castTo[T])
+      }
   }
 
-  val getPolyAct: (Int, Int) => Int => Activation = (degree: Int, s: Int) => (i: Int) =>
-    if(i - s == 0) layer_poly(degree)(s"Act_$i")
-    else tf.learn.Sigmoid(s"Act_$i")
+  def getPolyAct[T: TF: IsFloatOrDouble](degree: Int, s: Int, i: Int): Activation[T] =
+      if(i - s == 0) layer_poly[T](degree)(s"Act_$i")
+      else tf.learn.Sigmoid(s"Act_$i")
 
-  val getReLUAct: Int => Int => Activation = (s: Int) => (i: Int) =>
+  def getReLUAct[T: TF: IsFloatOrDouble](s: Int, i: Int): Activation[T] =
     if((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
-  val getReLUAct2: Int => Int => Activation = (s: Int) => (i: Int) =>
+  def getReLUAct2[T: TF: IsFloatOrDouble](s: Int, i: Int): Activation[T] =
     if((i - s) == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
@@ -110,19 +108,20 @@ package object utils {
     * @param sliding_window The size of the sliding time window [y(t), ..., y(t+h)]
     *                       to construct. This is used as training label for the model.
     * */
-  def generate_data(
-    compute_output_and_lag: DataPipe[Tensor, (Float, Float)],
+  def generate_data[T: TF: IsFloatOrDouble](
+    compute_output_and_lag: DataPipe[Tensor[T], (Float, Float)],
     sliding_window: Int, d: Int = 3, n: Int = 5,
     noiserot: Double = 0.1, alpha: Double = 0.0,
-    noise: Double = 0.5): TLDATA = {
+    noise: Double = 0.5): TLDATA[T] = {
 
-    val random_gaussian_vec: DataPipe[Int, RandomVariable[Tensor]] =
+    val random_gaussian_vec: DataPipe[Int, RandomVariable[Tensor[T]]] =
       DataPipe((i: Int) =>
-        RandomVariable(() => dtf.tensor_f32(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*))
+        RandomVariable(
+          () => dtf.tensor_f64(i, 1)((0 until i).map(_ => scala.util.Random.nextGaussian()*noise):_*).castTo[T])
       )
 
-    val normalise: DataPipe[RandomVariable[Tensor], Tensor] =
-      DataPipe((t: RandomVariable[Tensor]) => t.draw.l2Normalize(0))
+    val normalise: DataPipe[RandomVariable[Tensor[T]], Tensor[T]] =
+      DataPipe((t: RandomVariable[Tensor[T]]) => t.draw.l2Normalize(0))
 
     val normalised_gaussian_vec = random_gaussian_vec > normalise
 
@@ -131,27 +130,30 @@ package object utils {
     )
 
     //A data pipe which returns a random rotation matrix, given n, the number of dimensions
-    val rand_rot_mat: DataPipe[Int, Tensor] =
+    val rand_rot_mat: DataPipe[Int, Tensor[T]] =
       random_gaussian_mat >
         DataPipe((m: DenseMatrix[Double]) => qr(m).q) >
-        DataPipe((m: DenseMatrix[Double]) => dtf.tensor_f32(m.rows, m.rows)(m.toArray:_*).transpose())
+        DataPipe(
+          (m: DenseMatrix[Double]) => dtf.tensor_f64(m.rows, m.rows)(m.toArray:_*).castTo[T].transpose[Int]())
 
 
-    val get_rotation_operator = MetaPipe((rotation_mat: Tensor) => (x: Tensor) => rotation_mat.matmul(x))
+    val get_rotation_operator = MetaPipe((rotation_mat: Tensor[T]) => (x: Tensor[T]) => rotation_mat.matmul(x))
 
     //Get the rotation operator for the randomly generated rotation.
-    val rotation_op: DataPipe[Tensor, Tensor] = get_rotation_operator(rand_rot_mat(d))
+    val rotation_op: DataPipe[Tensor[T], Tensor[T]] = get_rotation_operator(rand_rot_mat(d))
 
-    val translation_op = DataPipe2((tr: Tensor, x: Tensor) => tr.add(x.multiply(1.0f - alpha.toFloat)))
+    val translation_op = DataPipe2(
+      (tr: Tensor[T], x: Tensor[T]) => tr.add(x.multiply(Tensor(1.0f - alpha.toFloat).castTo[T]))
+    )
 
     //Create a time series of random increments d(t)
     val translation_vecs = random_gaussian_vec(d).iid(n+500-1).draw
 
     //Impulse vecs
-    val impulse: RandomVariable[Tensor] =
+    val impulse: RandomVariable[Tensor[T]] =
       RandomVariable(new Bernoulli(0.999)).iid(d) >
         StreamDataPipe((f: Boolean) => if(f) 1d else Uniform(0.9d, 2d).draw()) >
-        DataPipe((s: Stream[Double]) => dtf.tensor_f32(d, 1)(s:_*))
+        DataPipe((s: Stream[Double]) => dtf.tensor_f64(d, 1)(s:_*).castTo[T])
 
     val impulse_vecs = impulse.iid(n+500-1).draw
 
@@ -161,10 +163,10 @@ package object utils {
     val x_tail =
       translation_vecs.zip(impulse_vecs).scanLeft(x0)((x, sc) => sc._2 * translation_op(sc._1, rotation_op(x)))
 
-    val x: Seq[Tensor] = (Stream(x0) ++ x_tail).takeRight(n)
+    val x: Seq[Tensor[T]] = (Stream(x0) ++ x_tail).takeRight(n)
 
     //Takes input x(t) and returns {y(t + delta(x(t))), delta(x(t))}
-    val calculate_outputs: DataPipe[Tensor, (Float, Float)] =
+    val calculate_outputs: DataPipe[Tensor[T], (Float, Float)] =
       compute_output_and_lag >
         DataPipe(
           DataPipe((d: Float) => d),
@@ -174,9 +176,13 @@ package object utils {
     //Finally create the data pipe which takes a stream of x(t) and
     //generates the input output pairs.
     val generate_data_pipe = StreamDataPipe(
-      DataPipe(id[Int], BifurcationPipe(id[Tensor], calculate_outputs))  >
-        DataPipe((pattern: (Int, (Tensor, (Float, Float)))) =>
-          ((pattern._1, pattern._2._1.reshape(Shape(d))), (pattern._1 + pattern._2._2._1, pattern._2._2._2)))
+      DataPipe(id[Int], BifurcationPipe(id[Tensor[T]], calculate_outputs))  >
+        DataPipe((pattern: (Int, (Tensor[T], (Float, Float)))) =>
+          (
+            (pattern._1, tfi.reshape[T, Int](pattern._2._1,Shape(d))),
+            (pattern._1 + pattern._2._2._1, pattern._2._2._2)
+          )
+        )
     )
 
     val times = (0 until n).toStream
@@ -231,9 +237,10 @@ package object utils {
       .toMap
 
     //Join the features with sliding time windows of the output
-    val joined_data = data.map(c =>
-      if(effectsMap.contains(c._1._1)) (c._1._1, (c._1._2, Some(effectsMap(c._1._1)), c._2._1 - c._1._1))
-      else (c._1._1, (c._1._2, None, c._2._1 - c._1._1)))
+    val joined_data: SLIDINGDATA[T] = data.map(
+      (c: ((Int, Tensor[T]), (Float, Float))) =>
+        if(effectsMap.contains(c._1._1)) (c._1._1, (c._1._2, Some(effectsMap(c._1._1)), c._2._1 - c._1._1))
+        else (c._1._1, (c._1._2, None, c._2._1 - c._1._1)))
       .filter(_._2._2.isDefined)
       .map(p => (p._1, (p._2._1, p._2._2.get, p._2._3)))
 
@@ -252,12 +259,14 @@ package object utils {
     *                           a value of 0 represents no confounding factors
     *                           in the final data set.
     * */
-  def confound_data(dataset: TLDATA, confounding_factor: Double): TLDATA = {
+  def confound_data[T: TF: IsFloatOrDouble](
+    dataset: TLDATA[T],
+    confounding_factor: Double): TLDATA[T] = {
     require(
       confounding_factor >= 0d && confounding_factor <= 1d,
       "The confounding factor can only be between 0 and 1")
 
-    val d = dataset._1.head._1._2.shape(0).scalar.asInstanceOf[Int]
+    val d = dataset._1.head._1._2.shape(0).scalar
 
     val num_sel_dims = math.ceil(d*(1d - confounding_factor)).toInt
 
@@ -273,7 +282,7 @@ package object utils {
   /**
     * Plot the synthetic data set produced by [[generate_data()]].
     * */
-  def plot_data(dataset: TLDATA): Unit = {
+  def plot_data[T: TF: IsFloatOrDouble](dataset: TLDATA[T]): Unit = {
 
     val (data, joined_data) = dataset
 
@@ -323,8 +332,11 @@ package object utils {
     * @param sliding_window The size of the causal time window.
     *
     * */
-  def load_data_into_tensors(num_training: Int, num_test: Int, sliding_window: Int)
-  : DataPipe[SLIDINGDATA, PROCDATA] = DataPipe((data: SLIDINGDATA) => {
+  def load_data_into_tensors[T: TF: IsFloatOrDouble](
+    num_training: Int,
+    num_test: Int,
+    sliding_window: Int)
+  : DataPipe[SLIDINGDATA[T], PROCDATA[T]] = DataPipe((data: SLIDINGDATA[T]) => {
 
     require(
       num_training + num_test == data.length,
@@ -341,8 +353,9 @@ package object utils {
     * @param sliding_window The size of the causal time window.
     *
     * */
-  def data_splits_to_tensors(sliding_window: Int): DataPipe2[SLIDINGDATA, SLIDINGDATA, PROCDATA] =
-    DataPipe2((training_data: SLIDINGDATA, test_data: SLIDINGDATA) => {
+  def data_splits_to_tensors[T: TF: IsFloatOrDouble](sliding_window: Int)
+  : DataPipe2[SLIDINGDATA[T], SLIDINGDATA[T], PROCDATA[T]] =
+    DataPipe2((training_data: SLIDINGDATA[T], test_data: SLIDINGDATA[T]) => {
 
       val features_train = dtf.stack(training_data.map(_._2._1), axis = 0)
 
@@ -352,17 +365,17 @@ package object utils {
 
       val labels_train = dtf.tensor_f64(
         training_data.length, sliding_window)(
-        labels_tr_flat:_*)
+        labels_tr_flat:_*).castTo[T]
 
       val labels_te_flat = test_data.toList.flatMap(_._2._2.toList)
 
       val labels_test  = dtf.tensor_f64(
         test_data.length, sliding_window)(
-        labels_te_flat:_*)
+        labels_te_flat:_*).castTo[T]
 
-      val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
-        dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*),
-        dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*))
+      val (train_time_lags, test_time_lags): (Tensor[T], Tensor[T]) = (
+        dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*).castTo[T],
+        dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*).castTo[T])
 
 
       //Create a helios data set.
@@ -385,22 +398,23 @@ package object utils {
     * @param causal_window The size of the causal time window.
     *
     * */
-  def data_splits_to_dataset(causal_window: Int): DataPipe2[SLIDINGDATA, SLIDINGDATA, PROCDATA2] =
+  def data_splits_to_dataset[T: TF: IsFloatOrDouble](causal_window: Int)
+  : DataPipe2[SLIDINGDATA[T], SLIDINGDATA[T], PROCDATA2[T]] =
     DataPipe2(
-      (training_data: SLIDINGDATA, test_data: SLIDINGDATA) => {
+      (training_data: SLIDINGDATA[T], test_data: SLIDINGDATA[T]) => {
 
         //Get the ground truth values of the causal time lags.
-        val (train_time_lags, test_time_lags): (Tensor, Tensor) = (
-          dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*),
-          dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*))
+        val (train_time_lags, test_time_lags): (Tensor[T], Tensor[T]) = (
+          dtf.tensor_f64(training_data.length)(training_data.toList.map(d => d._2._3.toDouble):_*).castTo[T],
+          dtf.tensor_f64(test_data.length)(test_data.toList.map(d => d._2._3.toDouble):_*).castTo[T])
 
         //Create the data set
         val train_dataset = dtfdata.dataset(training_data).map(
-          (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
+          DataPipe((p: SLIDINGPATT[T]) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*).castTo[T]))
         )
 
         val test_dataset = dtfdata.dataset(test_data).map(
-          (p: SLIDINGPATT) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*))
+          DataPipe((p: SLIDINGPATT[T]) => (p._2._1, dtf.tensor_f64(causal_window)(p._2._2:_*).castTo[T]))
         )
 
         val tf_dataset = TFDataSet(train_dataset, test_dataset)
@@ -414,9 +428,9 @@ package object utils {
     * only to the features.
     *
     * */
-  val scale_helios_dataset = DataPipe((dataset: HeliosDataSet) => {
+  def scale_helios_dataset[T: TF: IsFloatOrDouble] = DataPipe((dataset: HeliosDataSet[T, T]) => {
 
-    val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization(dataset.trainData, dataset.trainLabels)
+    val (norm_tr_data, scalers) = dtfpipe.gaussian_standardization[T, T].run(dataset.trainData, dataset.trainLabels)
 
     (
       dataset.copy(
@@ -430,17 +444,17 @@ package object utils {
     * Data pipeline used by [[run_exp_joint()]] and [[run_exp_stage_wise()]]
     * methods to scale data before training.
     * */
-  val scale_data_v1 = DataPipe(
-    scale_helios_dataset,
-    id[(Tensor, Tensor)]
+  def scale_data_v1[T: TF: IsFloatOrDouble] = DataPipe(
+    scale_helios_dataset[T],
+    id[(Tensor[T], Tensor[T])]
   )
 
   /**
     * Data pipeline used by [[run_exp_hyp()]]
     * method to scale data before training.
     * */
-  val scale_data_v2 = DataPipe(
-    fte.scale_dataset, id[(Tensor, Tensor)]
+  def scale_data_v2[T: TF: IsFloatOrDouble] = DataPipe(
+    fte.data.scale_dataset[T], id[(Tensor[T], Tensor[T])]
   )
 
   /**
@@ -510,12 +524,12 @@ package object utils {
     * @param time_scale An optional parameter, used only if `mo_flag` and
     *                   `prob_timelags` are both set to false.
     * */
-  def get_output_mapping(
+  def get_output_mapping[T: TF: IsFloatOrDouble](
     causal_window: Int,
     mo_flag: Boolean,
     prob_timelags: Boolean,
     dist_type: String,
-    time_scale: Double = 1.0): Layer[Output, (Output, Output)] = if (!mo_flag) {
+    time_scale: Double = 1.0): Layer[Output[T], (Output[T], Output[T])] = if (!mo_flag) {
 
     if (!prob_timelags) RBFWeightedSWLoss.output_mapping("Output/RBFWeightedL1", causal_window, time_scale)
     else CausalDynamicTimeLagSO.output_mapping("Output/SOProbWeightedTS", causal_window)
@@ -624,7 +638,10 @@ package object utils {
     *                      form of a probability distribution over the causal
     *                      time window.
     * */
-  def get_loss(
+  def get_loss[
+  P: TF: IsFloatOrDouble,
+  T: TF: IsNumeric: IsNotQuantized,
+  L: TF : IsFloatOrDouble](
     sliding_window: Int,
     mo_flag: Boolean,
     prob_timelags: Boolean,
@@ -637,7 +654,7 @@ package object utils {
     target_dist: helios.learn.cdt_loss.TargetDistribution = helios.learn.cdt_loss.Boltzmann,
     temp: Double                                          = 1.0,
     error_wt: Double                                      = 1.0,
-    c: Double                                             = 1.0): Loss[((Output, Output), Output)] =
+    c: Double                                             = 1.0): Loss[((Output[P], Output[P]), Output[T]), L] =
     if (!mo_flag) {
       if (!prob_timelags) {
         RBFWeightedSWLoss(
@@ -677,39 +694,40 @@ package object utils {
         specificity = c)
     }
 
-  def collect_predictions(preds: DataSet[(Tensor, Tensor)]): (Tensor, Tensor) =
+  def collect_predictions[T: TF: IsFloatOrDouble](
+    preds: DataSet[(Tensor[T], Tensor[T])]): (Tensor[T], Tensor[T]) =
     (
-      tfi.stack(preds.map((p: (Tensor, Tensor)) => p._1).data.toSeq, axis = -1),
-      tfi.stack(preds.map((p: (Tensor, Tensor)) => p._2).data.toSeq, axis = -1)
+      tfi.stack(preds.map((p: (Tensor[T], Tensor[T])) => p._1).data.toSeq, axis = -1),
+      tfi.stack(preds.map((p: (Tensor[T], Tensor[T])) => p._2).data.toSeq, axis = -1)
     )
 
   /**
     * Process the predictions made by a causal time lag model.
     *
     * */
-  def process_predictions(
-    predictions: (Tensor, Tensor),
+  def process_predictions[T: TF: IsFloatOrDouble](
+    predictions: (Tensor[T], Tensor[T]),
     time_window: Int,
     multi_output: Boolean = true,
     probabilistic_time_lags: Boolean = true,
     timelag_pred_strategy: String = "mode",
-    scale_outputs: Option[GaussianScalerTF] = None): (Tensor, Tensor) = {
+    scale_outputs: Option[GaussianScalerTF[T]] = None): (Tensor[T], Tensor[T]) = {
 
     val index_times = Tensor(
       (0 until time_window).map(_.toDouble)
     ).reshape(
       Shape(time_window)
-    )
+    ).castTo[T]
 
     val pred_time_lags = if(probabilistic_time_lags) {
       val unsc_probs = predictions._2
 
-      if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(predictions._1.shape(0))).cast(FLOAT64)
+      if (timelag_pred_strategy == "mode") unsc_probs.topK(1)._2.reshape(Shape(predictions._1.shape(0))).castTo[T]
       else unsc_probs.multiply(index_times).sum(axes = 1)
 
     } else predictions._2
 
-    val pred_targets: Tensor = if (multi_output) {
+    val pred_targets: Tensor[T] = if (multi_output) {
 
       val all_preds =
         if (scale_outputs.isDefined) scale_outputs.get.i(predictions._1)
@@ -717,7 +735,7 @@ package object utils {
 
       val repeated_times = tfi.stack(Seq.fill(time_window)(pred_time_lags.floor), axis = -1)
 
-      val conv_kernel = repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
+      val conv_kernel = repeated_times.subtract(index_times).square.multiply(Tensor(-1.0).castTo[T]).exp.floor
 
       all_preds.multiply(conv_kernel).sum(axes = 1).divide(conv_kernel.sum(axes = 1))
 
@@ -734,7 +752,10 @@ package object utils {
 
   }
 
-  def plot_time_series(targets: Tensor, predictions: Tensor, plot_title: String): Unit = {
+  def plot_time_series[T: TF: IsNotQuantized: IsReal](
+    targets: Tensor[T],
+    predictions: Tensor[T],
+    plot_title: String): Unit = {
     line(dtfutils.toDoubleSeq(targets).zipWithIndex.map(c => (c._2, c._1)).toSeq)
     hold()
     line(dtfutils.toDoubleSeq(predictions).zipWithIndex.map(c => (c._2, c._1)).toSeq)
@@ -743,7 +764,10 @@ package object utils {
     unhold()
   }
 
-  def plot_time_series(targets: Stream[(Int, Double)], predictions: Tensor, plot_title: String): Unit = {
+  def plot_time_series[T: TF: IsNotQuantized: IsReal](
+    targets: Stream[(Int, Double)],
+    predictions: Tensor[T],
+    plot_title: String): Unit = {
     line(targets.toSeq)
     hold()
     line(dtfutils.toDoubleSeq(predictions).zipWithIndex.map(c => (c._2, c._1)).toSeq)
@@ -757,7 +781,7 @@ package object utils {
     * */
   @throws[java.util.NoSuchElementException]
   @throws[Exception]
-  def plot_histogram(data: Tensor, plot_title: String): Unit = {
+  def plot_histogram[T: TF: IsNotQuantized: IsReal](data: Tensor[T], plot_title: String): Unit = {
     try {
 
       histogram(dtfutils.toDoubleSeq(data).toSeq)
@@ -782,11 +806,11 @@ package object utils {
     * @param ylab y-axis label
     * @param plot_title The plot title, as a string.
     * */
-  def plot_input_output(
-    input: Stream[Tensor],
-    input_to_scalar: Tensor => Double,
-    targets: Tensor,
-    predictions: Tensor,
+  def plot_input_output[T: TF: IsNotQuantized: IsReal](
+    input: Stream[Tensor[T]],
+    input_to_scalar: Tensor[T] => Double,
+    targets: Tensor[T],
+    predictions: Tensor[T],
     xlab: String,
     ylab: String,
     plot_title: String): Unit = {
@@ -817,10 +841,10 @@ package object utils {
     *                    to be displayed as the plot legend.
     * @param plot_title The plot title, as a string.
     * */
-  def plot_input_output(
-    input: Stream[Tensor],
-    input_to_scalar: Tensor => Double,
-    predictions: Seq[Tensor],
+  def plot_input_output[T: TF: IsNotQuantized: IsReal](
+    input: Stream[Tensor[T]],
+    input_to_scalar: Tensor[T] => Double,
+    predictions: Seq[Tensor[T]],
     xlab: String,
     ylab: String,
     plot_legend: Seq[String],
@@ -875,8 +899,8 @@ package object utils {
     * @param summary_dir Path where the data should be written
     * @param identifier A string which starts each file name
     * */
-  def write_data_set(
-    data: TLDATA,
+  def write_data_set[T: TF: IsFloatOrDouble: IsReal](
+    data: TLDATA[T],
     summary_dir: Path,
     identifier: String): Unit = {
 
@@ -918,8 +942,8 @@ package object utils {
     * @param summary_dir Path where the data should be written
     * @param identifier A string which starts each file name
     * */
-  def write_model_outputs(
-    outputs: (Tensor, Tensor),
+  def write_model_outputs[T: TF: IsNotQuantized: IsReal](
+    outputs: (Tensor[T], Tensor[T]),
     summary_dir: Path,
     identifier: String): Unit = {
 
@@ -966,9 +990,9 @@ package object utils {
   /**
     * Write evaluation metrics to disk
     * */
-  def write_performance(
-    train_performance: (RegressionMetricsTF, RegressionMetricsTF),
-    test_performance: (RegressionMetricsTF, RegressionMetricsTF),
+  def write_performance[T: TF: IsReal](
+    train_performance: (RegressionMetricsTF[T], RegressionMetricsTF[T]),
+    test_performance: (RegressionMetricsTF[T], RegressionMetricsTF[T]),
     directory: Path): Unit = {
 
     write.over(

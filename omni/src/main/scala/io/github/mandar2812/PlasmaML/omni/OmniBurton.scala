@@ -2,7 +2,7 @@ package io.github.mandar2812.PlasmaML.omni
 
 import io.github.mandar2812.PlasmaML.omni.OmniOSA._
 import io.github.mandar2812.dynaml.DynaMLPipe.extractTimeSeries
-import io.github.mandar2812.dynaml.pipes.{DataPipe, StreamDataPipe}
+import io.github.mandar2812.dynaml.pipes.{DataPipe, IterableDataPipe}
 
 /**
   * Contains work-flows for running experiments
@@ -40,7 +40,7 @@ object OmniBurton {
         dayofYearformatter.parseDateTime(
           year.toInt.toString + "/" + day.toInt.toString +
             "/" + hour.toInt.toString).getMillis/1000.0 }) >
-      StreamDataPipe((couple: (Double, Double)) =>
+      IterableDataPipe((couple: (Double, Double)) =>
         couple._1 >= startStamp && couple._1 <= endStamp)
 
     //Apply the pipeline to the file

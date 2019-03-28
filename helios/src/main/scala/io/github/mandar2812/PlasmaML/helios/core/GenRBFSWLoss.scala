@@ -16,23 +16,28 @@ import org.platanios.tensorflow.api.ops.Output
   *
   * @author mandar2812*
   * */
-case class GenRBFSWLoss(
+case class GenRBFSWLoss[
+P: TF: IsFloatOrDouble,
+T: TF: IsNumeric: IsNotQuantized,
+L: TF : IsFloatOrDouble](
   override val name:  String,
   size_causal_window: Int,
   corr_cutoff:        Double = -0.75,
   prior_weight:       Double = 1.0,
   prior_scaling:      Double = 1.0,
   batch:              Int    = -1)
-  extends Loss[((Output, Output), Output)](name) {
+  extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"RBFSW[$size_causal_window]"
 
-  override protected def _forward(input: ((Output, Output), Output))(implicit mode: Mode): Output = {
+  override def forwardWithoutContext(
+    input: ((Output[P], Output[P]), Output[T]))(
+    implicit mode: Mode): Output[L] = {
 
     //Declare learnable parameters.
-    val time_scale: tf.Variable = tf.variable("time_scale", FLOAT32, Shape(), tf.OnesInitializer)
-    val logp: tf.Variable       = tf.variable("logp", FLOAT32, Shape(), tf.RandomUniformInitializer(0.0, 1.0))
-    val p                       = logp.exp
+    val time_scale: tf.Variable[P] = tf.variable[P]("time_scale", Shape(), tf.OnesInitializer)
+    val logp: tf.Variable[P]       = tf.variable[P]("logp", Shape(), tf.RandomUniformInitializer(0.0f, 1.0f))
+    val p                          = logp.exp
 
     //Declare relevant quantities
     val predictions   = input._1._1
@@ -42,13 +47,13 @@ case class GenRBFSWLoss(
 
     //Determine the batch size, if not provided @TODO: Iron out bugs in this segment
     val batchSize =
-      if(batch == -1) predictions.size.toInt/predictions.shape.toTensor().prod().scalar.asInstanceOf[Int]
+      if(batch == -1) predictions.size.toInt/predictions.shape.toTensor.prod().scalar
       else batch
 
     //Sort the predicted targets and time lags, obtaining
     //the ranks of each element.
-    val rank_preds     = predictions.topK(batchSize)._2.cast(FLOAT32)
-    val rank_unsc_lags = unscaled_lags.topK(batchSize)._2.cast(FLOAT32)
+    val rank_preds     = predictions.topK(batchSize)._2.castTo[P]
+    val rank_unsc_lags = unscaled_lags.topK(batchSize)._2.castTo[P]
 
     //Standardize (mean center) the ranked tensors
     val (ranked_preds_mean, ranked_unscaled_lags_mean) = (rank_preds.mean(), rank_unsc_lags.mean())
@@ -66,19 +71,20 @@ case class GenRBFSWLoss(
 
     val repeated_preds = tf.stack(Seq.fill(size_causal_window)(predictions), axis = -1)
 
-    val index_times: Output = Tensor((0 until size_causal_window).map(_.toDouble)).reshape(Shape(size_causal_window))
+    val index_times: Output[P] =
+      Tensor((0 until size_causal_window).map(_.toDouble)).reshape(Shape(size_causal_window)).castTo[P].toOutput
 
     //Calculate the convolution kernel of the loss function.
     val convolution_kernel = (repeated_times - index_times)
       .abs
       .pow(p)
-      .divide(p.multiply(-1.0))
+      .divide(p.multiply(Tensor(-1.0).castTo[P].toOutput))
       .divide(time_scale.square)
       .exp
 
     //Convolve the kernel with the loss tensor, yielding the weighted loss tensor
     val weighted_loss_tensor =
-      (repeated_preds - targets)
+      (repeated_preds - targets.castTo[P])
         .square
         .multiply(convolution_kernel)
         .sum(axes = 1)
@@ -94,11 +100,11 @@ case class GenRBFSWLoss(
     val prior =
       norm_ranked_targets.multiply(norm_ranked_unsc_lags)
         .mean()
-        .subtract(corr_cutoff)
-        .multiply(prior_scaling)
+        .subtract(Tensor(corr_cutoff).castTo[P].toOutput)
+        .multiply(Tensor(prior_scaling).castTo[P].toOutput)
         .softplus
-        .multiply(prior_weight)
+        .multiply(Tensor(prior_weight).castTo[P].toOutput)
 
-    weighted_loss_tensor.add(prior)
+    weighted_loss_tensor.add(prior).castTo[L]
   }
 }

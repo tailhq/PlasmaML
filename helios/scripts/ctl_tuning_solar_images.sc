@@ -12,7 +12,7 @@ import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{L1Regularization, L
 import breeze.numerics.sigmoid
 import io.github.mandar2812.PlasmaML.helios.core.timelag
 import io.github.mandar2812.dynaml.probability.UniformRV
-import org.platanios.tensorflow.api.{FLOAT32, FLOAT64, Output, Tensor, tf}
+import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.StopCriteria
 import org.platanios.tensorflow.api.learn.layers.Layer
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -31,7 +31,7 @@ def apply[T <: SolarImagesSource](
   time_horizon: (Int, Int)                              = (24, 100),
   image_hist: Int                                       = 0,
   image_hist_downsamp: Int                              = 1,
-  opt: Optimizer                                        = tf.train.AdaDelta(0.01),
+  opt: Optimizer                                        = tf.train.AdaDelta(0.01f),
   iterations: Int                                       = 1000000,
   iterations_tuning: Int                                = 50000,
   divergence: helios.learn.cdt_loss.Divergence          = helios.learn.cdt_loss.KullbackLeibler,
@@ -42,8 +42,9 @@ def apply[T <: SolarImagesSource](
   regularization_type: String                           = "L2",
   hyper_optimizer: String                               = "gs",
   num_hyp_samples: Int                                  = 20,
-  hyp_opt_iterations: Option[Int]                       = Some(5))
-: helios.Experiment[helios.ModelRunTuning, helios.ImageExpConfig] = {
+  hyp_opt_iterations: Option[Int]                       = Some(5),
+  existing_exp: Option[Path]                            = None)
+: helios.Experiment[Double, helios.ModelRunTuning[Double, Double], helios.ImageExpConfig] = {
 
   //Data with MDI images
 
@@ -121,9 +122,9 @@ def apply[T <: SolarImagesSource](
     Seq(1, 1, 1, 1)
   )
 
-  val activation = DataPipe[String, Layer[Output, Output]]((s: String) => tf.learn.ReLU(s, 0.01f))
+  val activation = DataPipe[String, Layer[Output[Float], Output[Float]]]((s: String) => tf.learn.ReLU(s, 0.01f))
 
-  val conv_section = tf.learn.Cast("Input/Cast", FLOAT32) >>
+  val conv_section =
     dtflearn.inception_stack(
       num_channels*(image_hist_downsamp + 1),
       filter_depths_stack1, activation,
@@ -135,20 +136,22 @@ def apply[T <: SolarImagesSource](
     tf.learn.MaxPool(s"MaxPool_2", Seq(1, 3, 3, 1), 2, 2, SameConvPadding)
 
 
-  val post_conv_ff_stack = dtflearn.feedforward_stack(
-    (i: Int) => tf.learn.Sigmoid("Act_"+i), FLOAT64)(
+  val post_conv_ff_stack = dtflearn.feedforward_stack[Double](
+    (i: Int) => tf.learn.Sigmoid("Act_"+i))(
     ff_stack, starting_index = ff_index)
 
-  val output_mapping = helios.learn.cdt_loss.output_mapping(
+  val output_mapping = helios.learn.cdt_loss.output_mapping[Double](
     name = "Output/CDT-SW",
     dataset.data.head._2._2.length)
 
 
-  val architecture = tf.learn.Cast("Input/Cast", FLOAT32) >>
-    conv_section >>
-    tf.learn.Flatten("Flatten_1") >>
-    post_conv_ff_stack >>
-    output_mapping
+  val architecture =
+    tf.learn.Cast[UByte, Float]("Cast/Input") >>
+      conv_section >>
+      tf.learn.Flatten("Flatten_1") >>
+      tf.learn.Cast[Float, Double]("Cast/Input") >>
+      post_conv_ff_stack >>
+      output_mapping
 
 
   val (_, layer_shapes, layer_parameter_names, layer_datatypes) =
@@ -158,6 +161,10 @@ def apply[T <: SolarImagesSource](
       ff_stack.dropRight(1),
       dType = "FLOAT64",
       starting_index = ff_index)
+
+  val scope = dtfutils.get_scope(architecture) _
+
+  val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
 
   val hyper_parameters = List(
     "prior_wt",
@@ -197,7 +204,7 @@ def apply[T <: SolarImagesSource](
   //Generate the loss function given values for the hyper-parameters
   val loss_func_generator = (h: Map[String, Double]) => {
 
-    val lossFunc = timelag.utils.get_loss(
+    val lossFunc = timelag.utils.get_loss[Double, Double, Double](
       time_horizon._2, mo_flag = true,
       prob_timelags = true,
       prior_wt = h("prior_wt"),
@@ -209,38 +216,30 @@ def apply[T <: SolarImagesSource](
 
     val reg_layer =
       if(regularization_type == "L1")
-        L1Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+        L1Regularization[Double](layer_scopes, layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
       else
-        L2Regularization(layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
+        L2Regularization[Double](layer_scopes, layer_parameter_names, layer_datatypes, layer_shapes, h("reg"))
 
     lossFunc >>
       reg_layer >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
-  val fitness_function = DataPipe2[(Tensor, Tensor), Tensor, Double]((preds, targets) => {
+  val fitness_function = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]]((preds, targets) => {
 
     val weighted_error = preds._1
       .subtract(targets)
       .square
       .multiply(preds._2)
       .sum(axes = 1)
-      .mean()
-      .scalar
-      .asInstanceOf[Double]
 
     val entropy = preds._2
-      .multiply(-1d)
-      .multiply(preds._2.log)
+      .multiply(Tensor(-1d).castTo[Double])
+      .multiply(tf.log(preds._2))
       .sum(axes = 1)
-      .mean()
-      .scalar
-      .asInstanceOf[Double]
 
-    weighted_error + entropy
+      (weighted_error + entropy).castTo[Float]
   })
-
-
 
   val experiment = helios.run_cdt_experiment_omni_hyp(
     dataset, tt_partition, resample = re,
@@ -262,7 +261,8 @@ def apply[T <: SolarImagesSource](
     hyper_optimizer = hyper_optimizer,
     hyp_mapping = hyp_mapping,
     hyp_opt_iterations = hyp_opt_iterations,
-    num_hyp_samples = num_hyp_samples)
+    num_hyp_samples = num_hyp_samples, 
+    existing_exp = existing_exp)
 
   experiment.copy(config = experiment.config.copy(image_sources = Seq(image_source)))
 }

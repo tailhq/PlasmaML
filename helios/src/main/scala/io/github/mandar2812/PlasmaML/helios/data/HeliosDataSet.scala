@@ -2,9 +2,9 @@ package io.github.mandar2812.PlasmaML.helios.data
 
 import org.platanios.tensorflow.api._
 
-case class HeliosDataSet(
-  trainData: Tensor, trainLabels: Tensor, nTrain: Int,
-  testData: Tensor, testLabels: Tensor, nTest: Int) {
+case class HeliosDataSet[T: TF, U: TF](
+  trainData: Tensor[T], trainLabels: Tensor[U], nTrain: Int,
+  testData: Tensor[T], testLabels: Tensor[U], nTest: Int) {
 
 
   def close(): Unit = {
