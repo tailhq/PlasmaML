@@ -203,46 +203,20 @@ package object helios {
       dtflearn.SupEstimatorTF[In, Output[T], ArchOut, ArchOut, Loss, (ArchOut, (In, Output[T]))]
   }
 
-  case class TunedModelRunT[T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
-    data_and_scales: (TFDataSet[(DateTime, (IT, Tensor[T]))], (Scaler[IT],
-        ReversibleScaler[Tensor[T]])),
-    model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[
-      T
-    ], Shape, ITT, IDD, ISS],
-    metrics_train: Option[RegressionMetricsTF[T]],
-    metrics_test: Option[RegressionMetricsTF[T]],
-    summary_dir: Path,
-    training_preds: Option[ITT],
-    test_preds: Option[ITT],
-    training_outputs: Option[ITT] = None,
-    test_outputs: Option[ITT] = None)
-      extends ModelRun[T] {
-
-    override type DATA_PATTERN = (DateTime, (IT, Tensor[T]))
-
-    override type SCALERS = (Scaler[IT], ReversibleScaler[Tensor[T]])
-
-    override type MODEL =
-      TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[
-        T
-      ], DataType[T], Shape, ITT, IDD, ISS]
-
-    override type ESTIMATOR =
-      Option[dtflearn.SupEstimatorTF[
-        In,
-        Output[T],
-        ArchOut,
-        ArchOut,
-        Loss,
-        (ArchOut, (In, Output[T]))
-      ]]
-
-    override val estimator: ESTIMATOR = model.estimator
-  }
-
-  case class TunedModelRun[InputPattern, T, In, ArchOut, Loss, IT, ID, IS, ITT, IDD, ISS](
-    data_and_scales: (TFDataSet[(DateTime, (InputPattern, Tensor[T]))], (Scaler[InputPattern],
-        ReversibleScaler[Tensor[T]])),
+  case class TunedModelRun[
+    InputPattern,
+    T,
+    In,
+    ArchOut,
+    Loss,
+    IT,
+    ID,
+    IS,
+    ITT,
+    IDD,
+    ISS
+  ](data_and_scales: (TFDataSet[(DateTime, (InputPattern, Tensor[T]))],
+      (Scaler[InputPattern], ReversibleScaler[Tensor[T]])),
     model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[
       T
     ], Shape, ITT, IDD, ISS],
@@ -310,7 +284,8 @@ package object helios {
     config: Conf,
     results: Run)
 
-  type ModelRunTuning[T, L] = TunedModelRunT[
+  type ModelRunTuning[Input, T, L] = TunedModelRun[
+    Input,
     T,
     Output[UByte],
     (Output[T], Output[T]),
@@ -674,6 +649,19 @@ package object helios {
     unhold()
 
   }
+
+  /**
+    * Write evaluation metrics to disk
+    * */
+    def write_performance[T: TF: IsReal](
+      fileID: String,
+      performance: RegressionMetricsTF[T],
+      directory: Path): Unit = {
+  
+      write.over(
+        directory/s"performance_${fileID}.json",
+        s"[${performance.to_json}]")
+    }
 
   def run_unsupervised_experiment(
     collated_data: HELIOS_IMAGE_DATA,
@@ -1219,7 +1207,7 @@ package object helios {
     hyp_opt_iterations: Option[Int] = Some(5),
     hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
     existing_exp: Option[Path] = None
-  ): Experiment[Double, ModelRunTuning[Double, Double], ImageExpConfig] = {
+  ): Experiment[Double, ModelRunTuning[Tensor[UByte], Double, Double], ImageExpConfig] = {
 
     //The directories to write model parameters and summaries.
     val resDirName = "helios_omni_" + results_id
@@ -1384,12 +1372,13 @@ package object helios {
         )
 
     val handle_ops = dtflearn.model.tf_data_handle_ops[
-      (DateTime, (Tensor[UByte], Tensor[Double])), 
-      Tensor[UByte], 
-      Tensor[Double], 
-      (Tensor[Double], Tensor[Double]), 
-      Output[UByte], 
-      Output[Double]](patternToTensor = Some(tup2_2[DateTime, (Tensor[UByte], Tensor[Double])]))
+      (DateTime, (Tensor[UByte], Tensor[Double])),
+      Tensor[UByte],
+      Tensor[Double],
+      (Tensor[Double], Tensor[Double]),
+      Output[UByte],
+      Output[Double]
+    ](patternToTensor = Some(tup2_2[DateTime, (Tensor[UByte], Tensor[Double])]))
 
     val tunableTFModel: TunableTFModel[
       (DateTime, (Tensor[UByte], Tensor[Double])),
@@ -1598,15 +1587,16 @@ package object helios {
     val reg_metrics_train =
       new RegressionMetricsTF(pred_outputs_train, actual_targets_train)
 
-    val results: helios.ModelRunTuning[Double, Double] = helios.TunedModelRunT(
-      (norm_tf_data, scalers),
-      best_model,
-      Some(reg_metrics_train),
-      Some(reg_metrics_test),
-      tf_summary_dir,
-      Some((pred_outputs_train, pred_time_lags_train)),
-      Some((pred_outputs_test, pred_time_lags_test))
-    )
+    val results: helios.ModelRunTuning[Tensor[UByte], Double, Double] =
+      helios.TunedModelRun(
+        (norm_tf_data, scalers),
+        best_model,
+        Some(reg_metrics_train),
+        Some(reg_metrics_test),
+        tf_summary_dir,
+        Some((pred_outputs_train, pred_time_lags_train)),
+        Some((pred_outputs_test, pred_time_lags_test))
+      )
 
     val exp_config = ImageExpConfig(
       Seq.empty[SolarImagesSource],

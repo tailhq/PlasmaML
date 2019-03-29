@@ -18,6 +18,7 @@ import breeze.numerics.sigmoid
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
+
 @main
 def apply(
     start_year: Int = 2011,
@@ -47,7 +48,7 @@ def apply(
     hyp_opt_iterations: Option[Int] = Some(5),
     reg_type: String = "L2",
     existing_exp: Option[Path] = None
-): helios.Experiment[Double, fte.ModelRunTuning, fte.FTExperiment.Config] = {
+): helios.Experiment[Double, fte.ModelRunTuning, fte.data.FteOmniConfig] = {
 
   val num_pred_dims = timelag.utils.get_num_output_dims(
     causal_window._2,

@@ -77,51 +77,10 @@ package object fte {
     * */
   object FTExperiment {
 
-    case class FTEConfig(
-      data_limits: (Int, Int),
-      deltaTFTE: Int,
-      fteStep: Int,
-      latitude_limit: Double,
-      log_scale_fte: Boolean)
-
-    case class OMNIConfig(deltaT: (Int, Int), log_flag: Boolean)
-
-    case class Config(
-      fte_config: FTEConfig,
-      omni_config: OMNIConfig,
-      multi_output: Boolean = true,
-      probabilistic_time_lags: Boolean = true,
-      timelag_prediction: String = "mode")
-        extends helios.Config
-
-    var config = Config(
+    var config = FteOmniConfig(
       FTEConfig((0, 0), 0, 1, 90d, log_scale_fte = false),
       OMNIConfig((0, 0), log_flag = false)
     )
-
-    var fte_data: ZipDataSet[DateTime, Tensor[Double]] =
-      dtfdata
-        .dataset(Iterable[(DateTime, Tensor[Double])]())
-        .to_zip(identityPipe)
-
-    var omni_data: ZipDataSet[DateTime, Tensor[Double]] =
-      dtfdata
-        .dataset(Iterable[(DateTime, Tensor[Double])]())
-        .to_zip(identityPipe)
-
-    def clear_cache(): Unit = {
-      fte_data = dtfdata
-        .dataset(Iterable[(DateTime, Tensor[Double])]())
-        .to_zip(identityPipe)
-      omni_data = dtfdata
-        .dataset(Iterable[(DateTime, Tensor[Double])]())
-        .to_zip(identityPipe)
-      config = Config(
-        FTEConfig((0, 0), 0, 1, 90d, log_scale_fte = false),
-        OMNIConfig((0, 0), log_flag = false)
-      )
-    }
-
   }
 
   def exp_cdt(
@@ -179,56 +138,33 @@ package object fte {
       new DateTime(year_range.max, 12, 31, 23, 59)
     )
 
-    if (FTExperiment.fte_data.size == 0 ||
-        FTExperiment.config.fte_config != FTExperiment.FTEConfig(
-          (year_range.min, year_range.max),
-          deltaTFTE,
-          fteStep,
-          latitude_limit,
-          log_scale_fte
-        )) {
+    println("\nProcessing FTE Data")
 
-      println("\nProcessing FTE Data")
+    val fte_data = load_fte_data(
+      fte_data_path,
+      carrington_rotations,
+      log_scale_fte,
+      start,
+      end
+    )(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
-      FTExperiment.fte_data = load_fte_data(
-        fte_data_path,
-        carrington_rotations,
-        log_scale_fte,
-        start,
-        end
-      )(deltaTFTE, fteStep, latitude_limit, conv_flag)
-
-      FTExperiment.config = FTExperiment.config.copy(
-        fte_config = FTExperiment.FTEConfig(
-          (year_range.min, year_range.max),
-          deltaTFTE,
-          fteStep,
-          latitude_limit,
-          log_scale_fte
-        )
+    FTExperiment.config = FTExperiment.config.copy(
+      fte_config = FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE,
+        fteStep,
+        latitude_limit,
+        log_scale_fte
       )
+    )
 
-    } else {
-      println("\nUsing cached FTE data sets")
-    }
+    println("Processing OMNI solar wind data")
+    val omni_data =
+      load_solar_wind_data(start, end)(deltaT, log_scale_omni)
 
-    if (FTExperiment.omni_data.size == 0 ||
-        FTExperiment.config.omni_config != FTExperiment.OMNIConfig(
-          deltaT,
-          log_scale_omni
-        )) {
-
-      println("Processing OMNI solar wind data")
-      FTExperiment.omni_data =
-        load_solar_wind_data(start, end)(deltaT, log_scale_omni)
-
-      FTExperiment.config = FTExperiment.config.copy(
-        omni_config = FTExperiment.OMNIConfig(deltaT, log_scale_omni)
-      )
-
-    } else {
-      println("\nUsing cached OMNI data set")
-    }
+    FTExperiment.config = FTExperiment.config.copy(
+      omni_config = OMNIConfig(deltaT, log_scale_omni)
+    )
 
     val tt_partition = DataPipe(
       (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
@@ -239,8 +175,7 @@ package object fte {
     )
 
     println("Constructing joined data set")
-    val dataset =
-      FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
+    val dataset = fte_data.join(omni_data).partition(tt_partition)
 
     val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
 
@@ -553,7 +488,7 @@ package object fte {
     summary_top_dir: Path = home / 'tmp,
     hyp_opt_iterations: Option[Int] = Some(5),
     existing_exp: Option[Path] = None
-  ): helios.Experiment[Double, ModelRunTuning, FTExperiment.Config] = {
+  ): helios.Experiment[Double, ModelRunTuning, FteOmniConfig] = {
 
     val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
@@ -908,15 +843,15 @@ package object fte {
 
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
 
-    val experiment_config = FTExperiment.Config(
-      FTExperiment.FTEConfig(
+    val experiment_config = FteOmniConfig(
+      FTEConfig(
         (year_range.min, year_range.max),
         deltaTFTE,
         fteStep,
         latitude_limit,
         log_scale_fte
       ),
-      FTExperiment.OMNIConfig(deltaT, log_scale_omni)
+      OMNIConfig(deltaT, log_scale_omni)
     )
 
     val results = helios.TunedModelRun(
@@ -929,6 +864,17 @@ package object fte {
       Some((final_predictions, pred_time_lags_test))
     )
 
+    write_exp_config(experiment_config, tf_summary_dir)
+
+    println("Writing data sets")
+    write_fte_data_set[DenseVector[Double]](
+      dt.toString("YYYY-MM-dd-HH-mm"),
+      dataset,
+      DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
+      tf_summary_dir
+    )
+
+    println("Writing model predictions")
     helios.write_predictions[Double](
       (unscaled_preds_test, predictions._2),
       tf_summary_dir,
@@ -941,6 +887,13 @@ package object fte {
       dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
       tf_summary_dir / ("scatter_test-" + dt
         .toString("YYYY-MM-dd-HH-mm") + ".csv")
+    )
+
+    println("Writing performance results")
+    helios.write_performance(
+      "test_" + dt.toString("YYYY-MM-dd-HH-mm"),
+      reg_metrics,
+      tf_summary_dir
     )
 
     helios.Experiment(
@@ -991,56 +944,33 @@ package object fte {
       new DateTime(year_range.max, 12, 31, 23, 59)
     )
 
-    if (FTExperiment.fte_data.size == 0 ||
-        FTExperiment.config.fte_config != FTExperiment.FTEConfig(
-          (year_range.min, year_range.max),
-          deltaT,
-          fteStep,
-          latitude_limit,
-          log_scale_fte
-        )) {
+    println("\nProcessing FTE Data")
 
-      println("\nProcessing FTE Data")
+    val fte_data = load_fte_data(
+      fte_data_path,
+      carrington_rotations,
+      log_scale_fte,
+      start,
+      end
+    )(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
-      FTExperiment.fte_data = load_fte_data(
-        fte_data_path,
-        carrington_rotations,
-        log_scale_fte,
-        start,
-        end
-      )(deltaTFTE, fteStep, latitude_limit, conv_flag)
-
-      FTExperiment.config = FTExperiment.config.copy(
-        fte_config = FTExperiment.FTEConfig(
-          (year_range.min, year_range.max),
-          deltaTFTE,
-          fteStep,
-          latitude_limit,
-          log_scale_fte
-        )
+    FTExperiment.config = FTExperiment.config.copy(
+      fte_config = FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE,
+        fteStep,
+        latitude_limit,
+        log_scale_fte
       )
+    )
 
-    } else {
-      println("\nUsing cached FTE data sets")
-    }
+    println("Processing OMNI solar wind data")
+    val omni_data =
+      load_solar_wind_data(start, end)((deltaT, 1), log_scale_omni)
 
-    if (FTExperiment.omni_data.size == 0 ||
-        FTExperiment.config.omni_config != FTExperiment.OMNIConfig(
-          (deltaT, 1),
-          log_scale_omni
-        )) {
-
-      println("Processing OMNI solar wind data")
-      FTExperiment.omni_data =
-        load_solar_wind_data(start, end)((deltaT, 1), log_scale_omni)
-
-      FTExperiment.config = FTExperiment.config.copy(
-        omni_config = FTExperiment.OMNIConfig((deltaT, 1), log_scale_omni)
-      )
-
-    } else {
-      println("\nUsing cached OMNI data set")
-    }
+    FTExperiment.config = FTExperiment.config.copy(
+      omni_config = OMNIConfig((deltaT, 1), log_scale_omni)
+    )
 
     val tt_partition = DataPipe(
       (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
@@ -1052,7 +982,7 @@ package object fte {
 
     println("Constructing joined data set")
     val dataset =
-      FTExperiment.fte_data.join(FTExperiment.omni_data).partition(tt_partition)
+      fte_data.join(omni_data).partition(tt_partition)
 
     val input_dim = dataset.training_dataset.data.head._2._1.shape
 

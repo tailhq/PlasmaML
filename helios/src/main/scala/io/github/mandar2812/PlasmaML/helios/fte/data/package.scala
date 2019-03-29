@@ -17,11 +17,38 @@ import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import org.platanios.tensorflow.api._
+import _root_.org.json4s._
+import _root_.org.json4s.JsonDSL._
+// or
+//import _root_.org.json4s.JsonDSL.WithDouble._
+import _root_.org.json4s.jackson.Serialization.{
+  read => read_json,
+  write => write_json
+}
 
 package object data {
 
   //Set time zone to UTC
   DateTimeZone.setDefault(DateTimeZone.UTC)
+
+  implicit val formats = DefaultFormats + FieldSerializer[Map[String, Any]]()
+
+  case class FTEConfig(
+    data_limits: (Int, Int),
+    deltaTFTE: Int,
+    fteStep: Int,
+    latitude_limit: Double,
+    log_scale_fte: Boolean)
+
+  case class OMNIConfig(deltaT: (Int, Int), log_flag: Boolean)
+
+  case class FteOmniConfig(
+    fte_config: FTEConfig,
+    omni_config: OMNIConfig,
+    multi_output: Boolean = true,
+    probabilistic_time_lags: Boolean = true,
+    timelag_prediction: String = "mode")
+      extends helios.Config
 
   //Load the Carrington Rotation Table
   val carrington_rotation_table: Path = pwd / 'data / "CR_Table.rdb"
@@ -96,8 +123,6 @@ package object data {
     )
 
   }
-
-  case class FTEConfig()
 
   /**
     * Load the Flux Tube Expansion (FTE) data.
@@ -767,8 +792,47 @@ package object data {
 
   }
 
-  val load_bdv_to_tf = identityPipe[DateTime] * DataPipe[DenseVector[Double], Tensor[
-    Double
-  ]](p => dtf.tensor_f64(p.size)(p.toArray.toSeq: _*))
+  def write_exp_config(config: FteOmniConfig, dir: Path): Unit = {
+    if (!(exists ! dir / "config.json")) {
+      val config_json = write_json(config)
+      write(dir / "config.json", config_json)
+    }
+  }
+
+  def write_fte_data_set[Input](
+    identifier: String,
+    dataset: helios.data.TF_DATA_T2[Input, Double],
+    input_to_seq: DataPipe[Input, Seq[Double]],
+    directory: Path
+  ): Unit = {
+
+    val pattern_to_map =
+      DataPipe[(DateTime, (Input, Tensor[Double])), JValue](
+        p =>
+          (
+            ("timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'")) ~
+              ("targets" -> dtfutils.toDoubleSeq(p._2._2).toList) ~
+              ("fte"     -> input_to_seq.run(p._2._1))
+          )
+      )
+
+    val map_to_json = DataPipe[JValue, String](p => write_json(p))
+
+    val process_pattern = pattern_to_map > map_to_json
+
+    val json_records_training =
+      dataset.training_dataset.map(process_pattern).data.mkString(",\n")
+    val json_records_test =
+      dataset.test_dataset.map(process_pattern).data.mkString(",\n")
+
+    write.over(
+      directory / s"training_data_${identifier}.json",
+      s"$json_records_training"
+    )
+    write.over(
+      directory / s"test_data_${identifier}.json",
+      s"$json_records_test"
+    )
+  }
 
 }

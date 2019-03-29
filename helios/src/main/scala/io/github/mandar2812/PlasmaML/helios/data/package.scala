@@ -28,8 +28,8 @@ import io.github.mandar2812.dynaml.DynaMLPipe.{identityPipe => id, _}
 import io.github.mandar2812.dynaml.utils
 import org.joda.time._
 import org.platanios.tensorflow.api._
-import org.json4s._
-import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
+import _root_.org.json4s._
+import _root_.org.json4s.jackson.Serialization.{read => read_json, write => write_json}
 
 /**
   * <h3>Helios Data Facility</h3>
@@ -41,7 +41,7 @@ import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
   * */
 package object data {
 
-  implicit val formats = DefaultFormats
+  implicit val formats = DefaultFormats + FieldSerializer[Map[String, Any]]()
 
   private implicit val dateOrdering = new Ordering[DateTime] {
     override def compare(x: DateTime, y: DateTime): Int =
@@ -1366,13 +1366,13 @@ package object data {
         )
     )
 
-    val map_to_json = DataPipe[Map[String, Any], String](p => s"write_json(p)")
+    val map_to_json = DataPipe[Map[String, Any], String](p => write_json(p))
 
     val process_pattern = pattern_to_map > map_to_json
 
     val json_records = dataset.map(process_pattern).data.mkString(",\n")
 
-    write.over(directory / s"$identifier.csv", s"[$json_records]")
+    write.over(directory / s"$identifier.json", s"[$json_records]")
   }
 
   /**
