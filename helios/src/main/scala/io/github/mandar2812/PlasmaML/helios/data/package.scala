@@ -29,7 +29,11 @@ import io.github.mandar2812.dynaml.utils
 import org.joda.time._
 import org.platanios.tensorflow.api._
 import _root_.org.json4s._
-import _root_.org.json4s.jackson.Serialization.{read => read_json, write => write_json}
+import _root_.org.json4s.JsonDSL._
+import _root_.org.json4s.jackson.Serialization.{
+  read => read_json,
+  write => write_json
+}
 
 /**
   * <h3>Helios Data Facility</h3>
@@ -1357,22 +1361,22 @@ package object data {
     identifier: String
   ): Unit = {
 
-    val pattern_to_map = DataPipe[PATTERN, Map[String, Any]](
+    val pattern_to_map = DataPipe[PATTERN, JValue](
       p =>
-        Map(
-          "timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
-          "images"    -> p._2._1.map(x => x.toString),
-          "targets"   -> p._2._2
+        (
+          ("timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'")) ~
+          ("images"    -> p._2._1.map(x => x.toString)) ~
+          ("targets"   -> p._2._2)
         )
     )
 
-    val map_to_json = DataPipe[Map[String, Any], String](p => write_json(p))
+    val map_to_json = DataPipe[JValue, String](p => write_json(p))
 
     val process_pattern = pattern_to_map > map_to_json
 
     val json_records = dataset.map(process_pattern).data.mkString(",\n")
 
-    write.over(directory / s"$identifier.json", s"[$json_records]")
+    write.over(directory / s"$identifier.json", s"$json_records")
   }
 
   /**

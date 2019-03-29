@@ -19,8 +19,6 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import org.platanios.tensorflow.api._
 import _root_.org.json4s._
 import _root_.org.json4s.JsonDSL._
-// or
-//import _root_.org.json4s.JsonDSL.WithDouble._
 import _root_.org.json4s.jackson.Serialization.{
   read => read_json,
   write => write_json
