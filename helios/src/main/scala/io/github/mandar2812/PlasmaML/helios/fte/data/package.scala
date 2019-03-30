@@ -2,6 +2,7 @@ package io.github.mandar2812.PlasmaML.helios.fte
 
 import ammonite.ops._
 import org.joda.time._
+import org.joda.time.format.DateTimeFormat
 import breeze.linalg.{DenseVector, DenseMatrix}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
@@ -23,6 +24,7 @@ import _root_.org.json4s.jackson.Serialization.{
   read => read_json,
   write => write_json
 }
+import org.json4s.jackson.JsonMethods._
 
 package object data {
 
@@ -45,7 +47,8 @@ package object data {
     omni_config: OMNIConfig,
     multi_output: Boolean = true,
     probabilistic_time_lags: Boolean = true,
-    timelag_prediction: String = "mode")
+    timelag_prediction: String = "mode",
+    fraction_variance: Double = 1d)
       extends helios.Config
 
   //Load the Carrington Rotation Table
@@ -86,9 +89,7 @@ package object data {
         val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
 
         if (exists ! hmi_file) (read.lines ! hmi_file).toIterable.drop(4)
-        else
-          /* if(exists! gong_file) */ (read.lines ! gong_file).toIterable
-            .drop(3)
+        else (read.lines ! gong_file).toIterable.drop(3)
       }
   )
 
@@ -249,8 +250,6 @@ package object data {
     val load_slice_to_tensor = DataPipe[Seq[FTEPattern], Tensor[Double]](
       (s: Seq[FTEPattern]) =>
         dtf.tensor_f64(s.length)(s.map(_._3.get).map(log_transformation): _*)
-      //Tensor[Double](s.map(_._3.get).map(log_transformation))
-      //.reshape(Shape(s.length))
     )
 
     val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
@@ -830,6 +829,67 @@ package object data {
     write.over(
       directory / s"test_data_${identifier}.json",
       s"$json_records_test"
+    )
+  }
+
+
+  def read_data_set(
+    training_data_file: Path,
+    test_data_file: Path
+  ): helios.data.TF_DATA_T2[DenseVector[Double], Double] = {
+
+    require(
+      exists! training_data_file && exists! test_data_file, 
+      "Both training and test files must exist.")
+
+    val dt_format = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+
+    val read_file = DataPipe((p: Path) => read.lines ! p)
+
+    val read_json_record = IterableDataPipe((s: String) => parse(s))
+
+    val load_record = IterableDataPipe((record: JValue) => {
+      val dt = dt_format.parseDateTime(
+        record
+          .findField(p => p._1 == "timestamp")
+          .get
+          ._2
+          .values
+          .asInstanceOf[String]
+      )
+      val features = DenseVector(
+        record
+          .findField(p => p._1 == "fte")
+          .get
+          ._2
+          .values
+          .asInstanceOf[List[Double]]
+          .toArray
+      )
+
+      val targets_seq = record
+        .findField(p => p._1 == "targets")
+        .get
+        ._2
+        .values
+        .asInstanceOf[List[Double]]
+
+      val targets = dtf.tensor_f64(targets_seq.length)(targets_seq: _*)
+
+      (dt, (features, targets))
+    })
+
+    val pipeline = read_file > read_json_record > load_record
+
+    TFDataSet(
+      dtfdata
+        .dataset(pipeline(training_data_file))
+        .to_zip(
+          identityPipe[(DateTime, (DenseVector[Double], Tensor[Double]))]
+        ),
+      dtfdata
+        .dataset(pipeline(test_data_file))
+        .to_zip(identityPipe[(DateTime, (DenseVector[Double], Tensor[Double]))])
     )
   }
 
