@@ -28,6 +28,7 @@ val csss_exp = csss_model_tuning(
   max_iterations_tuning = 500,
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
+  get_training_preds = false,
   existing_exp = experiments().headOption
 )
 

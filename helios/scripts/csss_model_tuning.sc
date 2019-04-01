@@ -47,6 +47,7 @@ def apply(
     optimization_algo: tf.train.Optimizer = tf.train.AdaDelta(0.01f),
     summary_dir: Path = home / 'tmp,
     hyp_opt_iterations: Option[Int] = Some(5),
+    get_training_preds: Boolean = false,
     reg_type: String = "L2",
     existing_exp: Option[Path] = None
 ): helios.Experiment[Double, fte.ModelRunTuning, fte.data.FteOmniConfig] = {
@@ -259,6 +260,7 @@ def apply(
     divergence = divergence_term,
     summary_top_dir = summary_dir,
     hyp_opt_iterations = hyp_opt_iterations,
+    get_training_preds = get_training_preds,
     existing_exp = existing_exp
   )
 }

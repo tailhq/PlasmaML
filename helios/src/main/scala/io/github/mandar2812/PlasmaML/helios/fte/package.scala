@@ -488,6 +488,7 @@ package object fte {
     fte_data_path: Path = home / 'Downloads / 'fte,
     summary_top_dir: Path = home / 'tmp,
     hyp_opt_iterations: Option[Int] = Some(5),
+    get_training_preds: Boolean = false,
     existing_exp: Option[Path] = None
   ): helios.Experiment[Double, ModelRunTuning, FteOmniConfig] = {
 
@@ -872,44 +873,77 @@ package object fte {
       false
     )
 
-    val model_predictions_train = best_model.infer_batch(
-      scaled_data.training_dataset.map(extract_tensors > extract_features),
-      train_config_test.data_processing,
-      tf_handle_ops_test
-    )
-
-    val predictions_train = model_predictions_train match {
-      case Left(tensor)      => tensor
-      case Right(collection) => timelag.utils.collect_predictions(collection)
-    }
-
-    val (
-      final_predictions_train,
-      final_targets_train,
-      unscaled_preds_train,
-      pred_time_lags_train
-    ) = process_predictions(
-      scaled_data.training_dataset,
-      predictions_train,
-      scalers,
-      causal_window,
-      mo_flag,
-      prob_timelags,
-      log_scale_omni,
-      true
-    )
-
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
 
-    val reg_metrics_train = new RegressionMetricsTF(final_predictions_train, final_targets_train)
+    val (reg_metrics_train, preds_train) = if (get_training_preds) {
+
+      val model_predictions_train = best_model.infer_batch(
+        scaled_data.training_dataset.map(extract_tensors > extract_features),
+        train_config_test.data_processing,
+        tf_handle_ops_test
+      )
+
+      val predictions_train = model_predictions_train match {
+        case Left(tensor)      => tensor
+        case Right(collection) => timelag.utils.collect_predictions(collection)
+      }
+
+      val (
+        final_predictions_train,
+        final_targets_train,
+        unscaled_preds_train,
+        pred_time_lags_train
+      ) = process_predictions(
+        scaled_data.training_dataset,
+        predictions_train,
+        scalers,
+        causal_window,
+        mo_flag,
+        prob_timelags,
+        log_scale_omni,
+        true
+      )
+
+      val reg_metrics_train =
+        new RegressionMetricsTF(final_predictions_train, final_targets_train)
+
+      println("Writing model predictions: Training Data")
+      helios.write_predictions[Double](
+        (unscaled_preds_train, predictions_train._2),
+        tf_summary_dir,
+        "train_" + dt.toString("YYYY-MM-dd-HH-mm")
+      )
+
+      helios.write_processed_predictions(
+        dtfutils.toDoubleSeq(final_predictions_train).toSeq,
+        final_targets_train,
+        dtfutils.toDoubleSeq(pred_time_lags_train).toSeq,
+        tf_summary_dir / ("scatter_train-" + dt
+          .toString("YYYY-MM-dd-HH-mm") + ".csv")
+      )
+
+      println("Writing performance results: Training Data")
+      helios.write_performance(
+        "train_" + dt.toString("YYYY-MM-dd-HH-mm"),
+        reg_metrics_train,
+        tf_summary_dir
+      )
+
+      (
+        Some(reg_metrics_train),
+        Some(final_predictions_train, pred_time_lags_train)
+      )
+    } else {
+      (None, None)
+    }
 
     val results = helios.TunedModelRun(
       (scaled_data, scalers),
       best_model,
-      Some(reg_metrics_train),
+      reg_metrics_train,
       Some(reg_metrics),
       tf_summary_dir,
-      Some((final_predictions_train, pred_time_lags_train)),
+      preds_train,
       Some((final_predictions, pred_time_lags_test))
     )
 
@@ -922,29 +956,6 @@ package object fte {
         tf_summary_dir
       )
     }
-
-    println("Writing model predictions: Training Data")
-    helios.write_predictions[Double](
-      (unscaled_preds_train, predictions_train._2),
-      tf_summary_dir,
-      "train_" + dt.toString("YYYY-MM-dd-HH-mm")
-    )
-
-    helios.write_processed_predictions(
-      dtfutils.toDoubleSeq(final_predictions_train).toSeq,
-      final_targets_train,
-      dtfutils.toDoubleSeq(pred_time_lags_train).toSeq,
-      tf_summary_dir / ("scatter_train-" + dt
-        .toString("YYYY-MM-dd-HH-mm") + ".csv")
-    )
-
-    println("Writing performance results: Training Data")
-    helios.write_performance(
-      "train_" + dt.toString("YYYY-MM-dd-HH-mm"),
-      reg_metrics_train,
-      tf_summary_dir
-    )
-
 
     println("Writing model predictions: Test Data")
     helios.write_predictions[Double](
