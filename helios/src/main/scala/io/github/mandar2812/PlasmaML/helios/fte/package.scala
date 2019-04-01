@@ -479,6 +479,7 @@ package object fte {
     deltaTFTE: Int = 5,
     fteStep: Int = 1,
     latitude_limit: Double = 40d,
+    fraction_pca: Double = 0.8,
     divergence: helios.learn.cdt_loss.Divergence =
       helios.learn.cdt_loss.KullbackLeibler,
     log_scale_fte: Boolean = false,
@@ -502,8 +503,51 @@ package object fte {
       else sum_dir_prefix + "_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
     }
 
-    val tf_summary_dir =
+    val tf_summary_dir_tmp =
       existing_exp.getOrElse(summary_top_dir / summary_dir_index)
+
+    val experiment_config = FteOmniConfig(
+      FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE,
+        fteStep,
+        latitude_limit,
+        log_scale_fte
+      ),
+      OMNIConfig(deltaT, log_scale_omni),
+      multi_output = true,
+      probabilistic_time_lags = true,
+      timelag_prediction = "mode",
+      fraction_variance = fraction_pca
+    )
+
+    val existing_config = read_exp_config(tf_summary_dir_tmp / "config.json")
+
+    val use_cached_config: Boolean = existing_config match {
+      case None    => false
+      case Some(c) => c == experiment_config
+    }
+
+    val tf_summary_dir = if (use_cached_config) {
+      println("Using provided experiment directory to continue experiment")
+      tf_summary_dir_tmp
+    } else {
+      println(
+        "Ignoring provided experiment directory and starting fresh experiment"
+      )
+      summary_top_dir / summary_dir_index
+    }
+
+    val use_cached_data = if (use_cached_config) {
+      val training_data_files = ls ! tf_summary_dir |? (_.segments.last
+        .contains("training_data_"))
+      val test_data_files = ls ! tf_summary_dir |? (_.segments.last
+        .contains("training_data_"))
+
+      training_data_files.length > 0 && test_data_files.length > 0
+    } else {
+      false
+    }
 
     val (test_start, test_end) = (
       new DateTime(test_year, 1, 1, 0, 0),
@@ -523,27 +567,45 @@ package object fte {
           true
     )
 
-    println("\nProcessing FTE Data")
-    val fte_data = load_fte_data_bdv(
-      fte_data_path,
-      carrington_rotations,
-      log_scale_fte,
-      start,
-      end
-    )(deltaTFTE, fteStep, latitude_limit, conv_flag)
+    val generate_fresh_dataset = () => {
+      println("\nProcessing FTE Data")
+      val fte_data = load_fte_data_bdv(
+        fte_data_path,
+        carrington_rotations,
+        log_scale_fte,
+        start,
+        end
+      )(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
-    println("Processing OMNI solar wind data")
-    val omni_data =
-      load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity)
+      println("Processing OMNI solar wind data")
+      val omni_data =
+        load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity)
 
-    println("Constructing joined data set")
-    val dataset = fte_data.join(omni_data).partition(tt_partition)
+      println("Constructing joined data set")
+      fte_data.join(omni_data).partition(tt_partition)
+    }
+
+    val dataset = if (use_cached_config && use_cached_data) {
+      println("Using previously cached data set")
+
+      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
+        .contains("training_data_"))).last
+      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
+        .contains("test_data_"))).last
+
+      read_data_set(
+        training_data_file,
+        test_data_file
+      )
+    } else {
+      generate_fresh_dataset()
+    }
 
     val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
 
     val data_size = dataset.training_dataset.size
 
-    val scaling_op = scale_timed_data2[Double](fraction = 0.81)
+    val scaling_op = scale_timed_data2[Double](fraction = fraction_pca)
 
     println("Scaling data attributes")
     val (scaled_data, scalers): helios.data.SC_TF_DATA_T2[DenseVector[Double], Double] =
@@ -791,7 +853,139 @@ package object fte {
       case Right(collection) => timelag.utils.collect_predictions(collection)
     }
 
-    val nTest = scaled_data.test_dataset.size
+    val (
+      final_predictions,
+      final_targets,
+      unscaled_preds_test,
+      pred_time_lags_test
+    ) = process_predictions(
+      scaled_data.test_dataset,
+      predictions,
+      scalers,
+      causal_window,
+      mo_flag,
+      prob_timelags,
+      log_scale_omni,
+      false
+    )
+
+    val model_predictions_train = best_model.infer_batch(
+      scaled_data.training_dataset.map(extract_tensors > extract_features),
+      train_config_test.data_processing,
+      tf_handle_ops_test
+    )
+
+    val predictions_train = model_predictions_train match {
+      case Left(tensor)      => tensor
+      case Right(collection) => timelag.utils.collect_predictions(collection)
+    }
+
+    val (
+      final_predictions_train,
+      final_targets_train,
+      unscaled_preds_train,
+      pred_time_lags_train
+    ) = process_predictions(
+      scaled_data.training_dataset,
+      predictions_train,
+      scalers,
+      causal_window,
+      mo_flag,
+      prob_timelags,
+      log_scale_omni,
+      true
+    )
+
+    val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
+
+    val reg_metrics_train = new RegressionMetricsTF(final_predictions_train, final_targets_train)
+
+    val results = helios.TunedModelRun(
+      (scaled_data, scalers),
+      best_model,
+      Some(reg_metrics_train),
+      Some(reg_metrics),
+      tf_summary_dir,
+      Some((final_predictions_train, pred_time_lags_train)),
+      Some((final_predictions, pred_time_lags_test))
+    )
+
+    write_exp_config(experiment_config, tf_summary_dir)
+
+    if (!use_cached_data) {
+      println("Writing data sets")
+      write_fte_data_set[DenseVector[Double]](
+        dt.toString("YYYY-MM-dd-HH-mm"),
+        dataset,
+        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
+        tf_summary_dir
+      )
+    }
+
+    println("Writing model predictions: Training Data")
+    helios.write_predictions[Double](
+      (unscaled_preds_train, predictions_train._2),
+      tf_summary_dir,
+      "train_" + dt.toString("YYYY-MM-dd-HH-mm")
+    )
+
+    helios.write_processed_predictions(
+      dtfutils.toDoubleSeq(final_predictions_train).toSeq,
+      final_targets_train,
+      dtfutils.toDoubleSeq(pred_time_lags_train).toSeq,
+      tf_summary_dir / ("scatter_train-" + dt
+        .toString("YYYY-MM-dd-HH-mm") + ".csv")
+    )
+
+    println("Writing performance results: Training Data")
+    helios.write_performance(
+      "train_" + dt.toString("YYYY-MM-dd-HH-mm"),
+      reg_metrics_train,
+      tf_summary_dir
+    )
+
+
+    println("Writing model predictions: Test Data")
+    helios.write_predictions[Double](
+      (unscaled_preds_test, predictions._2),
+      tf_summary_dir,
+      "test_" + dt.toString("YYYY-MM-dd-HH-mm")
+    )
+
+    helios.write_processed_predictions(
+      dtfutils.toDoubleSeq(final_predictions).toSeq,
+      final_targets,
+      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
+      tf_summary_dir / ("scatter_test-" + dt
+        .toString("YYYY-MM-dd-HH-mm") + ".csv")
+    )
+
+    println("Writing performance results: Test Data")
+    helios.write_performance(
+      "test_" + dt.toString("YYYY-MM-dd-HH-mm"),
+      reg_metrics,
+      tf_summary_dir
+    )
+
+    helios.Experiment(
+      experiment_config,
+      results
+    )
+
+  }
+
+  private def process_predictions(
+    scaled_data: DataSet[(DateTime, (DenseVector[Double], Tensor[Double]))],
+    predictions: (Tensor[Double], Tensor[Double]),
+    scalers: (Scaler[DenseVector[Double]], GaussianScalerTF[Double]),
+    causal_window: Int,
+    mo_flag: Boolean,
+    prob_timelags: Boolean,
+    log_scale_omni: Boolean,
+    scale_actual_targets: Boolean = true
+  ) = {
+
+    val nTest = scaled_data.size
 
     val index_times = Tensor(
       (0 until causal_window).map(_.toDouble)
@@ -808,7 +1002,7 @@ package object fte {
 
     val unscaled_preds_test = scalers._2.i(predictions._1)
 
-    val pred_targets: Tensor[Double] = if (mo_flag) {
+    val pred_targets_test: Tensor[Double] = if (mo_flag) {
 
       val repeated_times =
         tfi.stack(Seq.fill(causal_window)(pred_time_lags_test.floor), axis = -1)
@@ -824,9 +1018,13 @@ package object fte {
       scalers._2(0).i(predictions._1)
     }
 
-    val test_labels = scaled_data.test_dataset.data
+    val test_labels = scaled_data.data
       .map(_._2._2)
-      .map(t => dtfutils.toDoubleSeq(t).toSeq)
+      .map(
+        t =>
+          if (scale_actual_targets) dtfutils.toDoubleSeq(scalers._2.i(t)).toSeq
+          else dtfutils.toDoubleSeq(t).toSeq
+      )
       .toSeq
 
     val actual_targets = test_labels.zipWithIndex.map(zi => {
@@ -838,69 +1036,10 @@ package object fte {
     })
 
     val (final_predictions, final_targets) =
-      if (log_scale_omni) (pred_targets.exp, actual_targets.map(math.exp))
-      else (pred_targets, actual_targets)
+      if (log_scale_omni) (pred_targets_test.exp, actual_targets.map(math.exp))
+      else (pred_targets_test, actual_targets)
 
-    val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
-
-    val experiment_config = FteOmniConfig(
-      FTEConfig(
-        (year_range.min, year_range.max),
-        deltaTFTE,
-        fteStep,
-        latitude_limit,
-        log_scale_fte
-      ),
-      OMNIConfig(deltaT, log_scale_omni)
-    )
-
-    val results = helios.TunedModelRun(
-      (scaled_data, scalers),
-      best_model,
-      None,
-      Some(reg_metrics),
-      tf_summary_dir,
-      None,
-      Some((final_predictions, pred_time_lags_test))
-    )
-
-    write_exp_config(experiment_config, tf_summary_dir)
-
-    println("Writing data sets")
-    write_fte_data_set[DenseVector[Double]](
-      dt.toString("YYYY-MM-dd-HH-mm"),
-      dataset,
-      DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
-      tf_summary_dir
-    )
-
-    println("Writing model predictions")
-    helios.write_predictions[Double](
-      (unscaled_preds_test, predictions._2),
-      tf_summary_dir,
-      "test_" + dt.toString("YYYY-MM-dd-HH-mm")
-    )
-
-    helios.write_processed_predictions(
-      dtfutils.toDoubleSeq(final_predictions).toSeq,
-      final_targets,
-      dtfutils.toDoubleSeq(pred_time_lags_test).toSeq,
-      tf_summary_dir / ("scatter_test-" + dt
-        .toString("YYYY-MM-dd-HH-mm") + ".csv")
-    )
-
-    println("Writing performance results")
-    helios.write_performance(
-      "test_" + dt.toString("YYYY-MM-dd-HH-mm"),
-      reg_metrics,
-      tf_summary_dir
-    )
-
-    helios.Experiment(
-      experiment_config,
-      results
-    )
-
+    (final_predictions, final_targets, unscaled_preds_test, pred_time_lags_test)
   }
 
   def exp_single_output(

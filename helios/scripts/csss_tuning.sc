@@ -3,20 +3,21 @@ import $exec.helios.scripts.env
 
 import ammonite.ops.ImplicitWd._
 
-val experiments = ls! env.summary_dir |? (_.isDir) |? (_.segments.last.contains("fte"))
+def experiments() = ls! env.summary_dir |? (_.isDir) |? (_.segments.last.contains("fte"))
 
 val csss_exp = csss_model_tuning(
   start_year = 2008,
   end_year = 2017,
   test_year = 2015,
   sw_threshold = 600d,
-  crop_latitude = 30d,
-  fte_step = 12,
+  crop_latitude = 25d,
+  fraction_pca = 0.8,
+  fte_step = 24,
   history_fte = 6,
   log_scale_omni = false,
   log_scale_fte = false,
   causal_window = (56, 56),
-  network_size = Seq(30, 50),
+  network_size = Seq(70, 70, 70),
   activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
   hyper_optimizer = "gs",
   num_samples = 20,
@@ -25,11 +26,11 @@ val csss_exp = csss_model_tuning(
   batch_size = 1000,
   max_iterations = 250000,
   max_iterations_tuning = 20000,
-  optimization_algo = tf.train.Adam(0.01f),
+  optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
-  existing_exp = experiments.lastOption
+  existing_exp = experiments().headOption
 )
 
-val scatter_plots = ls! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter"))
+def scatter_plots() = ls! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter"))
 
-helios.visualise_cdt_results(scatter_plots.last) 
+helios.visualise_cdt_results(scatter_plots().head) 

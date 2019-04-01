@@ -33,6 +33,7 @@ def apply(
     history_fte: Int = 10,
     fte_step: Int = 2,
     crop_latitude: Double = 40d,
+    fraction_pca: Double = 0.8,
     log_scale_fte: Boolean = false,
     log_scale_omni: Boolean = false,
     conv_flag: Boolean = false,

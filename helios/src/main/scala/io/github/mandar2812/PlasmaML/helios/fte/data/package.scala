@@ -832,6 +832,50 @@ package object data {
     )
   }
 
+  def read_exp_config(
+    file: Path
+  ): Option[FteOmniConfig] = 
+    if(exists! file) {
+      try {
+        val config = parse((read.lines! file).head).values.asInstanceOf[Map[String, Any]]
+        val fte_config = config("fte_config").asInstanceOf[Map[String, Any]]
+        val omni_config = config("omni_config").asInstanceOf[Map[String, Any]]
+
+        val omni_deltaT =  omni_config("deltaT").asInstanceOf[Map[String, BigInt]]
+        val fte_data_limits =  fte_config("data_limits").asInstanceOf[Map[String, BigInt]]
+
+        Some(
+          FteOmniConfig(
+          FTEConfig(
+            data_limits = (
+              fte_data_limits("_1$mcI$sp").toInt,
+              fte_data_limits("_2$mcI$sp").toInt
+            ),
+            fte_config("deltaTFTE").asInstanceOf[BigInt].toInt,
+            fte_config("fteStep").asInstanceOf[BigInt].toInt,
+            fte_config("latitude_limit").asInstanceOf[Double],
+            fte_config("log_scale_fte").asInstanceOf[Boolean]
+          ),
+          OMNIConfig(
+            (
+              omni_deltaT("_1$mcI$sp").toInt,
+              omni_deltaT("_2$mcI$sp").toInt
+            ), 
+            omni_config("log_flag").asInstanceOf[Boolean]
+          ),
+          config("multi_output").asInstanceOf[Boolean],
+          config("probabilistic_time_lags").asInstanceOf[Boolean],
+          config("timelag_prediction").asInstanceOf[String],
+          config("fraction_variance").asInstanceOf[Double]
+        )
+      )
+
+      } catch {
+        case _: Exception => None
+      }
+    } else {
+      None
+    }
 
   def read_data_set(
     training_data_file: Path,
