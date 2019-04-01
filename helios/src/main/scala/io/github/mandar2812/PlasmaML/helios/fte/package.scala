@@ -535,6 +535,9 @@ package object fte {
       println(
         "Ignoring provided experiment directory and starting fresh experiment"
       )
+
+      write_exp_config(experiment_config, summary_top_dir / summary_dir_index)
+
       summary_top_dir / summary_dir_index
     }
 
@@ -909,8 +912,6 @@ package object fte {
       Some((final_predictions_train, pred_time_lags_train)),
       Some((final_predictions, pred_time_lags_test))
     )
-
-    write_exp_config(experiment_config, tf_summary_dir)
 
     if (!use_cached_data) {
       println("Writing data sets")

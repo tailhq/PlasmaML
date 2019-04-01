@@ -17,20 +17,20 @@ val csss_exp = csss_model_tuning(
   log_scale_omni = false,
   log_scale_fte = false,
   causal_window = (56, 56),
-  network_size = Seq(30, 50),
+  network_size = Seq(50, 50),
   activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
   hyper_optimizer = "gs",
   num_samples = 20,
   quantity = OMNIData.Quantities.V_SW,
   reg_type = "L2",
   batch_size = 500,
-  max_iterations = 6000,
+  max_iterations = 10000,
   max_iterations_tuning = 500,
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
   existing_exp = experiments().headOption
 )
 
-def scatter_plots() = ls! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter"))
+def scatter_plots_test() = ls! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter_test"))
 
-helios.visualise_cdt_results(scatter_plots().head) 
+helios.visualise_cdt_results(scatter_plots_test().last)
