@@ -87,9 +87,9 @@ package object data {
       (carrington_rotation: Int) => {
         val hmi_file  = data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
         val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
-
-        if (exists ! hmi_file) (read.lines ! hmi_file).toIterable.drop(4)
-        else (read.lines ! gong_file).toIterable.drop(3)
+        
+        if(exists ! gong_file) (read.lines ! gong_file).toIterable.drop(3)
+        else (read.lines ! hmi_file).toIterable.drop(4)
       }
   )
 
