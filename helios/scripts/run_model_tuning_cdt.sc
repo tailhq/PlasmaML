@@ -65,7 +65,7 @@ def apply(
 
   val hyper_parameters = List(
     "prior_wt",
-    "error_wt",
+    //"error_wt",
     "temperature",
     "specificity",
     "reg"
@@ -73,7 +73,7 @@ def apply(
 
   val hyper_prior = Map(
     "prior_wt"    -> UniformRV(0.5, 1.5),
-    "error_wt"    -> UniformRV(0.5, 1.5),
+    //"error_wt"    -> UniformRV(0.5, 1.5),
     "temperature" -> UniformRV(1d, 2.0),
     "specificity" -> UniformRV(0.5, 2.5),
     "reg"         -> UniformRV(0d, math.pow(10d, -3d))
@@ -140,7 +140,7 @@ def apply(
         prior_divergence = prior_type,
         target_dist = target_prob,
         temp = h("temperature"),
-        error_wt = h("error_wt"),
+        error_wt = 1.0,
         c = h("specificity"))
 
       val reg_layer =
