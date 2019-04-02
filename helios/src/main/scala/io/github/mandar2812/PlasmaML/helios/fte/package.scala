@@ -567,10 +567,10 @@ package object fte {
 
     val tt_partition = DataPipe(
       (p: (DateTime, (DenseVector[Double], Tensor[Double]))) =>
-        if (p._2._2.max().scalar > sw_threshold)
-          urv.draw <= 0.5
+        if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
+          false
         else
-          urv.draw <= 0.75
+          true
     )
 
     val generate_fresh_dataset = () => {

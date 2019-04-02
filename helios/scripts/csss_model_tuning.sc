@@ -21,35 +21,35 @@ import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 
 @main
 def apply(
-    start_year: Int = 2011,
-    end_year: Int = 2017,
-    test_year: Int = 2015,
-    sw_threshold: Double = 700d,
-    divergence_term: helios.learn.cdt_loss.Divergence =
-      helios.learn.cdt_loss.KullbackLeibler,
-    network_size: Seq[Int] = Seq(100, 60),
-    activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
-      timelag.utils.getReLUAct[Double](1, i),
-    history_fte: Int = 10,
-    fte_step: Int = 2,
-    crop_latitude: Double = 40d,
-    fraction_pca: Double = 0.8,
-    log_scale_fte: Boolean = false,
-    log_scale_omni: Boolean = false,
-    conv_flag: Boolean = false,
-    quantity: Int = OMNIData.Quantities.V_SW,
-    causal_window: (Int, Int) = (48, 56),
-    max_iterations: Int = 100000,
-    max_iterations_tuning: Int = 20000,
-    num_samples: Int = 20,
-    hyper_optimizer: String = "gs",
-    batch_size: Int = 32,
-    optimization_algo: tf.train.Optimizer = tf.train.AdaDelta(0.01f),
-    summary_dir: Path = home / 'tmp,
-    hyp_opt_iterations: Option[Int] = Some(5),
-    get_training_preds: Boolean = false,
-    reg_type: String = "L2",
-    existing_exp: Option[Path] = None
+  start_year: Int = 2011,
+  end_year: Int = 2017,
+  test_year: Int = 2015,
+  sw_threshold: Double = 700d,
+  divergence_term: helios.learn.cdt_loss.Divergence =
+    helios.learn.cdt_loss.KullbackLeibler,
+  network_size: Seq[Int] = Seq(100, 60),
+  activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
+    timelag.utils.getReLUAct[Double](1, i),
+  history_fte: Int = 10,
+  fte_step: Int = 2,
+  crop_latitude: Double = 40d,
+  fraction_pca: Double = 0.8,
+  log_scale_fte: Boolean = false,
+  log_scale_omni: Boolean = false,
+  conv_flag: Boolean = false,
+  quantity: Int = OMNIData.Quantities.V_SW,
+  causal_window: (Int, Int) = (48, 56),
+  max_iterations: Int = 100000,
+  max_iterations_tuning: Int = 20000,
+  num_samples: Int = 20,
+  hyper_optimizer: String = "gs",
+  batch_size: Int = 32,
+  optimization_algo: tf.train.Optimizer = tf.train.AdaDelta(0.01f),
+  summary_dir: Path = home / 'tmp,
+  hyp_opt_iterations: Option[Int] = Some(5),
+  get_training_preds: Boolean = false,
+  reg_type: String = "L2",
+  existing_exp: Option[Path] = None
 ): helios.Experiment[Double, fte.ModelRunTuning, fte.data.FteOmniConfig] = {
 
   val num_pred_dims = timelag.utils.get_num_output_dims(
@@ -108,7 +108,10 @@ def apply(
       dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
       output_mapping
   } else {
-    dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
+    dtflearn.feedforward_stack[Double](activation_func)(
+      net_layer_sizes.tail,
+      weightsInitializer = tf.GlorotUniformInitializer()
+    ) >>
       output_mapping
   }
 
@@ -153,7 +156,7 @@ def apply(
     //"error_wt" -> UniformRV(0.5, 1.5),
     "temperature" -> UniformRV(1.0, 2.5),
     "specificity" -> UniformRV(1.0, 2.0),
-    "reg" -> UniformRV(0d, math.pow(10d, -3d))
+    "reg"         -> UniformRV(math.pow(10d, -4d), math.pow(10d, -2d))
   )
 
   val hyp_scaling = hyper_prior.map(
