@@ -495,6 +495,8 @@ package object fte {
     val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
 
+    val urv = UniformRV(0d, 1d)
+
     val sum_dir_prefix = if (conv_flag) "fte_omni_conv" else "fte_omni"
 
     val dt = DateTime.now()
@@ -565,10 +567,10 @@ package object fte {
 
     val tt_partition = DataPipe(
       (p: (DateTime, (DenseVector[Double], Tensor[Double]))) =>
-        if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
-          false
+        if (p._2._2.max().scalar > sw_threshold)
+          urv.draw <= 0.5
         else
-          true
+          urv.draw <= 0.75
     )
 
     val generate_fresh_dataset = () => {
