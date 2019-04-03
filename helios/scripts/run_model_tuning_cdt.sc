@@ -76,17 +76,24 @@ def apply(
     //"error_wt"    -> UniformRV(0.5, 1.5),
     "temperature" -> UniformRV(1d, 2.0),
     "specificity" -> UniformRV(0.5, 2.5),
-    "reg"         -> UniformRV(math.pow(10d, -4d), math.pow(10d, -3d))
+    "reg"         -> UniformRV(math.pow(10d, -4d), math.pow(10d, -2.5d))
   )
+
+  val zero_one_enc = Encoder(
+    (x: Double) => (x - p._2.min)/(p._2.max - p._2.min), 
+    (u: Double) => u*(p._2.max - p._2.min) + p._2.min
+  )
+
+  val logit = Encoder((x: Double) => math.log(x/(1d - x)), (x: Double) => sigmoid(x))
 
   val hyp_scaling = hyper_prior.map(p =>
     (
       p._1,
-      Encoder((x: Double) => (x - p._2.min)/(p._2.max - p._2.min), (u: Double) => u*(p._2.max - p._2.min) + p._2.min)
+      zero_one_enc
     )
   )
 
-  val logit = Encoder((x: Double) => math.log(x/(1d - x)), (x: Double) => sigmoid(x))
+  
 
   val hyp_mapping = Some(
     hyper_parameters.map(
