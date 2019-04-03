@@ -28,7 +28,7 @@ p1 <- ggplot(meltDF, aes(x=time, y=value, color=variable)) +
   scale_colour_manual(labels = c("Prediction", "Actual"), values=palette1) +
   theme_gray(base_size = 20)
 
-ggsave(paste(iden, "timeseries_pred.png", sep = ''), p1, scale = 1.0, device = png())
+ggsave(paste(iden, "timeseries_pred.pdf", sep = ''), p1, scale = 1.0, device = pdf())
 
 scatter_df_pred <- data.frame(
   c(scatter_test$predv, scatter_train$predv), 
@@ -65,7 +65,7 @@ ggplot(scatter_v_test, aes(x = actualv, y=predv)) +
   labs(y="Predicted Output", x=" Actual Output") + 
   theme(legend.position="top")
 
-ggsave(paste(iden, "scatter_v_test.png", sep = ''), scale = 1.0, device = png())
+ggsave(paste(iden, "scatter_v_test.pdf", sep = ''), scale = 1.0, device = pdf())
 
 ggplot(scatter_t_test, aes(x = actuallag, y=predlag)) +
   geom_point(alpha = 0.5) +
@@ -74,7 +74,7 @@ ggplot(scatter_t_test, aes(x = actuallag, y=predlag)) +
   labs(y="Predicted Time Lag", x="Actual Time Lag") + 
   theme(legend.position="top")
 
-ggsave(paste(iden, "scatter_t_test.png", sep = ''), scale = 1.0, device = png())
+ggsave(paste(iden, "scatter_t_test.pdf", sep = ''), scale = 1.0, device = pdf())
 
 
 #Now construct the error data frames
@@ -102,7 +102,7 @@ ggplot(scatter_df, aes(x = Velocity, y = floor(TimeLag), color = Type, fill = Ty
   labs(y="Time Lag", x="Output") + 
   theme(legend.position="top")
 
-ggsave(paste(iden, "scatter_v_tl.png", sep = ''), scale = 1.0, device = png())
+ggsave(paste(iden, "scatter_v_tl.pdf", sep = ''), scale = 1.0, device = pdf())
 
 ggplot(rbind(errors_train, errors_test), aes(x=error_v, y=floor(error_lag))) + 
   scale_alpha_continuous(limits = c(0, 0.2), breaks = seq(0, 0.2, by=0.025)) +
@@ -115,9 +115,9 @@ ggplot(rbind(errors_train, errors_test), aes(x=error_v, y=floor(error_lag))) +
   ylab("Error in Time Lag") + 
   theme(legend.position="top")
 
-ggsave(paste(iden, "scatter_errors.png", sep = ''), scale = 1.0, device = png())
+ggsave(paste(iden, "scatter_errors.pdf", sep = ''), scale = 1.0, device = pdf())
 
-ggplot(rbind(errors_train, errors_test), aes(x=error_v, y=error_lag)) + 
+ggplot(errors_test, aes(x=error_v, y=error_lag)) + 
   #scale_alpha_continuous(limits = c(0, 0.2), breaks = seq(0, 0.2, by=0.025)) +
   #geom_point(aes(alpha = 0.2), show.legend = FALSE) + 
   stat_density_2d(aes(fill = stat(level)), geom = "polygon", show.legend = TRUE) +
@@ -130,13 +130,13 @@ ggplot(rbind(errors_train, errors_test), aes(x=error_v, y=error_lag)) +
       label.theme = element_text(angle = 90, size = 10)
   )) +  
   #theme(legend.text=element_text(size=9), legend.position = "right") +
-  facet_grid(data ~ .) +
+  #facet_grid(data ~ .) +
   theme_gray(base_size = 20) +
   xlab("Error in Output") + 
   ylab("Error in Time Lag") + 
   theme(legend.position="top")
 
-ggsave(paste(iden, "errors.png", sep = ''), scale = 1.0, device = png())
+ggsave(paste(iden, "errors.pdf", sep = ''), scale = 1.0, device = pdf())
 
 
 sample_df <- scatter_test[scatter_test$predlag - scatter_test$actuallag <= -2,]
@@ -147,7 +147,7 @@ p <- ggplot(sample_df, aes(x = predv, y = actualv)) +
   theme_gray(base_size = 20) + 
   labs(y = "Actual Output", x = "Predicted Output", alpha = "Error: Time Lag")
 
-ggsave(paste(iden, "lag_error_jus.png", sep = ''), p, scale = 1.0, device = png())
+ggsave(paste(iden, "lag_error_jus.pdf", sep = ''), p, scale = 1.0, device = pdf())
 
 ggplot(errors, aes(x=error_lag)) +
   geom_histogram(
@@ -158,7 +158,7 @@ ggplot(errors, aes(x=error_lag)) +
   theme_gray(base_size = 20) +
   xlab("Error: Time Lag") + facet_grid(data ~ .)
 
-ggsave(paste(iden, "hist_errors_timelag.png", sep = ''), scale = 1.0, device = png())
+ggsave(paste(iden, "hist_errors_timelag.pdf", sep = ''), scale = 1.0, device = pdf())
 
 #Construct loess/lm model
 
@@ -193,4 +193,4 @@ ggplot(df, aes(x = Velocity, y = TimeLag, color = Type)) +
   labs(y="Time Lag", x="Output") + 
   theme(legend.position="top")
 
-ggsave(paste(iden, 'predictive_curves.png', sep = ''), scale = 1.0, device = png())
+ggsave(paste(iden, 'predictive_curves.pdf', sep = ''), scale = 1.0, device = pdf())

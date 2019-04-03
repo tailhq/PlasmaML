@@ -98,7 +98,7 @@ def apply(
     //"error_wt"    -> UniformRV(0.5, 1.5),
     "temperature" -> UniformRV(1d, 2.0),
     "specificity" -> UniformRV(0.5, 2.5),
-    "reg"         -> UniformRV(math.pow(10d, -4d), math.pow(10d, -2.5d))
+    "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
   )
 
   val logit =

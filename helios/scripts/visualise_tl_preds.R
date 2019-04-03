@@ -75,7 +75,7 @@ ggplot(pred_df, aes(x=x_2, y=value, colour=variable)) +
   labs(color = "Predictors") +
   xlab(TeX('$||\\mathbf{x}||_2$')) + ylab(TeX('$\\hat{y}(\\mathbf{x})$'))
 
-ggsave(paste(iden, "predictors.png", sep = ''), scale = 1.25, device = png())
+ggsave(paste(iden, "predictors.pdf", sep = ''), scale = 1.25, device = pdf())
 
 ggplot(err_df, aes(x=x_2, y=value, colour=variable)) +
   geom_smooth(se = FALSE) +
@@ -89,7 +89,7 @@ ggplot(err_df, aes(x=x_2, y=value, colour=variable)) +
   labs(color = "Errors") +
   xlab(TeX('$||\\mathbf{x}||_2$')) + ylab(TeX('$|\\hat{y}_{i}(\\mathbf{x}) - y_{i}|$'))
 
-ggsave(paste(iden, "error_curves.png", sep = ''), scale = 1.25, device = png())
+ggsave(paste(iden, "error_curves.pdf", sep = ''), scale = 1.25, device = pdf())
 
 
 
@@ -102,4 +102,4 @@ ggplot(prob_df, aes(x=x_2,y=value, colour=variable)) +
   )) + labs(color = "Time Lag Probabilities") +
   xlab(TeX('$||\\mathbf{x}||_2$')) + ylab("Probability")
 
-ggsave(paste(iden, "probabilities.png", sep = ''), scale = 1.25, device = png())
+ggsave(paste(iden, "probabilities.pdf", sep = ''), scale = 1.25, device = pdf())
