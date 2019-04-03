@@ -817,19 +817,29 @@ package object data {
 
     val process_pattern = pattern_to_map > map_to_json
 
-    val json_records_training =
-      dataset.training_dataset.map(process_pattern).data.mkString(",\n")
-    val json_records_test =
-      dataset.test_dataset.map(process_pattern).data.mkString(",\n")
+    val write_pattern_train: String => Unit = 
+      line => write.append(
+        directory / s"training_data_${identifier}.json",
+        s"${line}\n"
+      )
 
-    write.over(
-      directory / s"training_data_${identifier}.json",
-      s"$json_records_training"
-    )
-    write.over(
-      directory / s"test_data_${identifier}.json",
-      s"$json_records_test"
-    )
+    val write_pattern_test: String => Unit = 
+      line => write.append(
+        directory / s"test_data_${identifier}.json",
+        s"${line}\n"
+      )
+    
+
+    dataset.training_dataset
+      .map(process_pattern)
+      .data
+      .foreach(write_pattern_train)
+    
+    
+    dataset.test_dataset
+      .map(process_pattern)
+      .data
+      .foreach(write_pattern_test)
   }
 
   def read_exp_config(
@@ -890,6 +900,8 @@ package object data {
 
     val read_file = DataPipe((p: Path) => read.lines ! p)
 
+    val filter_non_empty_lines = IterableDataPipe((l: String) => !l.isEmpty)
+
     val read_json_record = IterableDataPipe((s: String) => parse(s))
 
     val load_record = IterableDataPipe((record: JValue) => {
@@ -923,7 +935,7 @@ package object data {
       (dt, (features, targets))
     })
 
-    val pipeline = read_file > read_json_record > load_record
+    val pipeline = read_file > filter_non_empty_lines > read_json_record > load_record
 
     TFDataSet(
       dtfdata
