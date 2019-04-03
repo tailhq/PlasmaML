@@ -34,4 +34,13 @@ val csss_exp = csss_model_tuning(
 
 def scatter_plots_test() = ls! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter_test"))
 
+val script = pwd/'helios/'scripts/"visualise_tl.R" 
+
+try {
+  %%('Rscript, script, csss_exp.results.summary_dir, scatter_plots_test().last, "test_")
+} catch {
+  case e: Exception => e.printStackTrace()
+} 
+
+
 helios.visualise_cdt_results(scatter_plots_test().last)

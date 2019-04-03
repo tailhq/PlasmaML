@@ -613,6 +613,16 @@ package object fte {
 
     val scaling_op = scale_timed_data2[Double](fraction = fraction_pca)
 
+    if (!use_cached_data) {
+      println("Writing data sets")
+      write_fte_data_set[DenseVector[Double]](
+        dt.toString("YYYY-MM-dd-HH-mm"),
+        dataset,
+        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
+        tf_summary_dir
+      )
+    }
+
     println("Scaling data attributes")
     val (scaled_data, scalers): helios.data.SC_TF_DATA_T2[DenseVector[Double], Double] =
       scaling_op.run(dataset)
@@ -948,16 +958,6 @@ package object fte {
       preds_train,
       Some((final_predictions, pred_time_lags_test))
     )
-
-    if (!use_cached_data) {
-      println("Writing data sets")
-      write_fte_data_set[DenseVector[Double]](
-        dt.toString("YYYY-MM-dd-HH-mm"),
-        dataset,
-        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
-        tf_summary_dir
-      )
-    }
 
     println("Writing model predictions: Test Data")
     helios.write_predictions[Double](
