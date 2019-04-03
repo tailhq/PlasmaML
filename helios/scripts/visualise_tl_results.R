@@ -52,6 +52,30 @@ scatter_df <- rbind(scatter_df_pred, scatter_df_actual)
 
 colnames(scatter_df) <- c("Velocity", "TimeLag", "Type", "data")
 
+scatter_v_test <- data.frame(scatter_test$predv, scatter_test$actualv)
+colnames(scatter_v_test) <- c("predv", "actualv")
+
+scatter_t_test <- data.frame(scatter_test$predlag, scatter_test$actuallag)
+colnames(scatter_t_test) <- c("predlag", "actuallag")
+
+ggplot(scatter_v_test, aes(x = actualv, y=predv)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method=lm) +
+  theme_gray(base_size = 20) + 
+  labs(y="Predicted Output", x=" Actual Output") + 
+  theme(legend.position="top")
+
+ggsave(paste(iden, "scatter_v_test.png", sep = ''), scale = 1.0, device = png())
+
+ggplot(scatter_t_test, aes(x = actuallag, y=predlag)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method=lm) +
+  theme_gray(base_size = 20) + 
+  labs(y="Predicted Time Lag", x="Actual Time Lag") + 
+  theme(legend.position="top")
+
+ggsave(paste(iden, "scatter_t_test.png", sep = ''), scale = 1.0, device = png())
+
 
 #Now construct the error data frames
 errors_test <- read.csv("test_errors.csv")
