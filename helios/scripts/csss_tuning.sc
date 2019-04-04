@@ -36,6 +36,9 @@ val csss_exp = csss_model_tuning(
 def scatter_plots_test() =
   ls ! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter_test"))
 
+def scatter_plots_train() =
+  ls ! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter_train"))
+
 val script = pwd / 'helios / 'scripts / "visualise_tl.R"
 
 try {
