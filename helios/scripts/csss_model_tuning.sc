@@ -254,6 +254,7 @@ def apply(
     hyper_optimizer = hyper_optimizer,
     iterations_tuning = max_iterations_tuning,
     latitude_limit = crop_latitude,
+    fraction_pca = fraction_pca,
     deltaTFTE = history_fte,
     fteStep = fte_step,
     conv_flag = conv_flag,
