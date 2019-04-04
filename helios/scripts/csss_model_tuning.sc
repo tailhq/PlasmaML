@@ -201,7 +201,7 @@ def apply(
           layer_parameter_names,
           layer_datatypes,
           layer_shapes,
-          math.exp(h("reg"))
+          math.pow(10d, h("reg"))
         )
       else
         L1Regularization[Double](
@@ -209,7 +209,7 @@ def apply(
           layer_parameter_names,
           layer_datatypes,
           layer_shapes,
-          math.exp(h("reg"))
+          math.pow(10d, h("reg"))
         )
 
     lossFunc >>
