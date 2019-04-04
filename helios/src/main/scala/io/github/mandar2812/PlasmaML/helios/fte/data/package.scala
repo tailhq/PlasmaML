@@ -82,14 +82,19 @@ package object data {
       .dataset(process_carrington_file(carrington_rotation_table))
       .to_zip(read_time_stamps)
 
+
+  val read_lines_gong = (gong_file: Path) => (read.lines ! gong_file).toIterable.drop(3)
+
+  val read_lines_hmi = (hmi_file: Path) => (read.lines ! hmi_file).toIterable.drop(4) 
+  
   val fte_file = MetaPipe(
     (data_path: Path) =>
       (carrington_rotation: Int) => {
         val hmi_file  = data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
         val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
         
-        if(exists ! gong_file) (read.lines ! gong_file).toIterable.drop(3)
-        else (read.lines ! hmi_file).toIterable.drop(4)
+        if(exists ! hmi_file) read_lines_hmi(hmi_file) 
+        else read_lines_gong(gong_file)
       }
   )
 
