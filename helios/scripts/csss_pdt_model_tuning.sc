@@ -144,10 +144,7 @@ def apply(
   val lu_reg = h10 -> UniformRV(-4d, -2.5d)
 
   val hyper_parameters = List(
-    "prior_wt",
-    //"error_wt",
     "temperature",
-    "specificity",
     "reg"
   )
 
