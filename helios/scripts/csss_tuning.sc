@@ -1,10 +1,7 @@
+import $exec.helios.scripts.csss
 import $exec.helios.scripts.csss_model_tuning
 import $exec.helios.scripts.env
 
-import ammonite.ops.ImplicitWd._
-
-def experiments() =
-  ls ! env.summary_dir |? (_.isDir) |? (_.segments.last.contains("fte"))
 
 val csss_exp = csss_model_tuning(
   start_year = 2008,
@@ -30,27 +27,20 @@ val csss_exp = csss_model_tuning(
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
   get_training_preds = false,
-  existing_exp = experiments().lastOption
+  existing_exp = csss.experiments().lastOption
 )
 
-def scatter_plots_test() =
-  ls ! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter_test"))
-
-def scatter_plots_train() =
-  ls ! csss_exp.results.summary_dir |? (_.segments.last.contains("scatter_train"))
-
-val script = pwd / 'helios / 'scripts / "visualise_tl.R"
 
 try {
   %%(
     'Rscript,
     script,
     csss_exp.results.summary_dir,
-    scatter_plots_test().last,
+    csss.scatter_plots_test(csss_exp.results.summary_dir).last,
     "test_"
   )
 } catch {
   case e: Exception => e.printStackTrace()
 }
 
-helios.visualise_cdt_results(scatter_plots_test().last)
+helios.visualise_cdt_results(csss.scatter_plots_test(csss_exp.results.summary_dir).last)
