@@ -1,8 +1,8 @@
 import $exec.helios.scripts.{
-  tl_const_lag_tuning => tuning_exp1,
-  tl_const_v_tuning => tuning_exp2,
-  tl_const_a_tuning => tuning_exp3,
-  tl_softplus_tuning => tuning_exp4
+  pdt_const_lag_tuning => tuning_exp1,
+  pdt_const_v_tuning => tuning_exp2,
+  pdt_const_a_tuning => tuning_exp3,
+  pdt_softplus_tuning => tuning_exp4
 }
 
 import ammonite.ops.ImplicitWd._
@@ -60,8 +60,7 @@ val exp_set2 = tuning_exp2.main(
   miniBatch = 1024,
   optimizer = tf.train.Adam(0.01f),
   prior_type = Seq(helios.learn.cdt_loss.KullbackLeibler),
-  target_prob =
-    Seq(helios.learn.cdt_loss.Boltzmann),
+  target_prob = Seq(helios.learn.cdt_loss.Boltzmann),
   confounding = Seq(0d),
   dist_type = "default",
   num_samples = 20,
@@ -96,8 +95,7 @@ val exp_set3 = tuning_exp3.main(
   miniBatch = 1024,
   optimizer = tf.train.Adam(0.01f),
   prior_type = Seq(helios.learn.cdt_loss.KullbackLeibler),
-  target_prob =
-    Seq(helios.learn.cdt_loss.Boltzmann),
+  target_prob = Seq(helios.learn.cdt_loss.Boltzmann),
   confounding = Seq(0d),
   dist_type = "default",
   num_samples = 20,
@@ -132,8 +130,7 @@ val exp_set4 = tuning_exp4.main(
   miniBatch = 1024,
   optimizer = tf.train.Adam(0.01f),
   prior_type = Seq(helios.learn.cdt_loss.KullbackLeibler),
-  target_prob =
-    Seq(helios.learn.cdt_loss.Boltzmann),
+  target_prob = Seq(helios.learn.cdt_loss.Boltzmann),
   confounding = Seq(0d),
   dist_type = "default",
   num_samples = 20,

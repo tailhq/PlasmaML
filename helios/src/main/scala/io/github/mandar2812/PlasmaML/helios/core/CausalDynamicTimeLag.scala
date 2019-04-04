@@ -5,6 +5,7 @@ import io.github.mandar2812.dynaml.tensorflow._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.learn.layers.{Layer, Loss}
+import org.platanios.tensorflow.api.ops.variables._
 
 /**
   * <h3>Causal Dynamic time-lag Inference: Weighted Loss</h3>
@@ -559,4 +560,50 @@ object MOGrangerLoss {
         (input(::, 0::size_causal_window), lags)
       }
     }
+}
+
+case class ProbabilisticDynamicTimeLag[
+P: TF: IsFloatOrDouble,
+T: TF: IsNumeric,
+L: TF : IsFloatOrDouble](
+  override val name: String,
+  size_causal_window: Int,
+  temperature: Double = 1.0) extends
+  Loss[((Output[P], Output[P]), Output[T]), L](name) {
+
+  override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
+
+  val divergence: CausalDynamicTimeLag.Divergence                  = CausalDynamicTimeLag.KullbackLeibler
+  val target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann
+
+  override def forwardWithoutContext(
+    input: ((Output[P], Output[P]), Output[T]))(
+    implicit mode: Mode): Output[L] = {
+
+    val preds   = input._1._1
+    val prob    = input._1._2
+    val targets = input._2
+
+    val error_wt = tf.variable[P]("error_wt", Shape(), new RandomUniformInitializer)
+    val specificity = tf.variable[P]("specificity", Shape(), new RandomUniformInitializer)
+
+    val model_errors = preds.subtract(targets.castTo[P])
+
+    val target_prob = model_errors
+    .square
+    .multiply(Tensor(-1).toOutput.castTo[P])
+    .divide(Tensor(temperature).castTo[P])
+    .softmax()
+
+
+    val prior_term = divergence(prob, target_prob)
+
+    model_errors.square
+      .multiply(prob.multiply(specificity).add(Tensor(1).toOutput.castTo[P]))
+      .sum(axes = 1).mean()
+      .multiply(error_wt.square)
+      .add(prior_term)
+      .reshape(Shape())
+      .castTo[L]
+  }
 }

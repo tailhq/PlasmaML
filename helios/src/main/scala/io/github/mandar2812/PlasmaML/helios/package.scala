@@ -149,6 +149,7 @@ package object helios {
       WeightedTimeSeriesLossGaussian
     val cdt_beta_loss: WeightedTimeSeriesLossGaussian.type =
       WeightedTimeSeriesLossGaussian
+    val pdt_loss: ProbabilisticDynamicTimeLag.type = ProbabilisticDynamicTimeLag
   }
 
   /**
