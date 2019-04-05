@@ -599,7 +599,7 @@ L: TF : IsFloatOrDouble](
     val prior_term = divergence(prob, target_prob)
 
     model_errors.square
-      .multiply(prob.multiply(specificity).add(Tensor(1).toOutput.castTo[P]))
+      .multiply(prob.multiply(specificity.square).add(Tensor(1).toOutput.castTo[P]))
       .sum(axes = 1).mean()
       .multiply(error_wt.square)
       .add(prior_term)
