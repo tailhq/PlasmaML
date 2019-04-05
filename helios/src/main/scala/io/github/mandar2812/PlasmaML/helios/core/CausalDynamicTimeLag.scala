@@ -581,43 +581,86 @@ L: TF : IsFloatOrDouble](
     input: ((Output[P], Output[P]), Output[T]))(
     implicit mode: Mode): Output[L] = {
 
+    val preds   = input._1._1
+    val prob    = input._1._2
+    val targets = input._2
+  
+    val model_errors_sq = preds.subtract(targets.castTo[P]).square
+    val s0 = tf.variable[P](
+      "s0",
+      Shape(),
+      tf.OnesInitializer,
+      trainable = false
+    )
+
+    val target_prob = model_errors_sq
+    .multiply(Tensor(-1).toOutput.castTo[P])
+    .divide(Tensor(temperature).castTo[P])
+    .softmax()
+    
     val n = tf.constant(Tensor(size_causal_window).reshape(Shape()).castTo[P], Shape(), "n")
 
     val one = tf.constant(Tensor(1d).reshape(Shape()).castTo[P], Shape(), "one")
     
     val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
-    
-    val preds   = input._1._1
-    val prob    = input._1._2
-    val targets = input._2
 
-    val model_errors_sq = preds.subtract(targets.castTo[P]).square
-
-    val s0 = model_errors_sq.mean()
+    val s = tf.variable[P](
+      "s",
+      Shape(),
+      tf.OnesInitializer,
+      trainable = false
+    )
     
-    val c1 = prob.multiply(model_errors_sq).sum(axes = 1).mean().divide(s0)
+    val c1 = tf.variable[P](
+      "c1",
+      Shape(),
+      tf.OnesInitializer,
+      trainable = false
+    )
 
-    val s = s0*(n - c1)/(n - one)
-    
-    val alpha = (n/(n - one))*(one - c1)/c1
-    
-    val target_prob = model_errors_sq
-    .multiply(Tensor(-1).toOutput.castTo[P])
-    .divide(Tensor(temperature).castTo[P])
-    .softmax()
-
+    val alpha = tf.variable[P](
+      "alpha",
+      Shape(),
+      tf.RandomUniformInitializer(),
+      trainable = false
+    )
 
     val prior_term = divergence(prob, target_prob)
 
-    model_errors_sq
-      .multiply(prob.multiply(alpha.add(one.toOutput.castTo[P])))
+    val loss = model_errors_sq
+      .multiply(prob * (one + alpha))
       .sum(axes = 1)
       .mean()
-      .divide(s.multiply(two))
+      .divide(s * two)
       .add(prior_term)
-      .add(s.log.divide(two).multiply(n))
-      .subtract(one.add(alpha).log.divide(two))
+      .add(s.log*n/two)
+      .subtract(tf.log(one + alpha)/two)
       .reshape(Shape())
       .castTo[L]
+
+    //Update base line variance
+    s0.assign(s0/two + model_errors_sq.mean()/two)
+
+    val un_p = target_prob * (
+      tf.exp(
+        tf.log(one + alpha)/two - (model_errors_sq*alpha)/(two*s)
+      )
+    )
+
+    //Calculate the saddle point probability
+    val p = un_p / un_p.sum(axes = 1)
+    
+    //Update C1, using averaging
+    c1.assign(
+      c1/two + p.multiply(model_errors_sq).sum(axes = 1).mean()/(s0*two)
+    )
+
+    //Update error weight/model variance
+    s.assign(s/two + s0*(n - c1)/(two*(n - one)))
+    
+    //Update alpha/specificity
+    alpha.assign(alpha/two + (n/(n - one))*(one - c1)/(two * c1))
+
+    loss
   }
 }
