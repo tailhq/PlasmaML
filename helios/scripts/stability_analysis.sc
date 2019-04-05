@@ -18,7 +18,7 @@ import $exec.helios.scripts.env
 
 implicit val formats = DefaultFormats + FieldSerializer[Map[String, Any]]()
 
-case class CDTStability(c1: Double, c2: Double, n: Int) {
+case class CDTStability(s0: Double, c1: Double, c2: Double, n: Int) {
 
   val is_stable: Boolean = c2 < 2 * c1
 }
@@ -44,7 +44,7 @@ def compute_stability_metrics(
 
     val sq_error = y.subtract(t).square
 
-    val s0 = sq_error.mean().scalar
+    val s0 = sq_error.sum().scalar
 
     val c1 = p.multiply(sq_error).sum().scalar
 
@@ -59,13 +59,13 @@ def compute_stability_metrics(
     .map(compute_metrics)
     .reduce(DataPipe2[StabTriple, StabTriple, StabTriple](_ + _))
 
-  val s0 = result(0).divide(result(3)).scalar
+  val s0 = result(0).divide(result(3)).scalar / n
 
   val c1 = result(1).divide(result(3)).scalar / s0
 
   val c2 = result(2).divide(result(3)).scalar / (s0 * s0)
 
-  CDTStability(c1, c2, n)
+  CDTStability(s0, c1, c2, n)
 }
 
 def read_cdt_model_preds(
@@ -152,7 +152,7 @@ val stabilities = exp_dirs.map(exp_dir => {
 
 })
 
-val fte_exp = csss.experiments() |? (_.segments.last.contains("fte_omni_mo_tl_2019-04-04-14-49"))
+val fte_exp = csss.experiments() |? (_.segments.last.contains("fte_omni_mo_tl_2019-04-05-02-21"))
 
 val fte_stability = fte_exp.map(exp_dir => {
   val preds =

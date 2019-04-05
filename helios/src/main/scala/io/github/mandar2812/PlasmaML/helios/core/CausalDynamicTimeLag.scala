@@ -573,6 +573,7 @@ L: TF : IsFloatOrDouble](
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
+
   val divergence: CausalDynamicTimeLag.Divergence                  = CausalDynamicTimeLag.KullbackLeibler
   val target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann
 
@@ -580,17 +581,27 @@ L: TF : IsFloatOrDouble](
     input: ((Output[P], Output[P]), Output[T]))(
     implicit mode: Mode): Output[L] = {
 
+    val n = tf.constant(Tensor(size_causal_window).reshape(Shape()).castTo[P], Shape(), "n")
+
+    val one = tf.constant(Tensor(1d).reshape(Shape()).castTo[P], Shape(), "one")
+    
+    val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
+    
     val preds   = input._1._1
     val prob    = input._1._2
     val targets = input._2
 
-    val error_wt = tf.variable[P]("error_wt", Shape(), new RandomUniformInitializer)
-    val specificity = tf.variable[P]("specificity", Shape(), new RandomUniformInitializer)
+    val model_errors_sq = preds.subtract(targets.castTo[P]).square
 
-    val model_errors = preds.subtract(targets.castTo[P])
+    val s0 = model_errors_sq.mean()
+    
+    val c1 = prob.multiply(model_errors_sq).sum(axes = 1).mean().divide(s0)
 
-    val target_prob = model_errors
-    .square
+    val s = s0*(n - c1)/(n - one)
+    
+    val alpha = (n/(n - one))*(one - c1)/c1
+    
+    val target_prob = model_errors_sq
     .multiply(Tensor(-1).toOutput.castTo[P])
     .divide(Tensor(temperature).castTo[P])
     .softmax()
@@ -598,11 +609,14 @@ L: TF : IsFloatOrDouble](
 
     val prior_term = divergence(prob, target_prob)
 
-    model_errors.square
-      .multiply(prob.multiply(specificity.square).add(Tensor(1).toOutput.castTo[P]))
-      .sum(axes = 1).mean()
-      .multiply(error_wt.square)
+    model_errors_sq
+      .multiply(prob.multiply(alpha.add(one.toOutput.castTo[P])))
+      .sum(axes = 1)
+      .mean()
+      .divide(s.multiply(two))
       .add(prior_term)
+      .add(s.log.divide(two).multiply(n))
+      .subtract(one.add(alpha).log.divide(two))
       .reshape(Shape())
       .castTo[L]
   }
