@@ -16,131 +16,6 @@ import _root_.org.platanios.tensorflow.api._
 import $exec.helios.scripts.csss
 import $exec.helios.scripts.env
 
-implicit val formats = DefaultFormats + FieldSerializer[Map[String, Any]]()
-
-case class Stability(s0: Double, c1: Double, c2: Double, c2_d: Double, n: Int) {
-
-  val is_stable: Boolean = c2 < 2 * c1
-
-  val denegerate_unstable: Boolean = c2_d > 2*(1 - 1/n)
-}
-
-type ZipPattern = ((Tensor[Double], Tensor[Double]), Tensor[Double])
-
-type StabTriple = Tensor[Double]
-
-type DataTriple =
-  (DataSet[Tensor[Double]], DataSet[Tensor[Double]], DataSet[Tensor[Double]])
-
-def compute_stability_metrics(
-  predictions: DataSet[Tensor[Double]],
-  probabilities: DataSet[Tensor[Double]],
-  targets: DataSet[Tensor[Double]]
-): Stability = {
-
-  val n = predictions.data.head.shape(0)
-
-  val compute_metrics = DataPipe[ZipPattern, StabTriple](zp => {
-
-    val ((y, p), t) = zp
-
-    val sq_error = y.subtract(t).square
-
-    val s0 = sq_error.sum().scalar
-
-    val c1 = p.multiply(sq_error).sum().scalar
-
-    val c2 = p.multiply(sq_error.subtract(c1).square).sum().scalar
-
-    val c2_d = sq_error.subtract(s0/n).square.sum().scalar
-
-    dtf.tensor_f64(5)(s0, c1, c2, c2_d, 1.0)
-  })
-
-  val result = predictions
-    .zip(probabilities)
-    .zip(targets)
-    .map(compute_metrics)
-    .reduce(DataPipe2[StabTriple, StabTriple, StabTriple](_ + _))
-
-  val s0 = result(0).divide(result(4)).scalar / n
-
-  val c1 = result(1).divide(result(4)).scalar / s0
-
-  val c2 = result(2).divide(result(4)).scalar / (s0 * s0)
-
-  val c2_d = result(3).divide(result(4)).scalar /(n * s0 * s0)
-
-  Stability(s0, c1, c2, c2_d, n)
-}
-
-def read_cdt_model_preds(
-  preds: Path,
-  probs: Path,
-  targets: Path
-): DataTriple = {
-
-  val read_lines = DataPipe[Path, Iterable[String]](read.lines ! _)
-
-  val split_lines = IterableDataPipe(
-    (line: String) => line.split(',').map(_.toDouble)
-  )
-
-  val load_into_tensor = IterableDataPipe(
-    (ls: Array[Double]) => dtf.tensor_f64(ls.length)(ls.toSeq: _*)
-  )
-
-  val load_data = read_lines > split_lines > load_into_tensor
-
-  (
-    dtfdata.dataset(Seq(preds)).flatMap(load_data),
-    dtfdata.dataset(Seq(probs)).flatMap(load_data),
-    dtfdata.dataset(Seq(targets)).flatMap(load_data)
-  )
-
-}
-
-def fte_model_preds(preds: Path, probs: Path, fte_data: Path): DataTriple = {
-
-  val read_file = DataPipe((p: Path) => read.lines ! p)
-
-  val split_lines = IterableDataPipe(
-    (line: String) => line.split(',').map(_.toDouble)
-  )
-
-  val load_into_tensor = IterableDataPipe(
-    (ls: Array[Double]) => dtf.tensor_f64(ls.length)(ls.toSeq: _*)
-  )
-
-  val filter_non_empty_lines = IterableDataPipe((l: String) => !l.isEmpty)
-
-  val read_json_record = IterableDataPipe((s: String) => parse(s))
-
-  val load_targets = IterableDataPipe((record: JValue) => {
-    val targets_seq = record
-      .findField(p => p._1 == "targets")
-      .get
-      ._2
-      .values
-      .asInstanceOf[List[Double]]
-
-    val targets = dtf.tensor_f64(targets_seq.length)(targets_seq: _*)
-
-    targets
-  })
-
-  val pipeline_fte = read_file > filter_non_empty_lines > read_json_record > load_targets
-
-  val pipeline_model = read_file > split_lines > load_into_tensor
-
-  (
-    dtfdata.dataset(Seq(preds)).flatMap(pipeline_model),
-    dtfdata.dataset(Seq(probs)).flatMap(pipeline_model),
-    dtfdata.dataset(Seq(fte_data)).flatMap(pipeline_fte)
-  )
-
-}
-
 val exp_dirs = Seq(
   home / "Downloads" / "results_exp1" / "const_lag_timelag_mo_2019-03-01-20-17-05",
   home / "Downloads" / "results_exp2" / "const_v_timelag_mo_2019-03-01-20-17-40",
@@ -148,18 +23,38 @@ val exp_dirs = Seq(
   home / "results_exp4" / "softplus_timelag_mo_2019-04-03-17-50-54"
 )
 
+val exp_dirs2 = Seq(
+  env.summary_dir / "const_lag_timelag_mo_2019-03-01-20-17-05",
+  env.summary_dir / "const_v_timelag_mo_2019-03-01-20-17-40",
+  env.summary_dir / "const_a_timelag_mo_2019-04-01-21-52-36",
+  env.summary_dir / "softplus_timelag_mo_2019-04-03-17-50-54",
+  env.summary_dir / "const_v_timelag_mo_2019-04-08-10-51-12"
+)
+
 val stabilities = exp_dirs.map(exp_dir => {
-  val triple = read_cdt_model_preds(
+  val triple = timelag.utils.read_cdt_model_preds(
     exp_dir / "test_predictions.csv",
     exp_dir / "test_probabilities.csv",
     exp_dir / "test_data_targets.csv"
   )
 
-  compute_stability_metrics(triple._1, triple._2, triple._3)
+  timelag.utils.compute_stability_metrics(triple._1, triple._2, triple._3)
 
 })
 
-val fte_exp = csss.experiments() |? (_.segments.last.contains("fte_omni_mo_tl_2019-04-05-02-21"))
+val stabilities2 = exp_dirs2.map(exp_dir => {
+  val triple = timelag.utils.read_cdt_model_preds(
+    exp_dir / "test_predictions.csv",
+    exp_dir / "test_probabilities.csv",
+    exp_dir / "test_data_targets.csv"
+  )
+
+  timelag.utils.compute_stability_metrics(triple._1, triple._2, triple._3)
+
+})
+
+val fte_exp = csss.experiments() |? (_.segments.last
+  .contains("fte_omni_mo_tl_2019-04-05-02-21"))
 
 val fte_stability = fte_exp.map(exp_dir => {
   val preds =

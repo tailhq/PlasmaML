@@ -862,7 +862,7 @@ package object utils {
 
     val is_stable: Boolean = c2 < 2 * c1
 
-    val denegerate_unstable: Boolean = c2_d > 2 * (1 - 1 / n)
+    val degenerate_unstable: Boolean = c2_d > 2d * (1d - (1d/n))
   }
 
   def compute_stability_metrics(
