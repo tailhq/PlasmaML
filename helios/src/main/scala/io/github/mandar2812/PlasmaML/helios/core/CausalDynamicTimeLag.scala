@@ -656,7 +656,7 @@ L: TF : IsFloatOrDouble](
     val prior_term = divergence(prob, p)
 
     val loss = model_errors_sq
-      //.multiply(prob * (one + alpha))
+      .multiply(prob * (one + alpha))
       .sum(axes = 1)
       .mean()
       .divide(s * two)
