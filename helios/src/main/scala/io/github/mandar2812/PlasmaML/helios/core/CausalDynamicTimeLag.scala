@@ -568,14 +568,14 @@ T: TF: IsNumeric,
 L: TF : IsFloatOrDouble](
   override val name: String,
   size_causal_window: Int,
-  temperature: Double = 1.0) extends
+  temperature: Double = 1.0,
+  target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann) extends
   Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
 
   val divergence: CausalDynamicTimeLag.Divergence                  = CausalDynamicTimeLag.KullbackLeibler
-  val target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann
 
   override def forwardWithoutContext(
     input: ((Output[P], Output[P]), Output[T]))(
@@ -593,12 +593,24 @@ L: TF : IsFloatOrDouble](
       trainable = false
     )
 
-    val target_prob = model_errors_sq
-    .multiply(Tensor(-1).toOutput.castTo[P])
-    .divide(Tensor(temperature).castTo[P])
-    .softmax()
+    val target_prob = target_distribution match {
+      case CausalDynamicTimeLag.Boltzmann => model_errors_sq
+        .multiply(Tensor(-1).toOutput.castTo[P])
+        .divide(Tensor(temperature).castTo[P])
+        .softmax()
+
+      case CausalDynamicTimeLag.Uniform => dtf.tensor_f64(
+        1, size_causal_window)(
+        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*
+      ).toOutput.castTo[P]
+
+      case _ => model_errors_sq
+        .multiply(Tensor(-1).toOutput.castTo[P])
+        .divide(Tensor(temperature).castTo[P])
+        .softmax()
+    }
     
-    val n = tf.constant(Tensor(size_causal_window).reshape(Shape()).castTo[P], Shape(), "n")
+    val n   = tf.constant(Tensor(size_causal_window).reshape(Shape()).castTo[P], Shape(), "n")
 
     val one = tf.constant(Tensor(1d).reshape(Shape()).castTo[P], Shape(), "one")
     

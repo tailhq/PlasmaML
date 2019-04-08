@@ -92,7 +92,7 @@ def apply(
 
   val hyper_prior = Map(
     "temperature" -> UniformRV(1d, 2.0),
-    "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+    "reg"         -> UniformRV(-5d, -3d)
   )
 
   val logit =
@@ -167,7 +167,8 @@ def apply(
 
       val lossFunc = timelag.utils.get_pdt_loss[Double, Double, Double](
         sliding_window,
-        temp = h("temperature")
+        temp = h("temperature"), 
+        target_prob
       )
 
       val reg_layer =
@@ -177,7 +178,7 @@ def apply(
             layer_parameter_names,
             layer_datatypes,
             layer_shapes,
-            h("reg"),
+            math.exp(h("reg")),
             "L1Reg"
           )
         else
@@ -186,7 +187,7 @@ def apply(
             layer_parameter_names,
             layer_datatypes,
             layer_shapes,
-            h("reg"),
+            math.exp(h("reg")),
             "L2Reg"
           )
 

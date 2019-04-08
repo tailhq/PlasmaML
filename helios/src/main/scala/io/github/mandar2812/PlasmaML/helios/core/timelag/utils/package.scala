@@ -836,11 +836,12 @@ package object utils {
   def get_pdt_loss[
     P: TF: IsFloatOrDouble,
     T: TF: IsNumeric: IsNotQuantized,
-    L: TF: IsFloatOrDouble
-  ](sliding_window: Int,
-    temp: Double = 1.0
-  ): Loss[((Output[P], Output[P]), Output[T]), L] =
-    helios.learn.pdt_loss("Loss/PDT", sliding_window, temp)
+    L: TF: IsFloatOrDouble](
+      sliding_window: Int,
+      temp: Double = 1.0,
+      target_dist: helios.learn.cdt_loss.TargetDistribution = 
+        helios.learn.cdt_loss.Boltzmann): Loss[((Output[P], Output[P]), Output[T]), L] =
+    helios.learn.pdt_loss("Loss/PDT", sliding_window, temp, target_dist)
 
   def collect_predictions[T: TF: IsFloatOrDouble](
     preds: DataSet[(Tensor[T], Tensor[T])]

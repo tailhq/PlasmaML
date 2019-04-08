@@ -136,6 +136,7 @@ def fte_model_preds(preds: Path, probs: Path, fte_data: Path): DataTriple = {
 }
 
 val exp_dirs = Seq(
+  home / "Downloads" / "results_exp1" / "const_lag_timelag_mo_2019-03-01-20-17-05",
   home / "Downloads" / "results_exp2" / "const_v_timelag_mo_2019-03-01-20-17-40",
   home / "results_exp3" / "const_a_timelag_mo_2019-04-01-21-52-36",
   home / "results_exp4" / "softplus_timelag_mo_2019-04-03-17-50-54"
@@ -156,9 +157,9 @@ val fte_exp = csss.experiments() |? (_.segments.last.contains("fte_omni_mo_tl_20
 
 val fte_stability = fte_exp.map(exp_dir => {
   val preds =
-    (ls ! exp_dir |? (_.segments.last.contains("predictions_test"))).last
+    (ls ! exp_dir |? (_.segments.last.contains("predictions_test")))(1)
   val probs =
-    (ls ! exp_dir |? (_.segments.last.contains("probabilities_test"))).last
+    (ls ! exp_dir |? (_.segments.last.contains("probabilities_test")))(1)
 
   require(
     preds.segments.last.split('.').head.split('_').last == probs.segments.last
