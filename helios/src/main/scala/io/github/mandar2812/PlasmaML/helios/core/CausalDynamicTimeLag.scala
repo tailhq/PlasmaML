@@ -593,7 +593,7 @@ L: TF : IsFloatOrDouble](
       trainable = false
     )
 
-    val target_prob = target_distribution match {
+    /* val target_prob = target_distribution match {
       case CausalDynamicTimeLag.Boltzmann => model_errors_sq
         .multiply(Tensor(-1).toOutput.castTo[P])
         .divide(Tensor(temperature).castTo[P])
@@ -608,7 +608,7 @@ L: TF : IsFloatOrDouble](
         .multiply(Tensor(-1).toOutput.castTo[P])
         .divide(Tensor(temperature).castTo[P])
         .softmax()
-    }
+    } */
     
     val n   = tf.constant(Tensor(size_causal_window).reshape(Shape()).castTo[P], Shape(), "n")
 
@@ -651,7 +651,7 @@ L: TF : IsFloatOrDouble](
     )
 
     //Calculate the saddle point probability
-    val p = un_p / un_p.sum(axes = 1)
+    val p = un_p / un_p.sum(axes = 1, keepDims = true)
 
     val prior_term = divergence(p, prob)
 
