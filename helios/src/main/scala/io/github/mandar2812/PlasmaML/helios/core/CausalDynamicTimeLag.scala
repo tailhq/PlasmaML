@@ -639,10 +639,24 @@ L: TF : IsFloatOrDouble](
       trainable = false
     )
 
-    val prior_term = divergence(prob, target_prob)
+    
+
+    //Update base line variance
+    s0.assign(s0*lambda + model_errors_sq.mean()*(one - lambda))
+
+    val un_p = prob * (
+      tf.exp(
+        tf.log(one + alpha)/two - (model_errors_sq*alpha)/(two*s)
+      )
+    )
+
+    //Calculate the saddle point probability
+    val p = un_p / un_p.sum(axes = 1)
+
+    val prior_term = divergence(p, prob)
 
     val loss = model_errors_sq
-      .multiply(prob * (one + alpha))
+      .multiply(p * (one + alpha))
       .sum(axes = 1)
       .mean()
       .divide(s * two)
@@ -651,18 +665,6 @@ L: TF : IsFloatOrDouble](
       .subtract(tf.log(one + alpha)/two)
       .reshape(Shape())
       .castTo[L]
-
-    //Update base line variance
-    s0.assign(s0*lambda + model_errors_sq.mean()*(one - lambda))
-
-    val un_p = target_prob * (
-      tf.exp(
-        tf.log(one + alpha)/two - (model_errors_sq*alpha)/(two*s)
-      )
-    )
-
-    //Calculate the saddle point probability
-    val p = un_p / un_p.sum(axes = 1)
     
     //Update C1, using averaging
     c1.assign(
