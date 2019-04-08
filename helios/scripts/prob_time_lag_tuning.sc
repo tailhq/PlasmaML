@@ -7,6 +7,8 @@ import $exec.helios.scripts.{
 
 import ammonite.ops.ImplicitWd._
 import _root_.io.github.mandar2812.dynaml.tensorflow._
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
+import $exec.helios.scripts.env
 
 val exp_set1 = tuning_exp1.main(
   d = 10,
@@ -53,8 +55,8 @@ val exp_set2 = tuning_exp2.main(
   noiserot = 0.001,
   alpha = 0.02,
   train_test_separate = true,
-  num_neurons = Seq(60, 40),
-  activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
+  num_neurons = Seq(20, 20, 20),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](3, i),
   iterations = 50000,
   iterations_tuning = 5000,
   miniBatch = 1024,

@@ -657,7 +657,7 @@ L: TF : IsFloatOrDouble](
 
     val un_p = target_prob * (
       tf.exp(
-        tf.log(one + alpha)*lambda - (model_errors_sq*alpha)*(one - lambda)/s
+        tf.log(one + alpha)/two - (model_errors_sq*alpha)/(two*s)
       )
     )
 
