@@ -86,12 +86,12 @@ def apply(
   val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
 
   val hyper_parameters = List(
-    "temperature",
+    //"temperature",
     "reg"
   )
 
   val hyper_prior = Map(
-    "temperature" -> UniformRV(1d, 2.0),
+    //"temperature" -> UniformRV(1d, 2.0),
     "reg"         -> UniformRV(-5d, -3d)
   )
 
@@ -167,7 +167,7 @@ def apply(
 
       val lossFunc = timelag.utils.get_pdt_loss[Double, Double, Double](
         sliding_window,
-        temp = h("temperature"), 
+        temp = 1.0/* h("temperature") */, 
         target_prob
       )
 
