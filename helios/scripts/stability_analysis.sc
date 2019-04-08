@@ -20,7 +20,8 @@ val exp_dirs = Seq(
   home / "Downloads" / "results_exp1" / "const_lag_timelag_mo_2019-03-01-20-17-05",
   home / "Downloads" / "results_exp2" / "const_v_timelag_mo_2019-03-01-20-17-40",
   home / "results_exp3" / "const_a_timelag_mo_2019-04-01-21-52-36",
-  home / "results_exp4" / "softplus_timelag_mo_2019-04-03-17-50-54"
+  home / "results_exp4" / "softplus_timelag_mo_2019-04-03-17-50-54",
+  home / "tmp" /  "const_v_timelag_mo_2019-04-08-10-51-12"
 )
 
 val exp_dirs2 = Seq(

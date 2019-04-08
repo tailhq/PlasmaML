@@ -616,7 +616,7 @@ L: TF : IsFloatOrDouble](
     
     val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
 
-    val lambda = tf.constant(Tensor(0.75).reshape(Shape()).castTo[P], Shape(), "lambda")
+    val lambda = tf.constant(Tensor(0.9).reshape(Shape()).castTo[P], Shape(), "lambda")
 
     val s = tf.variable[P](
       "s",
