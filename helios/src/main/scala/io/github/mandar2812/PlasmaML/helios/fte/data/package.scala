@@ -954,4 +954,49 @@ package object data {
     )
   }
 
+  def fte_model_preds(
+    preds: Path, 
+    probs: Path, 
+    fte_data: Path): timelag.utils.DataTriple = {
+
+    val read_file = DataPipe((p: Path) => read.lines ! p)
+  
+    val split_lines = IterableDataPipe(
+      (line: String) => line.split(',').map(_.toDouble)
+    )
+  
+    val load_into_tensor = IterableDataPipe(
+      (ls: Array[Double]) => dtf.tensor_f64(ls.length)(ls.toSeq: _*)
+    )
+  
+    val filter_non_empty_lines = IterableDataPipe((l: String) => !l.isEmpty)
+  
+    val read_json_record = IterableDataPipe((s: String) => parse(s))
+  
+    val load_targets = IterableDataPipe((record: JValue) => {
+      val targets_seq = record
+        .findField(p => p._1 == "targets")
+        .get
+        ._2
+        .values
+        .asInstanceOf[List[Double]]
+  
+      val targets = dtf.tensor_f64(targets_seq.length)(targets_seq: _*)
+  
+      targets
+    })
+  
+    val pipeline_fte = read_file > filter_non_empty_lines > read_json_record > load_targets
+  
+    val pipeline_model = read_file > split_lines > load_into_tensor
+  
+    (
+      dtfdata.dataset(Seq(preds)).flatMap(pipeline_model),
+      dtfdata.dataset(Seq(probs)).flatMap(pipeline_model),
+      dtfdata.dataset(Seq(fte_data)).flatMap(pipeline_fte)
+    )
+  
+  }
+  
+
 }

@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.helios.core.timelag
 
-import ammonite.ops.{Path, write}
+import ammonite.ops._
 import breeze.linalg.{DenseMatrix, qr}
 import breeze.stats.distributions.{Bernoulli, Gaussian, LogNormal, Uniform}
 import _root_.io.github.mandar2812.dynaml.{DynaMLPipe => Pipe}
@@ -836,12 +836,102 @@ package object utils {
   def get_pdt_loss[
     P: TF: IsFloatOrDouble,
     T: TF: IsNumeric: IsNotQuantized,
-    L: TF: IsFloatOrDouble](
-      sliding_window: Int,
-      temp: Double = 1.0,
-      target_dist: helios.learn.cdt_loss.TargetDistribution = 
-        helios.learn.cdt_loss.Boltzmann): Loss[((Output[P], Output[P]), Output[T]), L] =
+    L: TF: IsFloatOrDouble
+  ](sliding_window: Int,
+    temp: Double = 1.0,
+    target_dist: helios.learn.cdt_loss.TargetDistribution =
+      helios.learn.cdt_loss.Boltzmann
+  ): Loss[((Output[P], Output[P]), Output[T]), L] =
     helios.learn.pdt_loss("Loss/PDT", sliding_window, temp, target_dist)
+
+  // Utilities for computing CDT model stability.
+
+  type ZipPattern = ((Tensor[Double], Tensor[Double]), Tensor[Double])
+
+  type StabTriple = Tensor[Double]
+
+  type DataTriple =
+    (DataSet[Tensor[Double]], DataSet[Tensor[Double]], DataSet[Tensor[Double]])
+
+  case class Stability(
+    s0: Double,
+    c1: Double,
+    c2: Double,
+    c2_d: Double,
+    n: Int) {
+
+    val is_stable: Boolean = c2 < 2 * c1
+
+    val denegerate_unstable: Boolean = c2_d > 2 * (1 - 1 / n)
+  }
+
+  def compute_stability_metrics(
+    predictions: DataSet[Tensor[Double]],
+    probabilities: DataSet[Tensor[Double]],
+    targets: DataSet[Tensor[Double]]
+  ): Stability = {
+
+    val n = predictions.data.head.shape(0)
+
+    val compute_metrics = DataPipe[ZipPattern, StabTriple](zp => {
+
+      val ((y, p), t) = zp
+
+      val sq_error = y.subtract(t).square
+
+      val s0 = sq_error.sum().scalar
+
+      val c1 = p.multiply(sq_error).sum().scalar
+
+      val c2 = p.multiply(sq_error.subtract(c1).square).sum().scalar
+
+      val c2_d = sq_error.subtract(s0 / n).square.sum().scalar
+
+      dtf.tensor_f64(5)(s0, c1, c2, c2_d, 1.0)
+    })
+
+    val result = predictions
+      .zip(probabilities)
+      .zip(targets)
+      .map(compute_metrics)
+      .reduce(DataPipe2[StabTriple, StabTriple, StabTriple](_ + _))
+
+    val s0 = result(0).divide(result(4)).scalar / n
+
+    val c1 = result(1).divide(result(4)).scalar / s0
+
+    val c2 = result(2).divide(result(4)).scalar / (s0 * s0)
+
+    val c2_d = result(3).divide(result(4)).scalar / (n * s0 * s0)
+
+    Stability(s0, c1, c2, c2_d, n)
+  }
+
+  def read_cdt_model_preds(
+    preds: Path,
+    probs: Path,
+    targets: Path
+  ): DataTriple = {
+
+    val read_lines = DataPipe[Path, Iterable[String]](read.lines ! _)
+
+    val split_lines = IterableDataPipe(
+      (line: String) => line.split(',').map(_.toDouble)
+    )
+
+    val load_into_tensor = IterableDataPipe(
+      (ls: Array[Double]) => dtf.tensor_f64(ls.length)(ls.toSeq: _*)
+    )
+
+    val load_data = read_lines > split_lines > load_into_tensor
+
+    (
+      dtfdata.dataset(Seq(preds)).flatMap(load_data),
+      dtfdata.dataset(Seq(probs)).flatMap(load_data),
+      dtfdata.dataset(Seq(targets)).flatMap(load_data)
+    )
+
+  }
 
   def collect_predictions[T: TF: IsFloatOrDouble](
     preds: DataSet[(Tensor[T], Tensor[T])]

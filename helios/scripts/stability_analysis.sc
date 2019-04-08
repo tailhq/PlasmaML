@@ -18,9 +18,11 @@ import $exec.helios.scripts.env
 
 implicit val formats = DefaultFormats + FieldSerializer[Map[String, Any]]()
 
-case class CDTStability(s0: Double, c1: Double, c2: Double, n: Int) {
+case class Stability(s0: Double, c1: Double, c2: Double, c2_d: Double, n: Int) {
 
   val is_stable: Boolean = c2 < 2 * c1
+
+  val denegerate_unstable: Boolean = c2_d > 2*(1 - 1/n)
 }
 
 type ZipPattern = ((Tensor[Double], Tensor[Double]), Tensor[Double])
@@ -34,7 +36,7 @@ def compute_stability_metrics(
   predictions: DataSet[Tensor[Double]],
   probabilities: DataSet[Tensor[Double]],
   targets: DataSet[Tensor[Double]]
-): CDTStability = {
+): Stability = {
 
   val n = predictions.data.head.shape(0)
 
@@ -50,7 +52,9 @@ def compute_stability_metrics(
 
     val c2 = p.multiply(sq_error.subtract(c1).square).sum().scalar
 
-    dtf.tensor_f64(4)(s0, c1, c2, 1.0)
+    val c2_d = sq_error.subtract(s0/n).square.sum().scalar
+
+    dtf.tensor_f64(5)(s0, c1, c2, c2_d, 1.0)
   })
 
   val result = predictions
@@ -59,13 +63,15 @@ def compute_stability_metrics(
     .map(compute_metrics)
     .reduce(DataPipe2[StabTriple, StabTriple, StabTriple](_ + _))
 
-  val s0 = result(0).divide(result(3)).scalar / n
+  val s0 = result(0).divide(result(4)).scalar / n
 
-  val c1 = result(1).divide(result(3)).scalar / s0
+  val c1 = result(1).divide(result(4)).scalar / s0
 
-  val c2 = result(2).divide(result(3)).scalar / (s0 * s0)
+  val c2 = result(2).divide(result(4)).scalar / (s0 * s0)
 
-  CDTStability(s0, c1, c2, n)
+  val c2_d = result(3).divide(result(4)).scalar /(n * s0 * s0)
+
+  Stability(s0, c1, c2, c2_d, n)
 }
 
 def read_cdt_model_preds(

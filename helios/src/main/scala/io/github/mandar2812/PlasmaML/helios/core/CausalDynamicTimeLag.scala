@@ -575,7 +575,7 @@ L: TF : IsFloatOrDouble](
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
 
-  val divergence: CausalDynamicTimeLag.Divergence                  = CausalDynamicTimeLag.KullbackLeibler
+  private val divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler
 
   override def forwardWithoutContext(
     input: ((Output[P], Output[P]), Output[T]))(
@@ -616,6 +616,8 @@ L: TF : IsFloatOrDouble](
     
     val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
 
+    val lambda = tf.constant(Tensor(0.75).reshape(Shape()).castTo[P], Shape(), "lambda")
+
     val s = tf.variable[P](
       "s",
       Shape(),
@@ -651,11 +653,11 @@ L: TF : IsFloatOrDouble](
       .castTo[L]
 
     //Update base line variance
-    s0.assign(s0/two + model_errors_sq.mean()/two)
+    s0.assign(s0*lambda + model_errors_sq.mean()*(one - lambda))
 
     val un_p = target_prob * (
       tf.exp(
-        tf.log(one + alpha)/two - (model_errors_sq*alpha)/(two*s)
+        tf.log(one + alpha)*lambda - (model_errors_sq*alpha)*(one - lambda)/s
       )
     )
 
@@ -664,14 +666,14 @@ L: TF : IsFloatOrDouble](
     
     //Update C1, using averaging
     c1.assign(
-      c1/two + p.multiply(model_errors_sq).sum(axes = 1).mean()/(s0*two)
+      c1*lambda + p.multiply(model_errors_sq).sum(axes = 1).mean()*(one - lambda)/s0
     )
 
     //Update error weight/model variance
-    s.assign(s/two + s0*(n - c1)/(two*(n - one)))
+    s.assign(s*lambda + s0*(n - c1)*(one - lambda)/(n - one))
     
     //Update alpha/specificity
-    alpha.assign(alpha/two + (n/(n - one))*(one - c1)/(two * c1))
+    alpha.assign(alpha*lambda + (n/(n - one))*(one - c1)*(one - lambda)/c1)
 
     loss
   }
