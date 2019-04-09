@@ -864,7 +864,7 @@ package object utils {
     c2_d: Double,
     n: Int) {
 
-    val is_stable: Boolean = c2 < 2 * c1
+    val is_stable: Boolean = c2 < 2 * c1 * c1
 
     val degenerate_unstable: Boolean = c2_d > 2d * (1d - (1d/n))
   }
