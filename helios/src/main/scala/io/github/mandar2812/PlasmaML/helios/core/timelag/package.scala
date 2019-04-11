@@ -1230,7 +1230,8 @@ package object timelag {
     epochFlag: Boolean                                        = false,
     confounding_factor: Double                                = 0d,
     fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double]   = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum/s.length),
-    eval_metric_names: Seq[String]                            = Seq("s0", "c1", "c2"))
+    eval_metric_names: Seq[String]                            = Seq("s0", "c1", "c2"), 
+    checkpointing_freq: Int = 5)
     : ExperimentResult[T, L, TunedModelRun[T, L]] = {
 
 
@@ -1299,7 +1300,7 @@ package object timelag {
           data_processing = data_ops,
           optimizer = optimizer,
           stopCriteria = stop_condition_test,
-          trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch, 4, 4)))
+          trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch, 4, checkpointing_freq)))
 
 
       val dTypeTag = TF[T]
@@ -1375,7 +1376,7 @@ package object timelag {
         config, 
         Some(train_config_test),
         Some(eval_metric_names.zip(fitness_func)),
-        Some(iterations/4)  
+        Some(iterations/checkpointing_freq)  
       )
 
       //best_model.train(tfdata.training_dataset, train_config_test)
