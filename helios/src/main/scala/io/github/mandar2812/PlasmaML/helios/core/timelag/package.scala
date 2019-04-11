@@ -1231,7 +1231,7 @@ package object timelag {
     confounding_factor: Double                                = 0d,
     fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double]   = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum/s.length),
     eval_metric_names: Seq[String]                            = Seq("s0", "c1", "c2"), 
-    checkpointing_freq: Int = 5)
+    checkpointing_freq: Int                                   = 5)
     : ExperimentResult[T, L, TunedModelRun[T, L]] = {
 
 

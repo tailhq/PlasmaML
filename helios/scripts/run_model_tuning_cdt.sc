@@ -45,7 +45,8 @@ def apply(
   hyper_optimizer: String = "gs",
   hyp_opt_iterations: Option[Int] = Some(5),
   epochFlag: Boolean = false,
-  regularization_types: Seq[String] = Seq("L2")
+  regularization_types: Seq[String] = Seq("L2"),
+  checkpointing_freq: Int = 5
 ): Seq[timelag.ExperimentResult[Double, Double, timelag.TunedModelRun[
   Double,
   Double
@@ -270,7 +271,8 @@ def apply(
       hyp_mapping = hyp_mapping,
       confounding_factor = c,
       fitness_to_scalar = fitness_to_scalar,
-      eval_metric_names = Seq("s0", "c1", "c2")
+      eval_metric_names = Seq("s0", "c1", "c2"),
+      checkpointing_freq = checkpointing_freq
     )
 
     result.copy[Double, Double, timelag.TunedModelRun[Double, Double]](
