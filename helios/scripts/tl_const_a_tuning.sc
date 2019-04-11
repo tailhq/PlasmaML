@@ -36,7 +36,8 @@ def main(
   hyper_optimizer: String                                    = "gs",
   hyp_opt_iterations: Option[Int]                            = Some(5),
   epochFlag: Boolean                                         = false,
-  regularization_types: Seq[String]                          = Seq("L2"))
+  regularization_types: Seq[String]                          = Seq("L2"),
+  checkpointing_freq: Int                                    = 5)
 : Seq[timelag.ExperimentResult[Double, Double, timelag.TunedModelRun[Double, Double]]] = {
 
   //Output computation
@@ -73,7 +74,7 @@ def main(
     prior_type, target_prob, dist_type,
     timelag_pred_strategy, summaries_top_dir, num_samples,
     hyper_optimizer, hyp_opt_iterations, epochFlag,
-    regularization_types
+    regularization_types, checkpointing_freq
   )
 
   experiment_results.map(experiment_result =>

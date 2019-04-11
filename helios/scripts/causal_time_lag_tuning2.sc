@@ -22,7 +22,7 @@ val exp_set2 = tuning_exp2.main(
   iterations = 10000,
   iterations_tuning = 1000,
   miniBatch = 1024,
-  optimizer = tf.train.Adam(0.01f),
+  optimizer = tf.train.RMSProp(0.01f),
   prior_type = Seq(helios.learn.cdt_loss.KullbackLeibler),
   target_prob =
     Seq(helios.learn.cdt_loss.Boltzmann),
@@ -31,7 +31,8 @@ val exp_set2 = tuning_exp2.main(
   num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
-  regularization_types = Seq("L2")
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 10
 )
 
 timelag.organize_results(exp_set2, home / 'tmp / 'results_exp2, "exp2_")
