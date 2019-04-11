@@ -761,7 +761,7 @@ package object fte {
         hyper_params,
         scaled_data.training_dataset,
         tf_handle_ops_tuning,
-        fitness_func,
+        Seq(fitness_func),
         arch,
         (FLOAT64, input_shape),
         (FLOAT64, Shape(causal_window)),

@@ -1402,7 +1402,7 @@ package object helios {
         hyper_params,
         norm_tf_data.training_dataset,
         handle_ops,
-        fitness_func,
+        Seq(fitness_func),
         architecture,
         (UINT8, data_shapes._1),
         (FLOAT64, data_shapes._2),

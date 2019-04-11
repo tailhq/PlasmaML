@@ -160,15 +160,13 @@ def apply(
 
   for (c                   <- confounding;
        prior_type          <- prior_types;
-       target_prob         <- target_probs;
+       //target_prob         <- target_probs;
        regularization_type <- regularization_types) yield {
 
     val loss_func_generator = (h: Map[String, Double]) => {
 
       val lossFunc = timelag.utils.get_pdt_loss[Double, Double, Double](
-        sliding_window,
-        temp = 1.0/* h("temperature") */, 
-        target_prob
+        sliding_window
       )
 
       val reg_layer =
@@ -223,7 +221,7 @@ def apply(
     result.copy[Double, Double, timelag.TunedModelRun[Double, Double]](
       config = result.config.copy[Double](
         divergence = Some(prior_type),
-        target_prob = Some(target_prob),
+        target_prob = None,//Some(target_prob),
         reg_type = Some(regularization_type)
       )
     )

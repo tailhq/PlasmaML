@@ -1212,7 +1212,7 @@ package object timelag {
     architecture: Layer[Output[T], (Output[T], Output[T])],
     hyper_params: List[String],
     loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[((Output[T], Output[T]), Output[T]), Output[L]],
-    fitness_func: DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]],
+    fitness_func: Seq[DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]]],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[Double]]],
     iterations: Int                                           = 150000,
     iterations_tuning: Int                                    = 20000,
@@ -1228,7 +1228,10 @@ package object timelag {
     hyp_opt_iterations: Option[Int]                           = Some(5),
     hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
     epochFlag: Boolean                                        = false,
-    confounding_factor: Double                                = 0d): ExperimentResult[T, L, TunedModelRun[T, L]] = {
+    confounding_factor: Double                                = 0d,
+    fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double]   = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum/s.length),
+    eval_metric_names: Seq[String]                            = Seq("s0", "c1", "c2"))
+    : ExperimentResult[T, L, TunedModelRun[T, L]] = {
 
 
     val (_, collated_data): TLDATA[T]           = confound_data(dataset._1, confounding_factor)
@@ -1301,6 +1304,10 @@ package object timelag {
 
       val dTypeTag = TF[T]
 
+      val split_data = tfdata.training_dataset.partition(
+        DataPipe[(Tensor[T], Tensor[T]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
+      )
+
       val tunableTFModel = dtflearn.tunable_tf_model[
         (Tensor[T], Tensor[T]),
         Output[T], Output[T], (Output[T], Output[T]), L,
@@ -1308,16 +1315,15 @@ package object timelag {
         Tensor[T], DataType[T], Shape,
         (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)](
         loss_func_generator, hyper_params,
-        tfdata.training_dataset,
+        split_data.training_dataset,
         tf_handle_ops,
         fitness_func,
         architecture,
         (dTypeTag.dataType, input_shape),
         (dTypeTag.dataType, Shape(causal_window)),
         train_config_tuning(tf_summary_dir),
-        data_split_func = Some(
-          DataPipe[(Tensor[T], Tensor[T]), Boolean](_ => scala.util.Random.nextDouble() <= 0.7)
-        ),
+        fitness_to_scalar = fitness_to_scalar,
+        validation_data = Some(split_data.test_dataset),
         inMemory = false
       )
 
@@ -1365,7 +1371,12 @@ package object timelag {
           config.values.mkString(start = "", sep = ",", end = "")
       )
 
-      val best_model = tunableTFModel.train_model(config, Some(train_config_test))
+      val best_model = tunableTFModel.train_model(
+        config, 
+        Some(train_config_test),
+        Some(eval_metric_names.zip(fitness_func)),
+        Some(iterations/4)  
+      )
 
       //best_model.train(tfdata.training_dataset, train_config_test)
 

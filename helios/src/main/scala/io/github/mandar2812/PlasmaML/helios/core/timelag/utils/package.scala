@@ -728,7 +728,7 @@ package object utils {
         it * epochSize
       )
     } else {
-      dtflearn.model._train_hooks(p, it / 3, it / 3, it)
+      dtflearn.model._train_hooks(p, it / 4, it / 4, it/4)
     }
 
   /**
@@ -846,7 +846,7 @@ package object utils {
     target_dist: helios.learn.cdt_loss.TargetDistribution =
       helios.learn.cdt_loss.Boltzmann
   ): Loss[((Output[P], Output[P]), Output[T]), L] =
-    helios.learn.pdt_loss("Loss/PDT", sliding_window, temp, target_dist)
+    helios.learn.pdt_loss("Loss/PDT", sliding_window)
 
   // Utilities for computing CDT model stability.
 

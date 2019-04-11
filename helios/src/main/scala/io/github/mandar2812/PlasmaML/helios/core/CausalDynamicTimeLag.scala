@@ -567,9 +567,7 @@ P: TF: IsFloatOrDouble,
 T: TF: IsNumeric,
 L: TF : IsFloatOrDouble](
   override val name: String,
-  size_causal_window: Int,
-  temperature: Double = 1.0,
-  target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann) extends
+  size_causal_window: Int) extends
   Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
@@ -593,22 +591,7 @@ L: TF : IsFloatOrDouble](
       trainable = false
     )
 
-    val target_prob = target_distribution match {
-      case CausalDynamicTimeLag.Boltzmann => model_errors_sq
-        .multiply(Tensor(-1).toOutput.castTo[P])
-        .divide(Tensor(temperature).castTo[P])
-        .softmax()
-
-      case CausalDynamicTimeLag.Uniform => dtf.tensor_f64(
-        1, size_causal_window)(
-        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*
-      ).toOutput.castTo[P]
-
-      case _ => model_errors_sq
-        .multiply(Tensor(-1).toOutput.castTo[P])
-        .divide(Tensor(temperature).castTo[P])
-        .softmax()
-    }
+    val target_prob = prob.mean(axes = 0)
     
     val n   = tf.constant(Tensor(size_causal_window).reshape(Shape()).castTo[P], Shape(), "n")
 
@@ -616,7 +599,7 @@ L: TF : IsFloatOrDouble](
     
     val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
 
-    val lambda = tf.constant(Tensor(0.9).reshape(Shape()).castTo[P], Shape(), "lambda")
+    val lambda = tf.constant(Tensor(0.995).reshape(Shape()).castTo[P], Shape(), "lambda")
 
     val s = tf.variable[P](
       "s",
@@ -642,7 +625,7 @@ L: TF : IsFloatOrDouble](
     
 
     //Update base line variance
-    s0.assign(s0*lambda + model_errors_sq.mean()*(one - lambda))
+    s0.assign(s0/two + model_errors_sq.mean()/two)
 
     val un_p = target_prob * (
       tf.exp(
@@ -653,7 +636,7 @@ L: TF : IsFloatOrDouble](
     //Calculate the saddle point probability
     val p = un_p / un_p.sum(axes = 1, keepDims = true)
 
-    val prior_term = divergence(prob, p)
+    val prior_term = divergence(prob, target_prob)
 
     val loss = model_errors_sq
       .multiply(prob * (one + alpha))
