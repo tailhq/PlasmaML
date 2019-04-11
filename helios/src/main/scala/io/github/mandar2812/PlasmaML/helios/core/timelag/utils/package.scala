@@ -716,19 +716,21 @@ package object utils {
     it: Int,
     epochFlag: Boolean,
     num_data: Int,
-    batch_size: Int
+    batch_size: Int, 
+    freq: Int = 4,
+    freq_checkpoint: Int = 1
   ): Set[Hook] =
     if (epochFlag) {
 
       val epochSize = num_data / batch_size
       dtflearn.model._train_hooks(
         p,
-        it * epochSize / 3,
-        it * epochSize / 3,
-        it * epochSize
+        it * epochSize / freq,
+        it * epochSize / freq,
+        it * epochSize / freq_checkpoint
       )
     } else {
-      dtflearn.model._train_hooks(p, it / 4, it / 4, it/4)
+      dtflearn.model._train_hooks(p, it / freq, it / freq, it / freq_checkpoint)
     }
 
   /**

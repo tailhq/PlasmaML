@@ -1299,7 +1299,7 @@ package object timelag {
           data_processing = data_ops,
           optimizer = optimizer,
           stopCriteria = stop_condition_test,
-          trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch)))
+          trainHooks = Some(get_train_hooks(tf_summary_dir, iterations, epochFlag, data_size, miniBatch, 4, 4)))
 
 
       val dTypeTag = TF[T]

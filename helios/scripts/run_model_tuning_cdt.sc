@@ -179,7 +179,7 @@ def apply(
     s0, c1, c2
   )
 
-  val fitness_to_scalar = DataPipe[Seq[Tensor[Float]], Double](s => s(1).scalar.toDouble/s(0).scalar.toDouble)
+  val fitness_to_scalar = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum)
 
   val dataset: timelag.utils.TLDATA[Double] =
     timelag.utils.generate_data[Double](

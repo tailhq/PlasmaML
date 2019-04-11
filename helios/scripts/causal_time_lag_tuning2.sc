@@ -17,7 +17,7 @@ val exp_set2 = tuning_exp2.main(
   noiserot = 0.001,
   alpha = 0.02,
   train_test_separate = true,
-  num_neurons = Seq(40, 40, 20),
+  num_neurons = Seq(40, 40, 40, 40),
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, i),
   iterations = 10000,
   iterations_tuning = 1000,
