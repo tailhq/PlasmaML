@@ -708,13 +708,12 @@ case class ProbabilisticDynamicTimeLag[
   T: TF: IsNumeric,
   L: TF: IsFloatOrDouble
 ](override val name: String,
+  error_var: Double, 
+  specificity: Double,
   size_causal_window: Int)
     extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
-
-  //private val divergence: CausalDynamicTimeLag.Divergence =
-  //CausalDynamicTimeLag.KullbackLeibler
 
   override def forwardWithoutContext(
     input: ((Output[P], Output[P]), Output[T])
@@ -728,12 +727,6 @@ case class ProbabilisticDynamicTimeLag[
 
     val model_errors_sq = preds.subtract(targets.castTo[P]).square
 
-    val s0 = tf.variable[P](
-      "s0",
-      Shape(),
-      tf.OnesInitializer,
-      trainable = false
-    )
 
     val n = tf.constant(
       Tensor(size_causal_window).reshape(Shape()).castTo[P],
@@ -745,32 +738,12 @@ case class ProbabilisticDynamicTimeLag[
 
     val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
 
+    val alpha = tf.constant(Tensor(specificity).reshape(Shape()).castTo[P], Shape(), "alpha")
+    val s     = tf.constant(Tensor(error_var).reshape(Shape()).castTo[P], Shape(), "s")
+
     val lambda =
       tf.constant(Tensor(0.995).reshape(Shape()).castTo[P], Shape(), "lambda")
 
-    val s = tf.variable[P](
-      "s",
-      Shape(),
-      tf.OnesInitializer,
-      trainable = false
-    )
-
-    val c1 = tf.variable[P](
-      "c1",
-      Shape(),
-      tf.OnesInitializer,
-      trainable = false
-    )
-
-    val alpha = tf.variable[P](
-      "alpha",
-      Shape(),
-      tf.RandomUniformInitializer(),
-      trainable = false
-    )
-
-    //Update base line variance
-    s0.assign(s0 / two + model_errors_sq.mean() / two)
 
     val un_p = prob * (
       tf.exp(
@@ -780,21 +753,6 @@ case class ProbabilisticDynamicTimeLag[
 
     //Calculate the saddle point probability
     val p = un_p / un_p.sum(axes = 1, keepDims = true)
-
-    //Update C1, using averaging
-    c1.assign(
-      p.multiply(model_errors_sq)
-        .sum(axes = 1)
-        .mean() / s0
-    )
-
-    //Update error weight/model variance
-    s.assign(/* s * lambda +  */s0 * (n - c1) /* * (one - lambda) */ / (n - one))
-
-    //Update alpha/specificity
-    alpha.assign(
-      /* alpha * lambda +  */(n / (n - one)) * (one - c1) /* * (one - lambda)  *// c1
-    )
 
     val log_partition_function = tf.log(
       (prob * tf.exp(

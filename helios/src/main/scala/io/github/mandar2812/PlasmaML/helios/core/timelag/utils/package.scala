@@ -844,11 +844,10 @@ package object utils {
     T: TF: IsNumeric: IsNotQuantized,
     L: TF: IsFloatOrDouble
   ](sliding_window: Int,
-    temp: Double = 1.0,
-    target_dist: helios.learn.cdt_loss.TargetDistribution =
-      helios.learn.cdt_loss.Boltzmann
+    error_var: Double, 
+    specificity: Double,
   ): Loss[((Output[P], Output[P]), Output[T]), L] =
-    helios.learn.pdt_loss("Loss/PDT", sliding_window)
+    helios.learn.pdt_loss("Loss/PDT", error_var, specificity, sliding_window)
 
   // Utilities for computing CDT model stability.
 
