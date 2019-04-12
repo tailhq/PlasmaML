@@ -20,6 +20,32 @@ import org.json4s.jackson.Serialization.{read => read_json, write => write_json}
 import org.platanios.tensorflow.api.core.types.{IsFloatOrDouble, TF}
 import org.platanios.tensorflow.api._
 
+/**
+  * <h3>Probabilistic Dynamic Time Lag Model</h3>
+  *
+  * @param time_window The size of the time window in steps.
+  * @param modelFunction Generates a tensorflow model instance
+  *                      from hyper-parameters.
+  * @param model_config_func Generates model training configuration
+  *                          from hyper-parameters.
+  * @param hyp_params A collection of hyper-parameters.
+  * @param persistent_hyp_params The subset of the hyper-parameters which
+  *                              are not updated.
+  * @param params_to_mutable_params A one-to-one invertible mapping between
+  *                                 the loss function parameters to the
+  *                                 cannonical parameters "alpha" and "sigma_sq".
+  * @param training_data The training data collection.
+  * @param tf_data_handle_ops An instance of [[dtflearn.model.Ops]], describes
+  *                           how the data patterns should be loaded into a
+  *                           Tensorflow dataset handle.
+  * @param fitness_to_scalar A function which processes all the computed metrics
+  *                          and returns a single fitness score.
+  * @param validation_data An optional validation data collection.
+  *
+  * @param data_split_func An optional data pipeline which divides the
+  *                        training collection into a train and validation split.
+  *
+  * */
 class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
   val time_window: Int,
   override val modelFunction: TunableTFModel.ModelFunc[
@@ -56,9 +82,6 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
     In,
     Output[Double]
   ],
-  override val fitness_functions: Seq[
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]]
-  ] = Seq(PDTModel.s0, PDTModel.c1, PDTModel.c2),
   override val fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
     DataPipe[Seq[Tensor[Float]], Double](m =>
         m.map(_.scalar.toDouble).sum / m.length),
@@ -78,20 +101,6 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
       validation_data,
       data_split_func
     ) {
-
-  override protected val fitness_metrics = fitness_functions
-    .zip(PDTModel.stability_quantities)
-    .map(fitness_function => {
-      Performance[((Output[Double], Output[Double]), (In, Output[Double]))](
-        fitness_function._2,
-        DataPipe[
-          ((Output[Double], Output[Double]), (In, Output[Double])),
-          Output[Float]
-        ](
-          c => fitness_function._1(c._1, c._2._2)
-        )
-      )
-    })
 
   val mutable_params_to_metric_functions
     : DataPipe[dtflearn.tunable_tf_model.HyperParams, Seq[
