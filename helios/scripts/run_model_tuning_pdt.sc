@@ -45,7 +45,8 @@ def apply(
   hyper_optimizer: String = "gs",
   hyp_opt_iterations: Option[Int] = Some(5),
   epochFlag: Boolean = false,
-  regularization_types: Seq[String] = Seq("L2")
+  regularization_types: Seq[String] = Seq("L2"),
+  checkpointing_freq: Int = 5
 ): Seq[timelag.ExperimentResult[Double, Double, timelag.TunedModelRun[
   Double,
   Double
@@ -132,9 +133,49 @@ def apply(
           .multiply(tf.log(preds._2))
           .sum(axes = 1)
 
-        (weighted_error + entropy).castTo[Float]
+        (weighted_error + entropy).castTo[Float] 
       }
     )
+
+  val s0 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+    (outputs, targets) => {
+
+      val (preds, probs) = outputs
+
+      val sq_errors = preds.subtract(targets).square
+
+      sq_errors.mean(axes = 1).castTo[Float]
+    }
+  )
+
+  val c1 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+    (outputs, targets) => {
+      
+      val (preds, probs) = outputs
+
+      val sq_errors = preds.subtract(targets).square
+
+      probs.multiply(sq_errors).sum(axes = 1).castTo[Float]
+    }
+  )
+
+  val c2 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+    (outputs, targets) => {
+      
+      val (preds, probs) = outputs
+
+      val sq_errors = preds.subtract(targets).square
+      val c1 = probs.multiply(sq_errors).sum(axes = 1, keepDims = true)
+      probs.multiply(sq_errors.subtract(c1).square).sum(axes = 1).castTo[Float]
+    }
+  )
+
+  val stability_metrics = Seq(
+    s0, c1, c2
+  )
+
+  val fitness_to_scalar = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum)
+
 
   val dataset: timelag.utils.TLDATA[Double] =
     timelag.utils.generate_data[Double](
@@ -199,7 +240,7 @@ def apply(
       architecture,
       hyper_parameters,
       loss_func_generator,
-      fitness_function,
+      stability_metrics,
       hyper_prior,
       iterations,
       iterations_tuning,
@@ -215,7 +256,9 @@ def apply(
       hyp_opt_iterations = hyp_opt_iterations,
       epochFlag = epochFlag,
       hyp_mapping = hyp_mapping,
-      confounding_factor = c
+      confounding_factor = c,
+      eval_metric_names = Seq("s0", "c1", "c2"),
+      checkpointing_freq = checkpointing_freq
     )
 
     result.copy[Double, Double, timelag.TunedModelRun[Double, Double]](

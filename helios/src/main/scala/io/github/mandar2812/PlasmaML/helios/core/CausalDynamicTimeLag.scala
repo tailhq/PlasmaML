@@ -65,24 +65,28 @@ import org.platanios.tensorflow.api.ops.variables._
   *
   * */
 case class CausalDynamicTimeLag[
-P: TF: IsFloatOrDouble,
-T: TF: IsNumeric,
-L: TF : IsFloatOrDouble](
-  override val name: String,
+  P: TF: IsFloatOrDouble,
+  T: TF: IsNumeric,
+  L: TF: IsFloatOrDouble
+](override val name: String,
   size_causal_window: Int,
-  prior_wt: Double                                             = 1.5,
-  error_wt: Double                                             = 1.0,
-  temperature: Double                                          = 1.0,
-  specificity: Double                                          = 1.0,
-  divergence: CausalDynamicTimeLag.Divergence                  = CausalDynamicTimeLag.KullbackLeibler,
-  target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann) extends
-  Loss[((Output[P], Output[P]), Output[T]), L](name) {
+  prior_wt: Double = 1.5,
+  error_wt: Double = 1.0,
+  temperature: Double = 1.0,
+  specificity: Double = 1.0,
+  divergence: CausalDynamicTimeLag.Divergence =
+    CausalDynamicTimeLag.KullbackLeibler,
+  target_distribution: CausalDynamicTimeLag.TargetDistribution =
+    CausalDynamicTimeLag.Boltzmann)
+    extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
   override def forwardWithoutContext(
-    input: ((Output[P], Output[P]), Output[T]))(
-    implicit mode: Mode): Output[L] = {
+    input: ((Output[P], Output[P]), Output[T])
+  )(
+    implicit mode: Mode
+  ): Output[L] = {
 
     val preds   = input._1._1
     val prob    = input._1._2
@@ -91,30 +95,37 @@ L: TF : IsFloatOrDouble](
     val model_errors = preds.subtract(targets.castTo[P])
 
     val target_prob = target_distribution match {
-      case CausalDynamicTimeLag.Boltzmann => model_errors
-        .square
-        .multiply(Tensor(-1).toOutput.castTo[P])
-        .divide(Tensor(temperature).castTo[P])
-        .softmax()
+      case CausalDynamicTimeLag.Boltzmann =>
+        model_errors.square
+          .multiply(Tensor(-1).toOutput.castTo[P])
+          .divide(Tensor(temperature).castTo[P])
+          .softmax()
 
-      case CausalDynamicTimeLag.Uniform => dtf.tensor_f64(
-        1, size_causal_window)(
-        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*
-      ).toOutput.castTo[P]
+      case CausalDynamicTimeLag.Uniform =>
+        dtf
+          .tensor_f64(1, size_causal_window)(
+            (1 to size_causal_window).map(_ => 1.0 / size_causal_window): _*
+          )
+          .toOutput
+          .castTo[P]
 
-      case _ => model_errors
-        .square
-        .multiply(Tensor(-1).toOutput.castTo[P])
-        .divide(Tensor(temperature).castTo[P])
-        .softmax()
+      case _ =>
+        model_errors.square
+          .multiply(Tensor(-1).toOutput.castTo[P])
+          .divide(Tensor(temperature).castTo[P])
+          .softmax()
     }
-
 
     val prior_term = divergence(prob, target_prob)
 
     model_errors.square
-      .multiply(prob.multiply(Tensor(specificity).castTo[P]).add(Tensor(1).toOutput.castTo[P]))
-      .sum(axes = 1).mean()
+      .multiply(
+        prob
+          .multiply(Tensor(specificity).castTo[P])
+          .add(Tensor(1).toOutput.castTo[P])
+      )
+      .sum(axes = 1)
+      .mean()
       .multiply(Tensor(error_wt).toOutput.castTo[P])
       .add(prior_term.multiply(Tensor(prior_wt).castTo[P]))
       .reshape(Shape())
@@ -130,18 +141,25 @@ object CausalDynamicTimeLag {
 
   object KullbackLeibler extends Divergence {
 
-    override def apply[T: TF: IsFloatOrDouble](p: Output[T], q: Output[T]): Output[T] =
+    override def apply[T: TF: IsFloatOrDouble](
+      p: Output[T],
+      q: Output[T]
+    ): Output[T] =
       p.divide(q).log.multiply(p).sum(axes = 1).mean[Int]()
 
     override def toString: String = "KullbackLeibler"
   }
 
   object JensenShannon extends Divergence {
-    override def apply[T: TF: IsFloatOrDouble](p: Output[T], q: Output[T]): Output[T] = {
+    override def apply[T: TF: IsFloatOrDouble](
+      p: Output[T],
+      q: Output[T]
+    ): Output[T] = {
 
       val m = p.add(q).divide(Tensor(2).toOutput.castTo[T])
 
-      (KullbackLeibler(p, m) + KullbackLeibler(q, m)).divide(Tensor(2).toOutput.castTo[T])
+      (KullbackLeibler(p, m) + KullbackLeibler(q, m))
+        .divide(Tensor(2).toOutput.castTo[T])
 
     }
 
@@ -149,33 +167,57 @@ object CausalDynamicTimeLag {
   }
 
   object CrossEntropy extends Divergence {
-    override def apply[T: TF: IsFloatOrDouble](p: Output[T], q: Output[T]): Output[T] =
-      q.multiply(p.log).sum(axes = 1).multiply(Tensor(-1).toOutput.castTo[T]).mean[Int]()
+    override def apply[T: TF: IsFloatOrDouble](
+      p: Output[T],
+      q: Output[T]
+    ): Output[T] =
+      q.multiply(p.log)
+        .sum(axes = 1)
+        .multiply(Tensor(-1).toOutput.castTo[T])
+        .mean[Int]()
 
     override def toString: String = "CrossEntropy"
   }
 
   object Hellinger extends Divergence {
-    override def apply[T: TF: IsFloatOrDouble](p: Output[T], q: Output[T]): Output[T] =
-      q.sqrt.subtract(p.sqrt).square.sum(axes = 1).divide(Tensor(2).toOutput.castTo[T]).sqrt.mean[Int]()
+    override def apply[T: TF: IsFloatOrDouble](
+      p: Output[T],
+      q: Output[T]
+    ): Output[T] =
+      q.sqrt
+        .subtract(p.sqrt)
+        .square
+        .sum(axes = 1)
+        .divide(Tensor(2).toOutput.castTo[T])
+        .sqrt
+        .mean[Int]()
 
     override def toString: String = "Hellinger"
   }
 
   object L2 extends Divergence {
-    override def apply[T: TF: IsFloatOrDouble](p: Output[T], q: Output[T]): Output[T] =
-      q.subtract(p).square.sum(axes = 1).divide(Tensor(2).toOutput.castTo[T]).mean[Int]()
+    override def apply[T: TF: IsFloatOrDouble](
+      p: Output[T],
+      q: Output[T]
+    ): Output[T] =
+      q.subtract(p)
+        .square
+        .sum(axes = 1)
+        .divide(Tensor(2).toOutput.castTo[T])
+        .mean[Int]()
 
     override def toString: String = "L2"
   }
 
   object Entropy extends Divergence {
-    override def apply[T: TF: IsFloatOrDouble](p: Output[T], q: Output[T]): Output[T] =
+    override def apply[T: TF: IsFloatOrDouble](
+      p: Output[T],
+      q: Output[T]
+    ): Output[T] =
       p.log.multiply(p).multiply(Tensor(-1).castTo[T]).sum(axes = 1).mean[Int]()
 
     override def toString: String = "ShannonEntropy"
   }
-
 
   sealed trait TargetDistribution
 
@@ -191,85 +233,102 @@ object CausalDynamicTimeLag {
 
   def output_mapping[P: TF: IsFloatOrDouble](
     name: String,
-    size_causal_window: Int): Layer[Output[P], (Output[P], Output[P])] =
+    size_causal_window: Int
+  ): Layer[Output[P], (Output[P], Output[P])] =
     new Layer[Output[P], (Output[P], Output[P])](name) {
-      override val layerType: String = s"OutputWTSLoss[horizon:$size_causal_window]"
+      override val layerType: String =
+        s"OutputWTSLoss[horizon:$size_causal_window]"
 
-      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): (Output[P], Output[P]) = {
-        (input(::, 0::size_causal_window), input(::, size_causal_window::).softmax())
+      override def forwardWithoutContext(
+        input: Output[P]
+      )(
+        implicit mode: Mode
+      ): (Output[P], Output[P]) = {
+        (
+          input(::, 0 :: size_causal_window),
+          input(::, size_causal_window ::).softmax()
+        )
       }
     }
 }
 
 case class CausalDynamicTimeLagI[
-P: TF: IsFloatOrDouble,
-T: TF: IsNumeric,
-L: TF : IsFloatOrDouble](
-  override val name: String,
-  size_causal_window: Int) extends
-  Loss[(Output[P], Output[T]), L](name) {
+  P: TF: IsFloatOrDouble,
+  T: TF: IsNumeric,
+  L: TF: IsFloatOrDouble
+](override val name: String,
+  size_causal_window: Int)
+    extends Loss[(Output[P], Output[T]), L](name) {
 
   override val layerType: String = s"L2Loss[horizon:$size_causal_window]"
 
   override def forwardWithoutContext(
-    input: (Output[P], Output[T]))(
-    implicit mode: Mode): Output[L] = {
+    input: (Output[P], Output[T])
+  )(
+    implicit mode: Mode
+  ): Output[L] = {
 
-    val preds    = input._1
+    val preds = input._1
 
-    val targets  = input._2.castTo[P]
+    val targets = input._2.castTo[P]
 
     preds.subtract(targets).square.sum(axes = 1).mean[Int]().castTo[L]
   }
 }
 
-
 case class CausalDynamicTimeLagII[
-P: TF: IsFloatOrDouble,
-T: TF: IsNumeric,
-L: TF : IsFloatOrDouble](
-  override val name: String,
+  P: TF: IsFloatOrDouble,
+  T: TF: IsNumeric,
+  L: TF: IsFloatOrDouble
+](override val name: String,
   size_causal_window: Int,
   prior_wt: Double = 1.5,
   error_wt: Double = 1.0,
   temperature: Double = 1.0,
   specificity: Double = 1.0,
-  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler,
-  target_distribution: CausalDynamicTimeLag.TargetDistribution = CausalDynamicTimeLag.Boltzmann) extends
-  Loss[(Output[P], Output[P]), L](name) {
+  divergence: CausalDynamicTimeLag.Divergence =
+    CausalDynamicTimeLag.KullbackLeibler,
+  target_distribution: CausalDynamicTimeLag.TargetDistribution =
+    CausalDynamicTimeLag.Boltzmann)
+    extends Loss[(Output[P], Output[P]), L](name) {
 
   override val layerType: String = s"CTL[horizon:$size_causal_window]"
 
-  override def forwardWithoutContext(input: (Output[P], Output[P]))(implicit mode: Mode): Output[L] = {
+  override def forwardWithoutContext(
+    input: (Output[P], Output[P])
+  )(
+    implicit mode: Mode
+  ): Output[L] = {
 
-    val prob    = input._1
+    val prob = input._1
 
     val model_errors = input._2
 
     val target_prob = target_distribution match {
-      case CausalDynamicTimeLag.Boltzmann => model_errors
-        .square
-        .multiply(Tensor(-1).toOutput.castTo[P])
-        .divide(Tensor(temperature).castTo[P])
-        .softmax()
+      case CausalDynamicTimeLag.Boltzmann =>
+        model_errors.square
+          .multiply(Tensor(-1).toOutput.castTo[P])
+          .divide(Tensor(temperature).castTo[P])
+          .softmax()
 
-      case CausalDynamicTimeLag.Uniform => dtf.tensor_f64(
-        1, size_causal_window)(
-        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*
-      ).toOutput.castTo[P]
+      case CausalDynamicTimeLag.Uniform =>
+        dtf
+          .tensor_f64(1, size_causal_window)(
+            (1 to size_causal_window).map(_ => 1.0 / size_causal_window): _*
+          )
+          .toOutput
+          .castTo[P]
 
-      case _ => model_errors
-        .square
-        .multiply(Tensor(-1).toOutput.castTo[P])
-        .divide(Tensor(temperature).castTo[P])
-        .softmax()
+      case _ =>
+        model_errors.square
+          .multiply(Tensor(-1).toOutput.castTo[P])
+          .divide(Tensor(temperature).castTo[P])
+          .softmax()
     }
-
 
     val prior_term = divergence(prob, target_prob)
 
-    model_errors
-      .square
+    model_errors.square
       .multiply(prob.multiply(Tensor(specificity).toOutput.castTo[P]))
       .sum(axes = 1)
       .mean[Int]()
@@ -281,11 +340,17 @@ L: TF : IsFloatOrDouble](
 }
 
 object CausalDynamicTimeLagII {
-  def output_mapping[P: TF: IsFloatOrDouble](name: String): Layer[Output[P], Output[P]] =
+  def output_mapping[P: TF: IsFloatOrDouble](
+    name: String
+  ): Layer[Output[P], Output[P]] =
     new Layer[Output[P], Output[P]](name) {
       override val layerType: String = s"ProbCDT"
 
-      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): Output[P] = {
+      override def forwardWithoutContext(
+        input: Output[P]
+      )(
+        implicit mode: Mode
+      ): Output[P] = {
         input.softmax()
       }
     }
@@ -293,92 +358,112 @@ object CausalDynamicTimeLagII {
 
 @Experimental
 case class CausalDynamicTimeLagSO[
-P: TF: IsFloatOrDouble,
-T: TF: IsNumeric,
-L: TF : IsFloatOrDouble](
-  override val name: String,
+  P: TF: IsFloatOrDouble,
+  T: TF: IsNumeric,
+  L: TF: IsFloatOrDouble
+](override val name: String,
   size_causal_window: Int,
   prior_wt: Double = 1.5,
   error_wt: Double = 1.0,
   temperature: Double = 1.0,
   specificity: Double = 1.0,
-  divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler) extends
-  Loss[((Output[P], Output[P]), Output[T]), L](name) {
+  divergence: CausalDynamicTimeLag.Divergence =
+    CausalDynamicTimeLag.KullbackLeibler)
+    extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"WTSLossSO[horizon:$size_causal_window]"
 
   override def forwardWithoutContext(
-    input: ((Output[P], Output[P]), Output[T]))(
-    implicit mode: Mode): Output[L] = {
+    input: ((Output[P], Output[P]), Output[T])
+  )(
+    implicit mode: Mode
+  ): Output[L] = {
 
-    val preds               = input._1._1
-    val repeated_preds      = tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
-    val prob                = input._1._2
-    val targets             = input._2.castTo[P]
+    val preds = input._1._1
+    val repeated_preds =
+      tf.stack(Seq.fill(size_causal_window)(preds), axis = -1)
+    val prob    = input._1._2
+    val targets = input._2.castTo[P]
 
     val model_errors = repeated_preds.subtract(targets)
 
     val target_prob = divergence match {
-      case CausalDynamicTimeLag.Hellinger => model_errors
-        .square.multiply(Tensor(-1).toOutput.castTo[P])
-        .divide(Tensor(temperature).toOutput.castTo[P])
-        .softmax()
-      case _ => dtf.tensor_f64(
-        1, size_causal_window)(
-        (1 to size_causal_window).map(_ => 1.0/size_causal_window):_*).toOutput.castTo[P]
+      case CausalDynamicTimeLag.Hellinger =>
+        model_errors.square
+          .multiply(Tensor(-1).toOutput.castTo[P])
+          .divide(Tensor(temperature).toOutput.castTo[P])
+          .softmax()
+      case _ =>
+        dtf
+          .tensor_f64(1, size_causal_window)(
+            (1 to size_causal_window).map(_ => 1.0 / size_causal_window): _*
+          )
+          .toOutput
+          .castTo[P]
     }
-
 
     val prior_term = divergence(prob, target_prob)
 
     model_errors.square
       .multiply(prob.multiply(Tensor(specificity).toOutput.castTo[P]))
       .add(Tensor(1).toOutput.castTo[P])
-      .sum(axes = 1).mean[Int]()
+      .sum(axes = 1)
+      .mean[Int]()
       .multiply(Tensor(error_wt).toOutput.castTo[P])
       .add(prior_term.multiply(Tensor(prior_wt).toOutput.castTo[P]))
       .reshape(Shape())
       .castTo[L]
   }
 }
-
-
 @Experimental
 object WeightedTimeSeriesLossBeta {
   def output_mapping[P: TF: IsNotQuantized: IsFloatOrDouble](
     name: String,
-    size_causal_window: Int): Layer[Output[P], (Output[P], Output[P])] =
+    size_causal_window: Int
+  ): Layer[Output[P], (Output[P], Output[P])] =
     new Layer[Output[P], (Output[P], Output[P])](name) {
-      override val layerType: String = s"OutputWTSLossBeta[horizon:$size_causal_window]"
+      override val layerType: String =
+        s"OutputWTSLossBeta[horizon:$size_causal_window]"
 
-      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): (Output[P], Output[P]) = {
-        val preds = input(::, 0::size_causal_window)
-        val alpha_beta = input(::, size_causal_window::).square.add(Tensor(1.0).castTo[P])
-
+      override def forwardWithoutContext(
+        input: Output[P]
+      )(
+        implicit mode: Mode
+      ): (Output[P], Output[P]) = {
+        val preds = input(::, 0 :: size_causal_window)
+        val alpha_beta =
+          input(::, size_causal_window ::).square.add(Tensor(1.0).castTo[P])
 
         val (alpha, beta) = (alpha_beta(::, 0), alpha_beta(::, 1))
 
         val (stacked_alpha, stacked_beta) = (
           tf.stack(Seq.fill(size_causal_window)(alpha), axis = 1),
-          tf.stack(Seq.fill(size_causal_window)(beta),  axis = 1))
+          tf.stack(Seq.fill(size_causal_window)(beta), axis = 1)
+        )
 
-        val index_times   = Tensor(0 until size_causal_window).reshape(Shape(1, size_causal_window)).toOutput.castTo[P]
+        val index_times = Tensor(0 until size_causal_window)
+          .reshape(Shape(1, size_causal_window))
+          .toOutput
+          .castTo[P]
 
-        val n             = Tensor(size_causal_window - 1.0).toOutput.castTo[P]
-        val n_minus_t     = index_times.castTo[P].multiply(Tensor(-1.0).toOutput.castTo[P]).add(n)
+        val n = Tensor(size_causal_window - 1.0).toOutput.castTo[P]
+        val n_minus_t =
+          index_times.castTo[P].multiply(Tensor(-1.0).toOutput.castTo[P]).add(n)
 
-        val norm_const    = stacked_alpha.logGamma
+        val norm_const = stacked_alpha.logGamma
           .add(stacked_beta.logGamma)
           .subtract(stacked_alpha.add(stacked_beta).logGamma)
 
-        val prob          = index_times
+        val prob = index_times
           .castTo[P]
-          .add(stacked_alpha).logGamma
+          .add(stacked_alpha)
+          .logGamma
           .add(n_minus_t.add(stacked_beta).logGamma)
           .add(n.add(Tensor(1.0).toOutput.castTo[P]).logGamma)
           .subtract(index_times.add(Tensor(1.0).toOutput.castTo[P]).logGamma)
           .subtract(n_minus_t.add(Tensor(1.0).toOutput.castTo[P]).logGamma)
-          .subtract(norm_const).exp
+          .subtract(norm_const)
+          .exp
 
         (preds, prob)
       }
@@ -387,28 +472,43 @@ object WeightedTimeSeriesLossBeta {
 
 @Experimental
 object WeightedTimeSeriesLossPoisson {
-  def output_mapping[P: TF: IsFloatOrDouble](name: String, size_causal_window: Int): Layer[Output[P], (Output[P], Output[P])] =
+  def output_mapping[P: TF: IsFloatOrDouble](
+    name: String,
+    size_causal_window: Int
+  ): Layer[Output[P], (Output[P], Output[P])] =
     new Layer[Output[P], (Output[P], Output[P])](name) {
-      override val layerType: String = s"OutputPoissonWTSLoss[horizon:$size_causal_window]"
+      override val layerType: String =
+        s"OutputPoissonWTSLoss[horizon:$size_causal_window]"
 
-      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): (Output[P], Output[P]) = {
+      override def forwardWithoutContext(
+        input: Output[P]
+      )(
+        implicit mode: Mode
+      ): (Output[P], Output[P]) = {
 
-        val preds = input(::, 0::size_causal_window)
+        val preds = input(::, 0 :: size_causal_window)
 
         val lambda = input(::, size_causal_window).softplus
 
-        val stacked_lambda = tf.stack(Seq.fill(size_causal_window)(lambda), axis = 1)
+        val stacked_lambda =
+          tf.stack(Seq.fill(size_causal_window)(lambda), axis = 1)
 
-        val index_times    = Tensor(0 until size_causal_window).reshape(Shape(1, size_causal_window)).castTo[P].toOutput
+        val index_times = Tensor(0 until size_causal_window)
+          .reshape(Shape(1, size_causal_window))
+          .castTo[P]
+          .toOutput
 
-        val unsc_prob      = index_times.multiply(stacked_lambda.logGamma)
+        val unsc_prob = index_times
+          .multiply(stacked_lambda.logGamma)
           .subtract(index_times.add(Tensor(1.0).castTo[P]).logGamma)
           .subtract(stacked_lambda)
           .exp
 
-        val norm_const     = unsc_prob.sum(axes = 1)
+        val norm_const = unsc_prob.sum(axes = 1)
 
-        val prob           = unsc_prob.divide(tf.stack(Seq.fill(size_causal_window)(norm_const), axis = 1))
+        val prob = unsc_prob.divide(
+          tf.stack(Seq.fill(size_causal_window)(norm_const), axis = 1)
+        )
 
         (preds, prob)
       }
@@ -417,96 +517,123 @@ object WeightedTimeSeriesLossPoisson {
 
 @Experimental
 object WeightedTimeSeriesLossGaussian {
-  def output_mapping[P: TF: IsFloatOrDouble](name: String, size_causal_window: Int): Layer[Output[P], (Output[P], Output[P])] =
+  def output_mapping[P: TF: IsFloatOrDouble](
+    name: String,
+    size_causal_window: Int
+  ): Layer[Output[P], (Output[P], Output[P])] =
     new Layer[Output[P], (Output[P], Output[P])](name) {
-      override val layerType: String = s"OutputGaussianWTSLoss[horizon:$size_causal_window]"
+      override val layerType: String =
+        s"OutputGaussianWTSLoss[horizon:$size_causal_window]"
 
-      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): (Output[P], Output[P]) = {
+      override def forwardWithoutContext(
+        input: Output[P]
+      )(
+        implicit mode: Mode
+      ): (Output[P], Output[P]) = {
 
-        val preds = input(::, 0::size_causal_window)
+        val preds = input(::, 0 :: size_causal_window)
 
         val mean = input(::, size_causal_window)
 
         //Precision is 1/sigma^2
         val precision = input(::, size_causal_window + 1).square
 
-        val stacked_mean = tf.stack(Seq.fill(size_causal_window)(mean), axis = 1)
-        val stacked_pre  = tf.stack(Seq.fill(size_causal_window)(precision), axis = 1)
+        val stacked_mean =
+          tf.stack(Seq.fill(size_causal_window)(mean), axis = 1)
+        val stacked_pre =
+          tf.stack(Seq.fill(size_causal_window)(precision), axis = 1)
 
-        val index_times    = Tensor(0 until size_causal_window).reshape(Shape(1, size_causal_window)).castTo[P].toOutput
+        val index_times = Tensor(0 until size_causal_window)
+          .reshape(Shape(1, size_causal_window))
+          .castTo[P]
+          .toOutput
 
-        val unsc_prob      = index_times.subtract(stacked_mean).square.multiply(Tensor(-0.5).castTo[P]).multiply(stacked_pre).exp
+        val unsc_prob = index_times
+          .subtract(stacked_mean)
+          .square
+          .multiply(Tensor(-0.5).castTo[P])
+          .multiply(stacked_pre)
+          .exp
 
-        val norm_const     = unsc_prob.sum(axes = 1)
+        val norm_const = unsc_prob.sum(axes = 1)
 
-        val prob           = unsc_prob.divide(tf.stack(Seq.fill(size_causal_window)(norm_const), axis = 1))
+        val prob = unsc_prob.divide(
+          tf.stack(Seq.fill(size_causal_window)(norm_const), axis = 1)
+        )
 
         (preds, prob)
       }
     }
 }
 
-
 object CausalDynamicTimeLagSO {
   def output_mapping[P: TF: IsFloatOrDouble](
     name: String,
-    size_causal_window: Int): Layer[Output[P], (Output[P], Output[P])] =
+    size_causal_window: Int
+  ): Layer[Output[P], (Output[P], Output[P])] =
     new Layer[Output[P], (Output[P], Output[P])](name) {
-      override val layerType: String = s"OutputWTSLossSO[horizon:$size_causal_window]"
+      override val layerType: String =
+        s"OutputWTSLossSO[horizon:$size_causal_window]"
 
-      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): (Output[P], Output[P]) = {
-        (input(::, 0), input(::, 1::).softmax())
+      override def forwardWithoutContext(
+        input: Output[P]
+      )(
+        implicit mode: Mode
+      ): (Output[P], Output[P]) = {
+        (input(::, 0), input(::, 1 ::).softmax())
       }
     }
 }
-
-
 @Experimental
 case class MOGrangerLoss[
-P: TF: IsFloatOrDouble,
-T: TF: IsNumeric,
-L: TF : IsFloatOrDouble](
-  override val name: String,
+  P: TF: IsFloatOrDouble,
+  T: TF: IsNumeric,
+  L: TF: IsFloatOrDouble
+](override val name: String,
   size_causal_window: Int,
   error_exponent: Double = 2.0,
   weight_error: Double,
-  scale_lags: Boolean = true) extends
-  Loss[((Output[P], Output[P]), Output[T]), L](name) {
+  scale_lags: Boolean = true)
+    extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType = s"MOGrangerLoss[horizon:$size_causal_window]"
 
-  private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+  private[this] val scaling = Tensor(size_causal_window.toDouble - 1d)
 
   override def forwardWithoutContext(
-    input: ((Output[P], Output[P]), Output[T]))(
-    implicit mode: Mode): Output[L] = {
+    input: ((Output[P], Output[P]), Output[T])
+  )(
+    implicit mode: Mode
+  ): Output[L] = {
 
     val alpha = Tensor(1.0).toOutput.castTo[P]
-    val nu = Tensor(1.0).toOutput.castTo[P]
-    val q = Tensor(1.0).toOutput.castTo[P]
+    val nu    = Tensor(1.0).toOutput.castTo[P]
+    val q     = Tensor(1.0).toOutput.castTo[P]
 
+    val predictions = input._1._1
+    val timelags    = input._1._2
 
-    val predictions    = input._1._1
-    val timelags       = input._1._2
+    val targets = input._2
 
-    val targets        = input._2
-
-    val repeated_times = tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
+    val repeated_times =
+      tf.stack(Seq.fill(size_causal_window)(timelags), axis = -1)
 
     val index_times: Output[P] = Tensor(
       (0 until size_causal_window).map(_.toDouble)
     ).reshape(
-      Shape(size_causal_window)
-    ).toOutput.castTo[P]
+        Shape(size_causal_window)
+      )
+      .toOutput
+      .castTo[P]
 
     val error_tensor = predictions.subtract(targets.castTo[P])
 
-    val convolution_kernel_temporal = error_tensor
-      .abs.pow(Tensor(error_exponent).toOutput.castTo[P])
+    val convolution_kernel_temporal = error_tensor.abs
+      .pow(Tensor(error_exponent).toOutput.castTo[P])
       .l2Normalize(axes = 1)
       .square
       .subtract(Tensor(1.0).toOutput.castTo[P])
-      .multiply(Tensor(-1/2.0).toOutput.castTo[P])
+      .multiply(Tensor(-1 / 2.0).toOutput.castTo[P])
 
     val weighted_temporal_loss_tensor = repeated_times
       .subtract(index_times)
@@ -516,10 +643,9 @@ L: TF : IsFloatOrDouble](
       .divide(convolution_kernel_temporal.sum(axes = 1))
       .mean[Int]()
 
-    error_tensor
-      .square
+    error_tensor.square
       .sum(axes = 1)
-      .multiply(Tensor(0.5*weight_error).toOutput.castTo[P])
+      .multiply(Tensor(0.5 * weight_error).toOutput.castTo[P])
       .mean[Int]()
       .add(weighted_temporal_loss_tensor)
       .reshape(Shape())
@@ -532,58 +658,76 @@ object MOGrangerLoss {
   def output_mapping[P: TF: IsFloatOrDouble](
     name: String,
     size_causal_window: Int,
-    scale_lags: Boolean = true): Layer[Output[P], (Output[P], Output[P])] =
+    scale_lags: Boolean = true
+  ): Layer[Output[P], (Output[P], Output[P])] =
     new Layer[Output[P], (Output[P], Output[P])](name) {
 
-      override val layerType: String = s"OutputMOGrangerLoss[horizon:$size_causal_window]"
+      override val layerType: String =
+        s"OutputMOGrangerLoss[horizon:$size_causal_window]"
 
-      private[this] val scaling = Tensor(size_causal_window.toDouble-1d)
+      private[this] val scaling = Tensor(size_causal_window.toDouble - 1d)
 
       val alpha = Tensor(1.0).toOutput.castTo[P]
       val nu    = Tensor(1.0).toOutput.castTo[P]
       val q     = Tensor(1.0).toOutput.castTo[P]
 
-      override def forwardWithoutContext(input: Output[P])(implicit mode: Mode): (Output[P], Output[P]) = {
+      override def forwardWithoutContext(
+        input: Output[P]
+      )(
+        implicit mode: Mode
+      ): (Output[P], Output[P]) = {
 
         val lags = if (scale_lags) {
           input(::, -1)
-            .multiply(alpha.add(Tensor(1E-6).toOutput.castTo[P]).square.multiply(Tensor(-1.0).toOutput.castTo[P]))
+            .multiply(
+              alpha
+                .add(Tensor(1e-6).toOutput.castTo[P])
+                .square
+                .multiply(Tensor(-1.0).toOutput.castTo[P])
+            )
             .exp
             .multiply(q.square)
             .add(Tensor(1.0).toOutput.castTo[P])
-            .pow(nu.square.pow(Tensor(-1.0).toOutput.castTo[P]).multiply(Tensor(-1.0).toOutput.castTo[P]))
+            .pow(
+              nu.square
+                .pow(Tensor(-1.0).toOutput.castTo[P])
+                .multiply(Tensor(-1.0).toOutput.castTo[P])
+            )
             .multiply(Tensor(scaling).toOutput.castTo[P])
         } else {
           input(::, -1)
         }
 
-        (input(::, 0::size_causal_window), lags)
+        (input(::, 0 :: size_causal_window), lags)
       }
     }
 }
 
 case class ProbabilisticDynamicTimeLag[
-P: TF: IsFloatOrDouble,
-T: TF: IsNumeric,
-L: TF : IsFloatOrDouble](
-  override val name: String,
-  size_causal_window: Int) extends
-  Loss[((Output[P], Output[P]), Output[T]), L](name) {
+  P: TF: IsFloatOrDouble,
+  T: TF: IsNumeric,
+  L: TF: IsFloatOrDouble
+](override val name: String,
+  size_causal_window: Int)
+    extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
 
   override val layerType: String = s"WTSLoss[horizon:$size_causal_window]"
 
-
-  private val divergence: CausalDynamicTimeLag.Divergence = CausalDynamicTimeLag.KullbackLeibler
+  //private val divergence: CausalDynamicTimeLag.Divergence =
+  //CausalDynamicTimeLag.KullbackLeibler
 
   override def forwardWithoutContext(
-    input: ((Output[P], Output[P]), Output[T]))(
-    implicit mode: Mode): Output[L] = {
+    input: ((Output[P], Output[P]), Output[T])
+  )(
+    implicit mode: Mode
+  ): Output[L] = {
 
     val preds   = input._1._1
     val prob    = input._1._2
     val targets = input._2
-  
+
     val model_errors_sq = preds.subtract(targets.castTo[P]).square
+
     val s0 = tf.variable[P](
       "s0",
       Shape(),
@@ -591,15 +735,18 @@ L: TF : IsFloatOrDouble](
       trainable = false
     )
 
-    val target_prob = prob.mean(axes = 0)
-    
-    val n   = tf.constant(Tensor(size_causal_window).reshape(Shape()).castTo[P], Shape(), "n")
+    val n = tf.constant(
+      Tensor(size_causal_window).reshape(Shape()).castTo[P],
+      Shape(),
+      "n"
+    )
 
     val one = tf.constant(Tensor(1d).reshape(Shape()).castTo[P], Shape(), "one")
-    
+
     val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
 
-    val lambda = tf.constant(Tensor(0.995).reshape(Shape()).castTo[P], Shape(), "lambda")
+    val lambda =
+      tf.constant(Tensor(0.995).reshape(Shape()).castTo[P], Shape(), "lambda")
 
     val s = tf.variable[P](
       "s",
@@ -607,7 +754,7 @@ L: TF : IsFloatOrDouble](
       tf.OnesInitializer,
       trainable = false
     )
-    
+
     val c1 = tf.variable[P](
       "c1",
       Shape(),
@@ -622,44 +769,42 @@ L: TF : IsFloatOrDouble](
       trainable = false
     )
 
-    
-
     //Update base line variance
-    s0.assign(s0/two + model_errors_sq.mean()/two)
+    s0.assign(s0 / two + model_errors_sq.mean() / two)
 
-    val un_p = target_prob * (
+    val un_p = prob * (
       tf.exp(
-        tf.log(one + alpha)/two - (model_errors_sq*alpha)/(two*s)
+        tf.log(one + alpha) / two - (model_errors_sq * alpha) / (two * s)
       )
     )
 
     //Calculate the saddle point probability
     val p = un_p / un_p.sum(axes = 1, keepDims = true)
 
-    val prior_term = divergence(prob, target_prob)
-
-    val loss = model_errors_sq
-      .multiply(prob * (one + alpha))
-      .sum(axes = 1)
-      .mean()
-      .divide(s * two)
-      .add(prior_term)
-      .add(s.log*n/two)
-      .subtract(tf.log(one + alpha)/two)
-      .reshape(Shape())
-      .castTo[L]
-    
     //Update C1, using averaging
     c1.assign(
-      c1*lambda + p.multiply(model_errors_sq).sum(axes = 1).mean()*(one - lambda)/s0
+      p.multiply(model_errors_sq)
+        .sum(axes = 1)
+        .mean() / s0
     )
 
     //Update error weight/model variance
-    s.assign(s*lambda + s0*(n - c1)*(one - lambda)/(n - one))
-    
-    //Update alpha/specificity
-    alpha.assign(alpha*lambda + (n/(n - one))*(one - c1)*(one - lambda)/c1)
+    s.assign(/* s * lambda +  */s0 * (n - c1) /* * (one - lambda) */ / (n - one))
 
-    loss
+    //Update alpha/specificity
+    alpha.assign(
+      /* alpha * lambda +  */(n / (n - one)) * (one - c1) /* * (one - lambda)  *// c1
+    )
+
+    val log_partition_function = tf.log(
+      (prob * tf.exp(
+        tf.log(one + alpha) / two - model_errors_sq * alpha / (two * s)
+      )).sum(axes = 1)
+    )
+
+    (log_partition_function - model_errors_sq.sum(axes = 1) / (two * s))
+      .mean()
+      .subtract(n * tf.log(s) / two)
+      .castTo[L]
   }
 }
