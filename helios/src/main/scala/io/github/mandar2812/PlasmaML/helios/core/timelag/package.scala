@@ -76,7 +76,9 @@ package object timelag {
     override type DATA = TFDataSet[(Tensor[T], Tensor[T])]
 
     override type MODEL =
-      TFModel[Output[T], Output[T], (Output[T], Output[T]), L, Tensor[T], DataType[T], Shape, Tensor[
+      TFModel[Output[T], Output[T], (Output[T], Output[T]), L, Tensor[T], DataType[
+        T
+      ], Shape, Tensor[
         T
       ], DataType[T], Shape, (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)]
 
@@ -138,9 +140,10 @@ package object timelag {
     override type MODEL =
       dtflearn.SupervisedModel[Output[T], Output[T], Output[T], Output[T], L]
 
-    override type ESTIMATOR = dtflearn.SupEstimatorTF[Output[T], Output[T], Output[
-      T
-    ], Output[T], L, (Output[T], (Output[T], Output[T]))]
+    override type ESTIMATOR =
+      dtflearn.SupEstimatorTF[Output[T], Output[T], Output[
+        T
+      ], Output[T], L, (Output[T], (Output[T], Output[T]))]
   }
 
   case class ExperimentType[T: TF: IsFloatOrDouble](
@@ -1451,6 +1454,438 @@ package object timelag {
     *
     * */
   def run_exp_hyp[T: TF: IsFloatOrDouble, L: TF: IsFloatOrDouble](
+    dataset: (TLDATA[T], TLDATA[T]),
+    architecture: Layer[Output[T], (Output[T], Output[T])],
+    hyper_params: List[String],
+    loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[
+      ((Output[T], Output[T]), Output[T]),
+      Output[L]
+    ],
+    fitness_func: Seq[
+      DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]]
+    ],
+    hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[
+      Double
+    ]]],
+    iterations: Int = 150000,
+    iterations_tuning: Int = 20000,
+    optimizer: Optimizer = tf.train.AdaDelta(0.01f),
+    miniBatch: Int = 512,
+    sum_dir_prefix: String = "",
+    mo_flag: Boolean = false,
+    prob_timelags: Boolean = false,
+    timelag_pred_strategy: String = "mode",
+    summaries_top_dir: Path = home / 'tmp,
+    num_samples: Int = 20,
+    hyper_optimizer: String = "gs",
+    hyp_opt_iterations: Option[Int] = Some(5),
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
+    epochFlag: Boolean = false,
+    confounding_factor: Double = 0d,
+    fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
+      DataPipe[Seq[Tensor[Float]], Double](s =>
+          s.map(_.scalar.toDouble).sum / s.length),
+    eval_metric_names: Seq[String] = Seq("s0", "c1", "c2"),
+    checkpointing_freq: Int = 5
+  ): ExperimentResult[T, L, TunedModelRun[T, L]] = {
+
+    val (_, collated_data): TLDATA[T] =
+      confound_data(dataset._1, confounding_factor)
+    val (_, collated_data_test): TLDATA[T] =
+      confound_data(dataset._2, confounding_factor)
+
+    val data_size          = collated_data.toSeq.length
+    val causal_window      = collated_data.head._2._2.length
+    val input_shape        = collated_data.head._2._1.shape
+    val actual_input_shape = dataset._1._1.head._1._2.shape
+    val num_test           = collated_data_test.length
+
+    type SC_DATA =
+      (helios.data.TF_DATA[T, T], (GaussianScalerTF[T], GaussianScalerTF[T]))
+
+    val model_train_eval = DataPipe(
+      (data_and_scales: (SC_DATA, (Tensor[T], Tensor[T]))) => {
+
+        val ((tfdata, scalers), (train_time_lags, test_time_lags)) =
+          data_and_scales
+
+        val dt = DateTime.now()
+
+        val summary_dir_index =
+          if (mo_flag)
+            sum_dir_prefix + "_timelag_mo_" + dt.toString("YYYY-MM-dd-HH-mm-ss")
+          else sum_dir_prefix + "_timelag_" + dt.toString("YYYY-MM-dd-HH-mm-ss")
+
+        val tf_summary_dir = summaries_top_dir / summary_dir_index
+
+        val stop_condition_tuning = get_stop_condition(
+          iterations_tuning,
+          0.05,
+          epochFlag,
+          data_size,
+          miniBatch
+        )
+
+        val stop_condition_test =
+          get_stop_condition(iterations, 0.01, epochFlag, data_size, miniBatch)
+
+        val stackOperationP =
+          DataPipe[Iterable[(Tensor[T], Tensor[T])], (Tensor[T], Tensor[T])](
+            bat => {
+              val (bat1, bat2) = bat.unzip
+
+              (
+                tfi.concatenate(bat1.toSeq, axis = 0),
+                tfi.concatenate(bat2.toSeq, axis = 0)
+              )
+            }
+          )
+
+        val data_ops = dtflearn.model.data_ops[Output[T], Output[T]](
+          shuffleBuffer = 10,
+          batchSize = miniBatch,
+          prefetchSize = 10
+        )
+
+        val tf_handle_ops = dtflearn.model.tf_data_handle_ops[
+          (Tensor[T], Tensor[T]),
+          Tensor[T],
+          Tensor[T],
+          (Tensor[T], Tensor[T]),
+          Output[T],
+          Output[T]
+        ](
+          patternToTensor = Some(identityPipe[(Tensor[T], Tensor[T])]),
+          concatOpI = Some(dtfpipe.EagerStack[T]()),
+          concatOpT = Some(dtfpipe.EagerStack[T]()),
+          concatOpO = Some(stackOperationP)
+        )
+
+        val train_config_tuning =
+          dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
+            DataPipe(
+              (p: Path) =>
+                dtflearn.model.trainConfig[Output[T], Output[T]](
+                  p,
+                  data_ops,
+                  optimizer,
+                  stop_condition_tuning,
+                  Some(
+                    get_train_hooks(
+                      p,
+                      iterations_tuning,
+                      epochFlag,
+                      data_size,
+                      miniBatch
+                    )
+                  )
+                )
+            )
+
+        val train_config_test =
+          dtflearn.model.trainConfig(
+            summaryDir = tf_summary_dir,
+            data_processing = data_ops,
+            optimizer = optimizer,
+            stopCriteria = stop_condition_test,
+            trainHooks = Some(
+              get_train_hooks(
+                tf_summary_dir,
+                iterations,
+                epochFlag,
+                data_size,
+                miniBatch,
+                4,
+                checkpointing_freq
+              )
+            )
+          )
+
+        val dTypeTag = TF[T]
+
+        val split_data = tfdata.training_dataset.partition(
+          DataPipe[(Tensor[T], Tensor[T]), Boolean](
+            _ => scala.util.Random.nextDouble() <= 0.7
+          )
+        )
+
+        val tunableTFModel = dtflearn.tunable_tf_model[
+          (Tensor[T], Tensor[T]),
+          Output[T],
+          Output[T],
+          (Output[T], Output[T]),
+          L,
+          Tensor[T],
+          DataType[T],
+          Shape,
+          Tensor[T],
+          DataType[T],
+          Shape,
+          (Tensor[T], Tensor[T]),
+          (DataType[T], DataType[T]),
+          (Shape, Shape)
+        ](
+          loss_func_generator,
+          hyper_params,
+          split_data.training_dataset,
+          tf_handle_ops,
+          fitness_func,
+          architecture,
+          (dTypeTag.dataType, input_shape),
+          (dTypeTag.dataType, Shape(causal_window)),
+          train_config_tuning(tf_summary_dir),
+          fitness_to_scalar = fitness_to_scalar,
+          validation_data = Some(split_data.test_dataset),
+          inMemory = false
+        )
+
+        val gs = hyper_optimizer match {
+          case "csa" =>
+            new CoupledSimulatedAnnealing[tunableTFModel.type](
+              tunableTFModel,
+              hyp_mapping
+            ).setMaxIterations(
+              hyp_opt_iterations.getOrElse(5)
+            )
+
+          case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
+
+          case "cma" =>
+            new CMAES[tunableTFModel.type](
+              tunableTFModel,
+              hyper_params,
+              learning_rate = 0.8,
+              hyp_mapping
+            ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+
+          case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+        }
+
+        gs.setPrior(hyper_prior)
+
+        gs.setNumSamples(num_samples)
+
+        println(
+          "--------------------------------------------------------------------"
+        )
+        println("Initiating model tuning")
+        println(
+          "--------------------------------------------------------------------"
+        )
+
+        val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
+
+        println(
+          "--------------------------------------------------------------------"
+        )
+        println("\nModel tuning complete")
+        println("Chosen configuration:")
+        pprint.pprintln(config)
+        println(
+          "--------------------------------------------------------------------"
+        )
+
+        println("Training final model based on chosen configuration")
+
+        write(
+          tf_summary_dir / "state.csv",
+          config.keys.mkString(start = "", sep = ",", end = "\n") +
+            config.values.mkString(start = "", sep = ",", end = "")
+        )
+
+        val best_model = tunableTFModel.train_model(
+          config,
+          Some(train_config_test),
+          Some(eval_metric_names.zip(fitness_func)),
+          Some(iterations / checkpointing_freq)
+        )
+
+        //best_model.train(tfdata.training_dataset, train_config_test)
+
+        val extract_features = DataPipe((p: (Tensor[T], Tensor[T])) => p._1)
+
+        val model_predictions_test = best_model.infer_batch(
+          tfdata.test_dataset.map(extract_features),
+          train_config_test.data_processing,
+          tf_handle_ops
+        )
+
+        val model_predictions_train = best_model.infer_batch(
+          tfdata.training_dataset.map(extract_features),
+          train_config_test.data_processing,
+          tf_handle_ops
+        )
+
+        val test_predictions = model_predictions_test match {
+          case Left(tensor)      => tensor
+          case Right(collection) => collect_predictions(collection)
+        }
+
+        val train_predictions = model_predictions_train match {
+          case Left(tensor)      => tensor
+          case Right(collection) => collect_predictions(collection)
+        }
+
+        val (pred_outputs_train, pred_time_lags_train) = process_predictions(
+          train_predictions,
+          collated_data.head._2._2.length,
+          mo_flag,
+          prob_timelags,
+          timelag_pred_strategy,
+          Some(scalers._2)
+        )
+
+        val unscaled_train_labels: Seq[Tensor[T]] =
+          tfdata.training_dataset
+            .map[Tensor[T]]((p: (Tensor[T], Tensor[T])) => p._2)
+            .map(scalers._2.i)
+            .data
+            .toSeq
+
+        val actual_outputs_train =
+          (0 until tfdata.training_dataset.size).map(n => {
+            val time_lag =
+              pred_time_lags_train(n).scalar.asInstanceOf[Double].toInt
+            unscaled_train_labels(n)(time_lag).scalar.asInstanceOf[Double]
+          })
+
+        val metrics_time_lag_train =
+          new RegressionMetricsTF[T](pred_time_lags_train, train_time_lags)
+        metrics_time_lag_train.target_quantity_("Time Lag: Train Data Set")
+
+        val metrics_output_train = new RegressionMetricsTF[T](
+          pred_outputs_train,
+          Tensor(actual_outputs_train)
+            .reshape(Shape(actual_outputs_train.length))
+            .castTo[T]
+        )
+
+        metrics_output_train.target_quantity_("Output[T]: Train Data Set")
+
+        val (pred_outputs_test, pred_time_lags_test) = process_predictions(
+          test_predictions,
+          causal_window,
+          mo_flag,
+          prob_timelags,
+          timelag_pred_strategy,
+          Some(scalers._2)
+        )
+
+        val unscaled_test_labels: Seq[Tensor[T]] =
+          tfdata.test_dataset
+            .map[Tensor[T]]((p: (Tensor[T], Tensor[T])) => p._2)
+            .data
+            .toSeq
+
+        val actual_outputs_test = (0 until num_test).map(n => {
+          val time_lag =
+            pred_time_lags_test(n).scalar.asInstanceOf[Double].toInt
+          unscaled_test_labels(n)(time_lag).scalar.asInstanceOf[Double]
+        })
+
+        val metrics_time_lag_test =
+          new RegressionMetricsTF[T](pred_time_lags_test, test_time_lags)
+        metrics_time_lag_test.target_quantity_("Time Lag: Test Data Set")
+
+        val metrics_output_test = new RegressionMetricsTF[T](
+          pred_outputs_test,
+          Tensor(actual_outputs_test)
+            .reshape(Shape(actual_outputs_test.length))
+            .castTo[T]
+        )
+
+        metrics_output_test.target_quantity_("Output[T]: Test Data Set")
+
+        TunedModelRun[T, L](
+          data_and_scales._1,
+          best_model,
+          (metrics_output_train, metrics_time_lag_train),
+          (metrics_output_test, metrics_time_lag_test),
+          tf_summary_dir,
+          (scalers._2.i(train_predictions._1), train_predictions._2),
+          (scalers._2.i(test_predictions._1), test_predictions._2)
+        )
+      }
+    )
+
+    //The processing pipeline
+    val train_and_evaluate =
+      data_splits_to_dataset[T](causal_window) >
+        scale_data_v2[T] >
+        model_train_eval
+
+    val results_model_eval =
+      train_and_evaluate(collated_data, collated_data_test)
+
+    val exp_results = ExperimentResult[T, L, TunedModelRun[T, L]](
+      ExperimentType[T](
+        mo_flag,
+        prob_timelags,
+        timelag_pred_strategy,
+        input_shape,
+        actual_input_shape
+      ),
+      dataset._1,
+      dataset._2,
+      results_model_eval
+    )
+
+    exp_results
+
+  }
+
+  /**
+    * <h4>Causal Time Lag: Alternating Training Procedure</h4>
+    * <h5>Hyper-parameter Tuning</h5>
+    *
+    * Runs a model train-tune-evaluation experiment.
+    *
+    * The model is trained to predict output labels for the entire
+    * causal window and a prediction for the causal time lag link
+    * between multi-dimensional input time series x(t) and a
+    * one dimensional output series y(t).
+    *
+    * The hyper-parameters of the loss function are determined using
+    * hyper-parameter optimization algorithms such as [[GridSearch]] and
+    * [[CoupledSimulatedAnnealing]].
+    *
+    * @param dataset The training and test data tuple, each one of
+    *                type [[TLDATA]].
+    * @param architecture The neural architecture making the predictions.
+    * @param loss_func_generator A function which takes the hyper-parameters
+    *                            [[dtflearn.tunable_tf_model.HyperParams]] and returns
+    *                            an instantiated loss function.
+    * @param iterations The max number of training iterations to run.
+    * @param iterations_tuning The max number of iterations of training to run for each model instance
+    *                          during the tuning process.
+    * @param optimizer The optimization algorithm to use for training
+    *                  model parameters.
+    * @param miniBatch Size of one data batch, used for gradient based learning.
+    * @param sum_dir_prefix The string prefix given to the model's summary/results
+    *                       directory.
+    * @param mo_flag If the model making one prediction for the entire causal window, then
+    *                set to false. If the model is making one prediction for each output
+    *                in the causal window, set to true.
+    * @param prob_timelags If the model is making probabilisitc prediction of the causal
+    *                      time lag, then set to true.
+    * @param timelag_pred_strategy In case of probabilistic time lag prediction, how
+    *                              should the target be chosen. Defaults to "mode", meaning
+    *                              the most likely output in the prediction is given
+    *                              as the target prediction.
+    * @param summaries_top_dir The top level directory under which the model summary directory
+    *                          will be created, defaults to ~/tmp
+    * @param num_samples The number of hyper-parameter samples to generate from
+    *                    the hyper-parameter prior distribution.
+    * @param hyper_optimizer The hyper parameter optimization algorithm to use,
+    *                        either "gs" (grid search) or "csa" (coupled simulated annealing).
+    * @param hyp_opt_iterations If `hyper_optimizer` is set to "csa", then this parameter is used
+    *                           for setting the number of csa iterations.
+    *
+    * @return An [[ExperimentResult]] object which contains
+    *         the evaluation results of type [[TunedModelRun]]
+    *
+    * */
+  def run_exp_alt[T: TF: IsFloatOrDouble, L: TF: IsFloatOrDouble](
     dataset: (TLDATA[T], TLDATA[T]),
     architecture: Layer[Output[T], (Output[T], Output[T])],
     hyper_params: List[String],
