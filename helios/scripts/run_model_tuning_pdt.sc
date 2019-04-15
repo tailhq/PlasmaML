@@ -1,5 +1,6 @@
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.pipes._
+import _root_.io.github.mandar2812.dynaml.DynaMLPipe._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.probability._
 import org.platanios.tensorflow.api.ops.training.optimizers.Optimizer
@@ -31,22 +32,17 @@ def apply(
     timelag.utils.getReLUAct2[Double](1, i),
   iterations: Int = 150000,
   iterations_tuning: Int = 20000,
+  pdt_iterations: Int = 2,
   miniBatch: Int = 32,
   optimizer: Optimizer = tf.train.AdaDelta(0.01f),
   sum_dir_prefix: String = "cdt",
-  prior_types: Seq[helios.learn.cdt_loss.Divergence] =
-    Seq(helios.learn.cdt_loss.KullbackLeibler),
-  target_probs: Seq[helios.learn.cdt_loss.TargetDistribution] =
-    Seq(helios.learn.cdt_loss.Boltzmann),
-  dist_type: String = "default",
-  timelag_pred_strategy: String = "mode",
   summaries_top_dir: Path = home / 'tmp,
   num_samples: Int = 20,
   hyper_optimizer: String = "gs",
   hyp_opt_iterations: Option[Int] = Some(5),
   epochFlag: Boolean = false,
   regularization_types: Seq[String] = Seq("L2"),
-  checkpointing_freq: Int = 5
+  checkpointing_freq: Int = 4
 ): Seq[timelag.ExperimentResult[Double, Double, timelag.TunedModelRun[
   Double,
   Double
@@ -59,7 +55,7 @@ def apply(
     sliding_window,
     mo_flag,
     prob_timelags,
-    dist_type
+    "default"
   )
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
@@ -74,7 +70,7 @@ def apply(
     sliding_window,
     mo_flag,
     prob_timelags,
-    dist_type
+    "default"
   )
 
   //Prediction architecture
@@ -87,13 +83,22 @@ def apply(
   val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
 
   val hyper_parameters = List(
-    //"temperature",
+    "sigma_sq",
+    "alpha",
     "reg"
   )
 
+  val persistent_hyper_parameters = List("reg")
+
   val hyper_prior = Map(
-    //"temperature" -> UniformRV(1d, 2.0),
-    "reg"         -> UniformRV(-5d, -3d)
+    "sigma_sq" -> UniformRV(1d, 10d),
+    "alpha"    -> UniformRV(0.75d, 2d),
+    "reg"      -> UniformRV(-5d, -3d)
+  )
+
+  val params_enc = Encoder(
+    identityPipe[Map[String, Double]],
+    identityPipe[Map[String, Double]]
   )
 
   val logit =
@@ -116,62 +121,6 @@ def apply(
         h => (h, hyp_scaling(h) > logit)
       )
       .toMap
-  )
-
-  val fitness_function =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-      (preds, targets) => {
-
-        val weighted_error = preds._1
-          .subtract(targets)
-          .square
-          .multiply(preds._2)
-          .sum(axes = 1)
-
-        val entropy = preds._2
-          .multiply(Tensor(-1d).castTo[Double])
-          .multiply(tf.log(preds._2))
-          .sum(axes = 1)
-
-        (weighted_error + entropy).castTo[Float] 
-      }
-    )
-
-  val s0 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-    (outputs, targets) => {
-
-      val (preds, probs) = outputs
-
-      val sq_errors = preds.subtract(targets).square
-
-      sq_errors.mean(axes = 1).castTo[Float]
-    }
-  )
-
-  val c1 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-    (outputs, targets) => {
-      
-      val (preds, probs) = outputs
-
-      val sq_errors = preds.subtract(targets).square
-
-      probs.multiply(sq_errors).sum(axes = 1).castTo[Float]
-    }
-  )
-
-  val c2 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-    (outputs, targets) => {
-      
-      val (preds, probs) = outputs
-
-      val sq_errors = preds.subtract(targets).square
-      val c1 = probs.multiply(sq_errors).sum(axes = 1, keepDims = true)
-      probs.multiply(sq_errors.subtract(c1).square).sum(axes = 1).castTo[Float]
-    }
-  )
-
-  val stability_metrics = Seq(
-    s0, c1, c2
   )
 
   val fitness_to_scalar = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum)
@@ -200,14 +149,12 @@ def apply(
     )
 
   for (c                   <- confounding;
-       prior_type          <- prior_types;
-       //target_prob         <- target_probs;
        regularization_type <- regularization_types) yield {
 
     val loss_func_generator = (h: Map[String, Double]) => {
 
       val lossFunc = timelag.utils.get_pdt_loss[Double, Double, Double](
-        sliding_window
+        sliding_window, h("sigma_sq"), h("alpha")
       )
 
       val reg_layer =
@@ -235,21 +182,20 @@ def apply(
         tf.learn.ScalarSummary("Loss", "ModelLoss")
     }
 
-    val result = timelag.run_exp_hyp(
+    val result = timelag.run_exp_alt(
       (dataset, dataset_test),
       architecture,
       hyper_parameters,
+      persistent_hyper_parameters,
+      params_enc,
       loss_func_generator,
-      stability_metrics,
       hyper_prior,
       iterations,
       iterations_tuning,
+      pdt_iterations,
       optimizer,
       miniBatch,
       sum_dir_prefix,
-      mo_flag,
-      prob_timelags,
-      timelag_pred_strategy,
       summaries_top_dir,
       num_samples,
       hyper_optimizer,
@@ -257,14 +203,13 @@ def apply(
       epochFlag = epochFlag,
       hyp_mapping = hyp_mapping,
       confounding_factor = c,
-      eval_metric_names = Seq("s0", "c1", "c2"),
       checkpointing_freq = checkpointing_freq
     )
 
     result.copy[Double, Double, timelag.TunedModelRun[Double, Double]](
       config = result.config.copy[Double](
-        divergence = Some(prior_type),
-        target_prob = None,//Some(target_prob),
+        divergence = None,
+        target_prob = None,
         reg_type = Some(regularization_type)
       )
     )

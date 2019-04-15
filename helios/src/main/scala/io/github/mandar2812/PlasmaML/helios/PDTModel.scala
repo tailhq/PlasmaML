@@ -46,26 +46,26 @@ import org.platanios.tensorflow.api._
   *                        training collection into a train and validation split.
   *
   * */
-class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
+class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloatOrDouble](
   val time_window: Int,
   override val modelFunction: TunableTFModel.ModelFunc[
     In,
-    Output[Double],
-    (Output[Double], Output[Double]),
+    Output[T],
+    (Output[T], Output[T]),
     Loss,
     IT,
     ID,
     IS,
-    Tensor[Double],
-    FLOAT64,
+    Tensor[T],
+    DataType[T],
     Shape,
-    (Tensor[Double], Tensor[Double]),
-    (FLOAT64, FLOAT64),
+    (Tensor[T], Tensor[T]),
+    (DataType[T], DataType[T]),
     (Shape, Shape)
   ],
   val model_config_func: dtflearn.tunable_tf_model.ModelConfigFunction[
     In,
-    Output[Double]
+    Output[T]
   ],
   override val hyp_params: Seq[String],
   val persistent_hyp_params: Seq[String],
@@ -77,10 +77,10 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
   override val tf_data_handle_ops: dtflearn.model.TFDataHandleOps[
     Pattern,
     IT,
-    Tensor[Double],
-    (Tensor[Double], Tensor[Double]),
+    Tensor[T],
+    (Tensor[T], Tensor[T]),
     In,
-    Output[Double]
+    Output[T]
   ],
   override val fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
     DataPipe[Seq[Tensor[Float]], Double](m =>
@@ -88,9 +88,11 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
   override protected val validation_data: Option[DataSet[Pattern]] = None,
   override protected val data_split_func: Option[DataPipe[Pattern, Boolean]] =
     None)
-    extends TunableTFModel[Pattern, In, Output[Double], (Output[Double], Output[Double]), Loss, IT, ID, IS, Tensor[
-      Double
-    ], FLOAT64, Shape, (Tensor[Double], Tensor[Double]), (FLOAT64, FLOAT64), (Shape, Shape)](
+    extends TunableTFModel[
+      Pattern, In, Output[T], (Output[T], Output[T]), 
+      Loss, IT, ID, IS, Tensor[T], DataType[T], Shape, 
+      (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), 
+      (Shape, Shape)](
       modelFunction,
       model_config_func,
       hyp_params,
@@ -105,22 +107,22 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
   val mutable_params_to_metric_functions: DataPipe[
     dtflearn.tunable_tf_model.HyperParams,
     Seq[
-      DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]]
+      DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]]
     ]
   ] =
     DataPipe(
       (c: Map[String, Double]) =>
         Seq(
           PDTModel.s0,
-          PDTModel.c1(c("alpha"), c("sigma_sq"), time_window),
-          PDTModel.c2(c("alpha"), c("sigma_sq"), time_window)
+          PDTModel.c1(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window),
+          PDTModel.c2(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window)
         )
     )
 
   val params_to_metric_funcs: DataPipe[
     dtflearn.tunable_tf_model.HyperParams,
     Seq[
-      DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]]
+      DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]]
     ]
   ] = params_to_mutable_params > mutable_params_to_metric_functions
 
@@ -131,26 +133,31 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
       val c1 = s(1).scalar.toDouble / s0
 
       Map(
-        "alpha"    -> time_window * (1d - c1) / (c1 * (time_window - 1)),
+        "alpha"    -> math.max(time_window * (1d - c1) / (c1 * (time_window - 1)), 0d),
         "sigma_sq" -> s0 * (time_window - c1) / (time_window - 1)
       )
     })
 
   private def update(
     p: Map[String, Double],
-    h: Map[String, Double]
+    h: Map[String, Double],
+    config: Option[dtflearn.model.Config[In, Output[T]]] = None,
+    eval_trigger: Option[Int] = None
   ): Map[String, Double] = {
 
     //Train and evaluate the model on the given hyper-parameters
-    val train_config = modelConfigFunc(p)
+    val train_config = config match {
+      case None => modelConfigFunc(p.toMap)
+      case Some(config) => config
+    }
 
     val stability_metrics = params_to_metric_funcs(h)
       .zip(PDTModel.stability_quantities)
       .map(fitness_function => {
-        Performance[((Output[Double], Output[Double]), (In, Output[Double]))](
+        Performance[((Output[T], Output[T]), (In, Output[T]))](
           fitness_function._2,
           DataPipe[
-            ((Output[Double], Output[Double]), (In, Output[Double])),
+            ((Output[T], Output[T]), (In, Output[T])),
             Output[Float]
           ](
             c => fitness_function._1(c._1, c._2._2)
@@ -158,13 +165,21 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
         )
       })
 
+    val eval_metrics = eval_trigger match {
+      case None => None
+      case Some(t) =>
+        Some(
+          PDTModel.stability_quantities
+            .zip(params_to_metric_funcs(h))
+        )
+    }
+
     val updated_params = try {
       val model = train_model(
         p ++ h,
         Some(train_config),
-        evaluation_metrics =
-          Some(PDTModel.stability_quantities.zip(params_to_metric_funcs(h)))
-        //stepTrigger
+        evaluation_metrics = eval_metrics,
+        eval_trigger
       )
 
       println("Updating PDT stability metrics.")
@@ -190,12 +205,72 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
     updated_params
   }
 
-  def solve(pdt_iterations: Int)(hyper_params: TunableTFModel.HyperParams) = {
+  def solve(
+    pdt_iterations: Int,
+    hyper_params: TunableTFModel.HyperParams,
+    config: Option[dtflearn.model.Config[In, Output[T]]] = None,
+    eval_trigger: Option[Int] = None
+  ) = {
 
     val (p, t) =
       hyper_params.toSeq.partition(kv => persistent_hyp_params.contains(kv._1))
 
-    (1 to pdt_iterations).foldLeft(t.toMap)((s, _) => update(p.toMap, s))
+    (1 to pdt_iterations).foldLeft(t.toMap)((s, _) => update(p.toMap, s, config, eval_trigger))
+  }
+
+  def build(
+    pdt_iterations: Int,
+    hyper_params: dtflearn.tunable_tf_model.HyperParams,
+    config: Option[dtflearn.model.Config[In, Output[T]]] = None,
+    eval_trigger: Option[Int] = None
+  ) = {
+    val p = hyper_params.filterKeys(persistent_hyp_params.contains _)
+
+    //Train and evaluate the model on the given hyper-parameters
+
+    //Start by loading the model configuration,
+    //which depends only on the `persistent`
+    //hyper-parameters.
+    val train_config = config match {
+      case None => modelConfigFunc(p.toMap)
+      case Some(config) => config
+    }
+
+    //Run the hyper-parameter refinement procedure.
+    val final_config: Map[String, Double] =
+      solve(pdt_iterations, hyper_params, Some(train_config), eval_trigger)
+
+    val stability_metrics = params_to_metric_funcs(final_config)
+      .zip(PDTModel.stability_quantities)
+      .map(fitness_function => {
+        Performance[((Output[T], Output[T]), (In, Output[T]))](
+          fitness_function._2,
+          DataPipe[
+            ((Output[T], Output[T]), (In, Output[T])),
+            Output[Float]
+          ](
+            c => fitness_function._1(c._1, c._2._2)
+          )
+        )
+      })
+
+    val eval_metrics = eval_trigger match {
+      case None => None
+      case Some(t) =>
+        Some(
+          PDTModel.stability_quantities
+            .zip(params_to_metric_funcs(final_config))
+        )
+    }
+
+    val model = train_model(
+      p.toMap ++ final_config,
+      Some(train_config),
+      evaluation_metrics = eval_metrics,
+      eval_trigger
+    )
+
+    (model, final_config)
   }
 
   override def energy(
@@ -216,35 +291,30 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
     //will be updated.
     val loop_count = options.getOrElse("loops", "2").toInt
 
-    //Run the hyper-parameter refinement procedure.
-    val final_config: Map[String, Double] = solve(loop_count)(hyper_params)
-
     //Now compute the model fitness score.
-    val (fitness, comment) = try {
+    val (fitness, comment, final_config) = try {
+
+      
+      //Run the refinement procedure.
+      val (model, final_config) = build(
+        loop_count,
+        hyper_params,
+        eval_trigger = options.get("evalTrigger").map(_.toInt)
+      )
 
       val stability_metrics = params_to_metric_funcs(final_config)
         .zip(PDTModel.stability_quantities)
         .map(fitness_function => {
-          Performance[((Output[Double], Output[Double]), (In, Output[Double]))](
+          Performance[((Output[T], Output[T]), (In, Output[T]))](
             fitness_function._2,
             DataPipe[
-              ((Output[Double], Output[Double]), (In, Output[Double])),
+              ((Output[T], Output[T]), (In, Output[T])),
               Output[Float]
             ](
               c => fitness_function._1(c._1, c._2._2)
             )
           )
         })
-
-      val model = train_model(
-        p.toMap ++ final_config,
-        Some(train_config),
-        evaluation_metrics = Some(
-          PDTModel.stability_quantities
-            .zip(params_to_metric_funcs(final_config))
-        ),
-        options.get("evalTrigger").map(_.toInt)
-      )
 
       println("Computing Energy.")
       val e = fitness_to_scalar(
@@ -258,13 +328,13 @@ class PDTModel[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
         )
       )
 
-      (e, None)
+      (e, None, final_config)
     } catch {
       case e: java.lang.IllegalStateException =>
-        (Double.PositiveInfinity, Some(e.getMessage))
+        (Double.PositiveInfinity, Some(e.getMessage), hyper_params)
       case e: Throwable =>
         e.printStackTrace()
-        (Double.PositiveInfinity, Some(e.getMessage))
+        (Double.PositiveInfinity, Some(e.getMessage), hyper_params)
     }
 
     //Append the model fitness to the hyper-parameter configuration
@@ -291,8 +361,8 @@ object PDTModel {
 
   val stability_quantities = Seq("s0", "c1", "c2")
 
-  val s0 =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+  def s0[T: TF: IsFloatOrDouble] =
+    DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]](
       (outputs, targets) => {
 
         val (preds, probs) = outputs
@@ -303,8 +373,8 @@ object PDTModel {
       }
     )
 
-  val c1 =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+  def c1[T: TF: IsFloatOrDouble] =
+    DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]](
       (outputs, targets) => {
 
         val (preds, probs) = outputs
@@ -315,8 +385,8 @@ object PDTModel {
       }
     )
 
-  val c2 =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+  def c2[T: TF: IsFloatOrDouble] =
+    DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]](
       (outputs, targets) => {
 
         val (preds, probs) = outputs
@@ -330,17 +400,17 @@ object PDTModel {
       }
     )
 
-  def c1(alpha: Double, sigma_sq: Double, n: Int) =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+  def c1[T: TF: IsFloatOrDouble](alpha: T, sigma_sq: T, n: Int) =
+    DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]](
       (outputs, targets) => {
 
         val (preds, probs) = outputs
 
         val sq_errors = preds.subtract(targets).square
 
-        val one = Tensor(1d).toOutput
+        val one = Tensor(1d).toOutput.castTo[T]
 
-        val two = Tensor(2d).toOutput
+        val two = Tensor(2d).toOutput.castTo[T]
 
         val un_p = probs * (
           tf.exp(
@@ -357,17 +427,17 @@ object PDTModel {
       }
     )
 
-  def c2(alpha: Double, sigma_sq: Double, n: Int) =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
+  def c2[T: TF: IsFloatOrDouble](alpha: T, sigma_sq: T, n: Int) =
+    DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]](
       (outputs, targets) => {
 
         val (preds, probs) = outputs
 
         val sq_errors = preds.subtract(targets).square
-        val one       = Tensor(1d).toOutput
-        val two       = Tensor(2d).toOutput
+        val one       = Tensor(1d).toOutput.castTo[T]
+        val two       = Tensor(2d).toOutput.castTo[T]
 
-        val un_p      = probs * (
+        val un_p = probs * (
           tf.exp(
             tf.log(one + alpha) / two - (sq_errors * alpha) / (two * sigma_sq)
           )
@@ -376,7 +446,7 @@ object PDTModel {
         //Calculate the saddle point probability
         val p = un_p / un_p.sum(axes = 1, keepDims = true)
 
-        val c1 = p.multiply(sq_errors).sum(axes = 1)
+        val c1 = p.multiply(sq_errors).sum(axes = 1, keepDims = true)
 
         p.multiply(sq_errors.subtract(c1).square)
           .sum(axes = 1)
@@ -384,26 +454,26 @@ object PDTModel {
       }
     )
 
-  def apply[Pattern, In, IT, ID, IS, Loss: TF: IsFloatOrDouble](
+  def apply[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloatOrDouble](
     time_window: Int,
     modelFunction: TunableTFModel.ModelFunc[
       In,
-      Output[Double],
-      (Output[Double], Output[Double]),
+      Output[T],
+      (Output[T], Output[T]),
       Loss,
       IT,
       ID,
       IS,
-      Tensor[Double],
-      FLOAT64,
+      Tensor[T],
+      DataType[T],
       Shape,
-      (Tensor[Double], Tensor[Double]),
-      (FLOAT64, FLOAT64),
+      (Tensor[T], Tensor[T]),
+      (DataType[T], DataType[T]),
       (Shape, Shape)
     ],
     model_config_func: dtflearn.tunable_tf_model.ModelConfigFunction[
       In,
-      Output[Double]
+      Output[T]
     ],
     hyp_params: Seq[String],
     persistent_hyp_params: Seq[String],
@@ -415,17 +485,17 @@ object PDTModel {
     tf_data_handle_ops: dtflearn.model.TFDataHandleOps[
       Pattern,
       IT,
-      Tensor[Double],
-      (Tensor[Double], Tensor[Double]),
+      Tensor[T],
+      (Tensor[T], Tensor[T]),
       In,
-      Output[Double]
+      Output[T]
     ],
     fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
       DataPipe[Seq[Tensor[Float]], Double](m =>
           m.map(_.scalar.toDouble).sum / m.length),
     validation_data: Option[DataSet[Pattern]] = None,
     data_split_func: Option[DataPipe[Pattern, Boolean]] = None
-  ) = new PDTModel[Pattern, In, IT, ID, IS, Loss](
+  ) = new PDTModel[Pattern, In, IT, ID, IS, T, Loss](
     time_window,
     modelFunction,
     model_config_func,

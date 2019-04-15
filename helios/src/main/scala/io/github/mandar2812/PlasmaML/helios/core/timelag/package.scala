@@ -1889,24 +1889,24 @@ package object timelag {
     dataset: (TLDATA[T], TLDATA[T]),
     architecture: Layer[Output[T], (Output[T], Output[T])],
     hyper_params: List[String],
+    persistent_hyp_params: List[String],
+    params_to_mutable_params: Encoder[
+      dtflearn.tunable_tf_model.HyperParams,
+      dtflearn.tunable_tf_model.HyperParams
+    ],
     loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[
       ((Output[T], Output[T]), Output[T]),
       Output[L]
-    ],
-    fitness_func: Seq[
-      DataPipe2[(Output[T], Output[T]), Output[T], Output[Float]]
     ],
     hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[
       Double
     ]]],
     iterations: Int = 150000,
     iterations_tuning: Int = 20000,
+    pdt_iterations: Int = 2,
     optimizer: Optimizer = tf.train.AdaDelta(0.01f),
     miniBatch: Int = 512,
     sum_dir_prefix: String = "",
-    mo_flag: Boolean = false,
-    prob_timelags: Boolean = false,
-    timelag_pred_strategy: String = "mode",
     summaries_top_dir: Path = home / 'tmp,
     num_samples: Int = 20,
     hyper_optimizer: String = "gs",
@@ -1917,7 +1917,6 @@ package object timelag {
     fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
       DataPipe[Seq[Tensor[Float]], Double](s =>
           s.map(_.scalar.toDouble).sum / s.length),
-    eval_metric_names: Seq[String] = Seq("s0", "c1", "c2"),
     checkpointing_freq: Int = 5
   ): ExperimentResult[T, L, TunedModelRun[T, L]] = {
 
@@ -1943,10 +1942,9 @@ package object timelag {
 
         val dt = DateTime.now()
 
-        val summary_dir_index =
-          if (mo_flag)
-            sum_dir_prefix + "_timelag_mo_" + dt.toString("YYYY-MM-dd-HH-mm-ss")
-          else sum_dir_prefix + "_timelag_" + dt.toString("YYYY-MM-dd-HH-mm-ss")
+        val summary_dir_index = sum_dir_prefix + "_timelag_mo_" + dt.toString(
+          "YYYY-MM-dd-HH-mm-ss"
+        )
 
         val tf_summary_dir = summaries_top_dir / summary_dir_index
 
@@ -1993,26 +1991,39 @@ package object timelag {
           concatOpO = Some(stackOperationP)
         )
 
-        val train_config_tuning =
-          dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
-            DataPipe(
-              (p: Path) =>
-                dtflearn.model.trainConfig[Output[T], Output[T]](
-                  p,
-                  data_ops,
-                  optimizer,
-                  stop_condition_tuning,
-                  Some(
-                    get_train_hooks(
-                      p,
-                      iterations_tuning,
-                      epochFlag,
-                      data_size,
-                      miniBatch
-                    )
-                  )
+        val config_to_dir = DataPipe[Map[String, Double], String](
+          _.map(kv => s"${kv._1}#${kv._2}").mkString("_")
+        )
+
+        val train_config_tuning = dtflearn.tunable_tf_model.ModelConfigFunction(
+          DataPipe[Map[String, Double], Path](
+            h =>
+              dtflearn.tunable_tf_model.ModelFunction.get_summary_dir(
+                tf_summary_dir,
+                h,
+                Some(config_to_dir)
+              )
+          ),
+          DataPipe[Map[String, Double], dtflearn.model.Ops[Output[T], Output[
+            T
+          ]]](_ => data_ops),
+          DataPipe((_: Map[String, Double]) => optimizer),
+          DataPipe((_: Map[String, Double]) => stop_condition_tuning),
+          DataPipe(
+            (h: Map[String, Double]) =>
+              Some(
+                get_train_hooks(
+                  tf_summary_dir / config_to_dir(h),
+                  iterations_tuning,
+                  epochFlag,
+                  data_size,
+                  miniBatch,
+                  checkpointing_freq / 4,
+                  checkpointing_freq
                 )
-            )
+              )
+          )
+        )
 
         val train_config_test =
           dtflearn.model.trainConfig(
@@ -2027,7 +2038,7 @@ package object timelag {
                 epochFlag,
                 data_size,
                 miniBatch,
-                4,
+                checkpointing_freq / 4,
                 checkpointing_freq
               )
             )
@@ -2041,56 +2052,61 @@ package object timelag {
           )
         )
 
-        val tunableTFModel = dtflearn.tunable_tf_model[
-          (Tensor[T], Tensor[T]),
-          Output[T],
-          Output[T],
-          (Output[T], Output[T]),
-          L,
-          Tensor[T],
-          DataType[T],
-          Shape,
-          Tensor[T],
-          DataType[T],
-          Shape,
-          (Tensor[T], Tensor[T]),
-          (DataType[T], DataType[T]),
-          (Shape, Shape)
-        ](
-          loss_func_generator,
+        val model_function =
+          dtflearn.tunable_tf_model.ModelFunction.from_loss_generator[
+            Output[T],
+            Output[T],
+            (Output[T], Output[T]),
+            L,
+            Tensor[T],
+            DataType[T],
+            Shape,
+            Tensor[T],
+            DataType[T],
+            Shape,
+            (Tensor[T], Tensor[T]),
+            (DataType[T], DataType[T]),
+            (Shape, Shape)
+          ](
+            loss_func_generator,
+            architecture,
+            (dTypeTag.dataType, input_shape),
+            (dTypeTag.dataType, Shape(causal_window))
+          )
+
+        val pdtModel = helios.learn.pdt_model(
+          causal_window,
+          model_function,
+          train_config_tuning,
           hyper_params,
+          persistent_hyp_params,
+          params_to_mutable_params,
           split_data.training_dataset,
           tf_handle_ops,
-          fitness_func,
-          architecture,
-          (dTypeTag.dataType, input_shape),
-          (dTypeTag.dataType, Shape(causal_window)),
-          train_config_tuning(tf_summary_dir),
           fitness_to_scalar = fitness_to_scalar,
-          validation_data = Some(split_data.test_dataset),
-          inMemory = false
+          validation_data = Some(split_data.test_dataset)
         )
 
         val gs = hyper_optimizer match {
           case "csa" =>
-            new CoupledSimulatedAnnealing[tunableTFModel.type](
-              tunableTFModel,
+            new CoupledSimulatedAnnealing[pdtModel.type](
+              pdtModel,
               hyp_mapping
             ).setMaxIterations(
               hyp_opt_iterations.getOrElse(5)
             )
 
-          case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
+          case "gs" => new GridSearch[pdtModel.type](pdtModel)
 
           case "cma" =>
-            new CMAES[tunableTFModel.type](
-              tunableTFModel,
+            new CMAES[pdtModel.type](
+              pdtModel,
               hyper_params,
               learning_rate = 0.8,
               hyp_mapping
             ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
 
-          case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+          case _ => new GridSearch[pdtModel.type](pdtModel)
         }
 
         gs.setPrior(hyper_prior)
@@ -2105,7 +2121,13 @@ package object timelag {
           "--------------------------------------------------------------------"
         )
 
-        val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
+        val (_, config) = gs.optimize(
+          hyper_prior.mapValues(_.draw),
+          Map(
+            "loops"       -> pdt_iterations.toString,
+            "evalTrigger" -> (iterations_tuning/checkpointing_freq).toString
+          )
+        )
 
         println(
           "--------------------------------------------------------------------"
@@ -2119,31 +2141,27 @@ package object timelag {
 
         println("Training final model based on chosen configuration")
 
-        write(
-          tf_summary_dir / "state.csv",
-          config.keys.mkString(start = "", sep = ",", end = "\n") +
-            config.values.mkString(start = "", sep = ",", end = "")
-        )
-
-        val best_model = tunableTFModel.train_model(
+        val (best_model, best_config) = pdtModel.build(
+          pdt_iterations,
           config,
           Some(train_config_test),
-          Some(eval_metric_names.zip(fitness_func)),
           Some(iterations / checkpointing_freq)
         )
 
-        //best_model.train(tfdata.training_dataset, train_config_test)
-
-        val extract_features = DataPipe((p: (Tensor[T], Tensor[T])) => p._1)
+        write(
+          tf_summary_dir / "state.csv",
+          best_config.keys.mkString(start = "", sep = ",", end = "\n") +
+            best_config.values.mkString(start = "", sep = ",", end = "")
+        )
 
         val model_predictions_test = best_model.infer_batch(
-          tfdata.test_dataset.map(extract_features),
+          tfdata.test_dataset.map(tup2_1[Tensor[T], Tensor[T]]),
           train_config_test.data_processing,
           tf_handle_ops
         )
 
         val model_predictions_train = best_model.infer_batch(
-          tfdata.training_dataset.map(extract_features),
+          tfdata.training_dataset.map(tup2_1[Tensor[T], Tensor[T]]),
           train_config_test.data_processing,
           tf_handle_ops
         )
@@ -2161,15 +2179,15 @@ package object timelag {
         val (pred_outputs_train, pred_time_lags_train) = process_predictions(
           train_predictions,
           collated_data.head._2._2.length,
-          mo_flag,
-          prob_timelags,
-          timelag_pred_strategy,
+          true,
+          true,
+          "mode",
           Some(scalers._2)
         )
 
         val unscaled_train_labels: Seq[Tensor[T]] =
           tfdata.training_dataset
-            .map[Tensor[T]]((p: (Tensor[T], Tensor[T])) => p._2)
+            .map[Tensor[T]](tup2_2[Tensor[T], Tensor[T]])
             .map(scalers._2.i)
             .data
             .toSeq
@@ -2197,9 +2215,9 @@ package object timelag {
         val (pred_outputs_test, pred_time_lags_test) = process_predictions(
           test_predictions,
           causal_window,
-          mo_flag,
-          prob_timelags,
-          timelag_pred_strategy,
+          true,
+          true,
+          "mode",
           Some(scalers._2)
         )
 
@@ -2251,9 +2269,9 @@ package object timelag {
 
     val exp_results = ExperimentResult[T, L, TunedModelRun[T, L]](
       ExperimentType[T](
-        mo_flag,
-        prob_timelags,
-        timelag_pred_strategy,
+        true,
+        true,
+        "mode",
         input_shape,
         actual_input_shape
       ),

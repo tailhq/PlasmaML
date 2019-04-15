@@ -24,20 +24,17 @@ def main(
   activation_func: Int => Activation[Double]                 = timelag.utils.getReLUAct[Double](1, _),
   iterations: Int                                            = 150000,
   iterations_tuning: Int                                     = 20000,
+  pdt_iterations: Int                                        = 2,
   miniBatch: Int                                             = 32,
   optimizer: Optimizer                                       = tf.train.AdaDelta(0.01f),
   sum_dir_prefix: String                                     = "const_a",
-  prior_type: Seq[helios.learn.cdt_loss.Divergence]          = Seq(helios.learn.cdt_loss.KullbackLeibler),
-  target_prob: Seq[helios.learn.cdt_loss.TargetDistribution] = Seq(helios.learn.cdt_loss.Boltzmann),
-  dist_type: String                                          = "default",
-  timelag_pred_strategy: String                              = "mode",
   summaries_top_dir: Path                                    = home/'tmp,
   num_samples: Int                                           = 20,
   hyper_optimizer: String                                    = "gs",
   hyp_opt_iterations: Option[Int]                            = Some(5),
   epochFlag: Boolean                                         = false,
   regularization_types: Seq[String]                          = Seq("L2"),
-  checkpointing_freq: Int                                    = 5)
+  checkpointing_freq: Int                                    = 4)
 : Seq[timelag.ExperimentResult[Double, Double, timelag.TunedModelRun[Double, Double]]] = {
 
   //Output computation
@@ -69,12 +66,11 @@ def main(
     compute_output > compute_time_lag > add_noise,
     d, confounding, size_training, size_test, sliding_window, noise, noiserot,
     alpha, train_test_separate, num_neurons, 
-    activation_func, iterations, iterations_tuning, 
+    activation_func, iterations, iterations_tuning, pdt_iterations,
     miniBatch, optimizer, sum_dir_prefix,
-    prior_type, target_prob, dist_type,
-    timelag_pred_strategy, summaries_top_dir, num_samples,
+    summaries_top_dir, num_samples,
     hyper_optimizer, hyp_opt_iterations, epochFlag,
-    regularization_types
+    regularization_types, checkpointing_freq
   )
 
   experiment_results.map(experiment_result =>
