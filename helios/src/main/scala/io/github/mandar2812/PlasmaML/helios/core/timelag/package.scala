@@ -2018,7 +2018,7 @@ package object timelag {
                   epochFlag,
                   data_size,
                   miniBatch,
-                  checkpointing_freq,
+                  checkpointing_freq*2,
                   checkpointing_freq
                 )
               )
@@ -2038,7 +2038,7 @@ package object timelag {
                 epochFlag,
                 data_size,
                 miniBatch,
-                checkpointing_freq,
+                checkpointing_freq*2,
                 checkpointing_freq
               )
             )
