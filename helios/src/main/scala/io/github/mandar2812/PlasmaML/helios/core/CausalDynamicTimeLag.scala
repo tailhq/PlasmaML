@@ -754,7 +754,15 @@ case class ProbabilisticDynamicTimeLag[
     //Calculate the saddle point probability
     val p = un_p / un_p.sum(axes = 1, keepDims = true)
 
-    val log_partition_function = tf.log(
+
+    val divergence_term = CausalDynamicTimeLag.KullbackLeibler(p, prob)
+
+
+    val expanded_loss = (model_errors_sq*(p*alpha + one)/(s*two)) + divergence_term - p*tf.log(alpha + one)/two 
+    
+    
+    
+    /* val log_partition_function = tf.log(
       (prob * tf.exp(
         tf.log(one + alpha) / two - model_errors_sq * alpha / (two * s)
       )).sum(axes = 1)
@@ -763,6 +771,9 @@ case class ProbabilisticDynamicTimeLag[
     (log_partition_function - model_errors_sq.sum(axes = 1) / (two * s))
       .mean()
       .subtract(n * tf.log(s) / two)
-      .castTo[L]
+      .castTo[L] */
+
+    (expanded_loss.sum(axes = 1).mean() + n*tf.log(s)).castTo[L]
+    
   }
 }
