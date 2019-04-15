@@ -22,8 +22,8 @@ val exp_set2 = tuning_exp2.main(
   train_test_separate = true,
   num_neurons = Seq(40, 40),
   activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
-  iterations = 20,
-  iterations_tuning = 20,
+  iterations = 100,
+  iterations_tuning = 50,
   pdt_iterations = 5,
   miniBatch = 1024,
   optimizer = tf.train.RMSProp(0.01f),
@@ -32,7 +32,7 @@ val exp_set2 = tuning_exp2.main(
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),
-  checkpointing_freq = 4
+  checkpointing_freq = 2
 )
 
 timelag.organize_results(exp_set2, home / 'tmp / 'results_exp2, "exp2_")
