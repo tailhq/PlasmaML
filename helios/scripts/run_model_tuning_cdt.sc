@@ -31,6 +31,7 @@ def apply(
     timelag.utils.getReLUAct2[Double](1, i),
   iterations: Int = 150000,
   iterations_tuning: Int = 20000,
+  pdt_iterations: Int = 2,
   miniBatch: Int = 32,
   optimizer: Optimizer = tf.train.AdaDelta(0.01f),
   sum_dir_prefix: String = "cdt",
@@ -87,19 +88,28 @@ def apply(
   val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
 
   val hyper_parameters = List(
-    "prior_wt",
-    //"error_wt",
+    "error_wt",
     "temperature",
     "specificity",
     "reg"
   )
 
   val hyper_prior = Map(
-    "prior_wt" -> UniformRV(0.5, 1.5),
-    //"error_wt"    -> UniformRV(0.5, 1.5),
+    "error_wt"    -> UniformRV(0d, 1.5),
     "temperature" -> UniformRV(1d, 2.0),
     "specificity" -> UniformRV(0.5, 2.5),
     "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+  )
+
+  val persistent_hyper_parameters = List("reg", "temperature")
+
+  val params_enc = Encoder(
+    DataPipe[Map[String, Double], Map[String, Double]](
+      h => Map("alpha" -> h("specificity"), "sigma_sq" -> 0.5 / h("error_wt"))
+    ),
+    DataPipe[Map[String, Double], Map[String, Double]](
+      h => Map("specificity" -> h("alpha"), "error_wt" -> 0.5 / h("sigma_sq"))
+    )
   )
 
   val logit =
@@ -139,48 +149,12 @@ def apply(
           .multiply(tf.log(preds._2))
           .sum(axes = 1)
 
-        (weighted_error + entropy).castTo[Float] 
+        (weighted_error + entropy).castTo[Float]
       }
     )
 
-  val s0 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-    (outputs, targets) => {
-
-      val (preds, probs) = outputs
-
-      val sq_errors = preds.subtract(targets).square
-
-      sq_errors.mean(axes = 1).castTo[Float]
-    }
-  )
-
-  val c1 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-    (outputs, targets) => {
-      
-      val (preds, probs) = outputs
-
-      val sq_errors = preds.subtract(targets).square
-
-      probs.multiply(sq_errors).sum(axes = 1).castTo[Float]
-    }
-  )
-
-  val c2 = DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-    (outputs, targets) => {
-      
-      val (preds, probs) = outputs
-
-      val sq_errors = preds.subtract(targets).square
-      val c1 = probs.multiply(sq_errors).sum(axes = 1, keepDims = true)
-      probs.multiply(sq_errors.subtract(c1).square).sum(axes = 1).castTo[Float]
-    }
-  )
-
-  val stability_metrics = Seq(
-    s0, c1, c2
-  )
-
-  val fitness_to_scalar = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum)
+  val fitness_to_scalar =
+    DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum)
 
   val dataset: timelag.utils.TLDATA[Double] =
     timelag.utils.generate_data[Double](
@@ -215,11 +189,11 @@ def apply(
         sliding_window,
         mo_flag,
         prob_timelags,
-        prior_wt = h("prior_wt"),
+        prior_wt = 1d,
         prior_divergence = prior_type,
         target_dist = target_prob,
         temp = h("temperature"),
-        error_wt = 1.0,
+        error_wt = h("error_wt"),
         c = h("specificity")
       )
 
@@ -248,21 +222,20 @@ def apply(
         tf.learn.ScalarSummary("Loss", "ModelLoss")
     }
 
-    val result = timelag.run_exp_hyp(
+    val result = timelag.run_exp_alt(
       (dataset, dataset_test),
       architecture,
       hyper_parameters,
+      persistent_hyper_parameters,
+      params_enc,
       loss_func_generator,
-      stability_metrics,
       hyper_prior,
       iterations,
       iterations_tuning,
+      pdt_iterations,
       optimizer,
       miniBatch,
       sum_dir_prefix,
-      mo_flag,
-      prob_timelags,
-      timelag_pred_strategy,
       summaries_top_dir,
       num_samples,
       hyper_optimizer,
@@ -271,7 +244,7 @@ def apply(
       hyp_mapping = hyp_mapping,
       confounding_factor = c,
       fitness_to_scalar = fitness_to_scalar,
-      eval_metric_names = Seq("s0", "c1", "c2"),
+      //eval_metric_names = Seq("s0", "c1", "c2"),
       checkpointing_freq = checkpointing_freq
     )
 
