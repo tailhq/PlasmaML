@@ -75,8 +75,8 @@ package object utils {
     if ((i - s) == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct3[T: TF: IsFloatOrDouble](end: Int, i: Int): Activation[T] =
-    if ((i - end) == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
+  def getReLUAct3[T: TF: IsFloatOrDouble](start: Int, repeat: Int, i: Int): Activation[T] =
+    if ((i - start) < repeat) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
   /**

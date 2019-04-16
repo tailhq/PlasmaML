@@ -585,7 +585,7 @@ package object timelag {
       plot_input_output(
         input = collated_data_test.map(_._2._1),
         input_to_scalar =
-          (t: Tensor[T]) => t.square.sum().scalar.asInstanceOf[Float].toDouble,
+          (t: Tensor[T]) => t.square.sum().scalar.asInstanceOf[Double],
         targets = metrics_test.targets,
         predictions = metrics_test.preds,
         xlab = "||x(t)||_2",

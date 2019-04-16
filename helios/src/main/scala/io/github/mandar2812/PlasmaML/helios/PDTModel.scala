@@ -182,7 +182,7 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
         eval_trigger
       )
 
-      println("Updating PDT stability metrics.")
+      println("Computing PDT stability metrics.")
       val metrics = model.evaluate(
         train_data_tf,
         train_split.size,
@@ -200,8 +200,9 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
         h
     }
 
-    println("Updated Parameters: ")
+    println("\nUpdated Parameters: ")
     pprint.pprintln(p ++ updated_params)
+    println()
     updated_params
   }
 
@@ -210,12 +211,23 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
     hyper_params: TunableTFModel.HyperParams,
     config: Option[dtflearn.model.Config[In, Output[T]]] = None,
     eval_trigger: Option[Int] = None
-  ) = {
+  ): Map[String, Double] = {
 
     val (p, t) =
       hyper_params.toSeq.partition(kv => persistent_hyp_params.contains(kv._1))
 
-    (1 to pdt_iterations).foldLeft(t.toMap)((s, _) => update(p.toMap, s, config, eval_trigger))
+    if(pdt_iterations > 0) (1 to pdt_iterations).foldLeft(t.toMap)((s, it) => {
+
+      val buffstr = if(it >= 10) "="*(math.log10(it).toInt) else ""
+
+      println()
+      println(s"╔=═════════════════════════════════════════${buffstr}═╗")
+      println(s"║ PDT Alternate Optimization - Iteration: ${it} ║")
+      println(s"╚══════════════════════════════════════════${buffstr}=╝")
+      println()
+      update(p.toMap, s, config, eval_trigger)
+    })
+    else t.toMap
   }
 
   def build(
@@ -262,6 +274,10 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
             .zip(params_to_metric_funcs(final_config))
         )
     }
+
+    println("\nTraining model based on final chosen parameters")
+    pprint.pprintln(p.toMap ++ final_config)
+    println()
 
     val model = train_model(
       p.toMap ++ final_config,
