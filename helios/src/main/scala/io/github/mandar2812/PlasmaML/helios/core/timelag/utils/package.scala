@@ -877,16 +877,39 @@ package object utils {
   def compute_stability_metrics(
     predictions: DataSet[Tensor[Double]],
     probabilities: DataSet[Tensor[Double]],
-    targets: DataSet[Tensor[Double]]
+    targets: DataSet[Tensor[Double]],
+    state: Map[String, Double],
+    params_enc: Encoder[
+      Map[String, Double],
+      Map[String, Double]
+    ]
   ): Stability = {
+
+    val (alpha, sigma_sq) = {
+      val enc_state = params_enc(state)
+      (enc_state("alpha"), enc_state("sigma_sq"))
+    }
 
     val n = predictions.data.head.shape(0)
 
+    val one = Tensor(1d).reshape(Shape())
+
+    val two = Tensor(2d).reshape(Shape())
+
     val compute_metrics = DataPipe[ZipPattern, StabTriple](zp => {
 
-      val ((y, p), t) = zp
+      val ((y, prob), t) = zp
 
       val sq_error = y.subtract(t).square
+
+      val un_p = prob * (
+        tfi.exp(
+          tfi.log(one + alpha) / two - (sq_error * alpha) / (two * sigma_sq)
+        )
+      )
+
+      //Calculate the saddle point probability
+      val p = un_p / un_p.sum(axes = 1, keepDims = true)
 
       val s0 = sq_error.sum().scalar
 

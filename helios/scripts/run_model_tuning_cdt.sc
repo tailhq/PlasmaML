@@ -89,41 +89,13 @@ def apply(
 
   val persistent_hyper_parameters = List("reg", "temperature")
 
-  val params_enc = Encoder(
-    DataPipe[Map[String, Double], Map[String, Double]](
-      h => Map("alpha" -> h("specificity"), "sigma_sq" -> 0.5 / h("error_wt"))
-    ),
-    DataPipe[Map[String, Double], Map[String, Double]](
-      h => Map("specificity" -> h("alpha"), "error_wt" -> 0.5 / h("sigma_sq"))
-    )
-  )
-
   val logit =
     Encoder((x: Double) => math.log(x / (1d - x)), (x: Double) => sigmoid(x))
-
-  val fitness_function =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-      (preds, targets) => {
-
-        val weighted_error = preds._1
-          .subtract(targets)
-          .square
-          .multiply(preds._2)
-          .sum(axes = 1)
-
-        val entropy = preds._2
-          .multiply(Tensor(-1d).castTo[Double])
-          .multiply(tf.log(preds._2))
-          .sum(axes = 1)
-
-        (weighted_error + entropy).castTo[Float]
-      }
-    )
 
   val fitness_to_scalar =
     DataPipe[Seq[Tensor[Float]], Double](s => {
       val metrics = s.map(_.scalar.toDouble)
-      metrics(1)/metrics.head + metrics(2)/(metrics.head*metrics.head)
+      metrics(2)/(metrics.head*metrics.head) - 2*math.pow(metrics(1)/metrics.head, 2)
     })
 
   val dataset: timelag.utils.TLDATA[Double] =
@@ -252,7 +224,7 @@ def apply(
       architecture,
       hyper_parameters,
       persistent_hyper_parameters,
-      params_enc,
+      helios.learn.cdt_loss.params_enc,
       loss_func_generator,
       hyper_prior,
       iterations,

@@ -1,5 +1,6 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
+import io.github.mandar2812.dynaml.pipes.{DataPipe, Encoder}
 import io.github.mandar2812.dynaml.utils.annotation.Experimental
 import io.github.mandar2812.dynaml.tensorflow._
 import org.platanios.tensorflow.api._
@@ -134,6 +135,16 @@ case class CausalDynamicTimeLag[
 }
 
 object CausalDynamicTimeLag {
+
+
+  val params_enc = Encoder(
+    DataPipe[Map[String, Double], Map[String, Double]](
+      h => Map("alpha" -> h("specificity"), "sigma_sq" -> 0.5 / h("error_wt"))
+    ),
+    DataPipe[Map[String, Double], Map[String, Double]](
+      h => Map("specificity" -> h("alpha"), "error_wt" -> 0.5 / h("sigma_sq"))
+    )
+  )
 
   sealed trait Divergence {
     def apply[T: TF: IsFloatOrDouble](p: Output[T], q: Output[T]): Output[T]

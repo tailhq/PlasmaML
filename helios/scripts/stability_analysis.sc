@@ -33,25 +33,46 @@ val exp_dirs2 = Seq(
   env.summary_dir / "const_v_timelag_mo_2019-04-08-10-51-12"
 )
 
+val extract_state = (p: Path) => {
+  val lines = read.lines! p / "state.csv"
+  lines.head.split(",").zip(lines.last.split(",").map(_.toDouble)).toMap
+}
+
 val stabilities = exp_dirs.map(exp_dir => {
+
+  val state = extract_state(exp_dir)
+
   val triple = timelag.utils.read_cdt_model_preds(
     exp_dir / "test_predictions.csv",
     exp_dir / "test_probabilities.csv",
     exp_dir / "test_data_targets.csv"
   )
 
-  timelag.utils.compute_stability_metrics(triple._1, triple._2, triple._3)
+  timelag.utils.compute_stability_metrics(
+    triple._1, 
+    triple._2, 
+    triple._3, 
+    state, 
+    helios.learn.cdt_loss.params_enc)
 
 })
 
 val stabilities2 = exp_dirs2.map(exp_dir => {
+
+  val state = extract_state(exp_dir)
+
   val triple = timelag.utils.read_cdt_model_preds(
     exp_dir / "test_predictions.csv",
     exp_dir / "test_probabilities.csv",
     exp_dir / "test_data_targets.csv"
   )
 
-  timelag.utils.compute_stability_metrics(triple._1, triple._2, triple._3)
+  timelag.utils.compute_stability_metrics(
+    triple._1, 
+    triple._2, 
+    triple._3,
+    state, 
+    helios.learn.cdt_loss.params_enc)
 
 })
 
@@ -59,6 +80,9 @@ val fte_exp = csss.experiments() |? (_.segments.last
   .contains("fte_omni_mo_tl_2019-04-05-02-21"))
 
 val fte_stability = fte_exp.map(exp_dir => {
+
+  val state = extract_state(exp_dir)
+
   val preds =
     (ls ! exp_dir |? (_.segments.last.contains("predictions_test")))(1)
   val probs =
@@ -76,5 +100,10 @@ val fte_stability = fte_exp.map(exp_dir => {
 
   val triple = fte_model_preds(preds, probs, fte_data)
 
-  compute_stability_metrics(triple._1, triple._2, triple._3)
+  compute_stability_metrics(
+    triple._1, 
+    triple._2, 
+    triple._3,
+    state, 
+    helios.learn.cdt_loss.params_enc)
 })

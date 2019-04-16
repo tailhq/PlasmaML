@@ -114,8 +114,8 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       (c: Map[String, Double]) =>
         Seq(
           PDTModel.s0,
-          PDTModel.c1,
-          PDTModel.c2
+          PDTModel.c1(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window),
+          PDTModel.c2(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window)
         )
     )
 
