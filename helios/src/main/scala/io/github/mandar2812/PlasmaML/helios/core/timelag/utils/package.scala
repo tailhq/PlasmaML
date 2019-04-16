@@ -75,7 +75,11 @@ package object utils {
     if ((i - s) == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct3[T: TF: IsFloatOrDouble](start: Int, repeat: Int, i: Int): Activation[T] =
+  def getReLUAct3[T: TF: IsFloatOrDouble](
+    start: Int,
+    repeat: Int,
+    i: Int
+  ): Activation[T] =
     if ((i - start) < repeat) tf.learn.ReLU(s"Act_$i", 0.01f)
     else tf.learn.Sigmoid(s"Act_$i")
 
@@ -716,7 +720,7 @@ package object utils {
     it: Int,
     epochFlag: Boolean,
     num_data: Int,
-    batch_size: Int, 
+    batch_size: Int,
     freq: Int = 4,
     freq_checkpoint: Int = 1
   ): Set[Hook] =
@@ -844,8 +848,8 @@ package object utils {
     T: TF: IsNumeric: IsNotQuantized,
     L: TF: IsFloatOrDouble
   ](sliding_window: Int,
-    error_var: Double, 
-    specificity: Double,
+    error_var: Double,
+    specificity: Double
   ): Loss[((Output[P], Output[P]), Output[T]), L] =
     helios.learn.pdt_loss("Loss/PDT", error_var, specificity, sliding_window)
 
@@ -867,7 +871,7 @@ package object utils {
 
     val is_stable: Boolean = c2 < 2 * c1 * c1
 
-    val degenerate_unstable: Boolean = c2_d > 2d * (1d - (1d/n))
+    val degenerate_unstable: Boolean = c2_d > 2d * (1d - (1d / n))
   }
 
   def compute_stability_metrics(

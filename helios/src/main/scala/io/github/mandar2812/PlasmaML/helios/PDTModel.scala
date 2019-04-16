@@ -114,8 +114,8 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       (c: Map[String, Double]) =>
         Seq(
           PDTModel.s0,
-          PDTModel.c1(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window),
-          PDTModel.c2(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window)
+          PDTModel.c1,
+          PDTModel.c2
         )
     )
 
@@ -179,7 +179,8 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
         p ++ h,
         Some(train_config),
         evaluation_metrics = eval_metrics,
-        eval_trigger
+        eval_trigger,
+        true
       )
 
       println("Computing PDT stability metrics.")
@@ -283,7 +284,8 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       p.toMap ++ final_config,
       Some(train_config),
       evaluation_metrics = eval_metrics,
-      eval_trigger
+      eval_trigger,
+      true
     )
 
     (model, final_config)
