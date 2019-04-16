@@ -214,7 +214,7 @@ def apply(
         prior_wt = 1d,
         prior_divergence = prior_type,
         target_dist = target_prob,
-        temp = h("temperature"),
+        temp = h.getOrElse("temperature", 1.0),
         error_wt = h("error_wt"),
         c = h("specificity")
       )
