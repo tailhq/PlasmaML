@@ -101,25 +101,6 @@ def apply(
   val logit =
     Encoder((x: Double) => math.log(x / (1d - x)), (x: Double) => sigmoid(x))
 
-  val hyp_scaling = hyper_prior.map(
-    p =>
-      (
-        p._1,
-        Encoder(
-          (x: Double) => (x - p._2.min) / (p._2.max - p._2.min),
-          (u: Double) => u * (p._2.max - p._2.min) + p._2.min
-        )
-      )
-  )
-
-  val hyp_mapping = Some(
-    hyper_parameters
-      .map(
-        h => (h, hyp_scaling(h) > logit)
-      )
-      .toMap
-  )
-
   val fitness_function =
     DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
       (preds, targets) => {
@@ -204,6 +185,25 @@ def apply(
           "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
         )
     }
+
+    val hyp_scaling = hyper_prior.map(
+      p =>
+        (
+          p._1,
+          Encoder(
+            (x: Double) => (x - p._2.min) / (p._2.max - p._2.min),
+            (u: Double) => u * (p._2.max - p._2.min) + p._2.min
+          )
+        )
+    )
+
+    val hyp_mapping = Some(
+      hyper_parameters
+        .map(
+          h => (h, hyp_scaling(h) > logit)
+        )
+        .toMap
+    )
 
     val loss_func_generator = (h: Map[String, Double]) => {
 
