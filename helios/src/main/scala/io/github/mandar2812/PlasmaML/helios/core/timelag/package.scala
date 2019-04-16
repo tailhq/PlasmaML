@@ -1948,8 +1948,13 @@ package object timelag {
 
         val tf_summary_dir = summaries_top_dir / summary_dir_index
 
+        val (adjusted_iterations, adjusted_iterations_tuning) = (
+          iterations / (pdt_iterations + 1),
+          iterations_tuning / (pdt_iterations + 1)
+        )
+
         val stop_condition_tuning = get_stop_condition(
-          iterations_tuning,
+          adjusted_iterations_tuning,
           0.05,
           epochFlag,
           data_size,
@@ -1957,7 +1962,7 @@ package object timelag {
         )
 
         val stop_condition_test =
-          get_stop_condition(iterations, 0.01, epochFlag, data_size, miniBatch)
+          get_stop_condition(adjusted_iterations, 0.01, epochFlag, data_size, miniBatch)
 
         val stackOperationP =
           DataPipe[Iterable[(Tensor[T], Tensor[T])], (Tensor[T], Tensor[T])](
@@ -2014,7 +2019,7 @@ package object timelag {
               Some(
                 get_train_hooks(
                   tf_summary_dir / config_to_dir(h),
-                  iterations_tuning,
+                  adjusted_iterations_tuning,
                   epochFlag,
                   data_size,
                   miniBatch,
@@ -2034,7 +2039,7 @@ package object timelag {
             trainHooks = Some(
               get_train_hooks(
                 tf_summary_dir,
-                iterations,
+                adjusted_iterations,
                 epochFlag,
                 data_size,
                 miniBatch,
@@ -2125,7 +2130,7 @@ package object timelag {
           hyper_prior.mapValues(_.draw),
           Map(
             "loops"       -> pdt_iterations.toString,
-            "evalTrigger" -> (iterations_tuning/checkpointing_freq).toString
+            "evalTrigger" -> (adjusted_iterations_tuning/checkpointing_freq).toString
           )
         )
 
@@ -2145,7 +2150,7 @@ package object timelag {
           pdt_iterations,
           config,
           Some(train_config_test),
-          Some(iterations / checkpointing_freq)
+          Some(adjusted_iterations / checkpointing_freq)
         )
 
         write(

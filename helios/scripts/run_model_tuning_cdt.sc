@@ -87,20 +87,6 @@ def apply(
 
   val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
 
-  val hyper_parameters = List(
-    "error_wt",
-    "temperature",
-    "specificity",
-    "reg"
-  )
-
-  val hyper_prior = Map(
-    "error_wt"    -> UniformRV(0d, 1.5),
-    "temperature" -> UniformRV(1d, 2.0),
-    "specificity" -> UniformRV(0.5, 2.5),
-    "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
-  )
-
   val persistent_hyper_parameters = List("reg", "temperature")
 
   val params_enc = Encoder(
@@ -182,6 +168,42 @@ def apply(
        prior_type          <- prior_types;
        target_prob         <- target_probs;
        regularization_type <- regularization_types) yield {
+
+    val hyper_parameters = target_prob match {
+
+      case helios.learn.cdt_loss.Boltzmann =>
+        List(
+          "error_wt",
+          "temperature",
+          "specificity",
+          "reg"
+        )
+
+      case _ =>
+        List(
+          "error_wt",
+          "specificity",
+          "reg"
+        )
+    }
+
+    val hyper_prior = target_prob match {
+
+      case helios.learn.cdt_loss.Boltzmann =>
+        Map(
+          "error_wt"    -> UniformRV(0d, 1.5),
+          "temperature" -> UniformRV(1d, 2.0),
+          "specificity" -> UniformRV(0.5, 2.5),
+          "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+        )
+
+      case _ =>
+        Map(
+          "error_wt"    -> UniformRV(0d, 1.5),
+          "specificity" -> UniformRV(0.5, 2.5),
+          "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+        )
+    }
 
     val loss_func_generator = (h: Map[String, Double]) => {
 
