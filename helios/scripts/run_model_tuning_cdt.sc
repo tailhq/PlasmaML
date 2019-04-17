@@ -150,14 +150,14 @@ def apply(
           "error_wt"    -> UniformRV(0d, 1.5),
           "temperature" -> UniformRV(1d, 2.0),
           "specificity" -> UniformRV(0.5, 2.5),
-          "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+          "reg"      -> UniformRV(-5d, -3d)
         )
 
       case _ =>
         Map(
           "error_wt"    -> UniformRV(0d, 1.5),
           "specificity" -> UniformRV(0.5, 2.5),
-          "reg"         -> UniformRV(math.pow(10d, -5d), math.pow(10d, -3d))
+          "reg"      -> UniformRV(-5d, -3d)
         )
     }
 
@@ -201,7 +201,7 @@ def apply(
             layer_parameter_names,
             layer_datatypes,
             layer_shapes,
-            h("reg"),
+            math.exp(h("reg")),
             "L1Reg"
           )
         else
@@ -210,7 +210,7 @@ def apply(
             layer_parameter_names,
             layer_datatypes,
             layer_shapes,
-            h("reg"),
+            math.exp(h("reg")),
             "L2Reg"
           )
 

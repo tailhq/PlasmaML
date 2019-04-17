@@ -3,13 +3,6 @@ import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
-import _root_.org.json4s._
-import _root_.org.json4s.JsonDSL._
-import _root_.org.json4s.jackson.Serialization.{
-  read => read_json,
-  write => write_json
-}
-import org.json4s.jackson.JsonMethods._
 
 import _root_.org.platanios.tensorflow.api._
 
@@ -37,6 +30,12 @@ val extract_state = (p: Path) => {
   val lines = read.lines! p / "state.csv"
   lines.head.split(",").zip(lines.last.split(",").map(_.toDouble)).toMap
 }
+
+val exp_dirs = List(
+  root/'ufs/'chandork/'tmp/"const_v_timelag_mo_2019-04-16-22-38-58",
+  root/'ufs/'chandork/'tmp/"const_a_timelag_mo_2019-04-17-07-00-13",
+  root/'ufs/'chandork/'tmp/"softplus_timelag_mo_2019-04-16-23-29-07"
+)
 
 val stabilities = exp_dirs.map(exp_dir => {
 
