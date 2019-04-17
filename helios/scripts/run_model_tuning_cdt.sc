@@ -95,7 +95,8 @@ def apply(
   val fitness_to_scalar =
     DataPipe[Seq[Tensor[Float]], Double](s => {
       val metrics = s.map(_.scalar.toDouble)
-      metrics(2)/(metrics.head*metrics.head) - 2*math.pow(metrics(1)/metrics.head, 2)
+      metrics(2) / (metrics.head * metrics.head) - 2 * math
+        .pow(metrics(1) / metrics.head, 2)
     })
 
   val dataset: timelag.utils.TLDATA[Double] =
@@ -150,14 +151,14 @@ def apply(
           "error_wt"    -> UniformRV(0d, 1.5),
           "temperature" -> UniformRV(1d, 2.0),
           "specificity" -> UniformRV(0.5, 2.5),
-          "reg"      -> UniformRV(-5d, -3d)
+          "reg"         -> UniformRV(-5d, -3d)
         )
 
       case _ =>
         Map(
           "error_wt"    -> UniformRV(0d, 1.5),
           "specificity" -> UniformRV(0.5, 2.5),
-          "reg"      -> UniformRV(-5d, -3d)
+          "reg"         -> UniformRV(-5d, -2.5d)
         )
     }
 
