@@ -93,7 +93,7 @@ def apply(
   val hyper_prior = Map(
     "sigma_sq" -> UniformRV(1d, 10d),
     "alpha"    -> UniformRV(0.75d, 2d),
-    "reg"      -> UniformRV(-5d, -3d)
+    "reg"      -> UniformRV(-6d, -5d)
   )
 
   val params_enc = Encoder(
@@ -123,8 +123,8 @@ def apply(
       .toMap
   )
 
-  val fitness_to_scalar = DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum)
-
+  val fitness_to_scalar =
+    DataPipe[Seq[Tensor[Float]], Double](s => s.map(_.scalar.toDouble).sum)
 
   val dataset: timelag.utils.TLDATA[Double] =
     timelag.utils.generate_data[Double](
@@ -154,7 +154,9 @@ def apply(
     val loss_func_generator = (h: Map[String, Double]) => {
 
       val lossFunc = timelag.utils.get_pdt_loss[Double, Double, Double](
-        sliding_window, h("sigma_sq"), h("alpha")
+        sliding_window,
+        h("sigma_sq"),
+        h("alpha")
       )
 
       val reg_layer =
