@@ -2153,10 +2153,12 @@ package object timelag {
           Some(adjusted_iterations / checkpointing_freq)
         )
 
+        val chosen_config = config.filterKeys(persistent_hyp_params.contains) ++ best_config
+
         write(
           tf_summary_dir / "state.csv",
-          best_config.keys.mkString(start = "", sep = ",", end = "\n") +
-            best_config.values.mkString(start = "", sep = ",", end = "")
+          chosen_config.keys.mkString(start = "", sep = ",", end = "\n") +
+          chosen_config.values.mkString(start = "", sep = ",", end = "")
         )
 
         val model_predictions_test = best_model.infer_batch(

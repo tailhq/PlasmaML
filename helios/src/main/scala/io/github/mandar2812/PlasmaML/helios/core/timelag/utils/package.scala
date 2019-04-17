@@ -882,7 +882,9 @@ package object utils {
     params_enc: Encoder[
       Map[String, Double],
       Map[String, Double]
-    ]
+    ],
+    std_pipe: DataPipe[Tensor[Double], (Tensor[Double], GaussianScalerTF[Double])] = 
+      dtfpipe.gauss_std[Double]()
   ): Stability = {
 
     val (alpha, sigma_sq) = {
@@ -896,15 +898,22 @@ package object utils {
 
     val two = Tensor(2d).reshape(Shape())
 
+    //First standardize the targets and predictions
+    //because during training the saddle point probabilities
+    //were computed with respect to the standardized quantities.
+    val (_, gauss_scaler) = std_pipe(tfi.stack(targets.data.toSeq, axis = 0))
+    
     val compute_metrics = DataPipe[ZipPattern, StabTriple](zp => {
 
       val ((y, prob), t) = zp
 
       val sq_error = y.subtract(t).square
 
+      val std_sq_error = gauss_scaler(y).subtract(gauss_scaler(t)).square
+
       val un_p = prob * (
         tfi.exp(
-          tfi.log(one + alpha) / two - (sq_error * alpha) / (two * sigma_sq)
+          tfi.log(one + alpha) / two - (std_sq_error * alpha) / (two * sigma_sq)
         )
       )
 

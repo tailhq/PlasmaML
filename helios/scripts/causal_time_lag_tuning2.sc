@@ -17,8 +17,8 @@ val exp_set2 = tuning_exp2.main(
   noiserot = 0.001,
   alpha = 0.02,
   train_test_separate = true,
-  num_neurons = Seq(50, 50, 50),
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i),
+  num_neurons = Seq(40, 40),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i),
   iterations = 60000,
   iterations_tuning = 10000,
   pdt_iterations = 3,
@@ -29,11 +29,11 @@ val exp_set2 = tuning_exp2.main(
     Seq(helios.learn.cdt_loss.Boltzmann),
   confounding = Seq(0d),
   dist_type = "default",
-  num_samples = 20,
+  num_samples = 4,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),
-  checkpointing_freq = 3
+  checkpointing_freq = 2
 )
 
 timelag.organize_results(exp_set2, home / 'tmp / 'results_exp2, "exp2_")
@@ -71,7 +71,7 @@ val exp_set3 = tuning_exp3.main(
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),
-  checkpointing_freq = 3
+  checkpointing_freq = 2
 )
 
 timelag.organize_results(exp_set3, home / 'tmp / 'results_exp3, "exp3_")
@@ -108,7 +108,8 @@ val exp_set4 = tuning_exp4.main(
   num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
-  regularization_types = Seq("L2")
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 2
 )
 
 timelag.organize_results(exp_set4, home / 'tmp / 'results_exp4, "exp4_")
@@ -145,7 +146,8 @@ val exp_set1 = tuning_exp1.main(
   num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
-  regularization_types = Seq("L2")
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 2
 )
 
 timelag.organize_results(exp_set1, home / 'tmp / 'results_exp1, "exp1_")
