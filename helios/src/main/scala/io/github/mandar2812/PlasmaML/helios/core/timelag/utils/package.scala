@@ -909,7 +909,7 @@ package object utils {
       )
 
       //Calculate the saddle point probability
-      val p = un_p / un_p.sum(axes = 1, keepDims = true)
+      val p = un_p / un_p.sum(axes = 0, keepDims = true)
 
       val s0 = sq_error.sum().scalar
 
