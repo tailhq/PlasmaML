@@ -509,6 +509,8 @@ package object fte {
     val tf_summary_dir_tmp =
       existing_exp.getOrElse(summary_top_dir / summary_dir_index)
 
+    val adj_fraction_pca = math.min(math.abs(fraction_pca), 1d)
+
     val experiment_config = FteOmniConfig(
       FTEConfig(
         (year_range.min, year_range.max),
@@ -521,7 +523,7 @@ package object fte {
       multi_output = true,
       probabilistic_time_lags = true,
       timelag_prediction = "mode",
-      fraction_variance = fraction_pca
+      fraction_variance = adj_fraction_pca
     )
 
     val existing_config = read_exp_config(tf_summary_dir_tmp / "config.json")
@@ -611,7 +613,7 @@ package object fte {
 
     val data_size = dataset.training_dataset.size
 
-    val scaling_op = scale_timed_data2[Double](fraction = fraction_pca)
+    val scaling_op = scale_timed_data2[Double](fraction = adj_fraction_pca)
 
     if (!use_cached_data) {
       println("Writing data sets")

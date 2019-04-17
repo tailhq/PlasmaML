@@ -129,6 +129,7 @@ case class CausalDynamicTimeLag[
       .mean()
       .multiply(Tensor(error_wt).toOutput.castTo[P])
       .add(prior_term.multiply(Tensor(prior_wt).castTo[P]))
+      .add((Tensor(size_causal_window.toDouble)*tfi.log(Tensor(0.5/error_wt))).castTo[P])
       .reshape(Shape())
       .castTo[L]
   }
@@ -769,7 +770,7 @@ case class ProbabilisticDynamicTimeLag[
     val divergence_term = CausalDynamicTimeLag.KullbackLeibler(p, prob)
 
 
-    val expanded_loss = (model_errors_sq*(p*alpha + one)/(s*two)) + divergence_term - p*tf.log(alpha + one)/two 
+    val expanded_loss = (model_errors_sq*(p*alpha + one)/(s*two)) - p*tf.log(alpha + one)/two 
     
     
     
@@ -784,7 +785,7 @@ case class ProbabilisticDynamicTimeLag[
       .subtract(n * tf.log(s) / two)
       .castTo[L] */
 
-    (expanded_loss.sum(axes = 1).mean() + n*tf.log(s)).castTo[L]
+    (expanded_loss.sum(axes = 1).mean() + divergence_term + n*tf.log(s)).castTo[L]
     
   }
 }

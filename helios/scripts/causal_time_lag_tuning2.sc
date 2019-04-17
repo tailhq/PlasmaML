@@ -29,7 +29,7 @@ val exp_set2 = tuning_exp2.main(
     Seq(helios.learn.cdt_loss.Boltzmann),
   confounding = Seq(0d),
   dist_type = "default",
-  num_samples = 20,
+  num_samples = 4,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),

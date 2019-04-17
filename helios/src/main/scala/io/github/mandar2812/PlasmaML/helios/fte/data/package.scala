@@ -82,18 +82,19 @@ package object data {
       .dataset(process_carrington_file(carrington_rotation_table))
       .to_zip(read_time_stamps)
 
+  val read_lines_gong = (gong_file: Path) =>
+    (read.lines ! gong_file).toIterable.drop(3)
 
-  val read_lines_gong = (gong_file: Path) => (read.lines ! gong_file).toIterable.drop(3)
+  val read_lines_hmi = (hmi_file: Path) =>
+    (read.lines ! hmi_file).toIterable.drop(4)
 
-  val read_lines_hmi = (hmi_file: Path) => (read.lines ! hmi_file).toIterable.drop(4) 
-  
   val fte_file = MetaPipe(
     (data_path: Path) =>
       (carrington_rotation: Int) => {
         val hmi_file  = data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
         val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
-        
-        if(exists ! hmi_file) read_lines_hmi(hmi_file) 
+
+        if (exists ! hmi_file) read_lines_hmi(hmi_file)
         else read_lines_gong(gong_file)
       }
   )
@@ -485,10 +486,15 @@ package object data {
         )
         .data
 
-      val perform_lossy_pca =
+      val perform_lossy_pca = if (fraction < 1d) {
         calculatePCAScalesFeatures(false) >
           tup2_2[Iterable[DenseVector[Double]], PCAScaler] >
           compressPCA(fraction)
+      } else {
+        DataPipe[Iterable[DenseVector[Double]], Scaler[DenseVector[Double]]](
+          _ => Scaler(identity[DenseVector[Double]])
+        )
+      }
 
       val scale_features =
         DataPipe[
@@ -501,7 +507,7 @@ package object data {
           (ds.map(gs(_)), gs)
         }) >
           (perform_lossy_pca * identityPipe[GaussianScaler]) >
-          DataPipe2[CompressedPCAScaler, GaussianScaler, Scaler[
+          DataPipe2[Scaler[DenseVector[Double]], GaussianScaler, Scaler[
             DenseVector[Double]
           ]](
             (pca, gs) => gs > pca
@@ -822,68 +828,69 @@ package object data {
 
     val process_pattern = pattern_to_map > map_to_json
 
-    val write_pattern_train: String => Unit = 
-      line => write.append(
-        directory / s"training_data_${identifier}.json",
-        s"${line}\n"
-      )
+    val write_pattern_train: String => Unit =
+      line =>
+        write.append(
+          directory / s"training_data_${identifier}.json",
+          s"${line}\n"
+        )
 
-    val write_pattern_test: String => Unit = 
-      line => write.append(
-        directory / s"test_data_${identifier}.json",
-        s"${line}\n"
-      )
-    
+    val write_pattern_test: String => Unit =
+      line =>
+        write.append(
+          directory / s"test_data_${identifier}.json",
+          s"${line}\n"
+        )
 
     dataset.training_dataset
       .map(process_pattern)
       .data
       .foreach(write_pattern_train)
-    
-    
+
     dataset.test_dataset
       .map(process_pattern)
       .data
       .foreach(write_pattern_test)
   }
 
-  def read_exp_config(
-    file: Path
-  ): Option[FteOmniConfig] = 
-    if(exists! file) {
+  def read_exp_config(file: Path): Option[FteOmniConfig] =
+    if (exists ! file) {
       try {
-        val config = parse((read.lines! file).head).values.asInstanceOf[Map[String, Any]]
-        val fte_config = config("fte_config").asInstanceOf[Map[String, Any]]
+        val config = parse((read.lines ! file).head).values
+          .asInstanceOf[Map[String, Any]]
+        val fte_config  = config("fte_config").asInstanceOf[Map[String, Any]]
         val omni_config = config("omni_config").asInstanceOf[Map[String, Any]]
 
-        val omni_deltaT =  omni_config("deltaT").asInstanceOf[Map[String, BigInt]]
-        val fte_data_limits =  fte_config("data_limits").asInstanceOf[Map[String, BigInt]]
+        val omni_deltaT = omni_config("deltaT")
+          .asInstanceOf[Map[String, BigInt]]
+        val fte_data_limits = fte_config("data_limits")
+          .asInstanceOf[Map[String, BigInt]]
 
         Some(
           FteOmniConfig(
-          FTEConfig(
-            data_limits = (
-              fte_data_limits("_1$mcI$sp").toInt,
-              fte_data_limits("_2$mcI$sp").toInt
+            FTEConfig(
+              data_limits = (
+                fte_data_limits("_1$mcI$sp").toInt,
+                fte_data_limits("_2$mcI$sp").toInt
+              ),
+              fte_config("deltaTFTE").asInstanceOf[BigInt].toInt,
+              fte_config("fteStep").asInstanceOf[BigInt].toInt,
+              fte_config("latitude_limit").asInstanceOf[Double],
+              fte_config("log_scale_fte").asInstanceOf[Boolean]
             ),
-            fte_config("deltaTFTE").asInstanceOf[BigInt].toInt,
-            fte_config("fteStep").asInstanceOf[BigInt].toInt,
-            fte_config("latitude_limit").asInstanceOf[Double],
-            fte_config("log_scale_fte").asInstanceOf[Boolean]
-          ),
-          OMNIConfig(
-            (
-              omni_deltaT("_1$mcI$sp").toInt,
-              omni_deltaT("_2$mcI$sp").toInt
-            ), 
-            omni_config("log_flag").asInstanceOf[Boolean]
-          ),
-          config("multi_output").asInstanceOf[Boolean],
-          config("probabilistic_time_lags").asInstanceOf[Boolean],
-          config("timelag_prediction").asInstanceOf[String],
-          config("fraction_variance").asInstanceOf[Double]
+            OMNIConfig(
+              (
+                omni_deltaT("_1$mcI$sp").toInt,
+                omni_deltaT("_2$mcI$sp").toInt
+              ),
+              omni_config("log_flag").asInstanceOf[Boolean]
+            ),
+            config("multi_output").asInstanceOf[Boolean],
+            config("probabilistic_time_lags").asInstanceOf[Boolean],
+            config("timelag_prediction").asInstanceOf[String],
+            config("fraction_variance").asInstanceOf[Double]
+          )
         )
-      )
 
       } catch {
         case _: Exception => None
@@ -898,8 +905,9 @@ package object data {
   ): helios.data.TF_DATA_T2[DenseVector[Double], Double] = {
 
     require(
-      exists! training_data_file && exists! test_data_file, 
-      "Both training and test files must exist.")
+      exists ! training_data_file && exists ! test_data_file,
+      "Both training and test files must exist."
+    )
 
     val dt_format = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
@@ -955,24 +963,25 @@ package object data {
   }
 
   def fte_model_preds(
-    preds: Path, 
-    probs: Path, 
-    fte_data: Path): timelag.utils.DataTriple = {
+    preds: Path,
+    probs: Path,
+    fte_data: Path
+  ): timelag.utils.DataTriple = {
 
     val read_file = DataPipe((p: Path) => read.lines ! p)
-  
+
     val split_lines = IterableDataPipe(
       (line: String) => line.split(',').map(_.toDouble)
     )
-  
+
     val load_into_tensor = IterableDataPipe(
       (ls: Array[Double]) => dtf.tensor_f64(ls.length)(ls.toSeq: _*)
     )
-  
+
     val filter_non_empty_lines = IterableDataPipe((l: String) => !l.isEmpty)
-  
+
     val read_json_record = IterableDataPipe((s: String) => parse(s))
-  
+
     val load_targets = IterableDataPipe((record: JValue) => {
       val targets_seq = record
         .findField(p => p._1 == "targets")
@@ -980,23 +989,22 @@ package object data {
         ._2
         .values
         .asInstanceOf[List[Double]]
-  
+
       val targets = dtf.tensor_f64(targets_seq.length)(targets_seq: _*)
-  
+
       targets
     })
-  
+
     val pipeline_fte = read_file > filter_non_empty_lines > read_json_record > load_targets
-  
+
     val pipeline_model = read_file > split_lines > load_into_tensor
-  
+
     (
       dtfdata.dataset(Seq(preds)).flatMap(pipeline_model),
       dtfdata.dataset(Seq(probs)).flatMap(pipeline_model),
       dtfdata.dataset(Seq(fte_data)).flatMap(pipeline_fte)
     )
-  
+
   }
-  
 
 }
