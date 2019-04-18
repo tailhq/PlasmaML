@@ -180,7 +180,7 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
         Some(train_config),
         evaluation_metrics = eval_metrics,
         eval_trigger,
-        true
+        evaluate_train = false
       )
 
       println("Computing PDT stability metrics.")
@@ -285,7 +285,7 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       Some(train_config),
       evaluation_metrics = eval_metrics,
       eval_trigger,
-      true
+      evaluate_train = false
     )
 
     (model, final_config)

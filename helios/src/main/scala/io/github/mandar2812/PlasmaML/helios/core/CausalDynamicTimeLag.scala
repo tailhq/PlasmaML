@@ -129,14 +129,16 @@ case class CausalDynamicTimeLag[
       .mean()
       .multiply(Tensor(error_wt).toOutput.castTo[P])
       .add(prior_term.multiply(Tensor(prior_wt).castTo[P]))
-      .add((Tensor(size_causal_window.toDouble)*tfi.log(Tensor(0.5/error_wt))).castTo[P])
+      .add(
+        (Tensor(size_causal_window.toDouble) * tfi.log(Tensor(0.5 / error_wt)))
+          .castTo[P]
+      )
       .reshape(Shape())
       .castTo[L]
   }
 }
 
 object CausalDynamicTimeLag {
-
 
   val params_enc = Encoder(
     DataPipe[Map[String, Double], Map[String, Double]](
@@ -246,22 +248,27 @@ object CausalDynamicTimeLag {
   def output_mapping[P: TF: IsFloatOrDouble](
     name: String,
     size_causal_window: Int
-  ): Layer[Output[P], (Output[P], Output[P])] =
-    new Layer[Output[P], (Output[P], Output[P])](name) {
-      override val layerType: String =
-        s"OutputWTSLoss[horizon:$size_causal_window]"
+  ): Layer[Output[P], (Output[P], Output[P])] = {
 
-      override def forwardWithoutContext(
-        input: Output[P]
-      )(
-        implicit mode: Mode
-      ): (Output[P], Output[P]) = {
-        (
-          input(::, 0 :: size_causal_window),
-          input(::, size_causal_window ::).softmax()
-        )
+    val softmax_layer =
+      new Layer[Output[P], Output[P]]("Probability/Softmax") {
+        override val layerType: String = s"Softmax"
+
+        override def forwardWithoutContext(
+          input: Output[P]
+        )(
+          implicit mode: Mode
+        ): Output[P] = input.softmax()
       }
-    }
+
+    val outputs_segment = tf.learn.Linear[P]("Outputs", size_causal_window)
+
+    val timelag_segment =
+      tf.learn.Linear[P]("TimeLags", size_causal_window) >> softmax_layer
+
+    dtflearn.bifurcation_layer(name, outputs_segment, timelag_segment)
+
+  }
 }
 
 case class CausalDynamicTimeLagI[
@@ -720,7 +727,7 @@ case class ProbabilisticDynamicTimeLag[
   T: TF: IsNumeric,
   L: TF: IsFloatOrDouble
 ](override val name: String,
-  error_var: Double, 
+  error_var: Double,
   specificity: Double,
   size_causal_window: Int)
     extends Loss[((Output[P], Output[P]), Output[T]), L](name) {
@@ -739,7 +746,6 @@ case class ProbabilisticDynamicTimeLag[
 
     val model_errors_sq = preds.subtract(targets.castTo[P]).square
 
-
     val n = tf.constant(
       Tensor(size_causal_window).reshape(Shape()).castTo[P],
       Shape(),
@@ -750,12 +756,16 @@ case class ProbabilisticDynamicTimeLag[
 
     val two = tf.constant(Tensor(2d).reshape(Shape()).castTo[P], Shape(), "two")
 
-    val alpha = tf.constant(Tensor(specificity).reshape(Shape()).castTo[P], Shape(), "alpha")
-    val s     = tf.constant(Tensor(error_var).reshape(Shape()).castTo[P], Shape(), "s")
+    val alpha = tf.constant(
+      Tensor(specificity).reshape(Shape()).castTo[P],
+      Shape(),
+      "alpha"
+    )
+    val s =
+      tf.constant(Tensor(error_var).reshape(Shape()).castTo[P], Shape(), "s")
 
     val lambda =
       tf.constant(Tensor(0.995).reshape(Shape()).castTo[P], Shape(), "lambda")
-
 
     val un_p = prob * (
       tf.exp(
@@ -766,14 +776,11 @@ case class ProbabilisticDynamicTimeLag[
     //Calculate the saddle point probability
     val p = un_p / un_p.sum(axes = 1, keepDims = true)
 
-
     val divergence_term = CausalDynamicTimeLag.KullbackLeibler(p, prob)
 
+    val expanded_loss = (model_errors_sq * (p * alpha + one) / (s * two)) - p * tf
+      .log(alpha + one) / two
 
-    val expanded_loss = (model_errors_sq*(p*alpha + one)/(s*two)) - p*tf.log(alpha + one)/two 
-    
-    
-    
     /* val log_partition_function = tf.log(
       (prob * tf.exp(
         tf.log(one + alpha) / two - model_errors_sq * alpha / (two * s)
@@ -785,7 +792,8 @@ case class ProbabilisticDynamicTimeLag[
       .subtract(n * tf.log(s) / two)
       .castTo[L] */
 
-    (expanded_loss.sum(axes = 1).mean() + divergence_term + n*tf.log(s)).castTo[L]
-    
+    (expanded_loss.sum(axes = 1).mean() + divergence_term + n * tf.log(s))
+      .castTo[L]
+
   }
 }

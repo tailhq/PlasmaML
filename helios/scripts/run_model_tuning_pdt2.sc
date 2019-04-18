@@ -63,27 +63,57 @@ def apply(
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     dtfutils.get_ffstack_properties(
       d,
-      num_neurons.last,
-      num_neurons.take(num_neurons.length - 1),
+      sliding_window,
+      num_neurons,
       "FLOAT64"
     )
 
-  val output_mapping = helios.learn.cdt_loss.output_mapping[Double](
-    "PDTNetwork", 
-    sliding_window,
-  )
+  val (
+    net_layer_sizes_2,
+    layer_shapes_2,
+    layer_parameter_names_2,
+    layer_datatypes_2
+  ) =
+    dtfutils.get_ffstack_properties(
+      d,
+      sliding_window,
+      num_neurons,
+      "FLOAT64"
+    )
+
+  val softmax_layer =
+    new Layer[Output[Double], Output[Double]]("Output/Softmax") {
+      override val layerType: String = s"Softmax"
+
+      override def forwardWithoutContext(
+        input: Output[Double]
+      )(
+        implicit mode: Mode
+      ): Output[Double] = input.softmax()
+    }
+
+  val outputs_segment =
+    dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail)
+
+  val tl_start_index = net_layer_sizes.tail.length + 1
+
+  val timelag_segment =
+    dtflearn.feedforward_stack[Double](
+      (i: Int) => timelag.utils.getReLUAct2[Double](tl_start_index, i)
+    )(
+      net_layer_sizes.tail,
+      starting_index = tl_start_index
+    ) >> softmax_layer
 
   //Prediction architecture
   val architecture =
-    dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
-      activation_func(net_layer_sizes.tail.length) >>
-      output_mapping
+    dtflearn.bifurcation_layer("PDTNetwork", outputs_segment, timelag_segment)
 
   val scope = dtfutils.get_scope(architecture) _
 
-  val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
-
-  val output_scope = scope("Outputs")
+  val layer_scopes =
+    layer_parameter_names.map(n => scope(n.split("/").head)) /* ++
+      layer_parameter_names_2.map(n => scope(n.split("/").head)) */
 
   val hyper_parameters = List(
     "sigma_sq",
@@ -94,9 +124,9 @@ def apply(
   val persistent_hyper_parameters = List("reg")
 
   val hyper_prior = Map(
-    "sigma_sq" -> UniformRV(1E-5, 5d),
+    "sigma_sq" -> UniformRV(1d, 10d),
     "alpha"    -> UniformRV(0.75d, 2d),
-    "reg"      -> UniformRV(-5d, -3d)
+    "reg"      -> UniformRV(-6d, -5d)
   )
 
   val params_enc = Encoder(
@@ -165,19 +195,19 @@ def apply(
       val reg_layer =
         if (regularization_type == "L1")
           L1Regularization[Double](
-            layer_scopes :+ output_scope,
-            layer_parameter_names :+ "Outputs/Weights",
-            layer_datatypes :+ "FLOAT64",
-            layer_shapes :+ Shape(num_neurons.last, sliding_window),
+            layer_scopes,
+            layer_parameter_names, //++ layer_parameter_names_2,
+            layer_datatypes,       //++ layer_datatypes_2,
+            layer_shapes,          //++ layer_shapes_2,
             math.exp(h("reg")),
             "L1Reg"
           )
         else
           L2Regularization[Double](
-            layer_scopes :+ output_scope,
-            layer_parameter_names :+ "Outputs/Weights",
-            layer_datatypes :+ "FLOAT64",
-            layer_shapes :+ Shape(num_neurons.last, sliding_window),
+            layer_scopes,
+            layer_parameter_names, //++ layer_parameter_names_2,
+            layer_datatypes,       //++ layer_datatypes_2,
+            layer_shapes,          //++ layer_shapes_2,
             math.exp(h("reg")),
             "L2Reg"
           )
