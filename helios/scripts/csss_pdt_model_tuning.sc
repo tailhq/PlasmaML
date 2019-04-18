@@ -25,8 +25,6 @@ def apply(
   end_year: Int = 2017,
   test_year: Int = 2015,
   sw_threshold: Double = 700d,
-  divergence_term: helios.learn.cdt_loss.Divergence =
-    helios.learn.cdt_loss.KullbackLeibler,
   network_size: Seq[Int] = Seq(100, 60),
   activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
     timelag.utils.getReLUAct[Double](1, i),
@@ -41,7 +39,8 @@ def apply(
   causal_window: (Int, Int) = (48, 56),
   max_iterations: Int = 100000,
   max_iterations_tuning: Int = 20000,
-  num_samples: Int = 20,
+  pdt_iterations: Int = 4,
+  num_samples: Int = 4,
   hyper_optimizer: String = "gs",
   batch_size: Int = 32,
   optimization_algo: tf.train.Optimizer = tf.train.AdaDelta(0.01f),
@@ -49,24 +48,40 @@ def apply(
   hyp_opt_iterations: Option[Int] = Some(5),
   get_training_preds: Boolean = false,
   reg_type: String = "L2",
-  existing_exp: Option[Path] = None
+  existing_exp: Option[Path] = None,
+  checkpointing_freq: Int = 1
 ): helios.Experiment[Double, fte.ModelRunTuning, fte.data.FteOmniConfig] = {
 
-  val num_pred_dims = timelag.utils.get_num_output_dims(
-    causal_window._2,
-    mo_flag = true,
-    prob_timelags = true,
-    dist_type = "default"
+  val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
+    dtfutils.get_ffstack_properties(
+      -1,
+      network_size.last,
+      network_size.take(network_size.length - 1),
+      "FLOAT64"
+    )
+
+  val output_mapping = helios.learn.cdt_loss.output_mapping[Double](
+    "PDTNetwork",
+    causal_window._2
   )
 
-  val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
-    timelag.utils.get_ffnet_properties(-1, num_pred_dims, network_size)
+  val hyper_parameters = List(
+    "sigma_sq",
+    "alpha",
+    "reg"
+  )
 
-  val output_mapping = timelag.utils.get_output_mapping[Double](
-    causal_window._2,
-    mo_flag = true,
-    prob_timelags = true,
-    dist_type = "default"
+  val persistent_hyper_parameters = List("reg")
+
+  val hyper_prior = Map(
+    "sigma_sq" -> UniformRV(1e-5, 5d),
+    "alpha"    -> UniformRV(0.75d, 2d),
+    "reg"      -> UniformRV(-5d, -3d)
+  )
+
+  val params_enc = Encoder(
+    identityPipe[Map[String, Double]],
+    identityPipe[Map[String, Double]]
   )
 
   val filter_depths = Seq(
@@ -108,16 +123,16 @@ def apply(
       dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
       output_mapping
   } else {
-    dtflearn.feedforward_stack[Double](activation_func)(
-      net_layer_sizes.tail,
-      weightsInitializer = tf.GlorotUniformInitializer()
-    ) >>
+    dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
+      activation_func(net_layer_sizes.tail.length) >>
       output_mapping
   }
 
   val scope = dtfutils.get_scope(architecture) _
 
   val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").head))
+
+  val output_scope = scope("Outputs")
 
   implicit val detImpl = DynaMLPipe.identityPipe[Double]
 
@@ -143,16 +158,6 @@ def apply(
 
   val lu_reg = h10 -> UniformRV(-4d, -2.5d)
 
-  val hyper_parameters = List(
-    "temperature",
-    "reg"
-  )
-
-  val hyper_prior = Map(
-    "temperature" -> UniformRV(0.85, 2.5),
-    "reg"         -> UniformRV(-5d, -3d)
-  )
-
   val hyp_scaling = hyper_prior.map(
     p =>
       (
@@ -175,29 +180,39 @@ def apply(
       .toMap
   )
 
+  val fitness_to_scalar =
+    DataPipe[Seq[Tensor[Float]], Double](s => {
+      val metrics = s.map(_.scalar.toDouble)
+      metrics(2) / (metrics.head * metrics.head) - 2 * math
+        .pow(metrics(1) / metrics.head, 2)
+    })
+
   val loss_func_generator = (h: Map[String, Double]) => {
 
     val lossFunc = timelag.utils.get_pdt_loss[Double, Double, Double](
       causal_window._2,
-      temp = h("temperature")
+      h("sigma_sq"),
+      h("alpha")
     )
 
     val reg =
       if (reg_type == "L2")
         L2Regularization[Double](
-          layer_scopes,
-          layer_parameter_names,
-          layer_datatypes,
-          layer_shapes,
-          math.pow(10d, h("reg"))
+          layer_scopes :+ output_scope,
+          layer_parameter_names :+ "Outputs/Weights",
+          layer_datatypes :+ "FLOAT64",
+          layer_shapes :+ Shape(network_size.last, causal_window._2),
+          math.exp(h("reg")),
+          "L2Reg"
         )
       else
         L1Regularization[Double](
-          layer_scopes,
-          layer_parameter_names,
-          layer_datatypes,
-          layer_shapes,
-          math.pow(10d, h("reg"))
+          layer_scopes :+ output_scope,
+          layer_parameter_names :+ "Outputs/Weights",
+          layer_datatypes :+ "FLOAT64",
+          layer_shapes :+ Shape(network_size.last, causal_window._2),
+          math.exp(h("reg")),
+          "L1Reg"
         )
 
     lossFunc >>
@@ -205,30 +220,12 @@ def apply(
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
-  val fitness_function =
-    DataPipe2[(Output[Double], Output[Double]), Output[Double], Output[Float]](
-      (preds, targets) => {
-
-        val weighted_error = preds._1
-          .subtract(targets)
-          .square
-          .multiply(preds._2)
-          .sum(axes = 1)
-
-        val entropy = preds._2
-          .multiply(Tensor(-1d).castTo[Double])
-          .multiply(tf.log(preds._2))
-          .sum(axes = 1)
-
-        (weighted_error + entropy).castTo[Float]
-      }
-    )
-
-  fte.exp_cdt_tuning(
+  fte.exp_cdt_alt(
     architecture,
     hyper_parameters,
+    persistent_hyper_parameters,
+    params_enc,
     loss_func_generator,
-    fitness_function,
     hyper_prior,
     hyp_mapping = hyp_mapping,
     year_range = start_year to end_year,
@@ -241,6 +238,7 @@ def apply(
     num_samples = num_samples,
     hyper_optimizer = hyper_optimizer,
     iterations_tuning = max_iterations_tuning,
+    pdt_iterations = pdt_iterations,
     latitude_limit = crop_latitude,
     fraction_pca = fraction_pca,
     deltaTFTE = history_fte,
@@ -249,10 +247,11 @@ def apply(
     log_scale_fte = log_scale_fte,
     log_scale_omni = log_scale_omni,
     deltaT = causal_window,
-    divergence = divergence_term,
     summary_top_dir = summary_dir,
     hyp_opt_iterations = hyp_opt_iterations,
     get_training_preds = get_training_preds,
-    existing_exp = existing_exp
+    existing_exp = existing_exp,
+    fitness_to_scalar = fitness_to_scalar,
+    checkpointing_freq = checkpointing_freq
   )
 }

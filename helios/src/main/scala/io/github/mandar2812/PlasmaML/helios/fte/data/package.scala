@@ -94,8 +94,8 @@ package object data {
         val hmi_file  = data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
         val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
 
-        if (exists ! hmi_file) read_lines_hmi(hmi_file)
-        else read_lines_gong(gong_file)
+        if (exists ! gong_file) read_lines_gong(gong_file)
+        else read_lines_hmi(hmi_file)
       }
   )
 

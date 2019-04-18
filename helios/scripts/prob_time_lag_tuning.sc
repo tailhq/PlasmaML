@@ -20,19 +20,19 @@ val exp_set2 = tuning_exp2.main(
   noiserot = 0.001,
   alpha = 0.02,
   train_test_separate = true,
-  num_neurons = Seq(40, 40),
+  num_neurons = Seq(60, 60),
   activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
   iterations = 60000,
   iterations_tuning = 10000,
-  pdt_iterations = 3,
+  pdt_iterations = 4,
   miniBatch = 128,
-  optimizer = tf.train.Adam(0.01f),
+  optimizer = tf.train.Adam(0.001f),
   confounding = Seq(0d),
-  num_samples = 4,
+  num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),
-  checkpointing_freq = 2
+  checkpointing_freq = 1
 )
 
 timelag.organize_results(exp_set2, home / 'tmp / 'results_exp2, "exp2_")
@@ -56,16 +56,17 @@ val exp_set3 = tuning_exp3.main(
   train_test_separate = true,
   num_neurons = Seq(40, 40),
   activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
-  iterations = 100,
-  iterations_tuning = 100,
-  pdt_iterations = 2,
-  miniBatch = 1024,
-  optimizer = tf.train.Adam(0.01f),
+  iterations = 60000,
+  iterations_tuning = 10000,
+  pdt_iterations = 4,
+  miniBatch = 128,
+  optimizer = tf.train.Adam(0.001f),
   confounding = Seq(0d),
   num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
-  regularization_types = Seq("L2")
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 1
 )
 
 timelag.organize_results(exp_set3, home / 'tmp / 'results_exp3, "exp3_")
@@ -89,16 +90,17 @@ val exp_set4 = tuning_exp4.main(
   train_test_separate = true,
   num_neurons = Seq(60, 40),
   activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
-  iterations = 100,
-  iterations_tuning = 100,
-  pdt_iterations = 2,
-  miniBatch = 1024,
-  optimizer = tf.train.Adam(0.01f),
+  iterations = 60000,
+  iterations_tuning = 10000,
+  pdt_iterations = 4,
+  miniBatch = 128,
+  optimizer = tf.train.Adam(0.001f),
   confounding = Seq(0d),
   num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
-  regularization_types = Seq("L2")
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 1
 )
 
 timelag.organize_results(exp_set4, home / 'tmp / 'results_exp4, "exp4_")
@@ -123,10 +125,10 @@ val exp_set1 = tuning_exp1.main(
   train_test_separate = true,
   num_neurons = Seq(30, 25),
   activation_func = (i: Int) => timelag.utils.getReLUAct2[Double](1, i),
-  iterations = 100,
-  iterations_tuning = 100,
+  iterations = 60000,
+  iterations_tuning = 10000,
   pdt_iterations = 2,
-  miniBatch = 1024,
+  miniBatch = 128,
   optimizer = tf.train.AdaDelta(0.01f),
   confounding = Seq(0d),
   num_samples = 20,
