@@ -2150,7 +2150,11 @@ package object timelag {
           pdt_iterations,
           config,
           Some(train_config_test),
-          Some(adjusted_iterations / checkpointing_freq)
+          Some(adjusted_iterations / checkpointing_freq),
+          log_predictors = true,
+          convert_input_to_str = Some(
+            DataPipe((i: Tensor[T]) => dtfutils.toDoubleSeq[T](i).mkString(",") + "\n")
+          )
         )
 
         val chosen_config = config.filterKeys(persistent_hyp_params.contains) ++ best_config
@@ -2217,7 +2221,7 @@ package object timelag {
             .castTo[T]
         )
 
-        metrics_output_train.target_quantity_("Output[T]: Train Data Set")
+        metrics_output_train.target_quantity_("Output: Train Data Set")
 
         val (pred_outputs_test, pred_time_lags_test) = process_predictions(
           test_predictions,
@@ -2251,7 +2255,7 @@ package object timelag {
             .castTo[T]
         )
 
-        metrics_output_test.target_quantity_("Output[T]: Test Data Set")
+        metrics_output_test.target_quantity_("Output: Test Data Set")
 
         TunedModelRun[T, L](
           data_and_scales._1,

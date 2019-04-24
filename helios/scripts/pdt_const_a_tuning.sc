@@ -6,6 +6,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.ammonite.ops._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.learn.layers.Activation
+import org.platanios.tensorflow.api.learn.layers.Layer
 
 import $file.run_model_tuning_pdt
 
@@ -21,7 +22,8 @@ def main(
   alpha: Double                                              = 0.0,
   train_test_separate: Boolean                               = false,
   num_neurons: Seq[Int]                                      = Seq(40),
-  activation_func: Int => Activation[Double]                 = timelag.utils.getReLUAct[Double](1, _),
+  activation_func: Int => Layer[Output[Double], Output[Double]] 
+    = timelag.utils.getReLUAct[Double](1, _),
   iterations: Int                                            = 150000,
   iterations_tuning: Int                                     = 20000,
   pdt_iterations: Int                                        = 2,

@@ -2,6 +2,7 @@ package io.github.mandar2812.PlasmaML.helios.core
 
 import ammonite.ops._
 import io.github.mandar2812.dynaml.utils.annotation.Experimental
+import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.tensorflow._
 import io.github.mandar2812.dynaml.models._
 import io.github.mandar2812.dynaml.utils
@@ -46,8 +47,15 @@ import org.platanios.tensorflow.api._
   *                        training collection into a train and validation split.
   *
   * */
-class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloatOrDouble](
-  val time_window: Int,
+class PDTModel[
+  Pattern,
+  In,
+  IT,
+  ID,
+  IS,
+  T: TF: IsFloatOrDouble,
+  Loss: TF: IsFloatOrDouble
+](val time_window: Int,
   override val modelFunction: TunableTFModel.ModelFunc[
     In,
     Output[T],
@@ -88,11 +96,9 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
   override protected val validation_data: Option[DataSet[Pattern]] = None,
   override protected val data_split_func: Option[DataPipe[Pattern, Boolean]] =
     None)
-    extends TunableTFModel[
-      Pattern, In, Output[T], (Output[T], Output[T]), 
-      Loss, IT, ID, IS, Tensor[T], DataType[T], Shape, 
-      (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), 
-      (Shape, Shape)](
+    extends TunableTFModel[Pattern, In, Output[T], (Output[T], Output[T]), Loss, IT, ID, IS, Tensor[
+      T
+    ], DataType[T], Shape, (Tensor[T], Tensor[T]), (DataType[T], DataType[T]), (Shape, Shape)](
       modelFunction,
       model_config_func,
       hyp_params,
@@ -104,6 +110,22 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       data_split_func
     ) {
 
+  type Model = TFModel[
+    In,
+    Output[T],
+    (Output[T], Output[T]),
+    Loss,
+    IT,
+    ID,
+    IS,
+    Tensor[T],
+    DataType[T],
+    Shape,
+    (Tensor[T], Tensor[T]),
+    (DataType[T], DataType[T]),
+    (Shape, Shape)
+  ]
+
   val mutable_params_to_metric_functions: DataPipe[
     dtflearn.tunable_tf_model.HyperParams,
     Seq[
@@ -114,8 +136,16 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       (c: Map[String, Double]) =>
         Seq(
           PDTModel.s0,
-          PDTModel.c1(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window),
-          PDTModel.c2(c("alpha").asInstanceOf[T], c("sigma_sq").asInstanceOf[T], time_window)
+          PDTModel.c1(
+            c("alpha").asInstanceOf[T],
+            c("sigma_sq").asInstanceOf[T],
+            time_window
+          ),
+          PDTModel.c2(
+            c("alpha").asInstanceOf[T],
+            c("sigma_sq").asInstanceOf[T],
+            time_window
+          )
         )
     )
 
@@ -133,21 +163,118 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       val c1 = s(1).scalar.toDouble / s0
 
       Map(
-        "alpha"    -> math.max(time_window * (1d - c1) / (c1 * (time_window - 1)), 0d),
+        "alpha" -> math
+          .max(time_window * (1d - c1) / (c1 * (time_window - 1)), 0d),
         "sigma_sq" -> s0 * (time_window - c1) / (time_window - 1)
       )
     })
 
+  def write_data_sets(
+    directory: Path,
+    input_pattern_to_str: DataPipe[IT, String]
+  ): Unit = {
+    println("Writing training data set")
+
+    val train_features_file      = directory / "train_split_features.csv"
+    val validation_features_file = directory / "validation_split_features.csv"
+
+    val train_targets_file      = directory / "train_split_targets.csv"
+    val validation_targets_file = directory / "validation_split_targets.csv"
+
+    val convert_input_pattern =
+      tf_data_handle_ops.patternToTensor.get >
+        tup2_1[IT, Tensor[T]] >
+        input_pattern_to_str
+
+    val get_target_pattern =
+      tf_data_handle_ops.patternToTensor.get >
+        tup2_2[IT, Tensor[T]]
+
+    train_split.data.foreach(pattern => {
+
+      write.append(train_features_file, convert_input_pattern(pattern))
+      write.append(
+        train_targets_file,
+        dtfutils
+          .toDoubleSeq[T](get_target_pattern(pattern))
+          .grouped(time_window)
+          .map(_.mkString(","))
+          .mkString("\n")
+      )
+    })
+
+    println("Writing validation data sets")
+
+    validation_split.data.foreach(pattern => {
+
+      write.append(validation_features_file, convert_input_pattern(pattern))
+      write.append(
+        validation_targets_file,
+        dtfutils
+          .toDoubleSeq[T](get_target_pattern(pattern))
+          .grouped(time_window)
+          .map(_.mkString(","))
+          .mkString("\n")
+      )
+    })
+  }
+
+  def write_model_outputs(
+    model_instance: Option[Model],
+    train_config: dtflearn.model.Config[In, Output[T]],
+    iden: String
+  ): Unit = {
+
+    val training_data_preds
+      : Either[(Tensor[T], Tensor[T]), DataSet[(Tensor[T], Tensor[T])]] =
+      model_instance.get.infer_batch(
+        train_split.map(
+          tf_data_handle_ops.patternToTensor.get > tup2_1[IT, Tensor[T]]
+        ),
+        train_config.data_processing.copy(shuffleBuffer = 0, repeat = 0),
+        tf_data_handle_ops
+      )
+
+    val intermediate_results_dir = train_config.summaryDir
+
+    training_data_preds match {
+      case Left(outputs) => {
+        timelag.utils
+          .write_model_outputs[T](
+            outputs,
+            intermediate_results_dir,
+            s"train_split_${iden}"
+          )
+      }
+
+      case Right(collection) => {
+        collection.data.foreach(
+          batch =>
+            timelag.utils.write_model_outputs[T](
+              batch,
+              intermediate_results_dir,
+              s"train_split_${iden}",
+              append = true
+            )
+        )
+      }
+
+    }
+
+  }
+
   private def update(
     p: Map[String, Double],
     h: Map[String, Double],
+    iteration_index: Int,
     config: Option[dtflearn.model.Config[In, Output[T]]] = None,
-    eval_trigger: Option[Int] = None
+    eval_trigger: Option[Int] = None,
+    log_predictors: Boolean = false
   ): Map[String, Double] = {
 
-    //Train and evaluate the model on the given hyper-parameters
+    //Create the training configuration based on the given hyper-parameters
     val train_config = config match {
-      case None => modelConfigFunc(p.toMap)
+      case None         => modelConfigFunc(p.toMap)
       case Some(config) => config
     }
 
@@ -174,32 +301,43 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
         )
     }
 
-    val updated_params = try {
-      val model = train_model(
-        p ++ h,
-        Some(train_config),
-        evaluation_metrics = eval_metrics,
-        eval_trigger,
-        evaluate_train = false
-      )
+    val (model_instance, updated_params): (Option[Model], Map[String, Double]) =
+      try {
 
-      println("Computing PDT stability metrics.")
-      val metrics = model.evaluate(
-        train_data_tf,
-        train_split.size,
-        stability_metrics,
-        train_config.data_processing.copy(shuffleBuffer = 0, repeat = 0),
-        true,
-        null
-      )
-      (metrics_to_mutable_params > params_to_mutable_params.i)(metrics)
-    } catch {
-      case e: java.lang.IllegalStateException =>
-        h
-      case e: Throwable =>
-        e.printStackTrace()
-        h
-    }
+        //Train model instance
+        val model: Model = train_model(
+          p ++ h,
+          Some(train_config),
+          evaluation_metrics = eval_metrics,
+          eval_trigger,
+          evaluate_train = false
+        )
+
+        println("Computing PDT stability metrics.")
+        //Compute stability metrics s0, c1 & c2
+        val metrics = model.evaluate(
+          train_data_tf,
+          train_split.size,
+          stability_metrics,
+          train_config.data_processing.copy(shuffleBuffer = 0, repeat = 0),
+          true,
+          null
+        )
+
+        //Return updated loss function parameters alpha and sigma^2
+        val new_state =
+          (metrics_to_mutable_params > params_to_mutable_params.i)(metrics)
+
+        (Some(model), new_state)
+      } catch {
+        case e: java.lang.IllegalStateException =>
+          (None, h)
+        case e: Throwable =>
+          e.printStackTrace()
+          (None, h)
+      }
+
+    if (log_predictors && model_instance.isDefined) write_model_outputs(model_instance, train_config, s"pdtit_${iteration_index}")
 
     println("\nUpdated Parameters: ")
     pprint.pprintln(p ++ updated_params)
@@ -211,22 +349,24 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
     pdt_iterations: Int,
     hyper_params: TunableTFModel.HyperParams,
     config: Option[dtflearn.model.Config[In, Output[T]]] = None,
-    eval_trigger: Option[Int] = None
+    eval_trigger: Option[Int] = None,
+    log_predictors: Boolean = false
   ): Map[String, Double] = {
 
     val (p, t) =
       hyper_params.toSeq.partition(kv => persistent_hyp_params.contains(kv._1))
 
-    if(pdt_iterations > 0) (1 to pdt_iterations).foldLeft(t.toMap)((s, it) => {
+    if (pdt_iterations > 0) (1 to pdt_iterations).foldLeft(t.toMap)((s, it) => {
 
-      val buffstr = if(it >= 10) "="*(math.log10(it).toInt) else ""
+      val buffstr = if (it >= 10) "=" * (math.log10(it).toInt) else ""
 
       println()
       println(s"╔=═════════════════════════════════════════${buffstr}═╗")
       println(s"║ PDT Alternate Optimization - Iteration: ${it} ║")
       println(s"╚══════════════════════════════════════════${buffstr}=╝")
       println()
-      update(p.toMap, s, config, eval_trigger)
+
+      update(p.toMap, s, it, config, eval_trigger, log_predictors)
     })
     else t.toMap
   }
@@ -235,7 +375,9 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
     pdt_iterations: Int,
     hyper_params: dtflearn.tunable_tf_model.HyperParams,
     config: Option[dtflearn.model.Config[In, Output[T]]] = None,
-    eval_trigger: Option[Int] = None
+    eval_trigger: Option[Int] = None,
+    log_predictors: Boolean = false,
+    convert_input_to_str: Option[DataPipe[IT, String]] = None
   ) = {
     val p = hyper_params.filterKeys(persistent_hyp_params.contains _)
 
@@ -245,13 +387,22 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
     //which depends only on the `persistent`
     //hyper-parameters.
     val train_config = config match {
-      case None => modelConfigFunc(p.toMap)
+      case None         => modelConfigFunc(p.toMap)
       case Some(config) => config
     }
 
+    if (convert_input_to_str.isDefined)
+      write_data_sets(train_config.summaryDir, convert_input_to_str.get)
+
     //Run the hyper-parameter refinement procedure.
     val final_config: Map[String, Double] =
-      solve(pdt_iterations, hyper_params, Some(train_config), eval_trigger)
+      solve(
+        pdt_iterations,
+        hyper_params,
+        Some(train_config),
+        eval_trigger,
+        log_predictors
+      )
 
     val stability_metrics = params_to_metric_funcs(final_config)
       .zip(PDTModel.stability_quantities)
@@ -288,6 +439,8 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
       evaluate_train = false
     )
 
+    if (log_predictors) write_model_outputs(Some(model), train_config, s"pdtit_${pdt_iterations+1}")
+
     (model, final_config)
   }
 
@@ -312,7 +465,6 @@ class PDTModel[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloa
     //Now compute the model fitness score.
     val (fitness, comment, final_config) = try {
 
-      
       //Run the refinement procedure.
       val (model, final_config) = build(
         loop_count,
@@ -472,8 +624,15 @@ object PDTModel {
       }
     )
 
-  def apply[Pattern, In, IT, ID, IS, T: TF: IsFloatOrDouble, Loss: TF: IsFloatOrDouble](
-    time_window: Int,
+  def apply[
+    Pattern,
+    In,
+    IT,
+    ID,
+    IS,
+    T: TF: IsFloatOrDouble,
+    Loss: TF: IsFloatOrDouble
+  ](time_window: Int,
     modelFunction: TunableTFModel.ModelFunc[
       In,
       Output[T],

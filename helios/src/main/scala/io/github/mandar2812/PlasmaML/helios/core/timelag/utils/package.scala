@@ -189,6 +189,10 @@ package object utils {
       rand_rot_mat(d)
     )
 
+    val one = Tensor(1.0d).castTo[T]
+
+    val alpha_t = Tensor(alpha).castTo[T]
+
     val translation_op = DataPipe2(
       (tr: Tensor[T], x: Tensor[T]) =>
         tr.add(x.multiply(Tensor(1.0f - alpha.toFloat).castTo[T]))
@@ -211,17 +215,15 @@ package object utils {
     val x_tail =
       translation_vecs
         .zip(impulse_vecs)
-        .scanLeft(x0)((x, sc) => sc._2 * translation_op(sc._1, rotation_op(x)))
+        .scanLeft(x0)(
+          (x, sc) => sc._2 * (rotation_op(x) * (one - alpha_t)) + sc._1
+        )
 
     val x: Seq[Tensor[T]] = (Stream(x0) ++ x_tail).takeRight(n)
 
     //Takes input x(t) and returns {y(t + delta(x(t))), delta(x(t))}
     val calculate_outputs: DataPipe[Tensor[T], (Float, Float)] =
-      compute_output_and_lag >
-        DataPipe(
-          DataPipe((d: Float) => d),
-          DataPipe((v: Float) => v)
-        )
+      compute_output_and_lag
 
     //Finally create the data pipe which takes a stream of x(t) and
     //generates the input output pairs.
@@ -301,8 +303,6 @@ package object utils {
       )
       .filter(_._2._2.isDefined)
       .map(p => (p._1, (p._2._1, p._2._2.get, p._2._3)))
-
-    //Now slice the input tensors depending on the confounding.
 
     (data, joined_data)
   }
@@ -490,12 +490,12 @@ package object utils {
       val (train_time_lags, test_time_lags): (Tensor[T], Tensor[T]) = (
         dtf
           .tensor_f64(training_data.length)(
-            training_data.toList.map(d => d._2._3.toDouble): _*
+            training_data.toList.map(d => math.floor(d._2._3.toDouble)): _*
           )
           .castTo[T],
         dtf
           .tensor_f64(test_data.length)(
-            test_data.toList.map(d => d._2._3.toDouble): _*
+            test_data.toList.map(d => math.floor(d._2._3.toDouble)): _*
           )
           .castTo[T]
       )
@@ -883,8 +883,9 @@ package object utils {
       Map[String, Double],
       Map[String, Double]
     ],
-    std_pipe: DataPipe[Tensor[Double], (Tensor[Double], GaussianScalerTF[Double])] = 
-      dtfpipe.gauss_std[Double]()
+    std_pipe: DataPipe[Tensor[Double], (Tensor[Double], GaussianScalerTF[
+        Double
+      ])] = dtfpipe.gauss_std[Double]()
   ): Stability = {
 
     val (alpha, sigma_sq) = {
@@ -902,7 +903,7 @@ package object utils {
     //because during training the saddle point probabilities
     //were computed with respect to the standardized quantities.
     val (_, gauss_scaler) = std_pipe(tfi.stack(targets.data.toSeq, axis = 0))
-    
+
     val compute_metrics = DataPipe[ZipPattern, StabTriple](zp => {
 
       val ((y, prob), t) = zp
@@ -1272,28 +1273,49 @@ package object utils {
   def write_model_outputs[T: TF: IsNotQuantized: IsReal](
     outputs: (Tensor[T], Tensor[T]),
     summary_dir: Path,
-    identifier: String
+    identifier: String,
+    append: Boolean = false
   ): Unit = {
 
     val h = outputs._1.shape(1)
 
-    write.over(
-      summary_dir / s"${identifier}_predictions.csv",
-      dtfutils
-        .toDoubleSeq(outputs._1)
-        .grouped(h)
-        .map(_.mkString(","))
-        .mkString("\n")
-    )
+    if (append) {
+      write.append(
+        summary_dir / s"${identifier}_predictions.csv",
+        dtfutils
+          .toDoubleSeq(outputs._1)
+          .grouped(h)
+          .map(_.mkString(","))
+          .mkString("\n")
+      )
 
-    write.over(
-      summary_dir / s"${identifier}_probabilities.csv",
-      dtfutils
-        .toDoubleSeq(outputs._2)
-        .grouped(h)
-        .map(_.mkString(","))
-        .mkString("\n")
-    )
+      write.append(
+        summary_dir / s"${identifier}_probabilities.csv",
+        dtfutils
+          .toDoubleSeq(outputs._2)
+          .grouped(h)
+          .map(_.mkString(","))
+          .mkString("\n")
+      )
+    } else {
+      write.over(
+        summary_dir / s"${identifier}_predictions.csv",
+        dtfutils
+          .toDoubleSeq(outputs._1)
+          .grouped(h)
+          .map(_.mkString(","))
+          .mkString("\n")
+      )
+
+      write.over(
+        summary_dir / s"${identifier}_probabilities.csv",
+        dtfutils
+          .toDoubleSeq(outputs._2)
+          .grouped(h)
+          .map(_.mkString(","))
+          .mkString("\n")
+      )
+    }
 
   }
 

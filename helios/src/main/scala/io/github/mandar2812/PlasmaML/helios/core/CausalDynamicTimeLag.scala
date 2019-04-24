@@ -764,9 +764,6 @@ case class ProbabilisticDynamicTimeLag[
     val s =
       tf.constant(Tensor(error_var).reshape(Shape()).castTo[P], Shape(), "s")
 
-    val lambda =
-      tf.constant(Tensor(0.995).reshape(Shape()).castTo[P], Shape(), "lambda")
-
     val un_p = prob * (
       tf.exp(
         tf.log(one + alpha) / two - (model_errors_sq * alpha) / (two * s)
@@ -780,17 +777,6 @@ case class ProbabilisticDynamicTimeLag[
 
     val expanded_loss = (model_errors_sq * (p * alpha + one) / (s * two)) - p * tf
       .log(alpha + one) / two
-
-    /* val log_partition_function = tf.log(
-      (prob * tf.exp(
-        tf.log(one + alpha) / two - model_errors_sq * alpha / (two * s)
-      )).sum(axes = 1)
-    )
-
-    (log_partition_function - model_errors_sq.sum(axes = 1) / (two * s))
-      .mean()
-      .subtract(n * tf.log(s) / two)
-      .castTo[L] */
 
     (expanded_loss.sum(axes = 1).mean() + divergence_term + n * tf.log(s))
       .castTo[L]

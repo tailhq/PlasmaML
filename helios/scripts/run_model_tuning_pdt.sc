@@ -30,7 +30,7 @@ def apply(
   alpha: Double = 0.0,
   train_test_separate: Boolean = false,
   num_neurons: Seq[Int] = Seq(40),
-  activation_func: Int => Activation[Double] = (i: Int) =>
+  activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
     timelag.utils.getReLUAct2[Double](1, i),
   iterations: Int = 150000,
   iterations_tuning: Int = 20000,
