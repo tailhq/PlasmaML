@@ -28,7 +28,7 @@ val exp_set2 = tuning_exp2.main(
   miniBatch = 128,
   optimizer = tf.train.Adam(0.001f),
   confounding = Seq(0d),
-  num_samples = 2,
+  num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),
@@ -36,7 +36,7 @@ val exp_set2 = tuning_exp2.main(
 )
 
 timelag.organize_results(exp_set2, home / 'tmp / 'results_exp2, "exp2_")
-ß%%(
+%%(
   'tar,
   "-C",
   home / 'tmp,
@@ -62,7 +62,7 @@ val exp_set3 = tuning_exp3.main(
   miniBatch = 128,
   optimizer = tf.train.Adam(0.01f),
   confounding = Seq(0d),
-  num_samples = 2,
+  num_samples = 20,
   hyper_optimizer = "gs",
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),
