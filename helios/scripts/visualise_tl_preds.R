@@ -27,7 +27,7 @@ output_mapping <- read.csv("output_mapping_test.csv")
 
 size_window <- ncol(preds_test)
 
-max_timelag <- max(scatter_test$actuallag)
+max_timelag <- min(size_window, max(scatter_test$actuallag))
 
 aug_preds_test <- cbind(preds_test, output_mapping)
 
@@ -62,7 +62,12 @@ colnames(targets_test) <- lapply(
 
 x_2 <- apply(features_test, c(1), function(x) sum(x ^ 2))
 
-prob_df <- melt(cbind(x_2, probs_test[, 1:max_timelag]), id = "x_2")
+prob_df <- melt(
+  cbind(
+    x_2, 
+    probs_test[,1:max_timelag]
+  ), 
+  id = "x_2")
 
 pred_df <- melt(
   cbind(x_2, aug_preds_test[size_window + 1], aug_preds_test[, 1:max_timelag]),
