@@ -186,21 +186,16 @@ class PDTModel[
         tup2_1[IT, Tensor[T]] >
         input_pattern_to_str
 
-    val get_target_pattern =
+    val convert_output_pattern =
       tf_data_handle_ops.patternToTensor.get >
-        tup2_2[IT, Tensor[T]]
+        tup2_2[IT, Tensor[T]] >
+        DataPipe((t: Tensor[T]) => dtfutils.toDoubleSeq[T](t).mkString(",") + "\n")
 
     train_split.data.foreach(pattern => {
 
       write.append(train_features_file, convert_input_pattern(pattern))
-      write.append(
-        train_targets_file,
-        dtfutils
-          .toDoubleSeq[T](get_target_pattern(pattern))
-          .grouped(time_window)
-          .map(_.mkString(","))
-          .mkString("\n")
-      )
+      write.append(train_targets_file, convert_output_pattern(pattern))
+
     })
 
     println("Writing validation data sets")
@@ -208,14 +203,8 @@ class PDTModel[
     validation_split.data.foreach(pattern => {
 
       write.append(validation_features_file, convert_input_pattern(pattern))
-      write.append(
-        validation_targets_file,
-        dtfutils
-          .toDoubleSeq[T](get_target_pattern(pattern))
-          .grouped(time_window)
-          .map(_.mkString(","))
-          .mkString("\n")
-      )
+      write.append(validation_targets_file,convert_output_pattern(pattern))
+      
     })
   }
 

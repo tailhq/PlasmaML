@@ -153,3 +153,10 @@ ggplot(prob_df, aes(x = x_2, y = value, colour = variable)) +
   xlab(TeX('$||\\mathbf{x}||_2$')) + ylab("Probability")
 
 ggsave(paste(iden, "probabilities.pdf", sep = ''), scale = 1.25, device = pdf())
+
+
+
+
+
+
+
