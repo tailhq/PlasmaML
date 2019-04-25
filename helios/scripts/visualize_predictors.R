@@ -36,19 +36,21 @@ rescale_targets <- function(x) {
 }
 
 
+
 train_split_features <- as.data.frame(sapply(read.csv("train_split_features.csv"), rescale_features))
 
 x_2 <- apply(train_split_features, c(1), function(x) sum(x ^ 2))
 
 train_split_targets <- as.data.frame(sapply(read.csv("train_split_targets.csv"), rescale_targets))
 
+selected_preds <- Filter(function(x) x%%3 == 0, 1:ncol(train_split_targets))
 
 
 pred_it_files <- list.files(pattern = "train_split_pdtit_[1-9]*_predictions.csv", recursive = FALSE)
 
 l <- lapply(pred_it_files, read.csv)
 
-selected_preds <- Filter(function(x) x%%3 == 0, 1:ncol(train_split_targets))
+
 
 selected_cols <- c(
   "x_2",
