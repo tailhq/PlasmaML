@@ -104,17 +104,6 @@ ggplot(scatter_df, aes(x = Velocity, y = floor(TimeLag), color = Type, fill = Ty
 
 ggsave(paste(iden, "scatter_v_tl.pdf", sep = ''), scale = 1.0, device = pdf())
 
-ggplot(scatter_df[scatter_df$data == "test",], aes(x = Velocity, y = floor(TimeLag), color = Type, fill = Type)) +
-  #geom_point(alpha = 0.5) + 
-  geom_smooth(method = lm, formula = y ~ splines::bs(x, 3)) +
-  #facet_grid(data ~ .) +
-  theme_gray(base_size = 20) + 
-  scale_colour_manual(values=palette1) + 
-  labs(y="Time Lag", x="Output") + 
-  theme(legend.position="top")
-
-ggsave(paste(iden, "predictive_curves.pdf", sep = ''), scale = 1.0, device = pdf())
-
 ggplot(rbind(errors_train, errors_test), aes(x=error_v, y=floor(error_lag))) + 
   scale_alpha_continuous(limits = c(0, 0.2), breaks = seq(0, 0.2, by=0.025)) +
   geom_point(aes(alpha = 0.05), show.legend = FALSE) + 
@@ -170,6 +159,18 @@ ggplot(errors, aes(x=error_lag)) +
   xlab("Error: Time Lag") + facet_grid(data ~ .)
 
 ggsave(paste(iden, "hist_errors_timelag.pdf", sep = ''), scale = 1.0, device = pdf())
+
+
+ggplot(scatter_df[scatter_df$data == "test",], aes(x = Velocity, y = floor(TimeLag), color = Type, fill = Type)) +
+  #geom_point(alpha = 0.5) + 
+  geom_smooth(method = lm, formula = y ~ splines::bs(x, 3)) +
+  #facet_grid(data ~ .) +
+  theme_gray(base_size = 20) + 
+  scale_colour_manual(values=palette1) + 
+  labs(y="Time Lag", x="Output") + 
+  theme(legend.position="top")
+
+ggsave(paste(iden, "predictive_curves.pdf", sep = ''), scale = 1.0, device = pdf())
 
 #Construct loess/lm model
 
