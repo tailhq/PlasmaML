@@ -129,8 +129,7 @@ def apply(
   val fitness_to_scalar =
     DataPipe[Seq[Tensor[Float]], Double](s => {
       val metrics = s.map(_.scalar.toDouble)
-      metrics(2) / (metrics.head * metrics.head) - 2 * math
-        .pow(metrics(1) / metrics.head, 2)
+      metrics(1) / metrics.head
     })
 
   val dataset: timelag.utils.TLDATA[Double] =
