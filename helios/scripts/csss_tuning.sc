@@ -4,7 +4,7 @@ import $exec.helios.scripts.env
 
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2010,
+  start_year = 2015,
   end_year = 2016,
   test_year = 2015,
   sw_threshold = 600d,
@@ -16,9 +16,9 @@ val csss_exp = csss_pdt_model_tuning(
   log_scale_fte = false,
   causal_window = (56, 56),
   network_size = Seq(50, 50),
-  activation_func = (i: Int) => dtflearn.Phi(s"Act_$i"),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
-  num_samples = 20,
+  num_samples = 10,
   quantity = OMNIData.Quantities.V_SW,
   reg_type = "L2",
   batch_size = 128,
