@@ -26,8 +26,8 @@ def apply(
   test_year: Int = 2015,
   sw_threshold: Double = 700d,
   network_size: Seq[Int] = Seq(100, 60),
-  activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
-    timelag.utils.getReLUAct[Double](1, i),
+  activation_func: Int => Layer[Output[Double], Output[Double]] = 
+    (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   history_fte: Int = 10,
   fte_step: Int = 2,
   crop_latitude: Double = 40d,
@@ -43,7 +43,7 @@ def apply(
   num_samples: Int = 4,
   hyper_optimizer: String = "gs",
   batch_size: Int = 32,
-  optimization_algo: tf.train.Optimizer = tf.train.AdaDelta(0.01f),
+  optimization_algo: tf.train.Optimizer = tf.train.Adam(0.01f),
   summary_dir: Path = home / 'tmp,
   hyp_opt_iterations: Option[Int] = Some(5),
   get_training_preds: Boolean = false,
@@ -60,10 +60,20 @@ def apply(
       "FLOAT64"
     )
 
-  val output_mapping = helios.learn.cdt_loss.output_mapping[Double](
-    "PDTNetwork",
-    causal_window._2
-  )
+    val sliding_window = causal_window._2
+
+    val output_mapping = {
+
+      val outputs_segment =  
+        //tf.learn.BatchNormalization[Double]("BatchNorm", fused = false) >>
+          tf.learn.Linear[Double]("Outputs", sliding_window)
+  
+      val timelag_segment =
+        tf.learn.Linear[Double]("TimeLags", sliding_window) >> 
+          tf.learn.Softmax[Double]("Probability/Softmax")
+  
+      dtflearn.bifurcation_layer("PDTNet", outputs_segment, timelag_segment)
+    }
 
   val hyper_parameters = List(
     "sigma_sq",
@@ -74,9 +84,9 @@ def apply(
   val persistent_hyper_parameters = List("reg")
 
   val hyper_prior = Map(
-    "sigma_sq" -> UniformRV(1e-5, 5d),
-    "alpha"    -> UniformRV(0.75d, 2d),
-    "reg"      -> UniformRV(-5d, -3d)
+    "reg"      -> UniformRV(-5d, -3d),
+    "alpha"    -> UniformRV(0.75d, 2d),  
+    "sigma_sq" -> UniformRV(1E-5, 5d)
   )
 
   val params_enc = Encoder(
