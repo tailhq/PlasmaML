@@ -132,7 +132,13 @@ object OMNILoader {
     val num_splits = splits.length
 
     val dt_string = splits.take(3).mkString("/")
-    val data = splits.takeRight(num_splits - 3).map(_.toDouble)
+    
+    val data = splits.takeRight(num_splits - 3).map(p => try {
+      p.toDouble
+    } catch {
+      case _: Exception => Double.NaN
+    })
+
     val timestamp = DateTime.parse(dt_string, dt_format)
     (timestamp, data.toSeq)
   })
