@@ -189,7 +189,9 @@ class PDTModel[
     val convert_output_pattern =
       tf_data_handle_ops.patternToTensor.get >
         tup2_2[IT, Tensor[T]] >
-        DataPipe((t: Tensor[T]) => dtfutils.toDoubleSeq[T](t).mkString(",") + "\n")
+        DataPipe(
+          (t: Tensor[T]) => dtfutils.toDoubleSeq[T](t).mkString(",") + "\n"
+        )
 
     train_split.data.foreach(pattern => {
 
@@ -203,8 +205,8 @@ class PDTModel[
     validation_split.data.foreach(pattern => {
 
       write.append(validation_features_file, convert_input_pattern(pattern))
-      write.append(validation_targets_file,convert_output_pattern(pattern))
-      
+      write.append(validation_targets_file, convert_output_pattern(pattern))
+
     })
   }
 
@@ -326,7 +328,16 @@ class PDTModel[
           (None, h)
       }
 
-    if (log_predictors && model_instance.isDefined) write_model_outputs(model_instance, train_config, s"pdtit_${iteration_index}")
+    if (log_predictors && model_instance.isDefined) {
+      
+      write_model_outputs(
+        model_instance,
+        train_config,
+        s"pdtit_${iteration_index}"
+      )
+
+      model_instance.map(_.close())
+    }
 
     println("\nUpdated Parameters: ")
     pprint.pprintln(p ++ updated_params)
@@ -428,7 +439,12 @@ class PDTModel[
       evaluate_train = false
     )
 
-    if (log_predictors) write_model_outputs(Some(model), train_config, s"pdtit_${pdt_iterations+1}")
+    if (log_predictors)
+      write_model_outputs(
+        Some(model),
+        train_config,
+        s"pdtit_${pdt_iterations + 1}"
+      )
 
     (model, final_config)
   }
@@ -486,6 +502,8 @@ class PDTModel[
           null
         )
       )
+      
+      model.close()
 
       (e, None, final_config)
     } catch {
