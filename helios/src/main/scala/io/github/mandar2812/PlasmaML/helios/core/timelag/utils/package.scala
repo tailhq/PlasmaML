@@ -67,20 +67,37 @@ package object utils {
     if (i - s == 0) layer_poly[T](degree)(s"Act_$i")
     else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct[T: TF: IsFloatOrDouble](s: Int, i: Int): Activation[T] =
-    if ((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
+  def getReLUAct[T: TF: IsFloatOrDouble](s: Int, i: Int, leakyness: Float = 0.01f): Activation[T] =
+    if ((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", leakyness)
     else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct2[T: TF: IsFloatOrDouble](s: Int, i: Int): Activation[T] =
-    if ((i - s) == 0) tf.learn.ReLU(s"Act_$i", 0.01f)
+  def getReLUAct2[T: TF: IsFloatOrDouble](s: Int, i: Int, leakyness: Float = 0.01f): Activation[T] =
+    if ((i - s) == 0) tf.learn.ReLU(s"Act_$i", leakyness)
     else tf.learn.Sigmoid(s"Act_$i")
 
   def getReLUAct3[T: TF: IsFloatOrDouble](
     start: Int,
     repeat: Int,
+    i: Int,
+    leakyness: Float = 0.01f
+  ): Activation[T] =
+    if ((i - start) < repeat) tf.learn.ReLU(s"Act_$i", leakyness)
+    else tf.learn.Sigmoid(s"Act_$i")
+
+  def getELUAct[T: TF: IsFloatOrDouble](
+    start: Int,
+    repeat: Int,
     i: Int
   ): Activation[T] =
-    if ((i - start) < repeat) tf.learn.ReLU(s"Act_$i", 0.01f)
+    if ((i - start) < repeat) tf.learn.ELU(s"Act_$i")
+    else tf.learn.Sigmoid(s"Act_$i")
+
+  def getSELUAct[T: TF: IsFloatOrDouble](
+    start: Int,
+    repeat: Int,
+    i: Int
+  ): Activation[T] =
+    if ((i - start) < repeat) tf.learn.SELU(s"Act_$i")
     else tf.learn.Sigmoid(s"Act_$i")
 
   /**
