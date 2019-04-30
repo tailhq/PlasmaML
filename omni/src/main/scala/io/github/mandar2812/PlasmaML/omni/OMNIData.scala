@@ -40,6 +40,9 @@ object OMNIData {
     val V_SW = 24
     val B_Z = 16
     val P = 28
+
+    //Solar Radio Flux
+    val F10_7 = 50
   }
 
   /**
@@ -54,7 +57,8 @@ object OMNIData {
     25 -> "999.9", 28 -> "99.99",
     27 -> "9.999", 39 -> "999",
     45 -> "99999.99", 46 -> "99999.99",
-    47 -> "99999.99", 15 -> "999.9")
+    47 -> "99999.99", 15 -> "999.9", 
+    50 -> "999.9")
 
   /**
     * Contains the name of the quantity stored
@@ -67,7 +71,8 @@ object OMNIData {
     41 -> "AE",
     38 -> "Kp",
     39 -> "Sunspot Number",
-    28 -> "Plasma Flow Pressure")
+    28 -> "Plasma Flow Pressure", 
+    50 -> "F10.7 Index")
 
   //The column indices corresponding to the year, day of year and hour respectively
   val dateColumns = List(0, 1, 2)
