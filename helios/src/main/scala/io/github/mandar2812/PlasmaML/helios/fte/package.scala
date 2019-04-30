@@ -1005,7 +1005,8 @@ package object fte {
     hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
     iterations: Int = 150000,
     iterations_tuning: Int = 20000,
-    pdt_iterations: Int = 2,
+    pdt_iterations_tuning: Int = 4,
+    pdt_iterations_test: Int = 9,
     num_samples: Int = 20,
     hyper_optimizer: String = "gs",
     miniBatch: Int = 32,
@@ -1235,8 +1236,8 @@ package object fte {
     )
 
     val (adjusted_iterations, adjusted_iterations_tuning) = (
-      iterations / (pdt_iterations + 1),
-      iterations_tuning / (pdt_iterations + 1)
+      iterations / (pdt_iterations_test + 1),
+      iterations_tuning / (pdt_iterations_tuning + 1)
     )
 
     val train_config_tuning = dtflearn.tunable_tf_model.ModelConfigFunction(
@@ -1364,7 +1365,7 @@ package object fte {
       val (_, config) = gs.optimize(
         hyper_prior.mapValues(_.draw),
         Map(
-          "loops"       -> pdt_iterations.toString,
+          "loops"       -> pdt_iterations_tuning.toString,
           "evalTrigger" -> (adjusted_iterations_tuning / checkpointing_freq).toString
         )
       )
@@ -1412,7 +1413,7 @@ package object fte {
     println("Training final model based on chosen configuration")
 
     val (best_model, best_config) = pdtModel.build(
-      pdt_iterations,
+      pdt_iterations_test,
       config,
       Some(train_config_test),
       Some(adjusted_iterations / checkpointing_freq)

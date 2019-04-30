@@ -2,7 +2,6 @@ import $exec.helios.scripts.csss
 import $exec.helios.scripts.csss_pdt_model_tuning
 import $exec.helios.scripts.env
 
-
 val csss_exp = csss_pdt_model_tuning(
   start_year = 2015,
   end_year = 2016,
@@ -14,7 +13,7 @@ val csss_exp = csss_pdt_model_tuning(
   history_fte = 0,
   log_scale_omni = false,
   log_scale_fte = true,
-  causal_window = (72, 48),
+  causal_window = (1, 6),
   network_size = Seq(40, 40),
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
@@ -24,13 +23,13 @@ val csss_exp = csss_pdt_model_tuning(
   batch_size = 128,
   max_iterations = 200000,
   max_iterations_tuning = 20000,
-  pdt_iterations = 4,
+  pdt_iterations_tuning = 4,
+  pdt_iterations_test = 19,
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
   get_training_preds = false,
-  existing_exp = None//csss.experiments().lastOption
+  existing_exp = None //csss.experiments().lastOption
 )
-
 
 try {
   %%(
@@ -44,4 +43,6 @@ try {
   case e: Exception => e.printStackTrace()
 }
 
-helios.visualise_cdt_results(csss.scatter_plots_test(csss_exp.results.summary_dir).last)
+helios.visualise_cdt_results(
+  csss.scatter_plots_test(csss_exp.results.summary_dir).last
+)

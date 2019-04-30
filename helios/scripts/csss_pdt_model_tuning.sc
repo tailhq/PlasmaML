@@ -26,8 +26,8 @@ def apply(
   test_year: Int = 2015,
   sw_threshold: Double = 700d,
   network_size: Seq[Int] = Seq(100, 60),
-  activation_func: Int => Layer[Output[Double], Output[Double]] = 
-    (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
+    timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   history_fte: Int = 10,
   fte_step: Int = 2,
   crop_latitude: Double = 40d,
@@ -39,7 +39,8 @@ def apply(
   causal_window: (Int, Int) = (48, 56),
   max_iterations: Int = 100000,
   max_iterations_tuning: Int = 20000,
-  pdt_iterations: Int = 4,
+  pdt_iterations_tuning: Int = 4,
+  pdt_iterations_test: Int = 14,
   num_samples: Int = 4,
   hyper_optimizer: String = "gs",
   batch_size: Int = 32,
@@ -60,20 +61,20 @@ def apply(
       "FLOAT64"
     )
 
-    val sliding_window = causal_window._2
+  val sliding_window = causal_window._2
 
-    val output_mapping = {
+  val output_mapping = {
 
-      val outputs_segment =  
-        //tf.learn.BatchNormalization[Double]("BatchNorm", fused = false) >>
-          tf.learn.Linear[Double]("Outputs", sliding_window)
-  
-      val timelag_segment =
-        tf.learn.Linear[Double]("TimeLags", sliding_window) >> 
-          tf.learn.Softmax[Double]("Probability/Softmax")
-  
-      dtflearn.bifurcation_layer("PDTNet", outputs_segment, timelag_segment)
-    }
+    val outputs_segment =
+      //tf.learn.BatchNormalization[Double]("BatchNorm", fused = false) >>
+      tf.learn.Linear[Double]("Outputs", sliding_window)
+
+    val timelag_segment =
+      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
+        tf.learn.Softmax[Double]("Probability/Softmax")
+
+    dtflearn.bifurcation_layer("PDTNet", outputs_segment, timelag_segment)
+  }
 
   val hyper_parameters = List(
     "sigma_sq",
@@ -85,8 +86,8 @@ def apply(
 
   val hyper_prior = Map(
     "reg"      -> UniformRV(-5d, -3d),
-    "alpha"    -> UniformRV(0.75d, 2d),  
-    "sigma_sq" -> UniformRV(1E-5, 5d)
+    "alpha"    -> UniformRV(0.75d, 2d),
+    "sigma_sq" -> UniformRV(1e-5, 5d)
   )
 
   val params_enc = Encoder(
@@ -247,7 +248,8 @@ def apply(
     num_samples = num_samples,
     hyper_optimizer = hyper_optimizer,
     iterations_tuning = max_iterations_tuning,
-    pdt_iterations = pdt_iterations,
+    pdt_iterations_tuning = pdt_iterations_tuning,
+    pdt_iterations_test = pdt_iterations_test,
     latitude_limit = crop_latitude,
     fraction_pca = fraction_pca,
     deltaTFTE = history_fte,
