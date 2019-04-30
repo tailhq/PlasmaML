@@ -70,17 +70,16 @@ def apply(
 
   val output_mapping = {
 
-    val outputs_segment =  
+    val outputs_segment =
       //tf.learn.BatchNormalization[Double]("BatchNorm", fused = false) >>
-        tf.learn.Linear[Double]("Outputs", sliding_window)
+      tf.learn.Linear[Double]("Outputs", sliding_window)
 
     val timelag_segment =
-      tf.learn.Linear[Double]("TimeLags", sliding_window) >> 
+      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
         tf.learn.Softmax[Double]("Probability/Softmax")
 
     dtflearn.bifurcation_layer("PDTNet", outputs_segment, timelag_segment)
   }
-  
 
   //Prediction architecture
   val architecture =
@@ -102,12 +101,13 @@ def apply(
     "reg"
   )
 
-  val persistent_hyper_parameters = List("reg")
+  val persistent_hyper_parameters = List("reg", "reg_timelag")
 
   val hyper_prior = Map(
-    "reg"      -> UniformRV(-5d, -3d),
-    "alpha"    -> UniformRV(0.75d, 2d),  
-    "sigma_sq" -> UniformRV(1E-5, 5d)
+    "reg"         -> UniformRV(-5d, -3d),
+    "reg_timelag" -> UniformRV(-5d, -4d),
+    "alpha"       -> UniformRV(0.75d, 2d),
+    "sigma_sq"    -> UniformRV(1e-5, 5d)
   )
 
   val params_enc = Encoder(
@@ -181,7 +181,7 @@ def apply(
         Seq("TimeLags/Weights"),
         Seq("FLOAT64"),
         Seq(Shape(num_neurons.last, sliding_window)),
-        math.exp(h("reg")),
+        math.exp(h("reg_timelag")),
         "TimeLags/L1Reg"
       )
 
