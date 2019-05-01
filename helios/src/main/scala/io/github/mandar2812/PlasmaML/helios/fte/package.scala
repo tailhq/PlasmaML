@@ -547,9 +547,9 @@ package object fte {
     }
 
     val use_cached_data = if (use_cached_config) {
-      val training_data_files = ls ! tf_summary_dir |? (_.segments.last
+      val training_data_files = ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("training_data_"))
-      val test_data_files = ls ! tf_summary_dir |? (_.segments.last
+      val test_data_files = ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("training_data_"))
 
       training_data_files.length > 0 && test_data_files.length > 0
@@ -596,9 +596,9 @@ package object fte {
     val dataset = if (use_cached_config && use_cached_data) {
       println("Using previously cached data set")
 
-      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
+      val training_data_file = (ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("training_data_"))).last
-      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
+      val test_data_file = (ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("test_data_"))).last
 
       read_data_set(
@@ -709,14 +709,14 @@ package object fte {
 
     val checkpoints =
       if (exists ! tf_summary_dir)
-        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.last
+        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.toSeq.last
           .contains("model.ckpt-"))
       else Seq()
 
     val checkpoint_max =
       if (checkpoints.isEmpty) 0
       else
-        (checkpoints | (_.segments.last
+        (checkpoints | (_.segments.toSeq.last
           .split("-")
           .last
           .split('.')
@@ -1089,9 +1089,9 @@ package object fte {
     }
 
     val use_cached_data = if (use_cached_config) {
-      val training_data_files = ls ! tf_summary_dir |? (_.segments.last
+      val training_data_files = ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("training_data_"))
-      val test_data_files = ls ! tf_summary_dir |? (_.segments.last
+      val test_data_files = ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("training_data_"))
 
       training_data_files.length > 0 && test_data_files.length > 0
@@ -1138,9 +1138,9 @@ package object fte {
     val dataset = if (use_cached_config && use_cached_data) {
       println("Using previously cached data set")
 
-      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
+      val training_data_file = (ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("training_data_"))).last
-      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
+      val test_data_file = (ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("test_data_"))).last
 
       read_data_set(

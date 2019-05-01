@@ -6,7 +6,7 @@ object Dependencies {
 
   val scala_major = 2.12
 
-  val scala_minor = 4
+  val scala_minor = 8
 
   val scala = s"$scala_major.$scala_minor"
 
@@ -28,7 +28,7 @@ object Dependencies {
   val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
 
   val latest_dynaml_release = "v2.0-beta.1"
-  val latest_dynaml_dev_release = "v2.0"
+  val latest_dynaml_dev_release = "v2.0-amm-1.6.6"
   val dynaml_branch = ""
 
 
