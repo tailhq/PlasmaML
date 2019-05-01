@@ -803,7 +803,7 @@ package object data {
   def write_exp_config(config: FteOmniConfig, dir: Path): Unit = {
     if (!(exists ! dir / "config.json")) {
       val config_json = write_json(config)
-      write(dir / "config.json", config_json)
+      write(dir / "config.json", config_json, createFolders = true)
     }
   }
 
@@ -832,14 +832,16 @@ package object data {
       line =>
         write.append(
           directory / s"training_data_${identifier}.json",
-          s"${line}\n"
+          s"${line}\n", 
+          createFolders = true
         )
 
     val write_pattern_test: String => Unit =
       line =>
         write.append(
           directory / s"test_data_${identifier}.json",
-          s"${line}\n"
+          s"${line}\n", 
+          createFolders = true
         )
 
     dataset.training_dataset

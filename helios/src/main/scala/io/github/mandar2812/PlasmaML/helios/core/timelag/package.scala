@@ -733,7 +733,7 @@ package object timelag {
         browser_plots = false,
         identifier = identifier
       )
-      mkdir ! directory / res.results.summary_dir.segments.last
+      mkdir ! directory / res.results.summary_dir.segments.toSeq.last
     })
 
     //Create a manifest file
@@ -750,7 +750,7 @@ package object timelag {
             s"${r.config.reg_type.getOrElse("NA")}," +
             s"${r.config.actual_input_shape.scalar.asInstanceOf[Int]}," +
             s"${r.config.input_shape.scalar.asInstanceOf[Int]}," +
-            s"${r.results.summary_dir.segments.last}"
+            s"${r.results.summary_dir.segments.toSeq.last}"
       )
       .mkString("\n")
 
@@ -769,14 +769,14 @@ package object timelag {
       val files_to_copy =
         ls ! res.results.summary_dir |? (
           f =>
-            f.segments.last.contains(".csv") ||
-              f.segments.last.contains(".png") ||
-              f.segments.last.contains(".pdf") ||
-              f.segments.last.contains(".json")
+            f.segments.toSeq.last.contains(".csv") ||
+              f.segments.toSeq.last.contains(".png") ||
+              f.segments.toSeq.last.contains(".pdf") ||
+              f.segments.toSeq.last.contains(".json")
           )
 
       files_to_copy.foreach(
-        f => cp.into(f, directory / res.results.summary_dir.segments.last)
+        f => cp.into(f, directory / res.results.summary_dir.segments.toSeq.last)
       )
 
     })
