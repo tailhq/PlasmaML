@@ -4,6 +4,8 @@ import ammonite.ops._
 import org.joda.time._
 import org.joda.time.format.DateTimeFormat
 import breeze.linalg.{DenseVector, DenseMatrix}
+import breeze.math._
+import breeze.numerics._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.tensorflow.data._
@@ -502,7 +504,7 @@ package object data {
           (Iterable[DenseVector[Double]], GaussianScaler)
         ](ds => {
           val (mean, variance) = dutils.getStats(ds)
-          val gs               = GaussianScaler(mean, variance)
+          val gs               = GaussianScaler(mean, sqrt(variance))
 
           (ds.map(gs(_)), gs)
         }) >
