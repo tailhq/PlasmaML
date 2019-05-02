@@ -98,7 +98,8 @@ case class LinearSegment(
 
 def solar_wind_time_series(
   start: DateTime,
-  end: DateTime
+  end: DateTime,
+  solar_wind_params: List[Int] = List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z)
 ): ZipDataSet[DateTime, DenseVector[Double]] = {
 
   val omni_data_path = pwd / 'data
@@ -107,7 +108,7 @@ def solar_wind_time_series(
     fileToStream >
       replaceWhiteSpaces >
       extractTrainingFeatures(
-        OMNIData.dateColumns ++ List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z, F10_7),
+        OMNIData.dateColumns ++ solar_wind_params,
         OMNIData.columnFillValues
       ) >
       OMNILoader.processWithDateTime >
@@ -249,13 +250,14 @@ def dump_omni_mex_data(
   start_year: Int,
   end_year: Int,
   causal_window: (Int, Int),
+  solar_wind_params: List[Int] = List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z),
   file: Path
 ): Unit = {
 
   val start = new DateTime(start_year, 1, 1, 0, 0, 0)
   val end   = new DateTime(end_year, 12, 31, 23, 59, 59)
 
-  val omni = solar_wind_time_series(start, end)
+  val omni = solar_wind_time_series(start, end, solar_wind_params)
   val mex_sw = mex_solar_wind_time_series(
     Seq(home / 'Downloads / "mex_v_sw.txt"),
     start,
