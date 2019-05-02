@@ -107,7 +107,7 @@ def solar_wind_time_series(
     fileToStream >
       replaceWhiteSpaces >
       extractTrainingFeatures(
-        OMNIData.dateColumns ++ List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z),
+        OMNIData.dateColumns ++ List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z, F10_7),
         OMNIData.columnFillValues
       ) >
       OMNILoader.processWithDateTime >
