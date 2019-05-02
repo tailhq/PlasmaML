@@ -254,7 +254,56 @@ package object helios {
     override val estimator: ESTIMATOR = model.estimator
   }
 
-  private[helios] trait Config
+  case class TunedModelRun2[
+    InputPattern,
+    OutputPattern,
+    T,
+    In,
+    ArchOut,
+    Loss,
+    IT,
+    ID,
+    IS,
+    ITT,
+    IDD,
+    ISS
+  ](data_and_scales: (TFDataSet[(DateTime, (InputPattern, OutputPattern))],
+      (Scaler[InputPattern], ReversibleScaler[OutputPattern])),
+    model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[
+      T
+    ], Shape, ITT, IDD, ISS],
+    metrics_train: Option[RegressionMetricsTF[T]],
+    metrics_test: Option[RegressionMetricsTF[T]],
+    summary_dir: Path,
+    training_preds: Option[ITT],
+    test_preds: Option[ITT],
+    training_outputs: Option[ITT] = None,
+    test_outputs: Option[ITT] = None)
+      extends ModelRun[T] {
+
+    override type DATA_PATTERN = (DateTime, (InputPattern, OutputPattern))
+
+    override type SCALERS = (Scaler[InputPattern], ReversibleScaler[OutputPattern])
+
+    override type MODEL =
+      TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[
+        T
+      ], DataType[T], Shape, ITT, IDD, ISS]
+
+    override type ESTIMATOR =
+      Option[dtflearn.SupEstimatorTF[
+        In,
+        Output[T],
+        ArchOut,
+        ArchOut,
+        Loss,
+        (ArchOut, (In, Output[T]))
+      ]]
+
+    override val estimator: ESTIMATOR = model.estimator
+  }
+
+  trait Config
 
   case class ExperimentConfig(
     multi_output: Boolean,
@@ -656,15 +705,17 @@ package object helios {
   /**
     * Write evaluation metrics to disk
     * */
-    def write_performance[T: TF: IsReal](
-      fileID: String,
-      performance: RegressionMetricsTF[T],
-      directory: Path): Unit = {
-  
-      write.over(
-        directory/s"performance_${fileID}.json",
-        s"[${performance.to_json}]")
-    }
+  def write_performance[T: TF: IsReal](
+    fileID: String,
+    performance: RegressionMetricsTF[T],
+    directory: Path
+  ): Unit = {
+
+    write.over(
+      directory / s"performance_${fileID}.json",
+      s"[${performance.to_json}]"
+    )
+  }
 
   def run_unsupervised_experiment(
     collated_data: HELIOS_IMAGE_DATA,

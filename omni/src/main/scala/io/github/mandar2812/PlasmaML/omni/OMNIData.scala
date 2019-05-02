@@ -31,18 +31,23 @@ object OMNIData {
     //Sunspot Number
     val sunspot_number = 39
 
+    //Solar Radio Flux
+    val F10_7 = 50
     //Genmagnetic Indices
     val Dst = 40
     val AE = 41
     val Kp = 38
-
     //L1 quantities
+    //Solar Wind
     val V_SW = 24
+    val V_Lat = 26
+    val V_Lon = 25
+    //Inter-planetary Magnetic Field in GSM coordinates
+    val B_X = 12
+    val B_Y = 15
     val B_Z = 16
+    //Solar Wind Dynamic Pressure
     val P = 28
-
-    //Solar Radio Flux
-    val F10_7 = 50
   }
 
   /**
@@ -54,11 +59,11 @@ object OMNIData {
     16 -> "999.9", 21 -> "999.9",
     24 -> "9999.", 23 -> "999.9",
     40 -> "99999", 22 -> "9999999.",
-    25 -> "999.9", 28 -> "99.99",
-    27 -> "9.999", 39 -> "999",
-    45 -> "99999.99", 46 -> "99999.99",
-    47 -> "99999.99", 15 -> "999.9", 
-    50 -> "999.9")
+    25 -> "999.9", 26 -> "999.9", 
+    28 -> "99.99", 27 -> "9.999", 
+    39 -> "999",   45 -> "99999.99", 
+    46 -> "99999.99", 47 -> "99999.99", 
+    15 -> "999.9", 50 -> "999.9")
 
   /**
     * Contains the name of the quantity stored
@@ -66,6 +71,8 @@ object OMNIData {
     * */
   var columnNames = Map(
     24 -> "Solar Wind Speed",
+    12 -> "I.M.F Bx",
+    15 -> "I.M.F By",
     16 -> "I.M.F Bz",
     40 -> "Dst",
     41 -> "AE",
