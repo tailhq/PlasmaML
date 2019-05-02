@@ -2,6 +2,8 @@ import _root_.ammonite.ops._
 import _root_.org.joda.time._
 import _root_.org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import _root_.breeze.linalg.{DenseVector, DenseMatrix}
+import breeze.math._
+import breeze.numerics._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.DynaMLPipe._
@@ -359,7 +361,7 @@ type SC_DATA = (
   (Scaler[DenseVector[Double]], GaussianScaler)
 )
 
-def scale_bdv_data(fraction: Double) =
+val scale_bdv_data =
   DataPipe(
     (dataset: TFDataSet[
       (DateTime, (DenseVector[Double], DenseVector[Double]))
@@ -387,36 +389,15 @@ def scale_bdv_data(fraction: Double) =
 
       val gaussian_scaling = DataPipe[
         Iterable[DenseVector[Double]],
-        (Iterable[DenseVector[Double]], GaussianScaler)
+        GaussianScaler
       ](ds => {
         val (mean, variance) = dutils.getStats(ds)
-        val gs               = GaussianScaler(mean, variance)
-
-        (ds.map(gs(_)), gs)
+        GaussianScaler(mean, sqrt(variance))
       })
 
-      val perform_lossy_pca = if (fraction < 1d) {
-        calculatePCAScalesFeatures(false) >
-          tup2_2[Iterable[DenseVector[Double]], PCAScaler] >
-          compressPCA(fraction)
-      } else {
-        DataPipe[Iterable[DenseVector[Double]], Scaler[DenseVector[Double]]](
-          _ => Scaler(identity[DenseVector[Double]])
-        )
-      }
+      val targets_scaler = gaussian_scaling(targets)
 
-      val scale_features =
-        gaussian_scaling >
-          (perform_lossy_pca * identityPipe[GaussianScaler]) >
-          DataPipe2[Scaler[DenseVector[Double]], GaussianScaler, Scaler[
-            DenseVector[Double]
-          ]](
-            (pca, gs) => gs > pca
-          )
-
-      val (_, targets_scaler) = gaussian_scaling(targets)
-
-      val features_scaler = scale_features(features)
+      val features_scaler = gaussian_scaling(features)
 
       val scale_training_data = identityPipe[DateTime] * (features_scaler * targets_scaler)
       val scale_test_data = identityPipe[DateTime] * (features_scaler * identityPipe[
@@ -703,7 +684,7 @@ def apply(
 
   val data_size = omni_mex.training_dataset.size
 
-  val scaling_op = scale_bdv_data(fraction = adj_fraction_pca)
+  val scaling_op = scale_bdv_data
 
   println("Scaling data attributes")
   val (scaled_data, scalers): SC_DATA = scaling_op.run(omni_mex)

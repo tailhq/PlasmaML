@@ -11,7 +11,7 @@ mex_omni.dump_omni_mex_data(
 val omni_mex_res = mex_omni(
   data_file = home / 'Downloads / "omni_mex_data.json",
   start_year = 2014,
-  end_year = 2016,
+  end_year = 2017,
   test_year = 2016,
   network_size = Seq(20, 20),
   activation_func = (i: Int) => tf.learn.Sigmoid(s"Act_$i"),//timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
