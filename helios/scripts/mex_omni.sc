@@ -547,7 +547,7 @@ def apply(
   val persistent_hyper_parameters = List("reg")
 
   val hyper_prior = Map(
-    "reg"      -> UniformRV(-4.5d, -2.5d),
+    "reg"      -> UniformRV(-5d, -2.5d),
     "alpha"    -> UniformRV(0.75d, 2d),
     "sigma_sq" -> UniformRV(1e-5, 5d)
   )
