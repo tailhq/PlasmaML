@@ -59,6 +59,22 @@ package object utils {
       }
     }
 
+  def sin[T: TF: IsFloatOrDouble](n: String): Activation[T] =
+    new Activation(n) {
+      override val layerType = "Sin"
+      override def forwardWithoutContext(
+        input: Output[T]
+      )(
+        implicit mode: Mode
+      ): Output[T] = {
+        input.sin
+      }
+    }
+
+  def getSinAct[T: TF: IsFloatOrDouble](s: Int, i: Int): Activation[T] =
+    if (i - s == 0) sin[T](s"Act_$i")
+    else tf.learn.Sigmoid(s"Act_$i")
+
   def getPolyAct[T: TF: IsFloatOrDouble](
     degree: Int,
     s: Int,
@@ -67,11 +83,19 @@ package object utils {
     if (i - s == 0) layer_poly[T](degree)(s"Act_$i")
     else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct[T: TF: IsFloatOrDouble](s: Int, i: Int, leakyness: Float = 0.01f): Activation[T] =
+  def getReLUAct[T: TF: IsFloatOrDouble](
+    s: Int,
+    i: Int,
+    leakyness: Float = 0.01f
+  ): Activation[T] =
     if ((i - s) % 2 == 0) tf.learn.ReLU(s"Act_$i", leakyness)
     else tf.learn.Sigmoid(s"Act_$i")
 
-  def getReLUAct2[T: TF: IsFloatOrDouble](s: Int, i: Int, leakyness: Float = 0.01f): Activation[T] =
+  def getReLUAct2[T: TF: IsFloatOrDouble](
+    s: Int,
+    i: Int,
+    leakyness: Float = 0.01f
+  ): Activation[T] =
     if ((i - s) == 0) tf.learn.ReLU(s"Act_$i", leakyness)
     else tf.learn.Sigmoid(s"Act_$i")
 
