@@ -70,6 +70,7 @@ def solar_wind_time_series(
 
 case class OmniPDTConfig(
   solar_wind_params: List[Int],
+  target_quantity: Int,
   data_limits: (Int, Int),
   test_year: Int,
   causal_window: (Int, Int),
@@ -94,6 +95,7 @@ type ModelRunTuning = helios.TunedModelRun2[
 @main
 def apply(
   solar_wind_params: List[Int] = List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z),
+  target_quantity: Int = Dst,
   start_year: Int = 2014,
   end_year: Int = 2016,
   test_year: Int = 2015,
@@ -238,7 +240,7 @@ def apply(
 
   val omni = solar_wind_time_series(start, end, solar_wind_params)
   val omni_ground =
-    fte.data.load_solar_wind_data(start, end)(causal_window, false, Dst)
+    fte.data.load_solar_wind_data(start, end)(causal_window, false, target_quantity)
 
   val (test_start, test_end) = (
     new DateTime(test_year, 1, 1, 0, 0),
@@ -279,14 +281,12 @@ def apply(
     )
   )
 
-  val input_shape  = scaled_data.training_dataset.data.head._2._1.shape //Shape(scaled_data.training_dataset.data.head._2._1.shape(0))
-  val output_shape = scaled_data.training_dataset.data.head._2._2.shape //Shape(scaled_data.training_dataset.data.head._2._2.shape(0))
+  val input_shape  = scaled_data.training_dataset.data.head._2._1.shape
+  val output_shape = scaled_data.training_dataset.data.head._2._2.shape
 
   val load_pattern_in_tensor =
     tup2_2[DateTime, (Tensor[Double], Tensor[Double])] >
-      (
-        duplicate(identityPipe[Tensor[Double]])
-      )
+      duplicate(identityPipe[Tensor[Double]])
 
   val unzip =
     DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
@@ -633,6 +633,7 @@ def apply(
   helios.Experiment(
     OmniPDTConfig(
       solar_wind_params,
+      target_quantity,
       (start_year, end_year),
       test_year,
       causal_window,
