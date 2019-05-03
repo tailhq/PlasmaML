@@ -7,7 +7,7 @@ mex_omni.dump_omni_mex_data(
   2010,
   2018,
   (8, 16),
-  List(V_SW, V_Lat, V_Lon, P/* , B_X, B_Y, B_Z */),
+  List(V_SW, /* V_Lat, V_Lon, */ P , B_X, B_Y, B_Z),
   home / 'Downloads / "omni_mex_data.json"
 )
 
@@ -16,13 +16,13 @@ val omni_mex_res = mex_omni(
   start_year = 2015,
   end_year = 2017,
   test_year = 2016,
-  network_size = Seq(10, 10),
-  activation_func = (i: Int) => timelag.utils.getPolyAct[Double](2, 1, i),
+  network_size = Seq(20, 20),
+  activation_func = (i: Int) => tf.learn.Sigmoid(s"Act_$i"),//timelag.utils.getSinAct[Double](1, i),
   iterations = 100000,
   iterations_tuning = 20000,
   pdt_iterations_tuning = 4,
   pdt_iterations_test = 9,
-  batch_size = 128,
+  batch_size = 32,
   optimizer = tf.train.Adam(0.001f)
 )
 
