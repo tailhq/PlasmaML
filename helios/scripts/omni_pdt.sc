@@ -32,9 +32,65 @@ import org.platanios.tensorflow.api.learn.layers.Layer
 
 import OMNIData.Quantities._
 
-import $file.mex_omni
+def solar_wind_time_series(
+  start: DateTime,
+  end: DateTime,
+  solar_wind_params: List[Int] = List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z)
+): ZipDataSet[DateTime, Tensor[Double]] = {
 
+  val omni_data_path = pwd / 'data
 
+  val load_omni_file =
+    fileToStream >
+      replaceWhiteSpaces >
+      extractTrainingFeatures(
+        OMNIData.dateColumns ++ solar_wind_params,
+        OMNIData.columnFillValues
+      ) >
+      OMNILoader.processWithDateTime >
+      IterableDataPipe(
+        (p: (DateTime, Seq[Double])) => p._2.forall(x => !x.isNaN)
+      )
+
+  dtfdata
+    .dataset(start.getYear to end.getYear)
+    .map(
+      DataPipe(
+        (i: Int) => omni_data_path.toString() + "/" + OMNIData.getFilePattern(i)
+      )
+    )
+    .flatMap(load_omni_file)
+    .to_zip(
+      identityPipe[DateTime] * DataPipe[Seq[Double], Tensor[Double]](
+        xs => dtf.tensor_f64(solar_wind_params.length)(xs: _*)
+      )
+    )
+
+}
+
+case class OmniPDTConfig(
+  solar_wind_params: List[Int],
+  data_limits: (Int, Int),
+  test_year: Int,
+  causal_window: (Int, Int),
+  timelag_prediction: String = "mode",
+  fraction_variance: Double = 1d)
+    extends helios.Config
+
+type ModelRunTuning = helios.TunedModelRun2[
+  Tensor[Double],
+  Tensor[Double],
+  Double,
+  Output[Double],
+  (Output[Double], Output[Double]),
+  Double,
+  Tensor[Double],
+  FLOAT64,
+  Shape,
+  (Tensor[Double], Tensor[Double]),
+  (FLOAT64, FLOAT64),
+  (Shape, Shape)
+]
 @main
 def apply(
   solar_wind_params: List[Int] = List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z),
@@ -60,7 +116,7 @@ def apply(
   reg_type: String = "L2",
   existing_exp: Option[Path] = None,
   checkpointing_freq: Int = 1
-): helios.Experiment[Double, mex_omni.ModelRunTuning, mex_omni.OmniMexConfig] = {
+): helios.Experiment[Double, ModelRunTuning, OmniPDTConfig] = {
 
   val causal_window_size = causal_window._2
 
@@ -176,12 +232,13 @@ def apply(
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
-  type PATTERN = (DateTime, (DenseVector[Double], DenseVector[Double]))
+  type PATTERN = (DateTime, (Tensor[Double], Tensor[Double]))
   val start = new DateTime(start_year, 1, 1, 0, 0, 0)
   val end   = new DateTime(end_year, 12, 31, 23, 59, 59)
 
-  val omni = mex_omni.solar_wind_time_series(start, end, solar_wind_params)
-  val omni_ground = fte.data.load_solar_wind_data_bdv(start, end)(causal_window, false, Dst)
+  val omni = solar_wind_time_series(start, end, solar_wind_params)
+  val omni_ground =
+    fte.data.load_solar_wind_data(start, end)(causal_window, false, Dst)
 
   val (test_start, test_end) = (
     new DateTime(test_year, 1, 1, 0, 0),
@@ -189,7 +246,7 @@ def apply(
   )
 
   val tt_partition = DataPipe(
-    (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
+    (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
       if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
         false
       else
@@ -213,30 +270,22 @@ def apply(
 
   val data_size = omni_pdt.training_dataset.size
 
-
   println("Scaling data attributes")
-  val (scaled_data, scalers): mex_omni.SC_DATA = mex_omni.scale_bdv_data(omni_pdt)
+  val (scaled_data, scalers) = fte.data.scale_timed_data[Double].run(omni_pdt)
 
   val split_data = scaled_data.training_dataset.partition(
-    DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Boolean](
+    DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), Boolean](
       _ => scala.util.Random.nextDouble() <= 0.7
     )
   )
 
-  val input_shape  = Shape(scaled_data.training_dataset.data.head._2._1.length)
-  val output_shape = Shape(scaled_data.training_dataset.data.head._2._2.length)
+  val input_shape  = scaled_data.training_dataset.data.head._2._1.shape //Shape(scaled_data.training_dataset.data.head._2._1.shape(0))
+  val output_shape = scaled_data.training_dataset.data.head._2._2.shape //Shape(scaled_data.training_dataset.data.head._2._2.shape(0))
 
   val load_pattern_in_tensor =
-    tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] >
+    tup2_2[DateTime, (Tensor[Double], Tensor[Double])] >
       (
-        DataPipe(
-          (dv: DenseVector[Double]) =>
-            dtf.tensor_f64(input_shape(0))(dv.toArray.toSeq: _*)
-        ) *
-          DataPipe(
-            (dv: DenseVector[Double]) =>
-              dtf.tensor_f64(output_shape(0))(dv.toArray.toSeq: _*)
-          )
+        duplicate(identityPipe[Tensor[Double]])
       )
 
   val unzip =
@@ -248,7 +297,7 @@ def apply(
     .EagerConcatenate[Double](axis = 0))
 
   val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
-    (DateTime, (DenseVector[Double], DenseVector[Double])),
+    (DateTime, (Tensor[Double], Tensor[Double])),
     Tensor[Double],
     Tensor[Double],
     (Tensor[Double], Tensor[Double]),
@@ -261,7 +310,7 @@ def apply(
   )
 
   val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
-    (DateTime, (DenseVector[Double], DenseVector[Double])),
+    (DateTime, (Tensor[Double], Tensor[Double])),
     Tensor[Double],
     Tensor[Double],
     (Tensor[Double], Tensor[Double]),
@@ -474,7 +523,7 @@ def apply(
     final_targets,
     unscaled_preds_test,
     pred_time_lags_test
-  ) = mex_omni.process_predictions(
+  ) = fte.process_predictions(
     scaled_data.test_dataset,
     predictions,
     scalers,
@@ -505,7 +554,7 @@ def apply(
       final_targets_train,
       unscaled_preds_train,
       pred_time_lags_train
-    ) = mex_omni.process_predictions(
+    ) = fte.process_predictions(
       scaled_data.training_dataset,
       predictions_train,
       scalers,
@@ -582,7 +631,8 @@ def apply(
   )
 
   helios.Experiment(
-    mex_omni.OmniMexConfig(
+    OmniPDTConfig(
+      solar_wind_params,
       (start_year, end_year),
       test_year,
       causal_window,
@@ -592,4 +642,3 @@ def apply(
   )
 
 }
-

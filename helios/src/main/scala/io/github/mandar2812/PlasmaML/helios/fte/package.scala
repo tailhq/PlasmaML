@@ -1561,10 +1561,10 @@ package object fte {
 
   }
 
-  private def process_predictions(
-    scaled_data: DataSet[(DateTime, (DenseVector[Double], Tensor[Double]))],
+  def process_predictions[T](
+    scaled_data: DataSet[(DateTime, (T, Tensor[Double]))],
     predictions: (Tensor[Double], Tensor[Double]),
-    scalers: (Scaler[DenseVector[Double]], GaussianScalerTF[Double]),
+    scalers: (Scaler[T], GaussianScalerTF[Double]),
     causal_window: Int,
     mo_flag: Boolean,
     prob_timelags: Boolean,
