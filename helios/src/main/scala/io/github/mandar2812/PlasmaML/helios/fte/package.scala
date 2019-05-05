@@ -33,8 +33,8 @@ import _root_.io.github.mandar2812.dynaml.models.TunableTFModel.HyperParams
 
 package object fte {
 
-  type ModelRunTuning = helios.TunedModelRun[
-    DenseVector[Double],
+  type ModelRunTuning[T] = helios.TunedModelRun[
+    T,
     Double,
     Output[Double],
     (Output[Double], Output[Double]),
@@ -490,7 +490,7 @@ package object fte {
     hyp_opt_iterations: Option[Int] = Some(5),
     get_training_preds: Boolean = false,
     existing_exp: Option[Path] = None
-  ): helios.Experiment[Double, ModelRunTuning, FteOmniConfig] = {
+  ): helios.Experiment[Double, ModelRunTuning[DenseVector[Double]], FteOmniConfig] = {
 
     val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
@@ -601,9 +601,10 @@ package object fte {
       val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
         .contains("test_data_"))).last
 
-      read_data_set(
+      read_data_set[DenseVector[Double]](
         training_data_file,
-        test_data_file
+        test_data_file,
+        DataPipe((xs: Array[Double]) => DenseVector(xs))
       )
     } else {
       generate_fresh_dataset()
@@ -990,6 +991,14 @@ package object fte {
 
   }
 
+  /**
+    * Train the PDT alternating learning algorithm
+    * for the solar wind prediction task.
+    *
+    * @param architechture Neural network model expressed as a Tensorflow Layer.
+    * @param hyper_params A list of network and loss function hyper-parameters.
+    *
+    */
   def exp_cdt_alt(
     architechture: Layer[Output[Double], (Output[Double], Output[Double])],
     hyper_params: List[String],
@@ -1032,7 +1041,7 @@ package object fte {
       DataPipe[Seq[Tensor[Float]], Double](s =>
           s.map(_.scalar.toDouble).sum / s.length),
     checkpointing_freq: Int = 5
-  ): helios.Experiment[Double, ModelRunTuning, FteOmniConfig] = {
+  ): helios.Experiment[Double, ModelRunTuning[Tensor[Double]], FteOmniConfig] = {
 
     val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
@@ -1051,7 +1060,7 @@ package object fte {
     val tf_summary_dir_tmp =
       existing_exp.getOrElse(summary_top_dir / summary_dir_index)
 
-    val adj_fraction_pca = math.min(math.abs(fraction_pca), 1d)
+    val adj_fraction_pca = 1d//math.min(math.abs(fraction_pca), 1d)
 
     val experiment_config = FteOmniConfig(
       FTEConfig(
@@ -1092,7 +1101,7 @@ package object fte {
       val training_data_files = ls ! tf_summary_dir |? (_.segments.last
         .contains("training_data_"))
       val test_data_files = ls ! tf_summary_dir |? (_.segments.last
-        .contains("training_data_"))
+        .contains("test_data_"))
 
       training_data_files.length > 0 && test_data_files.length > 0
     } else {
@@ -1110,7 +1119,7 @@ package object fte {
     )
 
     val tt_partition = DataPipe(
-      (p: (DateTime, (DenseVector[Double], Tensor[Double]))) =>
+      (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
         if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
           false
         else
@@ -1119,7 +1128,7 @@ package object fte {
 
     val generate_fresh_dataset = () => {
       println("\nProcessing FTE Data")
-      val fte_data = load_fte_data_bdv(
+      val fte_data = load_fte_data(
         fte_data_path,
         carrington_rotations,
         log_scale_fte,
@@ -1143,9 +1152,10 @@ package object fte {
       val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
         .contains("test_data_"))).last
 
-      read_data_set(
+      read_data_set[Tensor[Double]](
         training_data_file,
-        test_data_file
+        test_data_file,
+        DataPipe((xs: Array[Double]) => dtf.tensor_f64(xs.length)(xs:_*))
       )
     } else {
       generate_fresh_dataset()
@@ -1155,39 +1165,33 @@ package object fte {
 
     val data_size = dataset.training_dataset.size
 
-    val scaling_op = scale_timed_data2[Double](fraction = adj_fraction_pca)
+    val scaling_op = scale_timed_data[Double] //(fraction = adj_fraction_pca)
 
     if (!use_cached_data) {
       println("Writing data sets")
-      write_fte_data_set[DenseVector[Double]](
+      write_fte_data_set[Tensor[Double]](
         dt.toString("YYYY-MM-dd-HH-mm"),
         dataset,
-        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
+        DataPipe[Tensor[Double], Seq[Double]](_.entriesIterator.toSeq),
         tf_summary_dir
       )
     }
 
     println("Scaling data attributes")
-    val (scaled_data, scalers): helios.data.SC_TF_DATA_T2[DenseVector[Double], Double] =
+    val (scaled_data, scalers)/* : helios.data.SC_TF_DATA_T2[DenseVector[Double], Double] */ =
       scaling_op.run(dataset)
 
     val split_data = scaled_data.training_dataset.partition(
-      DataPipe[(DateTime, (DenseVector[Double], Tensor[Double])), Boolean](
+      DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), Boolean](
         _ => scala.util.Random.nextDouble() <= 0.7
       )
     )
 
-    val input_shape = Shape(scaled_data.training_dataset.data.head._2._1.size)
+    val input_shape = scaled_data.training_dataset.data.head._2._1.shape//Shape(scaled_data.training_dataset.data.head._2._1.size)
 
     val load_pattern_in_tensor =
-      tup2_2[DateTime, (DenseVector[Double], Tensor[Double])] >
-        (
-          DataPipe(
-            (dv: DenseVector[Double]) =>
-              dtf.tensor_f64(input_shape(0))(dv.toArray.toSeq: _*)
-          ) *
-            identityPipe[Tensor[Double]]
-        )
+      tup2_2[DateTime, (Tensor[Double], Tensor[Double])] > 
+      duplicate(identityPipe[Tensor[Double]])
 
     val unzip =
       DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
@@ -1198,7 +1202,7 @@ package object fte {
       .concatOperation[Double](ax = 0))
 
     val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
-      (DateTime, (DenseVector[Double], Tensor[Double])),
+      (DateTime, (Tensor[Double], Tensor[Double])),
       Tensor[Double],
       Tensor[Double],
       (Tensor[Double], Tensor[Double]),
@@ -1211,7 +1215,7 @@ package object fte {
     )
 
     val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
-      (DateTime, (DenseVector[Double], Tensor[Double])),
+      (DateTime, (Tensor[Double], Tensor[Double])),
       Tensor[Double],
       Tensor[Double],
       (Tensor[Double], Tensor[Double]),

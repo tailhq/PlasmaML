@@ -51,7 +51,7 @@ def apply(
   reg_type: String = "L2",
   existing_exp: Option[Path] = None,
   checkpointing_freq: Int = 1
-): helios.Experiment[Double, fte.ModelRunTuning, fte.data.FteOmniConfig] = {
+): helios.Experiment[Double, fte.ModelRunTuning[Tensor[Double]], fte.data.FteOmniConfig] = {
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     dtfutils.get_ffstack_properties(
@@ -66,7 +66,6 @@ def apply(
   val output_mapping = {
 
     val outputs_segment =
-      //tf.learn.BatchNormalization[Double]("BatchNorm", fused = false) >>
       tf.learn.Linear[Double]("Outputs", sliding_window)
 
     val timelag_segment =

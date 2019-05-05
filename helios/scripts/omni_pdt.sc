@@ -92,6 +92,7 @@ type ModelRunTuning = helios.TunedModelRun2[
   (FLOAT64, FLOAT64),
   (Shape, Shape)
 ]
+
 @main
 def apply(
   solar_wind_params: List[Int] = List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z),

@@ -50,7 +50,7 @@ def apply(
   get_training_preds: Boolean = false,
   reg_type: String = "L2",
   existing_exp: Option[Path] = None
-): helios.Experiment[Double, fte.ModelRunTuning, fte.data.FteOmniConfig] = {
+): helios.Experiment[Double, fte.ModelRunTuning[DenseVector[Double]], fte.data.FteOmniConfig] = {
 
   val num_pred_dims = timelag.utils.get_num_output_dims(
     causal_window._2,

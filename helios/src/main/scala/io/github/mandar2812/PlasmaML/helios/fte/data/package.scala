@@ -901,10 +901,11 @@ package object data {
       None
     }
 
-  def read_data_set(
+  def read_data_set[T](
     training_data_file: Path,
-    test_data_file: Path
-  ): helios.data.TF_DATA_T2[DenseVector[Double], Double] = {
+    test_data_file: Path,
+    load_input_pattern: DataPipe[Array[Double], T]
+  ): helios.data.TF_DATA_T2[T, Double] = {
 
     require(
       exists ! training_data_file && exists ! test_data_file,
@@ -928,7 +929,7 @@ package object data {
           .values
           .asInstanceOf[String]
       )
-      val features = DenseVector(
+      val features = load_input_pattern(
         record
           .findField(p => p._1 == "fte")
           .get
@@ -956,11 +957,11 @@ package object data {
       dtfdata
         .dataset(pipeline(training_data_file))
         .to_zip(
-          identityPipe[(DateTime, (DenseVector[Double], Tensor[Double]))]
+          identityPipe[(DateTime, (T, Tensor[Double]))]
         ),
       dtfdata
         .dataset(pipeline(test_data_file))
-        .to_zip(identityPipe[(DateTime, (DenseVector[Double], Tensor[Double]))])
+        .to_zip(identityPipe[(DateTime, (T, Tensor[Double]))])
     )
   }
 
