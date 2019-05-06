@@ -3,9 +3,9 @@ import $exec.helios.scripts.csss_pdt_model_tuning
 import $exec.helios.scripts.env
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2014,
-  end_year = 2015,
-  test_year = 2015,
+  start_year = 2008,
+  end_year = 2012,
+  test_year = 2010,
   sw_threshold = 600d,
   crop_latitude = 20d,
   fraction_pca = 1d,
@@ -21,9 +21,9 @@ val csss_exp = csss_pdt_model_tuning(
   quantity = OMNIData.Quantities.V_SW,
   reg_type = "L2",
   batch_size = 128,
-  max_iterations = 200000,
+  max_iterations = 800000,
   max_iterations_tuning = 20000,
-  pdt_iterations_tuning = 4,
+  pdt_iterations_tuning = 9,
   pdt_iterations_test = 4,
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,

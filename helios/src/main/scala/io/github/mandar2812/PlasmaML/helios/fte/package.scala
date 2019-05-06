@@ -992,14 +992,44 @@ package object fte {
   }
 
   /**
-    * Train the PDT alternating learning algorithm
-    * for the solar wind prediction task.
+    * Train the PDT alternating learning algorithm.
     *
+    * @param dataset A train-test data set, instance of [[helios.data.TF_DATA_T]].
+    * @param tf_summary_dir The directory which stores model runs, parameters, data sets and predictions.
+    * @param experiment_config Stores the experiment configuration, see [[data.FteOmniConfig]]
     * @param architechture Neural network model expressed as a Tensorflow Layer.
     * @param hyper_params A list of network and loss function hyper-parameters.
-    *
+    * @param persistent_hyp_params The hyper-parameters which are not updated during
+    *                              the PDT learning procedure. Usually the regularization
+    *                              and arhchitecture based hyper-parameters.
+    * @param params_to_mutable_params An invertible transformation converting the updatable
+    *                                 hyper-parameters into the 'cannonical' PDT hyper-parameters.
+    *                                 i.e. &alpha; and &sigma;<sup>2</sup>.
+    * @param loss_func_generator A function which takes as input the model hyper-parameters and
+    *                            a PDT type loss function. See [[LG]] for type information.
+    * @param hyper_prior A prior probability distribution dictating how hyper-parameters are sampled
+    *                    during the search procedure. Specified as a scala Map.
+    * @param hyp_mapping An optional invertible mapping transformation for the hyper-parameter space.
+    *                    Required in case Covariance Matrix Adaption type methods are used for hyper-parameter search.
+    * @param iterations The total number of iterations of training to perform after hyper-parameters are chosen.
+    * @param iterations_tuning The total number of iterations of training to perform for evaluating each candidate
+    *                          model.
+    * @param pdt_iterations_tuning The number of PDT updates to perform while evaluating a candidate model.
+    * @param pdt_iterations_test The number of PDT updates to perform while training the final chosen model candidate.
+    * @param num_samples The number of candidate models to generate during hyper-parameter search. They will be sampled
+    *                    from the prior distribution [[hyper_prior]].
+    * @param hyper_optimizer A string specifying the hyper-parameter search procedure.
+    *                        The following options can be selected:
+    *                        <ul>
+    *                           <li>"gs": Grid Search/Random Search</li>
+    *                           <li>"csa": Coupled Simulated Annealing</li>
+    *                           <li>"cma": Covariance Matrix Adaptation</li>
+    *                        </ul>
     */
-  def exp_cdt_alt(
+  def run_exp(
+    dataset: helios.data.TF_DATA_T[Double, Double],
+    tf_summary_dir: Path,
+    experiment_config: FteOmniConfig,
     architechture: Layer[Output[Double], (Output[Double], Output[Double])],
     hyper_params: List[String],
     persistent_hyp_params: List[String],
@@ -1020,20 +1050,6 @@ package object fte {
     hyper_optimizer: String = "gs",
     miniBatch: Int = 32,
     optimizer: tf.train.Optimizer = tf.train.AdaDelta(0.001f),
-    year_range: Range = 2011 to 2017,
-    test_year: Int = 2015,
-    sw_threshold: Double = 700d,
-    quantity: Int = OMNIData.Quantities.V_SW,
-    deltaT: (Int, Int) = (48, 72),
-    deltaTFTE: Int = 5,
-    fteStep: Int = 1,
-    latitude_limit: Double = 40d,
-    fraction_pca: Double = 0.8,
-    log_scale_fte: Boolean = false,
-    log_scale_omni: Boolean = false,
-    conv_flag: Boolean = false,
-    fte_data_path: Path = home / 'Downloads / 'fte,
-    summary_top_dir: Path = home / 'tmp,
     hyp_opt_iterations: Option[Int] = Some(5),
     get_training_preds: Boolean = false,
     existing_exp: Option[Path] = None,
@@ -1041,125 +1057,7 @@ package object fte {
       DataPipe[Seq[Tensor[Float]], Double](s =>
           s.map(_.scalar.toDouble).sum / s.length),
     checkpointing_freq: Int = 5
-  ): helios.Experiment[Double, ModelRunTuning[Tensor[Double]], FteOmniConfig] = {
-
-    val mo_flag: Boolean       = true
-    val prob_timelags: Boolean = true
-
-    val urv = UniformRV(0d, 1d)
-
-    val sum_dir_prefix = if (conv_flag) "fte_omni_conv" else "fte_omni"
-
-    val dt = DateTime.now()
-
-    val summary_dir_index = {
-      if (mo_flag) sum_dir_prefix + "_mo_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
-      else sum_dir_prefix + "_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
-    }
-
-    val tf_summary_dir_tmp =
-      existing_exp.getOrElse(summary_top_dir / summary_dir_index)
-
-    val adj_fraction_pca = 1d//math.min(math.abs(fraction_pca), 1d)
-
-    val experiment_config = FteOmniConfig(
-      FTEConfig(
-        (year_range.min, year_range.max),
-        deltaTFTE,
-        fteStep,
-        latitude_limit,
-        log_scale_fte
-      ),
-      OMNIConfig(deltaT, log_scale_omni),
-      multi_output = true,
-      probabilistic_time_lags = true,
-      timelag_prediction = "mode",
-      fraction_variance = adj_fraction_pca
-    )
-
-    val existing_config = read_exp_config(tf_summary_dir_tmp / "config.json")
-
-    val use_cached_config: Boolean = existing_config match {
-      case None    => false
-      case Some(c) => c == experiment_config
-    }
-
-    val tf_summary_dir = if (use_cached_config) {
-      println("Using provided experiment directory to continue experiment")
-      tf_summary_dir_tmp
-    } else {
-      println(
-        "Ignoring provided experiment directory and starting fresh experiment"
-      )
-
-      write_exp_config(experiment_config, summary_top_dir / summary_dir_index)
-
-      summary_top_dir / summary_dir_index
-    }
-
-    val use_cached_data = if (use_cached_config) {
-      val training_data_files = ls ! tf_summary_dir |? (_.segments.last
-        .contains("training_data_"))
-      val test_data_files = ls ! tf_summary_dir |? (_.segments.last
-        .contains("test_data_"))
-
-      training_data_files.length > 0 && test_data_files.length > 0
-    } else {
-      false
-    }
-
-    val (test_start, test_end) = (
-      new DateTime(test_year, 1, 1, 0, 0),
-      new DateTime(test_year, 12, 31, 23, 59)
-    )
-
-    val (start, end) = (
-      new DateTime(year_range.min, 1, 1, 0, 0),
-      new DateTime(year_range.max, 12, 31, 23, 59)
-    )
-
-    val tt_partition = DataPipe(
-      (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
-        if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
-          false
-        else
-          true
-    )
-
-    val generate_fresh_dataset = () => {
-      println("\nProcessing FTE Data")
-      val fte_data = load_fte_data(
-        fte_data_path,
-        carrington_rotations,
-        log_scale_fte,
-        start,
-        end
-      )(deltaTFTE, fteStep, latitude_limit, conv_flag)
-
-      println("Processing OMNI solar wind data")
-      val omni_data =
-        load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity)
-
-      println("Constructing joined data set")
-      fte_data.join(omni_data).partition(tt_partition)
-    }
-
-    val dataset = if (use_cached_config && use_cached_data) {
-      println("Using previously cached data set")
-
-      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
-        .contains("training_data_"))).last
-      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
-        .contains("test_data_"))).last
-
-      read_data_set[Tensor[Double]](
-        training_data_file,
-        test_data_file,
-        DataPipe((xs: Array[Double]) => dtf.tensor_f64(xs.length)(xs:_*))
-      )
-    } else {
-      generate_fresh_dataset()
-    }
+  ): ModelRunTuning[Tensor[Double]] = {
 
     val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
 
@@ -1167,19 +1065,8 @@ package object fte {
 
     val scaling_op = scale_timed_data[Double] //(fraction = adj_fraction_pca)
 
-    if (!use_cached_data) {
-      println("Writing data sets")
-      write_fte_data_set[Tensor[Double]](
-        dt.toString("YYYY-MM-dd-HH-mm"),
-        dataset,
-        DataPipe[Tensor[Double], Seq[Double]](_.entriesIterator.toSeq),
-        tf_summary_dir
-      )
-    }
-
     println("Scaling data attributes")
-    val (scaled_data, scalers)/* : helios.data.SC_TF_DATA_T2[DenseVector[Double], Double] */ =
-      scaling_op.run(dataset)
+    val (scaled_data, scalers) = scaling_op.run(dataset)
 
     val split_data = scaled_data.training_dataset.partition(
       DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), Boolean](
@@ -1187,11 +1074,11 @@ package object fte {
       )
     )
 
-    val input_shape = scaled_data.training_dataset.data.head._2._1.shape//Shape(scaled_data.training_dataset.data.head._2._1.size)
+    val input_shape = scaled_data.training_dataset.data.head._2._1.shape
 
     val load_pattern_in_tensor =
-      tup2_2[DateTime, (Tensor[Double], Tensor[Double])] > 
-      duplicate(identityPipe[Tensor[Double]])
+      tup2_2[DateTime, (Tensor[Double], Tensor[Double])] >
+        duplicate(identityPipe[Tensor[Double]])
 
     val unzip =
       DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
@@ -1331,6 +1218,8 @@ package object fte {
       validation_data = Some(split_data.test_dataset)
     )
 
+    val dt = DateTime.now()
+
     val run_tuning = () => {
       val gs = hyper_optimizer match {
         case "csa" =>
@@ -1456,9 +1345,9 @@ package object fte {
       predictions,
       scalers,
       causal_window,
-      mo_flag,
-      prob_timelags,
-      log_scale_omni,
+      experiment_config.multi_output,
+      experiment_config.probabilistic_time_lags,
+      experiment_config.omni_config.log_flag,
       false
     )
 
@@ -1487,9 +1376,9 @@ package object fte {
         predictions_train,
         scalers,
         causal_window,
-        mo_flag,
-        prob_timelags,
-        log_scale_omni,
+        experiment_config.multi_output,
+        experiment_config.probabilistic_time_lags,
+        experiment_config.omni_config.log_flag,
         true
       )
 
@@ -1556,6 +1445,131 @@ package object fte {
       "test_" + dt.toString("YYYY-MM-dd-HH-mm"),
       reg_metrics,
       tf_summary_dir
+    )
+
+    results
+
+  }
+
+  /**
+    * Train the PDT alternating learning algorithm
+    * for the solar wind prediction task.
+    *
+    * @param architechture Neural network model expressed as a Tensorflow Layer.
+    * @param hyper_params A list of network and loss function hyper-parameters.
+    * @param persistent_hyp_params The hyper-parameters which are not updated during
+    *                              the PDT learning procedure. Usually the regularization
+    *                              and arhchitecture based hyper-parameters.
+    * @param params_to_mutable_params An invertible transformation converting the updatable
+    *                                 hyper-parameters into the 'cannonical' PDT hyper-parameters.
+    *                                 i.e. &alpha; and &sigma;<sup>2</sup>.
+    * @param loss_func_generator A function which takes as input the model hyper-parameters and
+    *                            a PDT type loss function. See [[LG]] for type information.
+    * @param hyper_prior A prior probability distribution dictating how hyper-parameters are sampled
+    *                    during the search procedure. Specified as a scala Map.
+    * @param hyp_mapping An optional invertible mapping transformation for the hyper-parameter space.
+    *                    Required in case Covariance Matrix Adaption type methods are used for hyper-parameter search.
+    * @param iterations The total number of iterations of training to perform after hyper-parameters are chosen.
+    * @param iterations_tuning The total number of iterations of training to perform for evaluating each candidate
+    *                          model.
+    * @param pdt_iterations_tuning The number of PDT updates to perform while evaluating a candidate model.
+    * @param pdt_iterations_test The number of PDT updates to perform while training the final chosen model candidate.
+    * @param num_samples The number of candidate models to generate during hyper-parameter search. They will be sampled
+    *                    from the prior distribution [[hyper_prior]].
+    * @param hyper_optimizer A string specifying the hyper-parameter search procedure.
+    *                        The following options can be selected:
+    *                        <ul>
+    *                           <li>"gs": Grid Search/Random Search</li>
+    *                           <li>"csa": Coupled Simulated Annealing</li>
+    *                           <li>"cma": Covariance Matrix Adaptation</li>
+    *                        </ul>
+    */
+  def exp_cdt_alt(
+    architechture: Layer[Output[Double], (Output[Double], Output[Double])],
+    hyper_params: List[String],
+    persistent_hyp_params: List[String],
+    params_to_mutable_params: Encoder[
+      dtflearn.tunable_tf_model.HyperParams,
+      dtflearn.tunable_tf_model.HyperParams
+    ],
+    loss_func_generator: LG,
+    hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[
+      Double
+    ]]],
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
+    iterations: Int = 150000,
+    iterations_tuning: Int = 20000,
+    pdt_iterations_tuning: Int = 4,
+    pdt_iterations_test: Int = 9,
+    num_samples: Int = 20,
+    hyper_optimizer: String = "gs",
+    miniBatch: Int = 32,
+    optimizer: tf.train.Optimizer = tf.train.AdaDelta(0.001f),
+    year_range: Range = 2011 to 2017,
+    test_year: Int = 2015,
+    sw_threshold: Double = 700d,
+    quantity: Int = OMNIData.Quantities.V_SW,
+    deltaT: (Int, Int) = (48, 72),
+    deltaTFTE: Int = 5,
+    fteStep: Int = 1,
+    latitude_limit: Double = 40d,
+    fraction_pca: Double = 0.8,
+    log_scale_fte: Boolean = false,
+    log_scale_omni: Boolean = false,
+    conv_flag: Boolean = false,
+    fte_data_path: Path = home / 'Downloads / 'fte,
+    summary_top_dir: Path = home / 'tmp,
+    hyp_opt_iterations: Option[Int] = Some(5),
+    get_training_preds: Boolean = false,
+    existing_exp: Option[Path] = None,
+    fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
+      DataPipe[Seq[Tensor[Float]], Double](s =>
+          s.map(_.scalar.toDouble).sum / s.length),
+    checkpointing_freq: Int = 5
+  ): helios.Experiment[Double, ModelRunTuning[Tensor[Double]], FteOmniConfig] = {
+
+    val (dataset, experiment_config, tf_summary_dir) = data.setup_exp_data(
+      year_range,
+      test_year,
+      sw_threshold,
+      quantity,
+      deltaT,
+      deltaTFTE,
+      fteStep,
+      latitude_limit,
+      fraction_pca,
+      log_scale_fte,
+      log_scale_omni,
+      conv_flag,
+      fte_data_path,
+      summary_top_dir,
+      existing_exp
+    )
+
+    val results = run_exp(
+      dataset,
+      tf_summary_dir,
+      experiment_config,
+      architechture,
+      hyper_params,
+      persistent_hyp_params,
+      params_to_mutable_params,
+      loss_func_generator,
+      hyper_prior,
+      hyp_mapping,
+      iterations,
+      iterations_tuning,
+      pdt_iterations_tuning,
+      pdt_iterations_test,
+      num_samples,
+      hyper_optimizer,
+      miniBatch,
+      optimizer,
+      hyp_opt_iterations,
+      get_training_preds,
+      existing_exp,
+      fitness_to_scalar,
+      checkpointing_freq
     )
 
     helios.Experiment(

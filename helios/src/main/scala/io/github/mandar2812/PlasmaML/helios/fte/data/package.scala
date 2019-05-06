@@ -1010,4 +1010,152 @@ package object data {
 
   }
 
+  def setup_exp_data(
+    year_range: Range = 2011 to 2017,
+    test_year: Int = 2015,
+    sw_threshold: Double = 700d,
+    quantity: Int = OMNIData.Quantities.V_SW,
+    deltaT: (Int, Int) = (48, 72),
+    deltaTFTE: Int = 5,
+    fteStep: Int = 1,
+    latitude_limit: Double = 40d,
+    fraction_pca: Double = 0.8,
+    log_scale_fte: Boolean = false,
+    log_scale_omni: Boolean = false,
+    conv_flag: Boolean = false,
+    fte_data_path: Path = home / 'Downloads / 'fte,
+    summary_top_dir: Path = home / 'tmp,
+    existing_exp: Option[Path] = None
+  ) = {
+    val mo_flag: Boolean       = true
+    val prob_timelags: Boolean = true
+
+    val urv = UniformRV(0d, 1d)
+
+    val sum_dir_prefix = if (conv_flag) "fte_omni_conv" else "fte_omni"
+
+    val dt = DateTime.now()
+
+    val summary_dir_index = {
+      if (mo_flag) sum_dir_prefix + "_mo_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
+      else sum_dir_prefix + "_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
+    }
+
+    val tf_summary_dir_tmp =
+      existing_exp.getOrElse(summary_top_dir / summary_dir_index)
+
+    val adj_fraction_pca = 1d
+
+    val experiment_config = FteOmniConfig(
+      FTEConfig(
+        (year_range.min, year_range.max),
+        deltaTFTE,
+        fteStep,
+        latitude_limit,
+        log_scale_fte
+      ),
+      OMNIConfig(deltaT, log_scale_omni),
+      multi_output = true,
+      probabilistic_time_lags = true,
+      timelag_prediction = "mode",
+      fraction_variance = adj_fraction_pca
+    )
+
+    val existing_config = read_exp_config(tf_summary_dir_tmp / "config.json")
+
+    val use_cached_config: Boolean = existing_config match {
+      case None    => false
+      case Some(c) => c == experiment_config
+    }
+
+    val tf_summary_dir = if (use_cached_config) {
+      println("Using provided experiment directory to continue experiment")
+      tf_summary_dir_tmp
+    } else {
+      println(
+        "Ignoring provided experiment directory and starting fresh experiment"
+      )
+
+      write_exp_config(experiment_config, summary_top_dir / summary_dir_index)
+
+      summary_top_dir / summary_dir_index
+    }
+
+    val use_cached_data = if (use_cached_config) {
+      val training_data_files = ls ! tf_summary_dir |? (_.segments.last
+        .contains("training_data_"))
+      val test_data_files = ls ! tf_summary_dir |? (_.segments.last
+        .contains("test_data_"))
+
+      training_data_files.length > 0 && test_data_files.length > 0
+    } else {
+      false
+    }
+
+    val (test_start, test_end) = (
+      new DateTime(test_year, 1, 1, 0, 0),
+      new DateTime(test_year, 12, 31, 23, 59)
+    )
+
+    val (start, end) = (
+      new DateTime(year_range.min, 1, 1, 0, 0),
+      new DateTime(year_range.max, 12, 31, 23, 59)
+    )
+
+    val tt_partition = DataPipe(
+      (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
+        if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
+          false
+        else
+          true
+    )
+
+    val generate_fresh_dataset = () => {
+      println("\nProcessing FTE Data")
+      val fte_data = load_fte_data(
+        fte_data_path,
+        carrington_rotations,
+        log_scale_fte,
+        start,
+        end
+      )(deltaTFTE, fteStep, latitude_limit, conv_flag)
+
+      println("Processing OMNI solar wind data")
+      val omni_data =
+        load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity)
+
+      println("Constructing joined data set")
+      fte_data.join(omni_data).partition(tt_partition)
+    }
+
+    val dataset = if (use_cached_config && use_cached_data) {
+      println("Using previously cached data set")
+
+      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
+        .contains("training_data_"))).last
+      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
+        .contains("test_data_"))).last
+
+      read_data_set[Tensor[Double]](
+        training_data_file,
+        test_data_file,
+        DataPipe((xs: Array[Double]) => dtf.tensor_f64(xs.length)(xs: _*))
+      )
+    } else {
+      generate_fresh_dataset()
+    }
+
+    if (!use_cached_data) {
+      println("Writing data sets")
+      write_fte_data_set[Tensor[Double]](
+        dt.toString("YYYY-MM-dd-HH-mm"),
+        dataset,
+        DataPipe[Tensor[Double], Seq[Double]](_.entriesIterator.toSeq),
+        tf_summary_dir
+      )
+    }
+
+    (dataset, experiment_config, tf_summary_dir)
+  }
+
 }
