@@ -36,7 +36,9 @@ def apply(
   log_scale_omni: Boolean = false,
   conv_flag: Boolean = false,
   quantity: Int = OMNIData.Quantities.V_SW,
-  causal_window: (Int, Int) = (48, 56),
+  time_window: (Int, Int) = (48, 56),
+  ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
+    identityPipe[Seq[Double]],
   max_iterations: Int = 100000,
   max_iterations_tuning: Int = 20000,
   pdt_iterations_tuning: Int = 4,
@@ -61,7 +63,9 @@ def apply(
       "FLOAT64"
     )
 
-  val sliding_window = causal_window._2
+  val sliding_window = ts_transform_output(
+    Seq.fill(time_window._2)(0d)
+  ).length
 
   val output_mapping = {
 
@@ -199,7 +203,7 @@ def apply(
   val loss_func_generator = (h: Map[String, Double]) => {
 
     val lossFunc = timelag.utils.get_pdt_loss[Double, Double, Double](
-      causal_window._2,
+      sliding_window,
       h("sigma_sq"),
       h("alpha")
     )
@@ -210,7 +214,7 @@ def apply(
           layer_scopes :+ output_scope,
           layer_parameter_names :+ "Outputs/Weights",
           layer_datatypes :+ "FLOAT64",
-          layer_shapes :+ Shape(network_size.last, causal_window._2),
+          layer_shapes :+ Shape(network_size.last, sliding_window),
           math.exp(h("reg")),
           "L2Reg"
         )
@@ -219,7 +223,7 @@ def apply(
           layer_scopes :+ output_scope,
           layer_parameter_names :+ "Outputs/Weights",
           layer_datatypes :+ "FLOAT64",
-          layer_shapes :+ Shape(network_size.last, causal_window._2),
+          layer_shapes :+ Shape(network_size.last, sliding_window),
           math.exp(h("reg")),
           "L1Reg"
         )
@@ -256,7 +260,8 @@ def apply(
     conv_flag = conv_flag,
     log_scale_fte = log_scale_fte,
     log_scale_omni = log_scale_omni,
-    deltaT = causal_window,
+    deltaT = time_window,
+    ts_transform_output = ts_transform_output,
     summary_top_dir = summary_dir,
     hyp_opt_iterations = hyp_opt_iterations,
     get_training_preds = get_training_preds,

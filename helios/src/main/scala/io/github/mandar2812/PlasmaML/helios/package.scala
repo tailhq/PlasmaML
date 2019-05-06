@@ -406,16 +406,6 @@ package object helios {
 
   }
 
-  def stackOperation[T: TF](ax: Int = 0) =
-    DataPipe[Iterable[Tensor[T]], Tensor[T]](
-      bat => tfi.stack(bat.toSeq, axis = ax)
-    )
-
-  def concatOperation[T: TF](ax: Int = 0) =
-    DataPipe[Iterable[Tensor[T]], Tensor[T]](
-      bat => tfi.concatenate(bat.toSeq, axis = ax)
-    )
-
   /**
     * Train a Neural architecture on a
     * processed data set.

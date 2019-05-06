@@ -2,6 +2,18 @@ import $exec.helios.scripts.csss
 import $exec.helios.scripts.csss_pdt_model_tuning
 import $exec.helios.scripts.env
 
+
+val time_window = (72, 48)
+val avg_sw_6h = DataPipe((xs: Seq[Double]) => xs.grouped(6).map(g => g.sum/g.length).toSeq)
+val max_sw_6h = DataPipe((xs: Seq[Double]) => xs.grouped(6).map(g => g.max).toSeq)
+
+val fact = 5
+val base_iterations = 2000
+val ext_iterations  = base_iterations * fact
+
+val base_it_pdt     = 4
+val ext_it_pdt      = 2*base_it_pdt + 1
+
 val csss_exp = csss_pdt_model_tuning(
   start_year = 2008,
   end_year = 2012,
@@ -13,7 +25,8 @@ val csss_exp = csss_pdt_model_tuning(
   history_fte = 0,
   log_scale_omni = false,
   log_scale_fte = true,
-  causal_window = (72, 48),
+  time_window = time_window,
+  ts_transform_output = avg_sw_6h,
   network_size = Seq(50, 50),
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
@@ -21,10 +34,10 @@ val csss_exp = csss_pdt_model_tuning(
   quantity = OMNIData.Quantities.V_SW,
   reg_type = "L2",
   batch_size = 128,
-  max_iterations = 800000,
-  max_iterations_tuning = 20000,
-  pdt_iterations_tuning = 9,
-  pdt_iterations_test = 4,
+  max_iterations = ext_iterations,
+  max_iterations_tuning = base_iterations,
+  pdt_iterations_tuning = base_it_pdt,
+  pdt_iterations_test = ext_it_pdt,
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
   get_training_preds = false,

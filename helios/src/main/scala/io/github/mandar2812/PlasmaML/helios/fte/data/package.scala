@@ -363,8 +363,15 @@ package object data {
     end: DateTime
   )(deltaT: (Int, Int),
     log_flag: Boolean,
-    quantity: Int = OMNIData.Quantities.V_SW
+    quantity: Int = OMNIData.Quantities.V_SW,
+    ts_transform: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]]
   ): ZipDataSet[DateTime, Tensor[Double]] = {
+
+    val transform: DataPipe[Seq[Double], Seq[Double]] = if(log_flag) {
+      ts_transform > DataPipe((xs: Seq[Double]) => xs.map(math.log))
+    } else {
+      ts_transform
+    }
 
     val omni_processing =
       OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(quantity) >
@@ -372,10 +379,7 @@ package object data {
           (p: (DateTime, Seq[Double])) =>
             p._1.isAfter(start) && p._1.isBefore(end)
         ) >
-        IterableDataPipe(
-          (p: (DateTime, Seq[Double])) =>
-            (p._1, if (log_flag) p._2.map(math.log) else p._2)
-        )
+        IterableDataPipe(identityPipe[DateTime] * transform)
 
     val omni_data_path = pwd / 'data
 
@@ -1015,6 +1019,7 @@ package object data {
     test_year: Int = 2015,
     sw_threshold: Double = 700d,
     quantity: Int = OMNIData.Quantities.V_SW,
+    ts_transform_output: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]],
     deltaT: (Int, Int) = (48, 72),
     deltaTFTE: Int = 5,
     fteStep: Int = 1,
@@ -1026,7 +1031,7 @@ package object data {
     fte_data_path: Path = home / 'Downloads / 'fte,
     summary_top_dir: Path = home / 'tmp,
     existing_exp: Option[Path] = None
-  ) = {
+  ): (helios.data.TF_DATA_T[Double, Double], FteOmniConfig, Path) = {
     val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
 
@@ -1122,7 +1127,7 @@ package object data {
 
       println("Processing OMNI solar wind data")
       val omni_data =
-        load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity)
+        load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity, ts_transform_output)
 
       println("Constructing joined data set")
       fte_data.join(omni_data).partition(tt_partition)
