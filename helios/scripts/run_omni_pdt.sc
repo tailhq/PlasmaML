@@ -11,7 +11,7 @@ val omni_res = omni_pdt(
   end_year = 2017,
   test_year = 2015,
   network_size = Seq(10, 10),
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
   iterations = 200000,
   iterations_tuning = 20000,
   pdt_iterations_tuning = 4,
