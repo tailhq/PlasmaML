@@ -520,7 +520,7 @@ def apply(
       architecture,
       (FLOAT64, input_shape),
       (FLOAT64, Shape(causal_window_size)),
-      clipGradients = tf.learn.ClipGradientsByNorm(2f)
+      clipGradients = tf.learn.ClipGradientsByNorm(1f)
     )
 
   val pdtModel = helios.learn.pdt_model(
