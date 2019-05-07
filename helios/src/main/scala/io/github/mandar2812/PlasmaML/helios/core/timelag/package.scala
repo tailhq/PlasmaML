@@ -1541,23 +1541,29 @@ package object timelag {
             }
           )
 
-        val data_ops = dtflearn.model.data_ops[Output[T], Output[T]](
+        val data_ops = dtflearn.model.data_ops[(Output[T], Output[T])](
           shuffleBuffer = 10,
           batchSize = miniBatch,
           prefetchSize = 10
         )
 
+        val batch_to_tensor = DataPipe((ds: Seq[(Tensor[T], Tensor[T])]) => {
+          val (xs, ys) = ds.unzip
+
+          (
+            dtfpipe.EagerStack[T](axis = 0).run(xs),
+            dtfpipe.EagerStack[T](axis = 0).run(ys)
+          )
+        })
+
         val tf_handle_ops = dtflearn.model.tf_data_handle_ops[
           (Tensor[T], Tensor[T]),
-          Tensor[T],
-          Tensor[T],
           (Tensor[T], Tensor[T]),
-          Output[T],
-          Output[T]
+          (Tensor[T], Tensor[T]),
+          (Output[T], Output[T])
         ](
-          patternToTensor = Some(identityPipe[(Tensor[T], Tensor[T])]),
-          concatOpI = Some(dtfpipe.EagerStack[T]()),
-          concatOpT = Some(dtfpipe.EagerStack[T]()),
+          bufferSize = miniBatch * 2,
+          patternToTensor = Some(batch_to_tensor),
           concatOpO = Some(stackOperationP)
         )
 
@@ -1565,7 +1571,7 @@ package object timelag {
           dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
             DataPipe(
               (p: Path) =>
-                dtflearn.model.trainConfig[Output[T], Output[T]](
+                dtflearn.model.trainConfig[(Output[T], Output[T])](
                   p,
                   data_ops,
                   optimizer,
@@ -1706,14 +1712,28 @@ package object timelag {
 
         val model_predictions_test = best_model.infer_batch(
           tfdata.test_dataset.map(extract_features),
-          train_config_test.data_processing,
-          tf_handle_ops
+          dtflearn.model.tf_data_handle_ops[
+            Tensor[T],
+            Tensor[T],
+            (Tensor[T], Tensor[T]),
+            Output[T]
+          ](
+            bufferSize = miniBatch * 2,
+            patternToTensor = Some(dtfpipe.EagerStack[T](axis = 0))
+          )
         )
 
         val model_predictions_train = best_model.infer_batch(
           tfdata.training_dataset.map(extract_features),
-          train_config_test.data_processing,
-          tf_handle_ops
+          dtflearn.model.tf_data_handle_ops[
+            Tensor[T],
+            Tensor[T],
+            (Tensor[T], Tensor[T]),
+            Output[T]
+          ](
+            bufferSize = miniBatch * 2,
+            patternToTensor = Some(dtfpipe.EagerStack[T](axis = 0))
+          )
         )
 
         val test_predictions = model_predictions_test match {
@@ -1962,7 +1982,13 @@ package object timelag {
         )
 
         val stop_condition_test =
-          get_stop_condition(adjusted_iterations, 0.01, epochFlag, data_size, miniBatch)
+          get_stop_condition(
+            adjusted_iterations,
+            0.01,
+            epochFlag,
+            data_size,
+            miniBatch
+          )
 
         val stackOperationP =
           DataPipe[Iterable[(Tensor[T], Tensor[T])], (Tensor[T], Tensor[T])](
@@ -1976,23 +2002,33 @@ package object timelag {
             }
           )
 
-        val data_ops = dtflearn.model.data_ops[Output[T], Output[T]](
+        val data_ops = dtflearn.model.data_ops[(Output[T], Output[T])](
           shuffleBuffer = 10,
           batchSize = miniBatch,
           prefetchSize = 10
         )
 
+        val batch_to_tensor = dtfpipe.EagerStack[T](axis = 0).zip(dtfpipe.EagerStack[T](axis = 0))
+
         val tf_handle_ops = dtflearn.model.tf_data_handle_ops[
           (Tensor[T], Tensor[T]),
+          (Tensor[T], Tensor[T]),
+          (Tensor[T], Tensor[T]),
+          (Output[T], Output[T])
+        ](
+          bufferSize = miniBatch * 5,
+          patternToTensor = Some(batch_to_tensor),
+          concatOpO = Some(stackOperationP)
+        )
+
+        val tf_handle_input = dtflearn.model.tf_data_handle_ops[
           Tensor[T],
           Tensor[T],
           (Tensor[T], Tensor[T]),
-          Output[T],
           Output[T]
         ](
-          patternToTensor = Some(identityPipe[(Tensor[T], Tensor[T])]),
-          concatOpI = Some(dtfpipe.EagerStack[T]()),
-          concatOpT = Some(dtfpipe.EagerStack[T]()),
+          bufferSize = miniBatch * 5,
+          patternToTensor = Some(dtfpipe.EagerStack[T](axis = 0)),
           concatOpO = Some(stackOperationP)
         )
 
@@ -2009,9 +2045,9 @@ package object timelag {
                 Some(config_to_dir)
               )
           ),
-          DataPipe[Map[String, Double], dtflearn.model.Ops[Output[T], Output[
-            T
-          ]]](_ => data_ops),
+          DataPipe[Map[String, Double], dtflearn.model.Ops[
+            (Output[T], Output[T])
+          ]](_ => data_ops),
           DataPipe((_: Map[String, Double]) => optimizer),
           DataPipe((_: Map[String, Double]) => stop_condition_tuning),
           DataPipe(
@@ -2023,7 +2059,7 @@ package object timelag {
                   epochFlag,
                   data_size,
                   miniBatch,
-                  checkpointing_freq*2,
+                  checkpointing_freq * 2,
                   checkpointing_freq
                 )
               )
@@ -2043,7 +2079,7 @@ package object timelag {
                 epochFlag,
                 data_size,
                 miniBatch,
-                checkpointing_freq*2,
+                checkpointing_freq * 2,
                 checkpointing_freq
               )
             )
@@ -2130,7 +2166,7 @@ package object timelag {
           hyper_prior.mapValues(_.draw),
           Map(
             "loops"       -> pdt_iterations.toString,
-            "evalTrigger" -> (adjusted_iterations_tuning/checkpointing_freq).toString
+            "evalTrigger" -> (adjusted_iterations_tuning / checkpointing_freq).toString
           )
         )
 
@@ -2152,29 +2188,33 @@ package object timelag {
           Some(train_config_test),
           Some(adjusted_iterations / checkpointing_freq),
           log_predictors = true,
-          convert_input_to_str = Some(
-            DataPipe((i: Tensor[T]) => dtfutils.toDoubleSeq[T](i).mkString(",") + "\n")
+          pattern_to_str = Some(
+            DataPipe(
+              (i: (Tensor[T], Tensor[T])) => (
+                dtfutils.toDoubleSeq[T](i._1).mkString(",") + "\n",
+                dtfutils.toDoubleSeq[T](i._2).mkString(",") + "\n"
+              )
+            )
           )
         )
 
-        val chosen_config = config.filterKeys(persistent_hyp_params.contains) ++ best_config
+        val chosen_config = config
+          .filterKeys(persistent_hyp_params.contains) ++ best_config
 
         write(
           tf_summary_dir / "state.csv",
           chosen_config.keys.mkString(start = "", sep = ",", end = "\n") +
-          chosen_config.values.mkString(start = "", sep = ",", end = "")
+            chosen_config.values.mkString(start = "", sep = ",", end = "")
         )
 
         val model_predictions_test = best_model.infer_batch(
           tfdata.test_dataset.map(tup2_1[Tensor[T], Tensor[T]]),
-          train_config_test.data_processing,
-          tf_handle_ops
+          tf_handle_input
         )
 
         val model_predictions_train = best_model.infer_batch(
           tfdata.training_dataset.map(tup2_1[Tensor[T], Tensor[T]]),
-          train_config_test.data_processing,
-          tf_handle_ops
+          tf_handle_input
         )
 
         val test_predictions = model_predictions_test match {

@@ -11,7 +11,13 @@ import io.github.mandar2812.dynaml.optimization._
 import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
 import io.github.mandar2812.dynaml.tensorflow.data._
 import io.github.mandar2812.dynaml.tensorflow.utils._
-import io.github.mandar2812.dynaml.tensorflow.{dtf, dtfdata, dtflearn, dtfutils, dtfpipe}
+import io.github.mandar2812.dynaml.tensorflow.{
+  dtf,
+  dtfdata,
+  dtflearn,
+  dtfutils,
+  dtfpipe
+}
 import io.github.mandar2812.dynaml.tensorflow.implicits._
 import io.github.mandar2812.dynaml.probability._
 import io.github.mandar2812.dynaml.DynaMLPipe._
@@ -174,44 +180,53 @@ package object fte {
     val input_shape = scaled_data.training_dataset.data.head._2._1.shape
 
     val load_pattern_in_tensor =
-      tup2_2[DateTime, (Tensor[Double], Tensor[Double])] >
-        duplicate(identityPipe[Tensor[Double]])
+      IterableDataPipe(tup2_2[DateTime, (Tensor[Double], Tensor[Double])]) >
+        dtfpipe
+          .EagerStack[Double](axis = 0)
+          .zip(dtfpipe.EagerStack[Double](axis = 0))
 
     val unzip =
       DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
         _.unzip
       )
 
-    val concatPreds = unzip > duplicate(dtfpipe.EagerConcatenate[Double](axis = 0))
+    val concatPreds = unzip > duplicate(
+      dtfpipe.EagerConcatenate[Double](axis = 0)
+    )
 
     val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
       (DateTime, (Tensor[Double], Tensor[Double])),
-      Tensor[Double],
-      Tensor[Double],
       (Tensor[Double], Tensor[Double]),
-      Output[Double],
-      Output[Double]
+      (Tensor[Double], Tensor[Double]),
+      (Output[Double], Output[Double])
     ](
-      patternToTensor = Some(load_pattern_in_tensor),
-      concatOpI = Some(dtfpipe.EagerStack[Double](axis = 0)),
-      concatOpT = Some(dtfpipe.EagerStack[Double](axis = 0))
+      bufferSize = miniBatch * 5,
+      patternToTensor = Some(load_pattern_in_tensor)
     )
 
     val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
       (DateTime, (Tensor[Double], Tensor[Double])),
-      Tensor[Double],
-      Tensor[Double],
       (Tensor[Double], Tensor[Double]),
-      Output[Double],
-      Output[Double]
+      (Tensor[Double], Tensor[Double]),
+      (Output[Double], Output[Double])
     ](
+      bufferSize = miniBatch * 5,
       patternToTensor = Some(load_pattern_in_tensor),
-      concatOpI = Some(dtfpipe.EagerStack[Double](axis = 0)),
-      concatOpT = Some(dtfpipe.EagerStack[Double](axis = 0)),
       concatOpO = Some(concatPreds)
     )
 
-    val tf_data_ops: dtflearn.model.Ops[Output[Double], Output[Double]] =
+    val tf_handle_input = dtflearn.model.tf_data_handle_ops[
+      Tensor[Double],
+      Tensor[Double],
+      (Tensor[Double], Tensor[Double]),
+      Output[Double]
+    ](
+      bufferSize = miniBatch * 5,
+      patternToTensor = Some(dtfpipe.EagerStack[Double](axis = 0)),
+      concatOpO = Some(concatPreds)
+    )
+
+    val tf_data_ops: dtflearn.model.Ops[(Output[Double], Output[Double])] =
       dtflearn.model.data_ops(
         shuffleBuffer = 10,
         batchSize = miniBatch,
@@ -236,9 +251,14 @@ package object fte {
             Some(config_to_dir)
           )
       ),
-      DataPipe[Map[String, Double], dtflearn.model.Ops[Output[Double], Output[
-        Double
-      ]]](_ => tf_data_ops),
+      DataPipe[Map[String, Double], dtflearn.model.Ops[
+        (
+          Output[Double],
+          Output[
+            Double
+          ]
+        )
+      ]](_ => tf_data_ops),
       DataPipe((_: Map[String, Double]) => optimizer),
       DataPipe(
         (_: Map[String, Double]) =>
@@ -416,14 +436,13 @@ package object fte {
         chosen_config.values.mkString(start = "", sep = ",", end = "")
     )
 
-    val extract_tensors = load_pattern_in_tensor
+    val extract_tensors = tup2_2[DateTime, (Tensor[Double], Tensor[Double])]
 
     val extract_features = tup2_1[Tensor[Double], Tensor[Double]]
 
     val model_predictions_test = best_model.infer_batch(
       scaled_data.test_dataset.map(extract_tensors > extract_features),
-      train_config_test.data_processing,
-      tf_handle_ops_test
+      tf_handle_input
     )
 
     val predictions = model_predictions_test match {
@@ -453,8 +472,7 @@ package object fte {
 
       val model_predictions_train = best_model.infer_batch(
         scaled_data.training_dataset.map(extract_tensors > extract_features),
-        train_config_test.data_processing,
-        tf_handle_ops_test
+        tf_handle_input
       )
 
       val predictions_train = model_predictions_train match {
@@ -606,7 +624,8 @@ package object fte {
     sw_threshold: Double = 700d,
     quantity: Int = OMNIData.Quantities.V_SW,
     deltaT: (Int, Int) = (48, 72),
-    ts_transform_output: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]],
+    ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
+      identityPipe[Seq[Double]],
     deltaTFTE: Int = 5,
     fteStep: Int = 1,
     latitude_limit: Double = 40d,

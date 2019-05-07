@@ -7,12 +7,7 @@ import io.github.mandar2812.dynaml.tensorflow._
 import io.github.mandar2812.dynaml.models._
 import io.github.mandar2812.dynaml.utils
 import io.github.mandar2812.dynaml.evaluation.Performance
-import io.github.mandar2812.dynaml.pipes.{
-  DataPipe,
-  DataPipe2,
-  MetaPipe,
-  Encoder
-}
+import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.tensorflow.data.{DataSet, TFDataSet}
 
 import org.json4s._
@@ -84,11 +79,9 @@ class PDTModel[
   override protected val training_data: DataSet[Pattern],
   override val tf_data_handle_ops: dtflearn.model.TFDataHandleOps[
     Pattern,
-    IT,
-    Tensor[T],
+    (IT, Tensor[T]),
     (Tensor[T], Tensor[T]),
-    In,
-    Output[T]
+    (In, Output[T])
   ],
   override val fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
     DataPipe[Seq[Tensor[Float]], Double](m =>
@@ -171,7 +164,7 @@ class PDTModel[
 
   def write_data_sets(
     directory: Path,
-    input_pattern_to_str: DataPipe[IT, String]
+    pattern_to_str: DataPipe[Pattern, (String, String)]
   ): Unit = {
     println("Writing training data set")
 
@@ -181,49 +174,43 @@ class PDTModel[
     val train_targets_file      = directory / "train_split_targets.csv"
     val validation_targets_file = directory / "validation_split_targets.csv"
 
-    val convert_input_pattern =
-      tf_data_handle_ops.patternToTensor.get >
-        tup2_1[IT, Tensor[T]] >
-        input_pattern_to_str
-
-    val convert_output_pattern =
-      tf_data_handle_ops.patternToTensor.get >
-        tup2_2[IT, Tensor[T]] >
-        DataPipe(
-          (t: Tensor[T]) => dtfutils.toDoubleSeq[T](t).mkString(",") + "\n"
-        )
-
     train_split.data.foreach(pattern => {
-
-      write.append(train_features_file, convert_input_pattern(pattern))
-      write.append(train_targets_file, convert_output_pattern(pattern))
-
+      val (input_pattern, target_pattern) = pattern_to_str(pattern)
+      write.append(train_features_file, input_pattern)
+      write.append(train_targets_file, target_pattern)
     })
 
     println("Writing validation data sets")
 
     validation_split.data.foreach(pattern => {
-
-      write.append(validation_features_file, convert_input_pattern(pattern))
-      write.append(validation_targets_file, convert_output_pattern(pattern))
+      val (input_pattern, target_pattern) = pattern_to_str(pattern)
+      write.append(validation_features_file, input_pattern)
+      write.append(validation_targets_file, target_pattern)
 
     })
   }
 
   def write_model_outputs(
     model_instance: Option[Model],
-    train_config: dtflearn.model.Config[In, Output[T]],
+    train_config: dtflearn.model.Config[(In, Output[T])],
     iden: String
   ): Unit = {
+
+    val handle_ops: dtflearn.model.TFDataHandleOps[
+      Pattern,
+      IT,
+      (Tensor[T], Tensor[T]),
+      In
+    ] = dtflearn.model.tf_data_handle_ops[Pattern, IT, (Tensor[T], Tensor[T]), In](
+      bufferSize = tf_data_handle_ops.bufferSize,
+      patternToTensor = Some(tf_data_handle_ops.patternToTensor.get > tup2_1[IT, Tensor[T]])
+    )
 
     val training_data_preds
       : Either[(Tensor[T], Tensor[T]), DataSet[(Tensor[T], Tensor[T])]] =
       model_instance.get.infer_batch(
-        train_split.map(
-          tf_data_handle_ops.patternToTensor.get > tup2_1[IT, Tensor[T]]
-        ),
-        train_config.data_processing.copy(shuffleBuffer = 0, repeat = 0),
-        tf_data_handle_ops
+        train_split,
+        handle_ops
       )
 
     val intermediate_results_dir = train_config.summaryDir
@@ -258,7 +245,7 @@ class PDTModel[
     p: Map[String, Double],
     h: Map[String, Double],
     iteration_index: Int,
-    config: Option[dtflearn.model.Config[In, Output[T]]] = None,
+    config: Option[dtflearn.model.Config[(In, Output[T])]] = None,
     eval_trigger: Option[Int] = None,
     log_predictors: Boolean = false
   ): Map[String, Double] = {
@@ -329,7 +316,7 @@ class PDTModel[
       }
 
     if (log_predictors && model_instance.isDefined) {
-      
+
       write_model_outputs(
         model_instance,
         train_config,
@@ -348,7 +335,7 @@ class PDTModel[
   def solve(
     pdt_iterations: Int,
     hyper_params: TunableTFModel.HyperParams,
-    config: Option[dtflearn.model.Config[In, Output[T]]] = None,
+    config: Option[dtflearn.model.Config[(In, Output[T])]] = None,
     eval_trigger: Option[Int] = None,
     log_predictors: Boolean = false
   ): Map[String, Double] = {
@@ -374,10 +361,10 @@ class PDTModel[
   def build(
     pdt_iterations: Int,
     hyper_params: dtflearn.tunable_tf_model.HyperParams,
-    config: Option[dtflearn.model.Config[In, Output[T]]] = None,
+    config: Option[dtflearn.model.Config[(In, Output[T])]] = None,
     eval_trigger: Option[Int] = None,
     log_predictors: Boolean = false,
-    convert_input_to_str: Option[DataPipe[IT, String]] = None
+    pattern_to_str: Option[DataPipe[Pattern, (String, String)]] = None
   ) = {
     val p = hyper_params.filterKeys(persistent_hyp_params.contains _)
 
@@ -391,8 +378,8 @@ class PDTModel[
       case Some(config) => config
     }
 
-    if (convert_input_to_str.isDefined)
-      write_data_sets(train_config.summaryDir, convert_input_to_str.get)
+    if (pattern_to_str.isDefined)
+      write_data_sets(train_config.summaryDir, pattern_to_str.get)
 
     //Run the hyper-parameter refinement procedure.
     val final_config: Map[String, Double] =
@@ -502,7 +489,7 @@ class PDTModel[
           null
         )
       )
-      
+
       model.close()
 
       (e, None, final_config)
@@ -668,11 +655,9 @@ object PDTModel {
     training_data: DataSet[Pattern],
     tf_data_handle_ops: dtflearn.model.TFDataHandleOps[
       Pattern,
-      IT,
-      Tensor[T],
+      (IT, Tensor[T]),
       (Tensor[T], Tensor[T]),
-      In,
-      Output[T]
+      (In, Output[T])
     ],
     fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
       DataPipe[Seq[Tensor[Float]], Double](m =>

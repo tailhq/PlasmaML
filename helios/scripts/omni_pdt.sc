@@ -36,7 +36,7 @@ def solar_wind_time_series(
   start: DateTime,
   end: DateTime,
   solar_wind_params: List[Int] = List(V_SW, V_Lat, V_Lon, B_X, B_Y, B_Z)
-): ZipDataSet[DateTime, Tensor[Double]] = {
+): ZipDataSet[DateTime, DenseVector[Double]] = {
 
   val omni_data_path = pwd / 'data
 
@@ -61,11 +61,72 @@ def solar_wind_time_series(
     )
     .flatMap(load_omni_file)
     .to_zip(
-      identityPipe[DateTime] * DataPipe[Seq[Double], Tensor[Double]](
-        xs => dtf.tensor_f64(solar_wind_params.length)(xs: _*)
+      identityPipe[DateTime] * DataPipe[Seq[Double], DenseVector[Double]](
+        xs => DenseVector(xs.toArray)
       )
     )
 
+}
+
+type DATA   = TFDataSet[(DateTime, (DenseVector[Double], DenseVector[Double]))]
+type SCALES = (GaussianScaler, GaussianScaler)
+
+def scale_data(omni_pdt: DATA): SCALES = {
+  val (mean_f, sigma_sq_f) = dutils.getStats(
+    omni_pdt.training_dataset
+      .map(
+        tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_1[
+          DenseVector[Double],
+          DenseVector[Double]
+        ]
+      )
+      .data
+  )
+
+  val sigma_f = sqrt(sigma_sq_f)
+
+  val (mean_t, sigma_sq_t) = dutils.getStats(
+    omni_pdt.training_dataset
+      .map(
+        tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_2[
+          DenseVector[Double],
+          DenseVector[Double]
+        ]
+      )
+      .data
+  )
+
+  val sigma_t = sqrt(sigma_sq_t)
+
+  val std_training =
+    DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+      p => {
+
+        //Standardize features
+        p._2._1 :-= mean_f
+        p._2._1 :/= sigma_f
+
+        //Standardize targets
+        p._2._2 :-= mean_t
+        p._2._2 :/= sigma_t
+
+      }
+    )
+
+  val std_test =
+    DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+      p => {
+
+        //Standardize only features
+        p._2._1 :-= mean_f
+        p._2._1 :/= sigma_f
+
+      }
+    )
+
+  omni_pdt.training_dataset.foreach(std_training)
+  omni_pdt.test_dataset.foreach(std_test)
+  (GaussianScaler(mean_f, sigma_f), GaussianScaler(mean_t, sigma_t))
 }
 
 case class OmniPDTConfig(
@@ -79,8 +140,8 @@ case class OmniPDTConfig(
     extends helios.Config
 
 type ModelRunTuning = helios.TunedModelRun2[
-  Tensor[Double],
-  Tensor[Double],
+  DenseVector[Double],
+  DenseVector[Double],
   Double,
   Output[Double],
   (Output[Double], Output[Double]),
@@ -241,7 +302,12 @@ def apply(
 
   val omni = solar_wind_time_series(start, end, solar_wind_params)
   val omni_ground =
-    fte.data.load_solar_wind_data(start, end)(causal_window, false, target_quantity)
+    fte.data
+      .load_solar_wind_data_bdv(start, end)(
+        causal_window,
+        false,
+        target_quantity
+      )
 
   val (test_start, test_end) = (
     new DateTime(test_year, 1, 1, 0, 0),
@@ -249,7 +315,7 @@ def apply(
   )
 
   val tt_partition = DataPipe(
-    (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
+    (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
       if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
         false
       else
@@ -274,20 +340,52 @@ def apply(
   val data_size = omni_pdt.training_dataset.size
 
   println("Scaling data attributes")
-  val (scaled_data, scalers) = fte.data.scale_timed_data[Double].run(omni_pdt)
+  val scalers = scale_data(omni_pdt)
 
-  val split_data = scaled_data.training_dataset.partition(
-    DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), Boolean](
+  val input_shape  = Shape(omni_pdt.training_dataset.data.head._2._1.size)
+  val output_shape = Shape(omni_pdt.training_dataset.data.head._2._2.size)
+
+  val scalers_tf = (
+    //GaussianScalerTF(dtf.tensor_f64(input_shape(0))(scalers._1.mean.toArray:_*), dtf.tensor_f64(input_shape(0))(scalers._1.sigma.toArray:_*)),
+    scalers._1,
+    GaussianScalerTF(
+      dtf.tensor_f64(output_shape(0))(scalers._2.mean.toArray: _*),
+      dtf.tensor_f64(output_shape(0))(scalers._2.sigma.toArray: _*)
+    )
+  )
+
+  val split_data = omni_pdt.training_dataset.partition(
+    DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Boolean](
       _ => scala.util.Random.nextDouble() <= 0.7
     )
   )
 
-  val input_shape  = scaled_data.training_dataset.data.head._2._1.shape
-  val output_shape = scaled_data.training_dataset.data.head._2._2.shape
-
   val load_pattern_in_tensor =
-    tup2_2[DateTime, (Tensor[Double], Tensor[Double])] >
-      duplicate(identityPipe[Tensor[Double]])
+    IterableDataPipe(
+      tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])]
+    ) >
+      DataPipe[Iterable[(DenseVector[Double], DenseVector[Double])], (Tensor[Double], Tensor[Double])](
+        buffer => {
+          val (xs, ys)   = buffer.unzip
+          val bufferSize = buffer.toSeq.length
+
+          val xdim = xs.head.size
+          val ydim = ys.head.size
+
+          (
+            dtf.tensor_f64(bufferSize, xdim)(xs.map(_.toArray.toSeq).toSeq.flatten: _*),
+            dtf.tensor_f64(bufferSize, ydim)(ys.map(_.toArray.toSeq).toSeq.flatten: _*)
+          )
+        }
+      )
+
+  val load_input_batch =
+    DataPipe[Iterable[DenseVector[Double]], Tensor[Double]](buffer => {
+      val bufferSize = buffer.toSeq.length
+
+      val xdim = buffer.head.size
+      dtf.tensor_f64(bufferSize, xdim)(buffer.map(_.toArray.toSeq).toSeq.flatten: _*)
+    })
 
   val unzip =
     DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
@@ -298,33 +396,38 @@ def apply(
     .EagerConcatenate[Double](axis = 0))
 
   val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
-    (DateTime, (Tensor[Double], Tensor[Double])),
-    Tensor[Double],
-    Tensor[Double],
+    (DateTime, (DenseVector[Double], DenseVector[Double])),
     (Tensor[Double], Tensor[Double]),
-    Output[Double],
-    Output[Double]
+    (Tensor[Double], Tensor[Double]),
+    (Output[Double], Output[Double])
   ](
-    patternToTensor = Some(load_pattern_in_tensor),
-    concatOpI = Some(dtfpipe.EagerStack[Double](axis = 0)),
-    concatOpT = Some(dtfpipe.EagerStack[Double](axis = 0))
+    bufferSize = 4 * batch_size,
+    patternToTensor = Some(load_pattern_in_tensor)
   )
 
   val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
-    (DateTime, (Tensor[Double], Tensor[Double])),
-    Tensor[Double],
-    Tensor[Double],
+    (DateTime, (DenseVector[Double], DenseVector[Double])),
     (Tensor[Double], Tensor[Double]),
-    Output[Double],
-    Output[Double]
+    (Tensor[Double], Tensor[Double]),
+    (Output[Double], Output[Double])
   ](
+    bufferSize = 4 * batch_size,
     patternToTensor = Some(load_pattern_in_tensor),
-    concatOpI = Some(dtfpipe.EagerStack[Double](axis = 0)),
-    concatOpT = Some(dtfpipe.EagerStack[Double](axis = 0)),
     concatOpO = Some(concatPreds)
   )
 
-  val tf_data_ops: dtflearn.model.Ops[Output[Double], Output[Double]] =
+  val tf_handle_input = dtflearn.model.tf_data_handle_ops[
+    DenseVector[Double],
+    Tensor[Double],
+    (Tensor[Double], Tensor[Double]),
+    Output[Double]
+  ](
+    bufferSize = 4 * batch_size,
+    patternToTensor = Some(load_input_batch),
+    concatOpO = Some(concatPreds)
+  )
+
+  val tf_data_ops: dtflearn.model.Ops[(Output[Double], Output[Double])] =
     dtflearn.model.data_ops(
       shuffleBuffer = 10,
       batchSize = batch_size,
@@ -349,9 +452,14 @@ def apply(
           Some(config_to_dir)
         )
     ),
-    DataPipe[Map[String, Double], dtflearn.model.Ops[Output[Double], Output[
-      Double
-    ]]](_ => tf_data_ops),
+    DataPipe[Map[String, Double], dtflearn.model.Ops[
+      (
+        Output[Double],
+        Output[
+          Double
+        ]
+      )
+    ]](_ => tf_data_ops),
     DataPipe((_: Map[String, Double]) => optimizer),
     DataPipe(
       (_: Map[String, Double]) =>
@@ -504,14 +612,13 @@ def apply(
       chosen_config.values.mkString(start = "", sep = ",", end = "")
   )
 
-  val extract_tensors = load_pattern_in_tensor
+  val extract_tensors = tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])]
 
-  val extract_features = tup2_1[Tensor[Double], Tensor[Double]]
+  val extract_features = tup2_1[DenseVector[Double], DenseVector[Double]]
 
   val model_predictions_test = best_model.infer_batch(
-    scaled_data.test_dataset.map(extract_tensors > extract_features),
-    train_config_test.data_processing,
-    tf_handle_ops_test
+    omni_pdt.test_dataset.map(extract_tensors > extract_features),
+    tf_handle_input
   )
 
   val predictions = model_predictions_test match {
@@ -525,9 +632,13 @@ def apply(
     unscaled_preds_test,
     pred_time_lags_test
   ) = fte.process_predictions(
-    scaled_data.test_dataset,
+    omni_pdt.test_dataset.map(
+      identityPipe[DateTime] * (identityPipe[DenseVector[Double]] * DataPipe(
+        (y: DenseVector[Double]) => dtf.tensor_f64(y.size)(y.toArray: _*)
+      ))
+    ),
     predictions,
-    scalers,
+    scalers_tf,
     causal_window_size,
     mo_flag,
     prob_timelags,
@@ -540,9 +651,8 @@ def apply(
   val (reg_metrics_train, preds_train) = if (get_training_preds) {
 
     val model_predictions_train = best_model.infer_batch(
-      scaled_data.training_dataset.map(extract_tensors > extract_features),
-      train_config_test.data_processing,
-      tf_handle_ops_test
+      omni_pdt.training_dataset.map(extract_tensors > extract_features),
+      tf_handle_input
     )
 
     val predictions_train = model_predictions_train match {
@@ -556,9 +666,13 @@ def apply(
       unscaled_preds_train,
       pred_time_lags_train
     ) = fte.process_predictions(
-      scaled_data.training_dataset,
+      omni_pdt.training_dataset.map(
+        identityPipe[DateTime] * (identityPipe[DenseVector[Double]] * DataPipe(
+          (y: DenseVector[Double]) => dtf.tensor_f64(y.size)(y.toArray: _*)
+        ))
+      ),
       predictions_train,
-      scalers,
+      scalers_tf,
       causal_window_size,
       mo_flag,
       prob_timelags,
@@ -600,7 +714,7 @@ def apply(
   }
 
   val results = helios.TunedModelRun2(
-    (scaled_data, scalers),
+    (omni_pdt, scalers),
     best_model,
     reg_metrics_train,
     Some(reg_metrics),

@@ -8,15 +8,16 @@ val omni_res = omni_pdt(
   Dst,
   causal_window = (0, 12),
   start_year = 2003,
-  end_year = 2010,
-  test_year = 2003,
+  end_year = 2006,
+  test_year = 2004,
   network_size = Seq(10, 10),
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
-  iterations = 100000,
+  iterations = 200000,
   iterations_tuning = 20000,
   pdt_iterations_tuning = 4,
   pdt_iterations_test = 4,
-  batch_size = 128,
+  batch_size = 256,
+  num_samples = 2,
   optimizer = tf.train.Adam(0.001f)
 )
 

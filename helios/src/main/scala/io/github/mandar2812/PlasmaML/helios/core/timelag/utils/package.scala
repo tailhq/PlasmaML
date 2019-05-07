@@ -1022,11 +1022,11 @@ package object utils {
     (
       tfi.stack(
         preds.map((p: (Tensor[T], Tensor[T])) => p._1).data.toSeq,
-        axis = -1
+        axis = 0
       ),
       tfi.stack(
         preds.map((p: (Tensor[T], Tensor[T])) => p._2).data.toSeq,
-        axis = -1
+        axis = 0
       )
     )
 
