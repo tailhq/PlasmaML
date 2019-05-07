@@ -519,7 +519,8 @@ def apply(
       loss_func_generator,
       architecture,
       (FLOAT64, input_shape),
-      (FLOAT64, Shape(causal_window_size))
+      (FLOAT64, Shape(causal_window_size)),
+      tf.ClipGradientsByNorm(2f)
     )
 
   val pdtModel = helios.learn.pdt_model(
