@@ -6,6 +6,7 @@ import breeze.stats._
 import breeze.linalg.{DenseVector, DenseMatrix}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
+import io.github.mandar2812.dynaml.utils.GaussianScaler
 import io.github.mandar2812.dynaml.evaluation._
 import io.github.mandar2812.dynaml.optimization._
 import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
@@ -39,8 +40,9 @@ import _root_.io.github.mandar2812.dynaml.models.TunableTFModel.HyperParams
 
 package object fte {
 
-  type ModelRunTuning[T] = helios.TunedModelRun[
+  type ModelRunTuning[T] = helios.TunedModelRun2[
     T,
+    DenseVector[Double],
     Double,
     Output[Double],
     (Output[Double], Output[Double]),
@@ -130,7 +132,7 @@ package object fte {
     *                        </ul>
     */
   def run_exp(
-    dataset: helios.data.TF_DATA_T[Double, Double],
+    dataset: helios.data.DATA[DenseVector[Double], DenseVector[Double]],
     tf_summary_dir: Path,
     experiment_config: FteOmniConfig,
     architechture: Layer[Output[Double], (Output[Double], Output[Double])],
@@ -160,30 +162,55 @@ package object fte {
       DataPipe[Seq[Tensor[Float]], Double](s =>
           s.map(_.scalar.toDouble).sum / s.length),
     checkpointing_freq: Int = 5
-  ): ModelRunTuning[Tensor[Double]] = {
+  ): ModelRunTuning[DenseVector[Double]] = {
 
-    val causal_window = dataset.training_dataset.data.head._2._2.shape(0)
+    val causal_window = dataset.training_dataset.data.head._2._2.size
 
     val data_size = dataset.training_dataset.size
 
-    val scaling_op = scale_timed_data[Double]
-
     println("Scaling data attributes")
-    val (scaled_data, scalers) = scaling_op.run(dataset)
+    val scalers = scale_data(dataset)
 
-    val split_data = scaled_data.training_dataset.partition(
-      DataPipe[(DateTime, (Tensor[Double], Tensor[Double])), Boolean](
+    val split_data = dataset.training_dataset.partition(
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Boolean](
         _ => scala.util.Random.nextDouble() <= 0.7
       )
     )
 
-    val input_shape = scaled_data.training_dataset.data.head._2._1.shape
+    val input_shape = Shape(dataset.training_dataset.data.head._2._1.size)
 
     val load_pattern_in_tensor =
-      IterableDataPipe(tup2_2[DateTime, (Tensor[Double], Tensor[Double])]) >
-        dtfpipe
-          .EagerStack[Double](axis = 0)
-          .zip(dtfpipe.EagerStack[Double](axis = 0))
+      IterableDataPipe(
+        tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])]
+      ) >
+        DataPipe[Iterable[(DenseVector[Double], DenseVector[Double])], (Tensor[Double], Tensor[Double])](
+          buffer => {
+            val (xs, ys)   = buffer.unzip
+            val bufferSize = buffer.toSeq.length
+
+            val xdim = xs.head.size
+            val ydim = ys.head.size
+
+            (
+              dtf.tensor_f64(bufferSize, xdim)(
+                xs.map(_.toArray.toSeq).toSeq.flatten: _*
+              ),
+              dtf.tensor_f64(bufferSize, ydim)(
+                ys.map(_.toArray.toSeq).toSeq.flatten: _*
+              )
+            )
+          }
+        )
+
+    val load_input_batch =
+      DataPipe[Iterable[DenseVector[Double]], Tensor[Double]](buffer => {
+        val bufferSize = buffer.toSeq.length
+
+        val xdim = buffer.head.size
+        dtf.tensor_f64(bufferSize, xdim)(
+          buffer.map(_.toArray.toSeq).toSeq.flatten: _*
+        )
+      })
 
     val unzip =
       DataPipe[Iterable[(Tensor[Double], Tensor[Double])], (Iterable[Tensor[Double]], Iterable[Tensor[Double]])](
@@ -195,34 +222,34 @@ package object fte {
     )
 
     val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
-      (DateTime, (Tensor[Double], Tensor[Double])),
+      (DateTime, (DenseVector[Double], DenseVector[Double])),
       (Tensor[Double], Tensor[Double]),
       (Tensor[Double], Tensor[Double]),
       (Output[Double], Output[Double])
     ](
-      bufferSize = miniBatch * 5,
+      bufferSize = 4 * miniBatch,
       patternToTensor = Some(load_pattern_in_tensor)
     )
 
     val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
-      (DateTime, (Tensor[Double], Tensor[Double])),
+      (DateTime, (DenseVector[Double], DenseVector[Double])),
       (Tensor[Double], Tensor[Double]),
       (Tensor[Double], Tensor[Double]),
       (Output[Double], Output[Double])
     ](
-      bufferSize = miniBatch * 5,
+      bufferSize = 4 * miniBatch,
       patternToTensor = Some(load_pattern_in_tensor),
       concatOpO = Some(concatPreds)
     )
 
     val tf_handle_input = dtflearn.model.tf_data_handle_ops[
-      Tensor[Double],
+      DenseVector[Double],
       Tensor[Double],
       (Tensor[Double], Tensor[Double]),
       Output[Double]
     ](
-      bufferSize = miniBatch * 5,
-      patternToTensor = Some(dtfpipe.EagerStack[Double](axis = 0)),
+      bufferSize = 4 * miniBatch,
+      patternToTensor = Some(load_input_batch),
       concatOpO = Some(concatPreds)
     )
 
@@ -436,12 +463,13 @@ package object fte {
         chosen_config.values.mkString(start = "", sep = ",", end = "")
     )
 
-    val extract_tensors = tup2_2[DateTime, (Tensor[Double], Tensor[Double])]
+    val extract_tensors =
+      tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])]
 
-    val extract_features = tup2_1[Tensor[Double], Tensor[Double]]
+    val extract_features = tup2_1[DenseVector[Double], DenseVector[Double]]
 
     val model_predictions_test = best_model.infer_batch(
-      scaled_data.test_dataset.map(extract_tensors > extract_features),
+      dataset.test_dataset.map(extract_tensors > extract_features),
       tf_handle_input
     )
 
@@ -455,8 +483,8 @@ package object fte {
       final_targets,
       unscaled_preds_test,
       pred_time_lags_test
-    ) = process_predictions(
-      scaled_data.test_dataset,
+    ) = process_predictions_bdv(
+      dataset.test_dataset,
       predictions,
       scalers,
       causal_window,
@@ -471,7 +499,7 @@ package object fte {
     val (reg_metrics_train, preds_train) = if (get_training_preds) {
 
       val model_predictions_train = best_model.infer_batch(
-        scaled_data.training_dataset.map(extract_tensors > extract_features),
+        dataset.training_dataset.map(extract_tensors > extract_features),
         tf_handle_input
       )
 
@@ -485,8 +513,8 @@ package object fte {
         final_targets_train,
         unscaled_preds_train,
         pred_time_lags_train
-      ) = process_predictions(
-        scaled_data.training_dataset,
+      ) = process_predictions_bdv(
+        dataset.training_dataset,
         predictions_train,
         scalers,
         causal_window,
@@ -529,8 +557,8 @@ package object fte {
       (None, None)
     }
 
-    val results = helios.TunedModelRun(
-      (scaled_data, scalers),
+    val results = helios.TunedModelRun2(
+      (dataset, scalers),
       best_model,
       reg_metrics_train,
       Some(reg_metrics),
@@ -642,7 +670,7 @@ package object fte {
       DataPipe[Seq[Tensor[Float]], Double](s =>
           s.map(_.scalar.toDouble).sum / s.length),
     checkpointing_freq: Int = 5
-  ): helios.Experiment[Double, ModelRunTuning[Tensor[Double]], FteOmniConfig] = {
+  ): helios.Experiment[Double, ModelRunTuning[DenseVector[Double]], FteOmniConfig] = {
 
     val (dataset, experiment_config, tf_summary_dir) = data.setup_exp_data(
       year_range,
@@ -746,6 +774,79 @@ package object fte {
         t =>
           if (scale_actual_targets) dtfutils.toDoubleSeq(scalers._2.i(t)).toSeq
           else dtfutils.toDoubleSeq(t).toSeq
+      )
+      .toSeq
+
+    val actual_targets = test_labels.zipWithIndex.map(zi => {
+      val (z, index) = zi
+      val time_lag =
+        pred_time_lags_test(index).scalar.asInstanceOf[Double].toInt
+
+      z(time_lag)
+    })
+
+    val (final_predictions, final_targets) =
+      if (log_scale_omni) (pred_targets_test.exp, actual_targets.map(math.exp))
+      else (pred_targets_test, actual_targets)
+
+    (final_predictions, final_targets, unscaled_preds_test, pred_time_lags_test)
+  }
+
+  def process_predictions_bdv[T](
+    scaled_data: DataSet[(DateTime, (T, DenseVector[Double]))],
+    predictions: (Tensor[Double], Tensor[Double]),
+    scalers: (Scaler[T], GaussianScaler),
+    causal_window: Int,
+    mo_flag: Boolean,
+    prob_timelags: Boolean,
+    log_scale_omni: Boolean,
+    scale_actual_targets: Boolean
+  ) = {
+
+    val scaler_targets_tf = GaussianScalerTF(
+      dtf.tensor_f64(causal_window)(scalers._2.mean.toArray.toSeq: _*),
+      dtf.tensor_f64(causal_window)(scalers._2.sigma.toArray.toSeq: _*)
+    )
+
+    val nTest = scaled_data.size
+
+    val index_times = Tensor(
+      (0 until causal_window).map(_.toDouble)
+    ).reshape(
+      Shape(causal_window)
+    )
+
+    val pred_time_lags_test: Tensor[Double] = if (prob_timelags) {
+      val unsc_probs = predictions._2
+
+      unsc_probs.topK(1)._2.reshape(Shape(nTest)).castTo[Double]
+
+    } else predictions._2
+
+    val unscaled_preds_test = scaler_targets_tf.i(predictions._1)
+
+    val pred_targets_test: Tensor[Double] = if (mo_flag) {
+
+      val repeated_times =
+        tfi.stack(Seq.fill(causal_window)(pred_time_lags_test.floor), axis = -1)
+
+      val conv_kernel =
+        repeated_times.subtract(index_times).square.multiply(-1.0).exp.floor
+
+      unscaled_preds_test
+        .multiply(conv_kernel)
+        .sum(axes = 1)
+        .divide(conv_kernel.sum(axes = 1))
+    } else {
+      scaler_targets_tf(0).i(predictions._1)
+    }
+
+    val test_labels = scaled_data.data
+      .map(_._2._2)
+      .map(
+        t =>
+          if (scale_actual_targets) scalers._2.i(t).toArray.toSeq
+          else t.toArray.toSeq
       )
       .toSeq
 

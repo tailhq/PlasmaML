@@ -613,6 +613,67 @@ package object data {
 
     })
 
+    type SCALES = (GaussianScaler, GaussianScaler)
+    
+    def scale_data(data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]): SCALES = {
+      val (mean_f, sigma_sq_f) = dutils.getStats(
+        data.training_dataset
+          .map(
+            tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_1[
+              DenseVector[Double],
+              DenseVector[Double]
+            ]
+          )
+          .data
+      )
+    
+      val sigma_f = sqrt(sigma_sq_f)
+    
+      val (mean_t, sigma_sq_t) = dutils.getStats(
+        data.training_dataset
+          .map(
+            tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_2[
+              DenseVector[Double],
+              DenseVector[Double]
+            ]
+          )
+          .data
+      )
+    
+      val sigma_t = sqrt(sigma_sq_t)
+    
+      val std_training =
+        DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+          p => {
+    
+            //Standardize features
+            p._2._1 :-= mean_f
+            p._2._1 :/= sigma_f
+    
+            //Standardize targets
+            p._2._2 :-= mean_t
+            p._2._2 :/= sigma_t
+    
+          }
+        )
+    
+      val std_test =
+        DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+          p => {
+    
+            //Standardize only features
+            p._2._1 :-= mean_f
+            p._2._1 :/= sigma_f
+    
+          }
+        )
+    
+      data.training_dataset.foreach(std_training)
+      data.test_dataset.foreach(std_test)
+      (GaussianScaler(mean_f, sigma_f), GaussianScaler(mean_t, sigma_t))
+    }
+    
+
   /**
     * Creates a DynaML data set consisting of time FTE values.
     * The FTE values are loaded in a [[Tensor]] object.
@@ -773,8 +834,15 @@ package object data {
     end: DateTime
   )(deltaT: (Int, Int),
     log_flag: Boolean,
-    quantity: Int = OMNIData.Quantities.V_SW
+    quantity: Int = OMNIData.Quantities.V_SW,
+    ts_transform: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]]
   ): ZipDataSet[DateTime, DenseVector[Double]] = {
+
+    val transform: DataPipe[Seq[Double], Seq[Double]] = if(log_flag) {
+      ts_transform > DataPipe((xs: Seq[Double]) => xs.map(math.log))
+    } else {
+      ts_transform
+    }
 
     val omni_processing =
       OMNILoader.omniVarToSlidingTS(deltaT._1, deltaT._2)(quantity) >
@@ -783,8 +851,7 @@ package object data {
             p._1.isAfter(start) && p._1.isBefore(end)
         ) >
         IterableDataPipe(
-          (p: (DateTime, Seq[Double])) =>
-            (p._1, if (log_flag) p._2.map(math.log) else p._2)
+          identityPipe[DateTime] * transform
         )
 
     val omni_data_path = pwd / 'data
@@ -813,19 +880,20 @@ package object data {
     }
   }
 
-  def write_fte_data_set[Input](
+  def write_fte_data_set[Input, Output](
     identifier: String,
-    dataset: helios.data.TF_DATA_T2[Input, Double],
+    dataset: helios.data.DATA[Input, Output],
     input_to_seq: DataPipe[Input, Seq[Double]],
+    output_to_seq: DataPipe[Output, Seq[Double]],
     directory: Path
   ): Unit = {
 
     val pattern_to_map =
-      DataPipe[(DateTime, (Input, Tensor[Double])), JValue](
+      DataPipe[(DateTime, (Input, Output)), JValue](
         p =>
           (
             ("timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'")) ~
-              ("targets" -> dtfutils.toDoubleSeq(p._2._2).toList) ~
+              ("targets" -> output_to_seq.run(p._2._2).toList) ~
               ("fte"     -> input_to_seq.run(p._2._1))
           )
       )
@@ -905,11 +973,12 @@ package object data {
       None
     }
 
-  def read_data_set[T](
+  def read_data_set[T, U](
     training_data_file: Path,
     test_data_file: Path,
-    load_input_pattern: DataPipe[Array[Double], T]
-  ): helios.data.TF_DATA_T2[T, Double] = {
+    load_input_pattern: DataPipe[Array[Double], T],
+    load_output_pattern: DataPipe[Array[Double], U]
+  ): helios.data.DATA[T, U] = {
 
     require(
       exists ! training_data_file && exists ! test_data_file,
@@ -943,15 +1012,15 @@ package object data {
           .toArray
       )
 
-      val targets_seq = record
+      val targets = load_output_pattern(
+        record
         .findField(p => p._1 == "targets")
         .get
         ._2
         .values
         .asInstanceOf[List[Double]]
-
-      val targets = dtf.tensor_f64(targets_seq.length)(targets_seq: _*)
-
+        .toArray
+      )
       (dt, (features, targets))
     })
 
@@ -961,11 +1030,11 @@ package object data {
       dtfdata
         .dataset(pipeline(training_data_file))
         .to_zip(
-          identityPipe[(DateTime, (T, Tensor[Double]))]
+          identityPipe[(DateTime, (T, U))]
         ),
       dtfdata
         .dataset(pipeline(test_data_file))
-        .to_zip(identityPipe[(DateTime, (T, Tensor[Double]))])
+        .to_zip(identityPipe[(DateTime, (T, U))])
     )
   }
 
@@ -1031,7 +1100,7 @@ package object data {
     fte_data_path: Path = home / 'Downloads / 'fte,
     summary_top_dir: Path = home / 'tmp,
     existing_exp: Option[Path] = None
-  ): (helios.data.TF_DATA_T[Double, Double], FteOmniConfig, Path) = {
+  ): (helios.data.DATA[DenseVector[Double], DenseVector[Double]], FteOmniConfig, Path) = {
     val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
 
@@ -1108,7 +1177,7 @@ package object data {
     )
 
     val tt_partition = DataPipe(
-      (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
+      (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
         if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
           false
         else
@@ -1117,7 +1186,7 @@ package object data {
 
     val generate_fresh_dataset = () => {
       println("\nProcessing FTE Data")
-      val fte_data = load_fte_data(
+      val fte_data = load_fte_data_bdv(
         fte_data_path,
         carrington_rotations,
         log_scale_fte,
@@ -1127,7 +1196,7 @@ package object data {
 
       println("Processing OMNI solar wind data")
       val omni_data =
-        load_solar_wind_data(start, end)(deltaT, log_scale_omni, quantity, ts_transform_output)
+        load_solar_wind_data_bdv(start, end)(deltaT, log_scale_omni, quantity, ts_transform_output)
 
       println("Constructing joined data set")
       fte_data.join(omni_data).partition(tt_partition)
@@ -1141,10 +1210,11 @@ package object data {
       val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
         .contains("test_data_"))).last
 
-      read_data_set[Tensor[Double]](
+      read_data_set[DenseVector[Double], DenseVector[Double]](
         training_data_file,
         test_data_file,
-        DataPipe((xs: Array[Double]) => dtf.tensor_f64(xs.length)(xs: _*))
+        DataPipe((xs: Array[Double]) => DenseVector(xs)),
+        DataPipe((xs: Array[Double]) => DenseVector(xs))
       )
     } else {
       generate_fresh_dataset()
@@ -1152,10 +1222,11 @@ package object data {
 
     if (!use_cached_data) {
       println("Writing data sets")
-      write_fte_data_set[Tensor[Double]](
+      write_fte_data_set[DenseVector[Double], DenseVector[Double]](
         dt.toString("YYYY-MM-dd-HH-mm"),
         dataset,
-        DataPipe[Tensor[Double], Seq[Double]](_.entriesIterator.toSeq),
+        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
+        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
         tf_summary_dir
       )
     }
