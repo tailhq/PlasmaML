@@ -212,11 +212,13 @@ package object fte {
             val ydim = ys.head.size
 
             (
-              dtf.tensor_f64(bufferSize, xdim)(
-                xs.map(_.toArray.toSeq).toSeq.flatten: _*
+              dtf.buffer_f64(
+                Shape(bufferSize, xdim),
+                xs.map(_.toArray).toArray.flatten
               ),
-              dtf.tensor_f64(bufferSize, ydim)(
-                ys.map(_.toArray.toSeq).toSeq.flatten: _*
+              dtf.buffer_f64(
+                Shape(bufferSize, ydim),
+                ys.map(_.toArray).toArray.flatten
               )
             )
           }
@@ -227,8 +229,9 @@ package object fte {
         val bufferSize = buffer.toSeq.length
 
         val xdim = buffer.head.size
-        dtf.tensor_f64(bufferSize, xdim)(
-          buffer.map(_.toArray.toSeq).toSeq.flatten: _*
+        dtf.buffer_f64(
+          Shape(bufferSize, xdim),
+          buffer.map(_.toArray).toArray.flatten
         )
       })
 

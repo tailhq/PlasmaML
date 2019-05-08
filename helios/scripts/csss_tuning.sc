@@ -15,8 +15,8 @@ val base_it_pdt     = 4
 def ext_it_pdt      = 2*base_it_pdt + 1
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2010,
-  end_year = 2016,
+  start_year = 2014,
+  end_year = 2017,
   test_year = 2015,
   crop_latitude = 25d,
   fraction_pca = 1d,
@@ -40,7 +40,7 @@ val csss_exp = csss_pdt_model_tuning(
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
   get_training_preds = false,
-  existing_exp = None//csss.experiments().lastOption
+  existing_exp = csss.experiments().lastOption
 )
 
 try {

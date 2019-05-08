@@ -677,11 +677,11 @@ package object helios {
 
     val scatter_data = process_pipe(results_path)
 
-    regression(scatter_data.map(p => (p.head, p(1))))
+    regression(scatter_data.map(p => (p(1), p.head)))
     hold()
     title("Scatter Plot: Model Predictions")
-    xAxis("Prediction")
-    yAxis("Actual Target")
+    xAxis("Actual Target")
+    yAxis("Prediction")
     unhold()
 
     scatter(scatter_data.map(p => (p.head, p.last)))
@@ -689,6 +689,13 @@ package object helios {
     title("Scatter Plot: Output Timelag Relationship")
     xAxis("Prediction")
     yAxis("Predicted Time Lag")
+    unhold()
+
+    scatter(scatter_data.map(p => (p.last, p.head - p(1))))
+    hold()
+    title("Scatter Plot: Output Timelag Relationship")
+    xAxis("Predicted Time Lag")
+    yAxis("Prediction Error")
     unhold()
 
   }
