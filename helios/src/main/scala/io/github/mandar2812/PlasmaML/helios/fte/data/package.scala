@@ -42,7 +42,10 @@ package object data {
     latitude_limit: Double,
     log_scale_fte: Boolean)
 
-  case class OMNIConfig(deltaT: (Int, Int), log_flag: Boolean)
+  case class OMNIConfig(
+    deltaT: (Int, Int),
+    log_flag: Boolean,
+    quantity: Int = OMNIData.Quantities.V_SW)
 
   case class FteOmniConfig(
     fte_config: FTEConfig,
@@ -52,6 +55,53 @@ package object data {
     timelag_prediction: String = "mode",
     fraction_variance: Double = 1d)
       extends helios.Config
+
+  def read_exp_config(file: Path): Option[FteOmniConfig] =
+    if (exists ! file) {
+      try {
+        val config = parse((read.lines ! file).head).values
+          .asInstanceOf[Map[String, Any]]
+        val fte_config  = config("fte_config").asInstanceOf[Map[String, Any]]
+        val omni_config = config("omni_config").asInstanceOf[Map[String, Any]]
+
+        val omni_deltaT = omni_config("deltaT")
+          .asInstanceOf[Map[String, BigInt]]
+        val fte_data_limits = fte_config("data_limits")
+          .asInstanceOf[Map[String, BigInt]]
+
+        Some(
+          FteOmniConfig(
+            FTEConfig(
+              data_limits = (
+                fte_data_limits("_1$mcI$sp").toInt,
+                fte_data_limits("_2$mcI$sp").toInt
+              ),
+              fte_config("deltaTFTE").asInstanceOf[BigInt].toInt,
+              fte_config("fteStep").asInstanceOf[BigInt].toInt,
+              fte_config("latitude_limit").asInstanceOf[Double],
+              fte_config("log_scale_fte").asInstanceOf[Boolean]
+            ),
+            OMNIConfig(
+              (
+                omni_deltaT("_1$mcI$sp").toInt,
+                omni_deltaT("_2$mcI$sp").toInt
+              ),
+              omni_config("log_flag").asInstanceOf[Boolean],
+              omni_config("quantity").asInstanceOf[Int]
+            ),
+            config("multi_output").asInstanceOf[Boolean],
+            config("probabilistic_time_lags").asInstanceOf[Boolean],
+            config("timelag_prediction").asInstanceOf[String],
+            config("fraction_variance").asInstanceOf[Double]
+          )
+        )
+
+      } catch {
+        case _: Exception => None
+      }
+    } else {
+      None
+    }
 
   //Load the Carrington Rotation Table
   val carrington_rotation_table: Path = pwd / 'data / "CR_Table.rdb"
@@ -367,7 +417,7 @@ package object data {
     ts_transform: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]]
   ): ZipDataSet[DateTime, Tensor[Double]] = {
 
-    val transform: DataPipe[Seq[Double], Seq[Double]] = if(log_flag) {
+    val transform: DataPipe[Seq[Double], Seq[Double]] = if (log_flag) {
       ts_transform > DataPipe((xs: Seq[Double]) => xs.map(math.log))
     } else {
       ts_transform
@@ -613,66 +663,67 @@ package object data {
 
     })
 
-    type SCALES = (GaussianScaler, GaussianScaler)
-    
-    def scale_data(data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]): SCALES = {
-      val (mean_f, sigma_sq_f) = dutils.getStats(
-        data.training_dataset
-          .map(
-            tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_1[
-              DenseVector[Double],
-              DenseVector[Double]
-            ]
-          )
-          .data
-      )
-    
-      val sigma_f = sqrt(sigma_sq_f)
-    
-      val (mean_t, sigma_sq_t) = dutils.getStats(
-        data.training_dataset
-          .map(
-            tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_2[
-              DenseVector[Double],
-              DenseVector[Double]
-            ]
-          )
-          .data
-      )
-    
-      val sigma_t = sqrt(sigma_sq_t)
-    
-      val std_training =
-        DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
-          p => {
-    
-            //Standardize features
-            p._2._1 :-= mean_f
-            p._2._1 :/= sigma_f
-    
-            //Standardize targets
-            p._2._2 :-= mean_t
-            p._2._2 :/= sigma_t
-    
-          }
+  type SCALES = (GaussianScaler, GaussianScaler)
+
+  def scale_data(
+    data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
+  ): SCALES = {
+    val (mean_f, sigma_sq_f) = dutils.getStats(
+      data.training_dataset
+        .map(
+          tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_1[
+            DenseVector[Double],
+            DenseVector[Double]
+          ]
         )
-    
-      val std_test =
-        DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
-          p => {
-    
-            //Standardize only features
-            p._2._1 :-= mean_f
-            p._2._1 :/= sigma_f
-    
-          }
+        .data
+    )
+
+    val sigma_f = sqrt(sigma_sq_f)
+
+    val (mean_t, sigma_sq_t) = dutils.getStats(
+      data.training_dataset
+        .map(
+          tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_2[
+            DenseVector[Double],
+            DenseVector[Double]
+          ]
         )
-    
-      data.training_dataset.foreach(std_training)
-      data.test_dataset.foreach(std_test)
-      (GaussianScaler(mean_f, sigma_f), GaussianScaler(mean_t, sigma_t))
-    }
-    
+        .data
+    )
+
+    val sigma_t = sqrt(sigma_sq_t)
+
+    val std_training =
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+        p => {
+
+          //Standardize features
+          p._2._1 :-= mean_f
+          p._2._1 :/= sigma_f
+
+          //Standardize targets
+          p._2._2 :-= mean_t
+          p._2._2 :/= sigma_t
+
+        }
+      )
+
+    val std_test =
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+        p => {
+
+          //Standardize only features
+          p._2._1 :-= mean_f
+          p._2._1 :/= sigma_f
+
+        }
+      )
+
+    data.training_dataset.foreach(std_training)
+    data.test_dataset.foreach(std_test)
+    (GaussianScaler(mean_f, sigma_f), GaussianScaler(mean_t, sigma_t))
+  }
 
   /**
     * Creates a DynaML data set consisting of time FTE values.
@@ -838,7 +889,7 @@ package object data {
     ts_transform: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]]
   ): ZipDataSet[DateTime, DenseVector[Double]] = {
 
-    val transform: DataPipe[Seq[Double], Seq[Double]] = if(log_flag) {
+    val transform: DataPipe[Seq[Double], Seq[Double]] = if (log_flag) {
       ts_transform > DataPipe((xs: Seq[Double]) => xs.map(math.log))
     } else {
       ts_transform
@@ -880,7 +931,7 @@ package object data {
     }
   }
 
-  def write_fte_data_set[Input, Output](
+  def write_data_set[Input, Output](
     identifier: String,
     dataset: helios.data.DATA[Input, Output],
     input_to_seq: DataPipe[Input, Seq[Double]],
@@ -894,7 +945,7 @@ package object data {
           (
             ("timestamp" -> p._1.toString("yyyy-MM-dd'T'HH:mm:ss'Z'")) ~
               ("targets" -> output_to_seq.run(p._2._2).toList) ~
-              ("fte"     -> input_to_seq.run(p._2._1))
+              ("inputs"  -> input_to_seq.run(p._2._1))
           )
       )
 
@@ -927,52 +978,6 @@ package object data {
       .foreach(write_pattern_test)
   }
 
-  def read_exp_config(file: Path): Option[FteOmniConfig] =
-    if (exists ! file) {
-      try {
-        val config = parse((read.lines ! file).head).values
-          .asInstanceOf[Map[String, Any]]
-        val fte_config  = config("fte_config").asInstanceOf[Map[String, Any]]
-        val omni_config = config("omni_config").asInstanceOf[Map[String, Any]]
-
-        val omni_deltaT = omni_config("deltaT")
-          .asInstanceOf[Map[String, BigInt]]
-        val fte_data_limits = fte_config("data_limits")
-          .asInstanceOf[Map[String, BigInt]]
-
-        Some(
-          FteOmniConfig(
-            FTEConfig(
-              data_limits = (
-                fte_data_limits("_1$mcI$sp").toInt,
-                fte_data_limits("_2$mcI$sp").toInt
-              ),
-              fte_config("deltaTFTE").asInstanceOf[BigInt].toInt,
-              fte_config("fteStep").asInstanceOf[BigInt].toInt,
-              fte_config("latitude_limit").asInstanceOf[Double],
-              fte_config("log_scale_fte").asInstanceOf[Boolean]
-            ),
-            OMNIConfig(
-              (
-                omni_deltaT("_1$mcI$sp").toInt,
-                omni_deltaT("_2$mcI$sp").toInt
-              ),
-              omni_config("log_flag").asInstanceOf[Boolean]
-            ),
-            config("multi_output").asInstanceOf[Boolean],
-            config("probabilistic_time_lags").asInstanceOf[Boolean],
-            config("timelag_prediction").asInstanceOf[String],
-            config("fraction_variance").asInstanceOf[Double]
-          )
-        )
-
-      } catch {
-        case _: Exception => None
-      }
-    } else {
-      None
-    }
-
   def read_data_set[T, U](
     training_data_file: Path,
     test_data_file: Path,
@@ -1004,7 +1009,7 @@ package object data {
       )
       val features = load_input_pattern(
         record
-          .findField(p => p._1 == "fte")
+          .findField(p => p._1 == "inputs")
           .get
           ._2
           .values
@@ -1014,12 +1019,12 @@ package object data {
 
       val targets = load_output_pattern(
         record
-        .findField(p => p._1 == "targets")
-        .get
-        ._2
-        .values
-        .asInstanceOf[List[Double]]
-        .toArray
+          .findField(p => p._1 == "targets")
+          .get
+          ._2
+          .values
+          .asInstanceOf[List[Double]]
+          .toArray
       )
       (dt, (features, targets))
     })
@@ -1083,12 +1088,90 @@ package object data {
 
   }
 
+  def generate_dataset(
+    fte_data_path: Path,
+    c: FteOmniConfig,
+    ts_transform_output: DataPipe[Seq[Double], Seq[Double]],
+    tt_partition: DataPipe[(DateTime, (DenseVector[Double], DenseVector[
+          Double
+        ])), Boolean],
+    conv_flag: Boolean = false
+  ): helios.data.DATA[DenseVector[Double], DenseVector[Double]] = {
+
+    val FteOmniConfig(
+      FTEConfig(
+        (start_year, end_year),
+        deltaTFTE,
+        fteStep,
+        latitude_limit,
+        log_scale_fte
+      ),
+      OMNIConfig(deltaT, log_scale_omni, quantity),
+      multi_output,
+      probabilistic_time_lags,
+      timelag_prediction,
+      fraction_variance
+    ) = c
+
+    val (start, end) = (
+      new DateTime(start_year, 1, 1, 0, 0),
+      new DateTime(end_year, 12, 31, 23, 59)
+    )
+
+    println("\nProcessing FTE Data")
+    val fte_data = load_fte_data_bdv(
+      fte_data_path,
+      carrington_rotations,
+      log_scale_fte,
+      start,
+      end
+    )(deltaTFTE, fteStep, latitude_limit, conv_flag)
+
+    println("Processing OMNI solar wind data")
+    val omni_data =
+      load_solar_wind_data_bdv(start, end)(
+        deltaT,
+        log_scale_omni,
+        quantity,
+        ts_transform_output
+      )
+
+    println("Constructing joined data set")
+    fte_data.join(omni_data).partition(tt_partition)
+  }
+
+  def _config_match(
+    tf_summary_dir: Path,
+    experiment_config: FteOmniConfig
+  ): Boolean = {
+    val existing_config = read_exp_config(tf_summary_dir / "config.json")
+
+    val use_cached_config: Boolean = existing_config match {
+      case None    => false
+      case Some(c) => c == experiment_config
+    }
+
+    use_cached_config
+  }
+
+  def _dataset_serialized(tf_summary_dir: Path): Boolean = {
+
+    val training_data_files = ls ! tf_summary_dir |? (_.segments.last
+      .contains("training_data_"))
+    val test_data_files = ls ! tf_summary_dir |? (_.segments.last
+      .contains("test_data_"))
+
+    training_data_files.length > 0 && test_data_files.length > 0
+
+  }
+
   def setup_exp_data(
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
     sw_threshold: Double = 700d,
     quantity: Int = OMNIData.Quantities.V_SW,
-    ts_transform_output: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]],
+    ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
+      identityPipe[Seq[Double]],
     deltaT: (Int, Int) = (48, 72),
     deltaTFTE: Int = 5,
     fteStep: Int = 1,
@@ -1100,7 +1183,7 @@ package object data {
     fte_data_path: Path = home / 'Downloads / 'fte,
     summary_top_dir: Path = home / 'tmp,
     existing_exp: Option[Path] = None
-  ): (helios.data.DATA[DenseVector[Double], DenseVector[Double]], FteOmniConfig, Path) = {
+  ): (FteOmniConfig, Path) = {
     val mo_flag: Boolean       = true
     val prob_timelags: Boolean = true
 
@@ -1128,7 +1211,7 @@ package object data {
         latitude_limit,
         log_scale_fte
       ),
-      OMNIConfig(deltaT, log_scale_omni),
+      OMNIConfig(deltaT, log_scale_omni, quantity),
       multi_output = true,
       probabilistic_time_lags = true,
       timelag_prediction = "mode",
@@ -1137,10 +1220,8 @@ package object data {
 
     val existing_config = read_exp_config(tf_summary_dir_tmp / "config.json")
 
-    val use_cached_config: Boolean = existing_config match {
-      case None    => false
-      case Some(c) => c == experiment_config
-    }
+    val use_cached_config: Boolean =
+      _config_match(tf_summary_dir_tmp, experiment_config)
 
     val tf_summary_dir = if (use_cached_config) {
       println("Using provided experiment directory to continue experiment")
@@ -1156,12 +1237,7 @@ package object data {
     }
 
     val use_cached_data = if (use_cached_config) {
-      val training_data_files = ls ! tf_summary_dir |? (_.segments.last
-        .contains("training_data_"))
-      val test_data_files = ls ! tf_summary_dir |? (_.segments.last
-        .contains("test_data_"))
-
-      training_data_files.length > 0 && test_data_files.length > 0
+      _dataset_serialized(tf_summary_dir)
     } else {
       false
     }
@@ -1169,11 +1245,6 @@ package object data {
     val (test_start, test_end) = (
       new DateTime(test_year, 1, 1, 0, 0),
       new DateTime(test_year, 12, 31, 23, 59)
-    )
-
-    val (start, end) = (
-      new DateTime(year_range.min, 1, 1, 0, 0),
-      new DateTime(year_range.max, 12, 31, 23, 59)
     )
 
     val tt_partition = DataPipe(
@@ -1184,45 +1255,19 @@ package object data {
           true
     )
 
-    val generate_fresh_dataset = () => {
-      println("\nProcessing FTE Data")
-      val fte_data = load_fte_data_bdv(
-        fte_data_path,
-        carrington_rotations,
-        log_scale_fte,
-        start,
-        end
-      )(deltaTFTE, fteStep, latitude_limit, conv_flag)
-
-      println("Processing OMNI solar wind data")
-      val omni_data =
-        load_solar_wind_data_bdv(start, end)(deltaT, log_scale_omni, quantity, ts_transform_output)
-
-      println("Constructing joined data set")
-      fte_data.join(omni_data).partition(tt_partition)
-    }
-
-    val dataset = if (use_cached_config && use_cached_data) {
-      println("Using previously cached data set")
-
-      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
-        .contains("training_data_"))).last
-      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
-        .contains("test_data_"))).last
-
-      read_data_set[DenseVector[Double], DenseVector[Double]](
-        training_data_file,
-        test_data_file,
-        DataPipe((xs: Array[Double]) => DenseVector(xs)),
-        DataPipe((xs: Array[Double]) => DenseVector(xs))
-      )
-    } else {
-      generate_fresh_dataset()
-    }
-
     if (!use_cached_data) {
-      println("Writing data sets")
-      write_fte_data_set[DenseVector[Double], DenseVector[Double]](
+
+      val dataset =
+        generate_dataset(
+          fte_data_path,
+          experiment_config,
+          ts_transform_output,
+          tt_partition,
+          conv_flag
+        )
+
+      println("Serializing data sets")
+      write_data_set(
         dt.toString("YYYY-MM-dd-HH-mm"),
         dataset,
         DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
@@ -1231,7 +1276,7 @@ package object data {
       )
     }
 
-    (dataset, experiment_config, tf_summary_dir)
+    (experiment_config, tf_summary_dir)
   }
 
 }

@@ -132,9 +132,7 @@ package object fte {
     *                        </ul>
     */
   def run_exp(
-    dataset: helios.data.DATA[DenseVector[Double], DenseVector[Double]],
     tf_summary_dir: Path,
-    experiment_config: FteOmniConfig,
     architechture: Layer[Output[Double], (Output[Double], Output[Double])],
     hyper_params: List[String],
     persistent_hyp_params: List[String],
@@ -161,8 +159,30 @@ package object fte {
     fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
       DataPipe[Seq[Tensor[Float]], Double](s =>
           s.map(_.scalar.toDouble).sum / s.length),
-    checkpointing_freq: Int = 5
+    checkpointing_freq: Int = 5,
+    log_scale_targets: Boolean = true
   ): ModelRunTuning[DenseVector[Double]] = {
+
+    require(
+      _dataset_serialized(tf_summary_dir),
+      s"Data set is not serialized in ${tf_summary_dir}\nPlease run the fte.data.setup_exp_data() method."
+    )
+
+    val dataset = {
+      println("Using serialized data set")
+
+      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
+        .contains("training_data_"))).last
+      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
+        .contains("test_data_"))).last
+
+      read_data_set[DenseVector[Double], DenseVector[Double]](
+        training_data_file,
+        test_data_file,
+        DataPipe((xs: Array[Double]) => DenseVector(xs)),
+        DataPipe((xs: Array[Double]) => DenseVector(xs))
+      )
+    }
 
     val causal_window = dataset.training_dataset.data.head._2._2.size
 
@@ -345,7 +365,8 @@ package object fte {
         loss_func_generator,
         architechture,
         (FLOAT64, input_shape),
-        (FLOAT64, Shape(causal_window))
+        (FLOAT64, Shape(causal_window)),
+        clipGradients = tf.learn.ClipGradientsByNorm(1f)
       )
 
     val pdtModel = helios.learn.pdt_model(
@@ -488,10 +509,10 @@ package object fte {
       predictions,
       scalers,
       causal_window,
-      experiment_config.multi_output,
-      experiment_config.probabilistic_time_lags,
-      experiment_config.omni_config.log_flag,
-      false
+      mo_flag = true,
+      prob_timelags = true,
+      log_scale_omni = log_scale_targets,
+      scale_actual_targets = false
     )
 
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
@@ -518,10 +539,10 @@ package object fte {
         predictions_train,
         scalers,
         causal_window,
-        experiment_config.multi_output,
-        experiment_config.probabilistic_time_lags,
-        experiment_config.omni_config.log_flag,
-        true
+        mo_flag = true,
+        prob_timelags = true,
+        log_scale_omni = log_scale_targets,
+        scale_actual_targets = true
       )
 
       val reg_metrics_train =
@@ -672,7 +693,7 @@ package object fte {
     checkpointing_freq: Int = 5
   ): helios.Experiment[Double, ModelRunTuning[DenseVector[Double]], FteOmniConfig] = {
 
-    val (dataset, experiment_config, tf_summary_dir) = data.setup_exp_data(
+    val (experiment_config, tf_summary_dir) = data.setup_exp_data(
       year_range,
       test_year,
       sw_threshold,
@@ -692,9 +713,7 @@ package object fte {
     )
 
     val results = run_exp(
-      dataset,
       tf_summary_dir,
-      experiment_config,
       architechture,
       hyper_params,
       persistent_hyp_params,
@@ -714,7 +733,8 @@ package object fte {
       get_training_preds,
       existing_exp,
       fitness_to_scalar,
-      checkpointing_freq
+      checkpointing_freq,
+      experiment_config.omni_config.log_flag
     )
 
     helios.Experiment(
