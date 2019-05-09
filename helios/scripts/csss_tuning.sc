@@ -15,7 +15,7 @@ val base_it_pdt     = 4
 def ext_it_pdt      = 2*base_it_pdt + 1
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2014,
+  start_year = 2012,
   end_year = 2017,
   test_year = 2015,
   crop_latitude = 25d,
