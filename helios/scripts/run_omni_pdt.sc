@@ -4,10 +4,10 @@ import $exec.helios.scripts.csss
 import _root_.io.github.mandar2812.PlasmaML.omni.OMNIData.Quantities._
 
 val omni_res = omni_pdt(
-  List(V_SW, B_Z),
+  List(V_SW, B_X, B_Y, B_Z),
   Dst,
   causal_window = (0, 12),
-  start_year = 2009,
+  start_year = 2014,
   end_year = 2016,
   test_year = 2015,
   network_size = Seq(10, 10, 10),
