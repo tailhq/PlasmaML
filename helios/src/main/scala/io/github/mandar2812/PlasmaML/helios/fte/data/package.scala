@@ -45,7 +45,8 @@ package object data {
   case class OMNIConfig(
     deltaT: (Int, Int),
     log_flag: Boolean,
-    quantity: Int = OMNIData.Quantities.V_SW)
+    quantity: Int = OMNIData.Quantities.V_SW,
+    use_persistence: Boolean = false)
 
   case class FteOmniConfig(
     fte_config: FTEConfig,
@@ -87,7 +88,8 @@ package object data {
                 omni_deltaT("_2$mcI$sp").toInt
               ),
               omni_config("log_flag").asInstanceOf[Boolean],
-              omni_config("quantity").asInstanceOf[Int]
+              omni_config("quantity").asInstanceOf[Int],
+              omni_config("use_persistence").asInstanceOf[Boolean]
             ),
             config("multi_output").asInstanceOf[Boolean],
             config("probabilistic_time_lags").asInstanceOf[Boolean],
@@ -102,6 +104,13 @@ package object data {
     } else {
       None
     }
+
+  def write_exp_config(config: FteOmniConfig, dir: Path): Unit = {
+    if (!(exists ! dir / "config.json")) {
+      val config_json = write_json(config)
+      write(dir / "config.json", config_json)
+    }
+  }
 
   //Load the Carrington Rotation Table
   val carrington_rotation_table: Path = pwd / 'data / "CR_Table.rdb"
@@ -924,11 +933,63 @@ package object data {
 
   }
 
-  def write_exp_config(config: FteOmniConfig, dir: Path): Unit = {
-    if (!(exists ! dir / "config.json")) {
-      val config_json = write_json(config)
-      write(dir / "config.json", config_json)
+  /**
+    * Load the OMNI solar wind time series as a [[Tensor]]
+    *
+    * @param start Starting time of the data.
+    * @param end End time of the data.
+    * @param deltaT The time window (t + l, t + l + h)
+    * @param log_flag If set to true, log scale the velocity values.
+    * @param quantity An integer column index corresponding to the OMNI
+    *                 quantity to extract. Defaults to [[OMNIData.Quantities.V_SW]]
+    *
+    * @return A [[ZipDataSet]] with time indexed tensors containing
+    *         sliding time histories of the solar wind.
+    * */
+  def load_solar_wind_data_bdv2(
+    start: DateTime,
+    end: DateTime
+  )(deltaT: (Int, Int),
+    log_flag: Boolean,
+    quantity: Int = OMNIData.Quantities.V_SW,
+    ts_transform: DataPipe[Seq[Double], Seq[Double]] = identityPipe[Seq[Double]]
+  ): ZipDataSet[DateTime, (DenseVector[Double], DenseVector[Double])] = {
+
+    val transform: DataPipe[Seq[Double], Seq[Double]] = if (log_flag) {
+      ts_transform > DataPipe((xs: Seq[Double]) => xs.map(math.log))
+    } else {
+      ts_transform
     }
+
+    val omni_processing =
+      OMNILoader.biDirectionalWindow((27*24 - deltaT._1, deltaT._2), deltaT)(quantity) >
+        IterableDataPipe(
+          (p: (DateTime, (Seq[Double], Seq[Double]))) =>
+            p._1.isAfter(start) && p._1.isBefore(end)
+        ) >
+        IterableDataPipe(
+          identityPipe[DateTime] * duplicate(transform)
+        )
+
+    val omni_data_path = pwd / 'data
+
+    val load_into_bdv = DataPipe[Seq[Double], DenseVector[Double]](
+      p => DenseVector(p.toArray)
+    )
+
+    dtfdata
+      .dataset(start.getYear to end.getYear)
+      .map(
+        DataPipe(
+          (i: Int) =>
+            omni_data_path.toString() + "/" + OMNIData.getFilePattern(i)
+        )
+      )
+      .transform(omni_processing)
+      .to_zip(
+        identityPipe[DateTime] * duplicate(load_into_bdv)
+      )
+
   }
 
   def write_data_set[Input, Output](
@@ -1106,7 +1167,7 @@ package object data {
         latitude_limit,
         log_scale_fte
       ),
-      OMNIConfig(deltaT, log_scale_omni, quantity),
+      OMNIConfig(deltaT, log_scale_omni, quantity, use_persistence),
       multi_output,
       probabilistic_time_lags,
       timelag_prediction,
@@ -1128,16 +1189,45 @@ package object data {
     )(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
     println("Processing OMNI solar wind data")
-    val omni_data =
-      load_solar_wind_data_bdv(start, end)(
-        deltaT,
-        log_scale_omni,
-        quantity,
-        ts_transform_output
+    val omni_data = if (use_persistence) {
+      println("Using 27 day persistence features")
+      Left(
+        load_solar_wind_data_bdv2(start, end)(
+          deltaT,
+          log_scale_omni,
+          quantity,
+          ts_transform_output
+        )
       )
+    } else {
+      Right(
+        load_solar_wind_data_bdv(start, end)(
+          deltaT,
+          log_scale_omni,
+          quantity,
+          ts_transform_output
+        )
+      )
+    }
 
     println("Constructing joined data set")
-    fte_data.join(omni_data).partition(tt_partition)
+
+    omni_data match {
+      case Right(omni) => fte_data.join(omni).partition(tt_partition)
+      case Left(omni) =>
+        fte_data
+          .join(omni)
+          .map(
+            identityPipe[DateTime] * DataPipe(
+              (p: (
+                DenseVector[Double],
+                (DenseVector[Double], DenseVector[Double])
+              )) => (DenseVector.vertcat(p._1, p._2._1), p._2._2)
+            )
+          )
+          .partition(tt_partition)
+    }
+
   }
 
   def _config_match(

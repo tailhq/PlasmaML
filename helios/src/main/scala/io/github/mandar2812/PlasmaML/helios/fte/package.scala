@@ -252,7 +252,8 @@ package object fte {
     ](
       bufferSize = 4 * miniBatch,
       patternToTensor = Some(load_pattern_in_tensor),
-      caching_mode = dtflearn.model.data.FileCache(tf_summary_dir/"data_cache_tuning")
+      caching_mode =
+        dtflearn.model.data.FileCache(tf_summary_dir / "data_cache_tuning")
     )
 
     val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
@@ -264,7 +265,8 @@ package object fte {
       bufferSize = 4 * miniBatch,
       patternToTensor = Some(load_pattern_in_tensor),
       concatOpO = Some(concatPreds),
-      caching_mode = dtflearn.model.data.FileCache(tf_summary_dir/"data_cache_test")
+      caching_mode =
+        dtflearn.model.data.FileCache(tf_summary_dir / "data_cache_test")
     )
 
     val tf_handle_input = dtflearn.model.tf_data_handle_ops[

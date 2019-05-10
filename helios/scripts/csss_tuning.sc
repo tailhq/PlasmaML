@@ -15,10 +15,10 @@ val base_it_pdt     = 4
 def ext_it_pdt      = 2*base_it_pdt + 1
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2012,
-  end_year = 2017,
+  start_year = 2014,
+  end_year = 2016,
   test_year = 2015,
-  crop_latitude = 25d,
+  crop_latitude = 20d,
   fraction_pca = 1d,
   fte_step = 0,
   history_fte = 0,
@@ -27,6 +27,7 @@ val csss_exp = csss_pdt_model_tuning(
   time_window = time_window,
   ts_transform_output = avg_sw_6h,
   network_size = Seq(50, 50),
+  use_persistence = true,
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
   num_samples = 4,

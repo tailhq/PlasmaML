@@ -35,11 +35,11 @@ object OMNIData {
     val F10_7 = 50
     //Genmagnetic Indices
     val Dst = 40
-    val AE = 41
-    val Kp = 38
+    val AE  = 41
+    val Kp  = 38
     //L1 quantities
     //Solar Wind
-    val V_SW = 24
+    val V_SW  = 24
     val V_Lat = 26
     val V_Lon = 25
     //Inter-planetary Magnetic Field in GSM coordinates
@@ -56,14 +56,23 @@ object OMNIData {
     * OMNI files.
     * */
   var columnFillValues = Map(
-    16 -> "999.9", 21 -> "999.9",
-    24 -> "9999.", 23 -> "999.9",
-    40 -> "99999", 22 -> "9999999.",
-    25 -> "999.9", 26 -> "999.9", 
-    28 -> "99.99", 27 -> "9.999", 
-    39 -> "999",   45 -> "99999.99", 
-    46 -> "99999.99", 47 -> "99999.99", 
-    15 -> "999.9", 50 -> "999.9")
+    16 -> "999.9",
+    21 -> "999.9",
+    24 -> "9999.",
+    23 -> "999.9",
+    40 -> "99999",
+    22 -> "9999999.",
+    25 -> "999.9",
+    26 -> "999.9",
+    28 -> "99.99",
+    27 -> "9.999",
+    39 -> "999",
+    45 -> "99999.99",
+    46 -> "99999.99",
+    47 -> "99999.99",
+    15 -> "999.9",
+    50 -> "999.9"
+  )
 
   /**
     * Contains the name of the quantity stored
@@ -78,13 +87,14 @@ object OMNIData {
     41 -> "AE",
     38 -> "Kp",
     39 -> "Sunspot Number",
-    28 -> "Plasma Flow Pressure", 
-    50 -> "F10.7 Index")
+    28 -> "Plasma Flow Pressure",
+    50 -> "F10.7 Index"
+  )
 
   //The column indices corresponding to the year, day of year and hour respectively
   val dateColumns = List(0, 1, 2)
 
-  def getFilePattern(year: Int): String = "omni2_"+year+".csv"
+  def getFilePattern(year: Int): String = "omni2_" + year + ".csv"
 
 }
 
@@ -106,7 +116,8 @@ object OMNILoader {
     * */
   val dt_format: DateTimeFormatter = DateTimeFormat.forPattern("yyyy/D/H")
 
-  def get_download_url(year: Int): String = base_url + omni_uri + s"omni2_$year.dat"
+  def get_download_url(year: Int): String =
+    base_url + omni_uri + s"omni2_$year.dat"
 
   def download(year_range: Range = 2001 to 2017, path: Path): Unit = {
 
@@ -116,22 +127,30 @@ object OMNILoader {
     year_range.foreach(y => {
       print("Year: ")
       pprint.pprintln(y)
-      utils.downloadURL(get_download_url(y), (path/("omni2_"+y+".csv")).toString)
+      utils.downloadURL(
+        get_download_url(y),
+        (path / ("omni2_" + y + ".csv")).toString
+      )
     })
 
   }
+
   /**
     * Returns a [[io.github.mandar2812.dynaml.pipes.DataPipe]] which
     * reads an OMNI file cleans it and extracts the columns specified
     * by targetColumn and exogenousInputs.
     * */
-  def omniFileToStream(targetColumn: Int, exogenousInputs: Seq[Int]): DataPipe[String, Iterable[String]] =
+  def omniFileToStream(
+    targetColumn: Int,
+    exogenousInputs: Seq[Int]
+  ): DataPipe[String, Iterable[String]] =
     fileToStream >
-    replaceWhiteSpaces >
-    extractTrainingFeatures(
-      dateColumns++List(targetColumn)++exogenousInputs,
-      columnFillValues) >
-    removeMissingLines
+      replaceWhiteSpaces >
+      extractTrainingFeatures(
+        dateColumns ++ List(targetColumn) ++ exogenousInputs,
+        columnFillValues
+      ) >
+      removeMissingLines
 
   /**
     * Takes a stream of OMNI data records (each line is a comma separated string),
@@ -140,16 +159,21 @@ object OMNILoader {
     * the extracted quantities.
     * */
   val processWithDateTime = IterableDataPipe((line: String) => {
-    val splits = line.split(",")
+    val splits     = line.split(",")
     val num_splits = splits.length
 
     val dt_string = splits.take(3).mkString("/")
-    
-    val data = splits.takeRight(num_splits - 3).map(p => try {
-      p.toDouble
-    } catch {
-      case _: Exception => Double.NaN
-    })
+
+    val data = splits
+      .takeRight(num_splits - 3)
+      .map(
+        p =>
+          try {
+            p.toDouble
+          } catch {
+            case _: Exception => Double.NaN
+          }
+      )
 
     val timestamp = DateTime.parse(dt_string, dt_format)
     (timestamp, data.toSeq)
@@ -167,13 +191,18 @@ object OMNILoader {
     * }}}
     * */
   val forward_time_window = MetaPipe21(
-    (deltaT: Int, timelag: Int) => (lines: Iterable[(DateTime, Double)]) =>
-      lines.toList.sliding(deltaT+timelag+1).map(history => {
+    (deltaT: Int, timelag: Int) =>
+      (lines: Iterable[(DateTime, Double)]) =>
+        lines.toList
+          .sliding(deltaT + timelag + 1)
+          .map(history => {
 
-        val features: Seq[Double] = history.slice(deltaT, deltaT+timelag).map(_._2)
+            val features: Seq[Double] =
+              history.slice(deltaT, deltaT + timelag).map(_._2)
 
-        (history.head._1, features)
-      }).toStream
+            (history.head._1, features)
+          })
+          .toStream
   )
 
   /**
@@ -190,14 +219,43 @@ object OMNILoader {
     * }}}
     * */
   val forward_and_backward_time_window = MetaPipe21(
-    (past: Int, future: (Int, Int)) => (lines: Iterable[(DateTime, Double)]) =>
-      lines.toList.sliding(past+future._1+future._2+1).map(history => {
+    (past: Int, future: (Int, Int)) =>
+      (lines: Iterable[(DateTime, Double)]) =>
+        lines.toList
+          .sliding(past + future._1 + future._2 + 1)
+          .map(history => {
 
-        val features: Seq[Double] = history.slice(past+future._1, past+future._1+future._2).map(_._2)
-        val features_history: Seq[Double] = history.slice(0, past+1).map(_._2)
+            val features: Seq[Double] = history
+              .slice(past + future._1, past + future._1 + future._2)
+              .map(_._2)
+            val features_history: Seq[Double] =
+              history.slice(0, past + 1).map(_._2)
 
-        (history(past)._1, (features_history, features))
-      }).toIterable
+            (history(past)._1, (features_history, features))
+          })
+          .toIterable
+  )
+
+  val generalised_time_window = MetaPipe21(
+    (past: (Int, Int), future: (Int, Int)) =>
+      (lines: Iterable[(DateTime, Double)]) =>
+        lines.toList
+          .sliding(past._1 + past._2 + future._1 + future._2 + 1)
+          .map(history => {
+
+            val features: Seq[Double] = history
+              .slice(
+                past._1 + past._2 + future._1,
+                past._1 + past._2 + future._1 + future._2
+              )
+              .map(_._2)
+
+            val features_history: Seq[Double] =
+              history.slice(0, past._2 + 1).map(_._2)
+
+            (history(past._1 + past._2)._1, (features_history, features))
+          })
+          .toIterable
   )
 
   /**
@@ -206,20 +264,26 @@ object OMNILoader {
     * <b>Usage</b>: See [[forward_time_window]].
     * */
   val mv_forward_time_window = MetaPipe21(
-    (deltaT: Int, timelag: Int) => (lines: Iterable[(DateTime, Seq[Double])]) => {
-      val num_quantities = lines.head._2.length
+    (deltaT: Int, timelag: Int) =>
+      (lines: Iterable[(DateTime, Seq[Double])]) => {
+        val num_quantities = lines.head._2.length
 
-      lines.toList.sliding(deltaT+timelag+1).map(history => {
+        lines.toList
+          .sliding(deltaT + timelag + 1)
+          .map(history => {
 
-        val features: Seq[Seq[Double]] = history.slice(deltaT, deltaT+timelag).map(_._2)
+            val features: Seq[Seq[Double]] =
+              history.slice(deltaT, deltaT + timelag).map(_._2)
 
-        val proc_features: Seq[Seq[Double]] = (0 until num_quantities).map(q => {
-          features.map(_(q))
-        })
+            val proc_features: Seq[Seq[Double]] =
+              (0 until num_quantities).map(q => {
+                features.map(_(q))
+              })
 
-        (history.head._1, proc_features)
-      }).toStream
-    }
+            (history.head._1, proc_features)
+          })
+          .toStream
+      }
   )
 
   /**
@@ -238,7 +302,11 @@ object OMNILoader {
     *   val omni_process_pipe = OMNILoader.omniVarToSlidingTS(5, 10)(OMNIData.Quantities.Dst)
     * }}}
     * */
-  def omniVarToSlidingTS(deltaT: Int, time_window: Int)(targetColumn: Int = OMNIData.Quantities.V_SW) =
+  def omniVarToSlidingTS(
+    deltaT: Int,
+    time_window: Int
+  )(targetColumn: Int = OMNIData.Quantities.V_SW
+  ) =
     IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
       processWithDateTime >
       IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
@@ -261,9 +329,11 @@ object OMNILoader {
     * }}}
     * */
   def omniVarToSlidingTS(
-    past: Int, deltaT: Int,
-    time_window: Int)(
-    targetColumn: Int) =
+    past: Int,
+    deltaT: Int,
+    time_window: Int
+  )(targetColumn: Int
+  ) =
     IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
       processWithDateTime >
       IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
@@ -286,11 +356,36 @@ object OMNILoader {
     *   val omni_process_pipe = OMNILoader.omniVarToSlidingTS(5, 10)(OMNIData.Quantities.Dst)
     * }}}
     * */
-  def omniDataToSlidingTS(deltaT: Int, time_window: Int)(
-    targetColumn: Int = OMNIData.Quantities.V_SW,
-    exogenous_inputs: Seq[Int] = Seq()) =
+  def omniDataToSlidingTS(
+    deltaT: Int,
+    time_window: Int
+  )(targetColumn: Int = OMNIData.Quantities.V_SW,
+    exogenous_inputs: Seq[Int] = Seq()
+  ) =
     IterableFlatMapPipe(omniFileToStream(targetColumn, exogenous_inputs)) >
       processWithDateTime >
       mv_forward_time_window(deltaT, time_window)
+
+  /**
+    * Create a data processing pipeline which constructs
+    * a time window forward and backward in time.
+    *
+    * (t, x(t)) -> (t, ([x(t - p - q + 1), ..., x(t - p)], [x(t + f), ..., x(t + f + g - 1)]))
+    *
+    * @param past The historical limit; a tuple (p, q)
+    * @param future The future time slice; a tuple (f, g)
+    * @param targetColumn The column/quantity to select from
+    *                     the OMNI data.
+    *
+    */
+  def biDirectionalWindow(
+    past: (Int, Int),
+    future: (Int, Int)
+  )(targetColumn: Int
+  ) =
+    IterableFlatMapPipe(omniFileToStream(targetColumn, Seq())) >
+      processWithDateTime >
+      IterableDataPipe((p: (DateTime, Seq[Double])) => (p._1, p._2.head)) >
+      generalised_time_window(past, future)
 
 }

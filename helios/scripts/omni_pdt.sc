@@ -109,7 +109,7 @@ def setup_exp(
   val omni_ground =
     fte.data
       .load_solar_wind_data_bdv(start, end)(
-        causal_window,
+        (causal_window._1 - 1, causal_window._2 + 1),
         false,
         target_quantity
       )
@@ -127,7 +127,15 @@ def setup_exp(
         true
   )
 
-  val omni_pdt = omni.join(omni_ground).partition(tt_partition)
+  val difference_mat = DenseMatrix.tabulate(
+    causal_window._2, causal_window._2 + 1)(
+    (i, j) => if (i == j) -1d else if (i == j - 1) 1d else 0d)
+
+  val difference_op = DataPipe((v: DenseVector[Double]) => difference_mat * v)
+
+  val omni_pdt = omni.join(omni_ground).map(
+    identityPipe[DateTime]* (identityPipe[DenseVector[Double]] * difference_op)
+    ).partition(tt_partition)
 
   val sum_dir_prefix = "omni_pdt_"
 
