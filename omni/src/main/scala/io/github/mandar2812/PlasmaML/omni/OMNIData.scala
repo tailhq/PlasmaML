@@ -245,15 +245,15 @@ object OMNILoader {
 
             val features: Seq[Double] = history
               .slice(
-                past._1 + past._2 + future._1,
-                past._1 + past._2 + future._1 + future._2
+                past._1 + past._2 + future._1 - 1,
+                past._1 + past._2 + future._1 + future._2 - 1
               )
               .map(_._2)
 
             val features_history: Seq[Double] =
-              history.slice(0, past._2 + 1).map(_._2)
+              history.slice(0, past._2).map(_._2)
 
-            (history(past._1 + past._2)._1, (features_history, features))
+            (history(past._1 + past._2 - 1)._1, (features_history, features))
           })
           .toIterable
   )
