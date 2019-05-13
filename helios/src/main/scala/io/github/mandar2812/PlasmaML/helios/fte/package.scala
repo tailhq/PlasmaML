@@ -50,9 +50,26 @@ package object fte {
     Tensor[Double],
     FLOAT64,
     Shape,
+    FLOAT64,
     (Tensor[Double], Tensor[Double]),
     (FLOAT64, FLOAT64),
     (Shape, Shape)
+  ]
+
+  type ModelRunTuningSO[T] = helios.TunedModelRun2[
+    T,
+    DenseVector[Double],
+    Double,
+    Output[Double],
+    Output[Double],
+    Double,
+    Tensor[Double],
+    FLOAT64,
+    Shape,
+    FLOAT64,
+    Tensor[Double],
+    FLOAT64,
+    Shape
   ]
 
   //Customized layer based on Bala et. al
@@ -93,6 +110,11 @@ package object fte {
 
   type LG = dtflearn.tunable_tf_model.HyperParams => Layer[
     ((Output[Double], Output[Double]), Output[Double]),
+    Output[Double]
+  ]
+
+  type LG1 = dtflearn.tunable_tf_model.HyperParams => Layer[
+    (Output[Double], Output[Double]),
     Output[Double]
   ]
 
@@ -893,9 +915,20 @@ package object fte {
   }
 
   def exp_single_output(
-    num_neurons: Seq[Int] = Seq(30, 30),
-    activation_func: Int => Activation[Double] = timelag.utils.getReLUAct(1, _),
-    optimizer: tf.train.Optimizer = tf.train.Adam(0.001f),
+    architecture: Layer[Output[Double], Output[Double]],
+    hyper_params: List[String],
+    loss_func_generator: LG1,
+    hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[
+      Double
+    ]]],
+    fitness_func: Seq[
+      DataPipe2[Output[Double], Output[Double], Output[Float]]
+    ],
+    eval_metric_names: Seq[String] = Seq("mse"),
+    fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
+      DataPipe[Seq[Tensor[Float]], Double](s =>
+          s.map(_.scalar.toDouble).sum / s.length),
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
     year_range: Range = 2011 to 2017,
     test_year: Int = 2015,
     sw_threshold: Double = 700d,
@@ -903,15 +936,20 @@ package object fte {
     deltaTFTE: Int = 5,
     fteStep: Int = 1,
     latitude_limit: Double = 40d,
-    reg: Double = 0.0001,
     log_scale_fte: Boolean = false,
     log_scale_omni: Boolean = false,
     conv_flag: Boolean = false,
-    iterations: Int = 10000,
-    miniBatch: Int = 32,
+    optimizer: tf.train.Optimizer = tf.train.AdaDelta(0.001f),
+    iterations: Int = 50000,
+    iterations_tuning: Int = 10000,
+    miniBatch: Int = 128,
+    hyper_optimizer: String = "gs",
+    num_samples: Int = 4,
+    hyp_opt_iterations: Option[Int] = Some(5),
     fte_data_path: Path = home / 'Downloads / 'fte,
-    summary_top_dir: Path = home / 'tmp
-  ) = {
+    summary_top_dir: Path = home / 'tmp,
+    checkpointing_freq: Int = 1
+  ): helios.Experiment[Double, ModelRunTuningSO[DenseVector[Double]], FteOmniConfig] = {
 
     val sum_dir_prefix = "fte_omni"
 
@@ -935,7 +973,7 @@ package object fte {
 
     println("\nProcessing FTE Data")
 
-    val fte_data = load_fte_data(
+    val fte_data = load_fte_data_bdv(
       fte_data_path,
       carrington_rotations,
       log_scale_fte,
@@ -943,26 +981,27 @@ package object fte {
       end
     )(deltaTFTE, fteStep, latitude_limit, conv_flag)
 
-    FTExperiment.config = FTExperiment.config.copy(
-      fte_config = FTEConfig(
+    val experiment_config = FteOmniConfig(
+      FTEConfig(
         (year_range.min, year_range.max),
         deltaTFTE,
         fteStep,
         latitude_limit,
         log_scale_fte
-      )
+      ),
+      OMNIConfig((deltaT, 1), log_scale_omni, OMNIData.Quantities.V_SW),
+      multi_output = false,
+      probabilistic_time_lags = false,
+      timelag_prediction = "none",
+      fraction_variance = 1d
     )
 
     println("Processing OMNI solar wind data")
     val omni_data =
-      load_solar_wind_data(start, end)((deltaT, 1), log_scale_omni)
-
-    FTExperiment.config = FTExperiment.config.copy(
-      omni_config = OMNIConfig((deltaT, 1), log_scale_omni)
-    )
+      load_solar_wind_data_bdv2(start, end)((deltaT, 1), log_scale_omni)
 
     val tt_partition = DataPipe(
-      (p: (DateTime, (Tensor[Double], Tensor[Double]))) =>
+      (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
         if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
           false
         else
@@ -971,165 +1010,295 @@ package object fte {
 
     println("Constructing joined data set")
     val dataset =
-      fte_data.join(omni_data).partition(tt_partition)
+      fte_data
+        .join(omni_data)
+        .map(
+          identityPipe[DateTime] * DataPipe(
+            (p: (
+              DenseVector[Double],
+              (DenseVector[Double], DenseVector[Double])
+            )) => (DenseVector.vertcat(p._1, p._2._1), p._2._2)
+          )
+        )
+        .partition(tt_partition)
 
-    val input_dim = dataset.training_dataset.data.head._2._1.shape
-
-    val input = tf.learn.Input(FLOAT64, Shape(-1) ++ input_dim)
-
-    val trainInput = tf.learn.Input(FLOAT64, Shape(-1))
-
-    val summariesDir = java.nio.file.Paths.get(tf_summary_dir.toString())
+    val input_dim = dataset.training_dataset.data.head._2._1.size
 
     val num_pred_dims = 1
 
-    val (
-      net_layer_sizes,
-      layer_shapes,
-      layer_parameter_names,
-      layer_datatypes
-    ) =
-      timelag.utils.get_ffnet_properties(-1, num_pred_dims, num_neurons)
-
-    val filter_depths = Seq(
-      Seq(4, 4, 4, 4),
-      Seq(2, 2, 2, 2),
-      Seq(1, 1, 1, 1)
-    )
-
-    val activation = DataPipe[String, Layer[Output[Float], Output[Float]]](
-      (s: String) => tf.learn.ReLU(s, 0.01f)
-    )
-
-    //Prediction architecture
-    val architecture = if (conv_flag) {
-      tf.learn.Cast[Double, Float]("Cast/Input") >>
-        dtflearn.inception_unit[Float](
-          channels = 1,
-          num_filters = filter_depths.head,
-          activation_generator = activation,
-          use_batch_norm = true
-        )(layer_index = 1) >>
-        tf.learn.MaxPool[Float](
-          s"MaxPool_1",
-          Seq(1, 3, 3, 1),
-          2,
-          2,
-          SameConvPadding
-        ) >>
-        dtflearn.inception_unit[Float](
-          filter_depths.head.sum,
-          filter_depths(1),
-          activation,
-          use_batch_norm = true
-        )(layer_index = 2) >>
-        tf.learn.MaxPool[Float](
-          s"MaxPool_2",
-          Seq(1, 3, 3, 1),
-          2,
-          2,
-          SameConvPadding
-        ) >>
-        dtflearn.inception_unit[Float](
-          filter_depths(1).sum,
-          filter_depths.last,
-          activation,
-          use_batch_norm = true
-        )(layer_index = 3) >>
-        tf.learn.MaxPool[Float](
-          s"MaxPool_3",
-          Seq(1, 3, 3, 1),
-          2,
-          2,
-          SameConvPadding
-        ) >>
-        tf.learn.Flatten[Float]("FlattenFeatures") >>
-        tf.learn.Cast[Float, Double]("Cast/Input") >>
-        dtflearn.feedforward_stack[Double](activation_func)(
-          net_layer_sizes.tail
-        )
-    } else {
-      dtflearn.feedforward_stack(activation_func)(net_layer_sizes.tail)
-    }
-
-    val scope = dtfutils.get_scope(architecture) _
-
-    val layer_scopes = layer_parameter_names.map(n => scope(n.split("/").last))
-
-    val loss = tf.learn.L2Loss[Double, Double]("Loss/L2") >>
-      tf.learn.ScalarSummary("Loss/Error", "Error") >>
-      L2Regularization(
-        layer_scopes,
-        layer_parameter_names,
-        layer_datatypes,
-        layer_shapes,
-        reg,
-        "L2Reg"
-      ) >>
-      tf.learn.ScalarSummary("Loss/Net", "ModelLoss")
-
     println("Scaling data attributes")
-    val (scaled_data, scalers): SC_DATA = scale_dataset[Double].run(
-      dataset.copy(
-        training_dataset = dataset.training_dataset
-          .map((p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2),
-        test_dataset = dataset.test_dataset.map(
-          (p: (DateTime, (Tensor[Double], Tensor[Double]))) => p._2
-        )
+    val scalers = scale_data(dataset)
+
+    val data_size = dataset.training_dataset.size
+
+    val split_data = dataset.training_dataset.partition(
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Boolean](
+        _ => scala.util.Random.nextDouble() <= 0.7
       )
     )
 
-    val train_data_tf = {
-      scaled_data.training_dataset
-        .build[
-          (Tensor[Double], Tensor[Double]),
-          (Output[Double], Output[Double]),
-          (FLOAT64, FLOAT64),
-          (Shape, Shape)
-        ](
-          identityPipe[(Tensor[Double], Tensor[Double])],
-          (FLOAT64, FLOAT64),
-          (input_dim, Shape())
+    val input_shape = Shape(dataset.training_dataset.data.head._2._1.size)
+
+    val load_pattern_in_tensor =
+      IterableDataPipe(
+        tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])]
+      ) >
+        DataPipe[Iterable[(DenseVector[Double], DenseVector[Double])], (Tensor[Double], Tensor[Double])](
+          buffer => {
+            val (xs, ys)   = buffer.unzip
+            val bufferSize = buffer.toSeq.length
+
+            val xdim = xs.head.size
+            val ydim = ys.head.size
+
+            (
+              dtf.buffer_f64(
+                Shape(bufferSize, xdim),
+                xs.map(_.toArray).toArray.flatten
+              ),
+              dtf.buffer_f64(
+                Shape(bufferSize, ydim),
+                ys.map(_.toArray).toArray.flatten
+              )
+            )
+          }
         )
-        .repeat()
-        .shuffle(10)
-        .batch[(FLOAT64, FLOAT64), (Shape, Shape)](miniBatch)
-        .prefetch(10)
-    }
 
-    val (model, estimator) = dtflearn
-      .build_tf_model[Output[Double], Output[Double], Output[Double], Output[
-        Double
-      ], Double, (Output[Double], (Output[Double], Output[Double])), FLOAT64, Shape, FLOAT64, Shape](
-        architecture,
-        input,
-        trainInput,
-        loss,
-        optimizer,
-        summariesDir,
-        dtflearn.rel_loss_change_stop(0.005, iterations)
-      )(train_data_tf)
+    val load_input_batch =
+      DataPipe[Iterable[DenseVector[Double]], Tensor[Double]](buffer => {
+        val bufferSize = buffer.toSeq.length
 
-    val nTest = scaled_data.test_dataset.size
+        val xdim = buffer.head.size
+        dtf.buffer_f64(
+          Shape(bufferSize, xdim),
+          buffer.map(_.toArray).toArray.flatten
+        )
+      })
 
-    implicit val ev = concatTensorSplits[Double]
+    val concatPreds = dtfpipe.EagerConcatenate[Double](axis = 0)
 
-    val predictions: Tensor[Double] =
-      dtfutils.buffered_preds[Output[Double], Output[Double], Output[Double], Output[
-        Double
-      ], Double, Tensor[Double], FLOAT64, Shape, Tensor[Double], FLOAT64, Shape, Tensor[
-        Double
-      ], Tensor[Double], Tensor[Double]](
-        estimator,
-        tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._1), axis = 0),
-        500,
-        nTest
+    val tf_handle_ops_tuning = dtflearn.model.tf_data_handle_ops[
+      (DateTime, (DenseVector[Double], DenseVector[Double])),
+      (Tensor[Double], Tensor[Double]),
+      Tensor[Double],
+      (Output[Double], Output[Double])
+    ](
+      bufferSize = 4 * miniBatch,
+      patternToTensor = Some(load_pattern_in_tensor)//,
+      /* caching_mode =
+        dtflearn.model.data.FileCache(tf_summary_dir / "data_cache_tuning") */
+    )
+
+    val tf_handle_ops_test = dtflearn.model.tf_data_handle_ops[
+      (DateTime, (DenseVector[Double], DenseVector[Double])),
+      (Tensor[Double], Tensor[Double]),
+      Tensor[Double],
+      (Output[Double], Output[Double])
+    ](
+      bufferSize = 4 * miniBatch,
+      patternToTensor = Some(load_pattern_in_tensor),
+      concatOpO = Some(concatPreds)//,
+      /* caching_mode =
+        dtflearn.model.data.FileCache(tf_summary_dir / "data_cache_test") */
+    )
+
+    val tf_handle_input = dtflearn.model.tf_data_handle_ops[
+      DenseVector[Double],
+      Tensor[Double],
+      Tensor[Double],
+      Output[Double]
+    ](
+      bufferSize = 4 * miniBatch,
+      patternToTensor = Some(load_input_batch),
+      concatOpO = Some(concatPreds)
+    )
+
+    val tf_data_ops: dtflearn.model.Ops[(Output[Double], Output[Double])] =
+      dtflearn.model.data_ops(
+        shuffleBuffer = 10,
+        batchSize = miniBatch,
+        prefetchSize = 10
       )
 
-    val pred_targets = scalers._2.i(predictions).reshape(Shape(nTest))
+    val config_to_dir = DataPipe[Map[String, Double], String](
+      _.map(kv => s"${kv._1}#${kv._2}").mkString("_")
+    )
 
-    val stacked_targets =
-      tfi.stack(scaled_data.test_dataset.data.toSeq.map(_._2), axis = 0)
+    val train_config_tuning = dtflearn.tunable_tf_model.ModelConfigFunction(
+      DataPipe[Map[String, Double], Path](
+        h =>
+          dtflearn.tunable_tf_model.ModelFunction.get_summary_dir(
+            tf_summary_dir,
+            h,
+            Some(config_to_dir)
+          )
+      ),
+      DataPipe[Map[String, Double], dtflearn.model.Ops[
+        (
+          Output[Double],
+          Output[
+            Double
+          ]
+        )
+      ]](_ => tf_data_ops),
+      DataPipe((_: Map[String, Double]) => optimizer),
+      DataPipe(
+        (_: Map[String, Double]) =>
+          dtflearn.rel_loss_change_stop(0.005, iterations_tuning)
+      ),
+      DataPipe(
+        (h: Map[String, Double]) =>
+          Some(
+            timelag.utils.get_train_hooks(
+              tf_summary_dir / config_to_dir(h),
+              iterations_tuning,
+              false,
+              data_size,
+              miniBatch,
+              checkpointing_freq * 2,
+              checkpointing_freq
+            )
+          )
+      )
+    )
+
+    val train_config_test =
+      dtflearn.model.trainConfig(
+        summaryDir = tf_summary_dir,
+        data_processing = tf_data_ops,
+        optimizer = optimizer,
+        stopCriteria = dtflearn.rel_loss_change_stop(0.005, iterations),
+        trainHooks = Some(
+          timelag.utils.get_train_hooks(
+            tf_summary_dir,
+            iterations,
+            false,
+            data_size,
+            miniBatch,
+            checkpointing_freq * 2,
+            checkpointing_freq
+          )
+        )
+      )
+
+    val tunableTFModel = dtflearn.tunable_tf_model[
+      (DateTime, (DenseVector[Double], DenseVector[Double])),
+      Output[Double],
+      Output[Double],
+      Output[Double],
+      Double,
+      Tensor[Double],
+      FLOAT64,
+      Shape,
+      Tensor[Double],
+      FLOAT64,
+      Shape,
+      Tensor[Double],
+      FLOAT64,
+      Shape
+    ](
+      loss_func_generator,
+      hyper_params,
+      split_data.training_dataset,
+      tf_handle_ops_tuning,
+      fitness_func,
+      architecture,
+      (FLOAT64, input_shape),
+      (FLOAT64, Shape(1)),
+      train_config_tuning,
+      fitness_to_scalar = fitness_to_scalar,
+      validation_data = Some(split_data.test_dataset),
+      inMemory = false
+    )
+
+    val gs = hyper_optimizer match {
+      case "csa" =>
+        new CoupledSimulatedAnnealing[tunableTFModel.type](
+          tunableTFModel,
+          hyp_mapping
+        ).setMaxIterations(
+          hyp_opt_iterations.getOrElse(5)
+        )
+
+      case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
+
+      case "cma" =>
+        new CMAES[tunableTFModel.type](
+          tunableTFModel,
+          hyper_params,
+          learning_rate = 0.8,
+          hyp_mapping
+        ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+
+      case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+    }
+
+    gs.setPrior(hyper_prior)
+
+    gs.setNumSamples(num_samples)
+
+    println(
+      "--------------------------------------------------------------------"
+    )
+    println("Initiating model tuning")
+    println(
+      "--------------------------------------------------------------------"
+    )
+
+    val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
+
+    println(
+      "--------------------------------------------------------------------"
+    )
+    println("\nModel tuning complete")
+    println("Chosen configuration:")
+    pprint.pprintln(config)
+    println(
+      "--------------------------------------------------------------------"
+    )
+
+    println("Training final model based on chosen configuration")
+
+    write(
+      tf_summary_dir / "state.csv",
+      config.keys.mkString(start = "", sep = ",", end = "\n") +
+        config.values.mkString(start = "", sep = ",", end = "")
+    )
+
+    val best_model = tunableTFModel.train_model(
+      config,
+      Some(train_config_test),
+      Some(eval_metric_names.zip(fitness_func)),
+      Some(iterations / checkpointing_freq)
+    )
+
+    val nTest = dataset.test_dataset.size
+
+    val extract_features = tup2_2[
+      DateTime,
+      (DenseVector[Double], DenseVector[Double])
+    ] > tup2_1[DenseVector[Double], DenseVector[Double]]
+
+    val model_predictions_test = best_model.infer_batch(
+      dataset.test_dataset.map(extract_features),
+      tf_handle_input
+    )
+
+    val scaler_targets_tf = GaussianScalerTF(
+      dtf.tensor_f64(num_pred_dims)(scalers._2.mean.toArray.toSeq: _*),
+      dtf.tensor_f64(num_pred_dims)(scalers._2.sigma.toArray.toSeq: _*)
+    )
+
+    val pred_targets = model_predictions_test match {
+      case Left(pred_tensor) =>
+        scaler_targets_tf.i(pred_tensor).reshape(Shape(nTest))
+      case Right(pred_coll) =>
+        tfi.stack(pred_coll.map(scaler_targets_tf.i).data.toSeq, axis = 0)
+    }
+
+    val stacked_targets = Tensor(
+      dataset.test_dataset.data.toSeq.map(_._2._2.toArray.head)
+    ).reshape(Shape(nTest))
 
     val reg_metrics = if (log_scale_omni) {
       new RegressionMetricsTF(pred_targets.exp, stacked_targets.exp)
@@ -1137,27 +1306,18 @@ package object fte {
       new RegressionMetricsTF(pred_targets, stacked_targets)
     }
 
-    val experiment_config = helios.ExperimentConfig(
-      multi_output = false,
-      probabilistic_time_lags = false,
-      "single-output"
-    )
-
-    val results = helios.SupervisedModelRun(
-      (scaled_data, scalers),
-      model,
-      estimator,
+    val results = helios.TunedModelRun2(
+      (dataset, scalers),
+      best_model,
       None,
       Some(reg_metrics),
       tf_summary_dir,
       None,
-      Some(pred_targets)
+      None
     )
 
-    helios.ExperimentResult(
+    helios.Experiment(
       experiment_config,
-      dataset.training_dataset,
-      dataset.test_dataset,
       results
     )
 

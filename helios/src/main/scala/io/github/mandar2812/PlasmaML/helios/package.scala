@@ -264,14 +264,13 @@ package object helios {
     IT,
     ID,
     IS,
+    TD,
     ITT,
     IDD,
     ISS
   ](data_and_scales: (TFDataSet[(DateTime, (InputPattern, OutputPattern))],
       (Scaler[InputPattern], ReversibleScaler[OutputPattern])),
-    model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], DataType[
-      T
-    ], Shape, ITT, IDD, ISS],
+    model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], TD, Shape, ITT, IDD, ISS],
     metrics_train: Option[RegressionMetricsTF[T]],
     metrics_test: Option[RegressionMetricsTF[T]],
     summary_dir: Path,
@@ -287,9 +286,7 @@ package object helios {
       (Scaler[InputPattern], ReversibleScaler[OutputPattern])
 
     override type MODEL =
-      TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[
-        T
-      ], DataType[T], Shape, ITT, IDD, ISS]
+      TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], TD, Shape, ITT, IDD, ISS]
 
     override type ESTIMATOR =
       Option[dtflearn.SupEstimatorTF[
@@ -1442,7 +1439,10 @@ package object helios {
       Tensor[UByte],
       (Tensor[Double], Tensor[Double]),
       Output[UByte]
-    ](patternToTensor = Some(dtfpipe.EagerStack[UByte](axis = 0)), concatOpO = Some(concatPreds))
+    ](
+      patternToTensor = Some(dtfpipe.EagerStack[UByte](axis = 0)),
+      concatOpO = Some(concatPreds)
+    )
 
     val tunableTFModel: TunableTFModel[
       (DateTime, (Tensor[UByte], Tensor[Double])),
