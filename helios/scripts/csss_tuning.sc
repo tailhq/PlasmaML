@@ -1,5 +1,6 @@
 import $exec.helios.scripts.csss
 import $exec.helios.scripts.csss_pdt_model_tuning
+import $exec.helios.scripts.csss_so_tuning
 import $exec.helios.scripts.env
 
 val time_window = (72, 48)
@@ -28,7 +29,7 @@ val csss_exp = csss_pdt_model_tuning(
   log_scale_omni = false,
   log_scale_fte = true,
   time_window = time_window,
-  ts_transform_output = avg_sw_6h,
+  ts_transform_output = identityPipe[Seq[Double]],//avg_sw_6h,
   network_size = Seq(40, 40),
   use_persistence = true,
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f), //tf.learn.Sigmoid(s"Act_$i"),
@@ -67,12 +68,13 @@ val res = csss_so_tuning(
   start_year = 2014,
   end_year = 2015,
   test_year = 2015,
-  network_size = Seq(50),
-  crop_latitude = 15d,
+  network_size = Seq(40, 40),
+  crop_latitude = 20d,
+  log_scale_fte = true,
   use_persistence = true,
-  activation_func = (i: Int) => tf.learn.Sigmoid(s"Act_$i"),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   optimization_algo = tf.train.Adam(0.001f),
-  max_iterations = 40000,
-  max_iterations_tuning = 10000,
+  max_iterations = ext_iterations,
+  max_iterations_tuning = base_iterations,
   num_samples = 1
 )

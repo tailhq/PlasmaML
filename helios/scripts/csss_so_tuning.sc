@@ -98,12 +98,6 @@ def apply(
       .toMap
   )
 
-  val fitness_to_scalar =
-    DataPipe[Seq[Tensor[Float]], Double](s => {
-      val metrics = s.map(_.scalar.toDouble)
-      //metrics(1) / metrics.head
-      metrics.head
-    })
 
   val loss_func_generator = (h: Map[String, Double]) => {
 
@@ -137,9 +131,18 @@ def apply(
 
   val fitness_func = Seq(
     DataPipe2[Output[Double], Output[Double], Output[Float]](
-      (p, t) => p.subtract(t).square.mean(axes = 1).castTo[Float]
+      (p, t) => p.subtract(t).square.sum(axes = -1).mean().castTo[Float]
+    ),
+    DataPipe2[Output[Double], Output[Double], Output[Float]](
+      (p, t) => p.subtract(t).abs.sum(axes = -1).mean().castTo[Float]
     )
   )
+
+  val fitness_to_scalar =
+    DataPipe[Seq[Tensor[Float]], Double](s => {
+      val metrics = s.map(_.scalar.toDouble)
+      metrics.sum/metrics.length
+    })
 
   fte.exp_single_output(
     architecture,

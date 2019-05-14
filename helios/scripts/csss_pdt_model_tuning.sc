@@ -266,30 +266,6 @@ def apply(
 
   val output_scope = scope("Outputs")
 
-  implicit val detImpl = DynaMLPipe.identityPipe[Double]
-
-  val h: PushforwardMap[Double, Double, Double] = PushforwardMap(
-    DataPipe((x: Double) => math.exp(x)),
-    DifferentiableMap((x: Double) => math.log(x), (x: Double) => 1.0 / x)
-  )
-
-  val h10: PushforwardMap[Double, Double, Double] = PushforwardMap(
-    DataPipe((x: Double) => math.pow(10d, x)),
-    DifferentiableMap(
-      (x: Double) => math.log10(x),
-      (x: Double) => 1.0 / (x * math.log(10d))
-    )
-  )
-
-  val g1 = GaussianRV(0.0, 0.75)
-
-  val g2 = GaussianRV(0.2, 0.75)
-
-  val lg_p = h -> g1
-  val lg_e = h -> g2
-
-  val lu_reg = h10 -> UniformRV(-4d, -2.5d)
-
   val hyp_scaling = hyper_prior.map(
     p =>
       (
