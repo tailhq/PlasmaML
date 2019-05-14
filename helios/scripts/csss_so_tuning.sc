@@ -19,6 +19,7 @@ import breeze.numerics.sigmoid
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
+
 @main
 def apply(
   start_year: Int = 2011,

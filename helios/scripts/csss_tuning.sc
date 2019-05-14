@@ -65,8 +65,8 @@ helios.visualise_cdt_results(
 )
 
 val res = csss_so_tuning(
-  start_year = 2014,
-  end_year = 2015,
+  start_year = 2013,
+  end_year = 2016,
   test_year = 2015,
   network_size = Seq(40, 40),
   crop_latitude = 20d,
@@ -76,5 +76,6 @@ val res = csss_so_tuning(
   optimization_algo = tf.train.Adam(0.001f),
   max_iterations = ext_iterations,
   max_iterations_tuning = base_iterations,
+  batch_size = 32,
   num_samples = 1
 )
