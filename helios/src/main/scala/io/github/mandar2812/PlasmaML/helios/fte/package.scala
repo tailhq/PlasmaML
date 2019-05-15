@@ -6,7 +6,7 @@ import breeze.stats._
 import breeze.linalg.{DenseVector, DenseMatrix}
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
-import io.github.mandar2812.dynaml.utils.GaussianScaler
+import io.github.mandar2812.dynaml.utils.{GaussianScaler, MinMaxScaler}
 import io.github.mandar2812.dynaml.evaluation._
 import io.github.mandar2812.dynaml.optimization._
 import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
@@ -211,7 +211,7 @@ package object fte {
     val data_size = dataset.training_dataset.size
 
     println("Scaling data attributes")
-    val scalers = scale_data(dataset)
+    val scalers = scale_data_min_max(dataset)
 
     val split_data = dataset.training_dataset.partition(
       DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Boolean](
@@ -520,15 +520,19 @@ package object fte {
       final_targets,
       unscaled_preds_test,
       pred_time_lags_test
-    ) = process_predictions_bdv(
+    ) = process_predictions_bdv[DenseVector[Double], MinMaxScaler](
       dataset.test_dataset,
       predictions,
       scalers,
       causal_window,
-      mo_flag = true,
-      prob_timelags = true,
       log_scale_omni = log_scale_targets,
-      scale_actual_targets = false
+      scale_actual_targets = false,
+      DataPipe((g: MinMaxScaler) => {
+        MinMaxScalerTF(
+          dtf.tensor_f64(causal_window)(scalers._2.min.toArray.toSeq: _*),
+          dtf.tensor_f64(causal_window)(scalers._2.max.toArray.toSeq: _*)
+        )
+      })
     )
 
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
@@ -550,15 +554,19 @@ package object fte {
         final_targets_train,
         unscaled_preds_train,
         pred_time_lags_train
-      ) = process_predictions_bdv(
+      ) = process_predictions_bdv[DenseVector[Double], MinMaxScaler](
         dataset.training_dataset,
         predictions_train,
         scalers,
         causal_window,
-        mo_flag = true,
-        prob_timelags = true,
         log_scale_omni = log_scale_targets,
-        scale_actual_targets = true
+        scale_actual_targets = true,
+        DataPipe((g: MinMaxScaler) => {
+          MinMaxScalerTF(
+            dtf.tensor_f64(causal_window)(scalers._2.min.toArray.toSeq: _*),
+            dtf.tensor_f64(causal_window)(scalers._2.max.toArray.toSeq: _*)
+          )
+        })
       )
 
       val reg_metrics_train =
@@ -828,21 +836,17 @@ package object fte {
     (final_predictions, final_targets, unscaled_preds_test, pred_time_lags_test)
   }
 
-  def process_predictions_bdv[T](
+  def process_predictions_bdv[T, S <: ReversibleScaler[DenseVector[Double]]](
     scaled_data: DataSet[(DateTime, (T, DenseVector[Double]))],
     predictions: (Tensor[Double], Tensor[Double]),
-    scalers: (Scaler[T], GaussianScaler),
+    scalers: (Scaler[T], S),
     causal_window: Int,
-    mo_flag: Boolean,
-    prob_timelags: Boolean,
     log_scale_omni: Boolean,
-    scale_actual_targets: Boolean
+    scale_actual_targets: Boolean,
+    get_tensor_scaler: DataPipe[S, ReversibleScaler[Tensor[Double]]]
   ) = {
 
-    val scaler_targets_tf = GaussianScalerTF(
-      dtf.tensor_f64(causal_window)(scalers._2.mean.toArray.toSeq: _*),
-      dtf.tensor_f64(causal_window)(scalers._2.sigma.toArray.toSeq: _*)
-    )
+    val scaler_targets_tf = get_tensor_scaler(scalers._2)
 
     val nTest = scaled_data.size
 
@@ -852,16 +856,16 @@ package object fte {
       Shape(causal_window)
     )
 
-    val pred_time_lags_test: Tensor[Double] = if (prob_timelags) {
+    val pred_time_lags_test: Tensor[Double] = {
       val unsc_probs = predictions._2
 
       unsc_probs.topK(1)._2.reshape(Shape(nTest)).castTo[Double]
 
-    } else predictions._2
+    }
 
     val unscaled_preds_test = scaler_targets_tf.i(predictions._1)
 
-    val pred_targets_test: Tensor[Double] = if (mo_flag) {
+    val pred_targets_test: Tensor[Double] = {
 
       val repeated_times =
         tfi.stack(Seq.fill(causal_window)(pred_time_lags_test.floor), axis = -1)
@@ -873,8 +877,6 @@ package object fte {
         .multiply(conv_kernel)
         .sum(axes = 1)
         .divide(conv_kernel.sum(axes = 1))
-    } else {
-      scaler_targets_tf(0).i(predictions._1)
     }
 
     val test_labels = scaled_data.data

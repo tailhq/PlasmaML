@@ -672,6 +672,8 @@ package object data {
 
   type SCALES = (GaussianScaler, GaussianScaler)
 
+  type MinMaxSCALES = (MinMaxScaler, MinMaxScaler)
+
   def scale_data(
     data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
   ): SCALES = {
@@ -732,6 +734,68 @@ package object data {
     (GaussianScaler(mean_f, sigma_f), GaussianScaler(mean_t, sigma_t))
   }
 
+
+  def scale_data_min_max(
+    data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
+  ): MinMaxSCALES = {
+    val (min_f, max_f) = dutils.getMinMax(
+      data.training_dataset
+        .map(
+          tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_1[
+            DenseVector[Double],
+            DenseVector[Double]
+          ]
+        )
+        .data
+    )
+
+    val (min_t, max_t) = dutils.getMinMax(
+      data.training_dataset
+        .map(
+          tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_2[
+            DenseVector[Double],
+            DenseVector[Double]
+          ]
+        )
+        .data
+    )
+
+    val (delta_f, delta_t) = (
+      max_f - min_f,
+      max_t - min_t
+    )
+
+    val std_training =
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+        p => {
+
+          //Standardize features
+          p._2._1 :-= min_f
+          p._2._1 :/= delta_f
+
+          //Standardize targets
+          p._2._2 :-= min_t
+          p._2._2 :/= delta_t
+
+        }
+      )
+
+    val std_test =
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+        p => {
+
+          //Standardize only features
+          p._2._1 :-= min_f
+          p._2._1 :/= delta_f
+
+        }
+      )
+
+    data.training_dataset.foreach(std_training)
+    data.test_dataset.foreach(std_test)
+    (MinMaxScaler(min_f, max_f), MinMaxScaler(min_t, max_t))
+  }
+
   /**
     * Creates a DynaML data set consisting of time FTE values.
     * The FTE values are loaded in a [[Tensor]] object.
@@ -790,9 +854,10 @@ package object data {
     )
 
     val load_slice_to_tensor = DataPipe[Seq[FTEPattern], DenseVector[Double]](
-      (s: Seq[FTEPattern]) =>
-        DenseVector(s.map(_._3.get).map(log_transformation).toArray :+ s.head._1)
-    )
+      (s: Seq[FTEPattern]) => {
+        val xs: Seq[Double] = Seq(s.head._1) ++ s.map(_._2) ++ s.map(_._3.get).map(log_transformation)
+        DenseVector(xs.toArray)
+      })
 
     val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
       (DateTime, Seq[FTEPattern])
