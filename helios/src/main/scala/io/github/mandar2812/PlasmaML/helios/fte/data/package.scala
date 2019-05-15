@@ -167,8 +167,6 @@ package object data {
     def _3: Option[Double] = data._3
   }
 
-  //type FTEPattern = FTEPattern
-
   val process_fte_file = {
     fte_file >> (
       trimLines >
@@ -793,7 +791,7 @@ package object data {
 
     val load_slice_to_tensor = DataPipe[Seq[FTEPattern], DenseVector[Double]](
       (s: Seq[FTEPattern]) =>
-        DenseVector(s.map(_._3.get).map(log_transformation).toArray)
+        DenseVector(s.map(_._3.get).map(log_transformation).toArray :+ s.head._1)
     )
 
     val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
