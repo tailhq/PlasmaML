@@ -855,7 +855,7 @@ package object data {
 
     val load_slice_to_tensor = DataPipe[Seq[FTEPattern], DenseVector[Double]](
       (s: Seq[FTEPattern]) => {
-        val xs: Seq[Double] = Seq(s.head._1) ++ s.map(_._2) ++ s.map(_._3.get).map(log_transformation)
+        val xs: Seq[Double] = Seq(s.head._1) /* ++ s.map(_._2) */ ++ s.map(_._3.get).map(log_transformation)
         DenseVector(xs.toArray)
       })
 
