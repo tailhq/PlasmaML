@@ -47,12 +47,12 @@ val csss_exp = csss_pdt_model_tuning(
   fte_step = 0,
   history_fte = 0,
   log_scale_omni = false,
-  log_scale_fte = true,
+  log_scale_fte = false,
   time_window = time_window,
   ts_transform_output = median_sw_6h,
   network_size = Seq(60, 60),
   use_persistence = true,
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
   hyper_optimizer = "gs",
   num_samples = 4,
   quantity = OMNIData.Quantities.V_SW,
@@ -65,6 +65,7 @@ val csss_exp = csss_pdt_model_tuning(
   optimization_algo = tf.train.Adam(0.001f),
   summary_dir = env.summary_dir,
   get_training_preds = true,
+  data_scaling = "gauss",
   existing_exp = None //csss.experiments().lastOption
 )
 

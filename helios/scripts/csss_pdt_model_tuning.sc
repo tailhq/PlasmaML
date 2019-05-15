@@ -21,121 +21,121 @@ import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 
 def setup_exp_data(
-    year_range: Range = 2011 to 2017,
-    test_year: Int = 2015,
-    sw_threshold: Double = 700d,
-    quantity: Int = OMNIData.Quantities.V_SW,
-    ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
-      identityPipe[Seq[Double]],
-    deltaT: (Int, Int) = (48, 72),
-    use_persistence: Boolean = false,
-    deltaTFTE: Int = 5,
-    fteStep: Int = 1,
-    latitude_limit: Double = 40d,
-    fraction_pca: Double = 0.8,
-    log_scale_fte: Boolean = false,
-    log_scale_omni: Boolean = false,
-    conv_flag: Boolean = false,
-    fte_data_path: Path = home / 'Downloads / 'fte,
-    summary_top_dir: Path = home / 'tmp,
-    existing_exp: Option[Path] = None
-  ): (fte.data.FteOmniConfig, Path) = {
-    val mo_flag: Boolean       = true
-    val prob_timelags: Boolean = true
+  year_range: Range = 2011 to 2017,
+  test_year: Int = 2015,
+  sw_threshold: Double = 700d,
+  quantity: Int = OMNIData.Quantities.V_SW,
+  ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
+    identityPipe[Seq[Double]],
+  deltaT: (Int, Int) = (48, 72),
+  use_persistence: Boolean = false,
+  deltaTFTE: Int = 5,
+  fteStep: Int = 1,
+  latitude_limit: Double = 40d,
+  fraction_pca: Double = 0.8,
+  log_scale_fte: Boolean = false,
+  log_scale_omni: Boolean = false,
+  conv_flag: Boolean = false,
+  fte_data_path: Path = home / 'Downloads / 'fte,
+  summary_top_dir: Path = home / 'tmp,
+  existing_exp: Option[Path] = None
+): (fte.data.FteOmniConfig, Path) = {
+  val mo_flag: Boolean       = true
+  val prob_timelags: Boolean = true
 
-    val urv = UniformRV(0d, 1d)
+  val urv = UniformRV(0d, 1d)
 
-    val sum_dir_prefix = if (conv_flag) "fte_omni_conv" else "fte_omni"
+  val sum_dir_prefix = if (conv_flag) "fte_omni_conv" else "fte_omni"
 
-    val dt = DateTime.now()
+  val dt = DateTime.now()
 
-    val summary_dir_index = {
-      if (mo_flag) sum_dir_prefix + "_mo_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
-      else sum_dir_prefix + "_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
-    }
-
-    val tf_summary_dir_tmp =
-      existing_exp.getOrElse(summary_top_dir / summary_dir_index)
-
-    val adj_fraction_pca = 1d
-
-    val experiment_config = fte.data.FteOmniConfig(
-      fte.data.FTEConfig(
-        (year_range.min, year_range.max),
-        deltaTFTE,
-        fteStep,
-        latitude_limit,
-        log_scale_fte
-      ),
-      fte.data.OMNIConfig(deltaT, log_scale_omni, quantity, use_persistence),
-      multi_output = true,
-      probabilistic_time_lags = true,
-      timelag_prediction = "mode",
-      fraction_variance = adj_fraction_pca
-    )
-
-    val existing_config = fte.data.read_exp_config(tf_summary_dir_tmp / "config.json")
-
-    val use_cached_config: Boolean =
-    fte.data._config_match(tf_summary_dir_tmp, experiment_config)
-
-    val tf_summary_dir = if (use_cached_config) {
-      println("Using provided experiment directory to continue experiment")
-      tf_summary_dir_tmp
-    } else {
-      println(
-        "Ignoring provided experiment directory and starting fresh experiment"
-      )
-
-      fte.data.write_exp_config(experiment_config, summary_top_dir / summary_dir_index)
-
-      summary_top_dir / summary_dir_index
-    }
-
-    val use_cached_data = if (use_cached_config) {
-      fte.data._dataset_serialized(tf_summary_dir)
-    } else {
-      false
-    }
-
-    val (test_start, test_end) = (
-      new DateTime(test_year, 1, 1, 0, 0),
-      new DateTime(test_year, 12, 31, 23, 59)
-    )
-
-    val tt_partition = DataPipe(
-      (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
-        if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
-          false
-        else
-          true
-    )
-
-    if (!use_cached_data) {
-
-      val dataset =
-        fte.data.generate_dataset(
-          fte_data_path,
-          experiment_config,
-          ts_transform_output,
-          tt_partition,
-          conv_flag
-        )
-
-      println("Serializing data sets")
-      fte.data.write_data_set(
-        dt.toString("YYYY-MM-dd-HH-mm"),
-        dataset,
-        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
-        DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
-        tf_summary_dir
-      )
-    }
-
-    (experiment_config, tf_summary_dir)
+  val summary_dir_index = {
+    if (mo_flag) sum_dir_prefix + "_mo_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
+    else sum_dir_prefix + "_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
   }
 
+  val tf_summary_dir_tmp =
+    existing_exp.getOrElse(summary_top_dir / summary_dir_index)
 
+  val adj_fraction_pca = 1d
+
+  val experiment_config = fte.data.FteOmniConfig(
+    fte.data.FTEConfig(
+      (year_range.min, year_range.max),
+      deltaTFTE,
+      fteStep,
+      latitude_limit,
+      log_scale_fte
+    ),
+    fte.data.OMNIConfig(deltaT, log_scale_omni, quantity, use_persistence),
+    multi_output = true,
+    probabilistic_time_lags = true,
+    timelag_prediction = "mode",
+    fraction_variance = adj_fraction_pca
+  )
+
+  val existing_config =
+    fte.data.read_exp_config(tf_summary_dir_tmp / "config.json")
+
+  val use_cached_config: Boolean =
+    fte.data._config_match(tf_summary_dir_tmp, experiment_config)
+
+  val tf_summary_dir = if (use_cached_config) {
+    println("Using provided experiment directory to continue experiment")
+    tf_summary_dir_tmp
+  } else {
+    println(
+      "Ignoring provided experiment directory and starting fresh experiment"
+    )
+
+    fte.data
+      .write_exp_config(experiment_config, summary_top_dir / summary_dir_index)
+
+    summary_top_dir / summary_dir_index
+  }
+
+  val use_cached_data = if (use_cached_config) {
+    fte.data._dataset_serialized(tf_summary_dir)
+  } else {
+    false
+  }
+
+  val (test_start, test_end) = (
+    new DateTime(test_year, 1, 1, 0, 0),
+    new DateTime(test_year, 12, 31, 23, 59)
+  )
+
+  val tt_partition = DataPipe(
+    (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
+      if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
+        false
+      else
+        true
+  )
+
+  if (!use_cached_data) {
+
+    val dataset =
+      fte.data.generate_dataset(
+        fte_data_path,
+        experiment_config,
+        ts_transform_output,
+        tt_partition,
+        conv_flag
+      )
+
+    println("Serializing data sets")
+    fte.data.write_data_set(
+      dt.toString("YYYY-MM-dd-HH-mm"),
+      dataset,
+      DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
+      DataPipe[DenseVector[Double], Seq[Double]](_.toArray.toSeq),
+      tf_summary_dir
+    )
+  }
+
+  (experiment_config, tf_summary_dir)
+}
 @main
 def apply(
   start_year: Int = 2011,
@@ -170,7 +170,8 @@ def apply(
   get_training_preds: Boolean = false,
   reg_type: String = "L2",
   existing_exp: Option[Path] = None,
-  checkpointing_freq: Int = 1
+  checkpointing_freq: Int = 1,
+  data_scaling: String = "gauss"
 ): helios.Experiment[Double, fte.ModelRunTuning[DenseVector[Double]], fte.data.FteOmniConfig] = {
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
@@ -187,8 +188,12 @@ def apply(
 
   val output_mapping = {
 
-    val outputs_segment =
+    val outputs_segment = if(data_scaling == "gauss") {
       tf.learn.Linear[Double]("Outputs", sliding_window)
+    } else {
+      tf.learn.Linear[Double]("Outputs", sliding_window) >>
+        tf.learn.Sigmoid("ScaledOutputs")
+    }
 
     val timelag_segment =
       tf.learn.Linear[Double]("TimeLags", sliding_window) >>
@@ -381,7 +386,7 @@ def apply(
     conv_flag = conv_flag,
     fte_data_path = home / 'Downloads / 'fte,
     summary_top_dir = summary_dir,
-    existing_exp = existing_exp,
+    existing_exp = existing_exp
   )
 
   val results = fte.run_exp(
@@ -406,7 +411,8 @@ def apply(
     existing_exp,
     fitness_to_scalar,
     checkpointing_freq,
-    experiment_config.omni_config.log_flag
+    experiment_config.omni_config.log_flag,
+    data_scaling = data_scaling
   )
 
   helios.Experiment(

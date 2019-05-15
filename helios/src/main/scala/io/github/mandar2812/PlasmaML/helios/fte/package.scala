@@ -182,7 +182,8 @@ package object fte {
       DataPipe[Seq[Tensor[Float]], Double](s =>
           s.map(_.scalar.toDouble).sum / s.length),
     checkpointing_freq: Int = 5,
-    log_scale_targets: Boolean = true
+    log_scale_targets: Boolean = true,
+    data_scaling: String = "gauss"
   ): ModelRunTuning[DenseVector[Double]] = {
 
     require(
@@ -211,7 +212,13 @@ package object fte {
     val data_size = dataset.training_dataset.size
 
     println("Scaling data attributes")
-    val scalers = scale_data_min_max(dataset)
+    val scalers: Either[SCALES, MinMaxSCALES] = if (data_scaling == "gauss") {
+      println("Performing Gaussian Scaling")
+      Left(scale_data(dataset))
+    } else {
+      println("Performing 0-1 Scaling")
+      Right(scale_data_min_max(dataset))
+    }
 
     val split_data = dataset.training_dataset.partition(
       DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Boolean](
@@ -520,20 +527,39 @@ package object fte {
       final_targets,
       unscaled_preds_test,
       pred_time_lags_test
-    ) = process_predictions_bdv[DenseVector[Double], MinMaxScaler](
-      dataset.test_dataset,
-      predictions,
-      scalers,
-      causal_window,
-      log_scale_omni = log_scale_targets,
-      scale_actual_targets = false,
-      DataPipe((g: MinMaxScaler) => {
-        MinMaxScalerTF(
-          dtf.tensor_f64(causal_window)(scalers._2.min.toArray.toSeq: _*),
-          dtf.tensor_f64(causal_window)(scalers._2.max.toArray.toSeq: _*)
+    ) = scalers match {
+      case Left(g_scalers) =>
+        process_predictions_bdv[DenseVector[Double], GaussianScaler](
+          dataset.test_dataset,
+          predictions,
+          g_scalers,
+          causal_window,
+          log_scale_omni = log_scale_targets,
+          scale_actual_targets = false,
+          DataPipe((g: GaussianScaler) => {
+            GaussianScalerTF(
+              dtf.tensor_f64(causal_window)(g_scalers._2.mean.toArray.toSeq: _*),
+              dtf.tensor_f64(causal_window)(g_scalers._2.sigma.toArray.toSeq: _*)
+            )
+          })
         )
-      })
-    )
+
+      case Right(mm_scalers) =>
+        process_predictions_bdv[DenseVector[Double], MinMaxScaler](
+          dataset.test_dataset,
+          predictions,
+          mm_scalers,
+          causal_window,
+          log_scale_omni = log_scale_targets,
+          scale_actual_targets = false,
+          DataPipe((g: MinMaxScaler) => {
+            MinMaxScalerTF(
+              dtf.tensor_f64(causal_window)(mm_scalers._2.min.toArray.toSeq: _*),
+              dtf.tensor_f64(causal_window)(mm_scalers._2.max.toArray.toSeq: _*)
+            )
+          })
+        )
+    }
 
     val reg_metrics = new RegressionMetricsTF(final_predictions, final_targets)
 
@@ -554,20 +580,43 @@ package object fte {
         final_targets_train,
         unscaled_preds_train,
         pred_time_lags_train
-      ) = process_predictions_bdv[DenseVector[Double], MinMaxScaler](
-        dataset.training_dataset,
-        predictions_train,
-        scalers,
-        causal_window,
-        log_scale_omni = log_scale_targets,
-        scale_actual_targets = true,
-        DataPipe((g: MinMaxScaler) => {
-          MinMaxScalerTF(
-            dtf.tensor_f64(causal_window)(scalers._2.min.toArray.toSeq: _*),
-            dtf.tensor_f64(causal_window)(scalers._2.max.toArray.toSeq: _*)
+      ) = scalers match {
+        case Left(g_scalers) =>
+          process_predictions_bdv[DenseVector[Double], GaussianScaler](
+            dataset.training_dataset,
+            predictions_train,
+            g_scalers,
+            causal_window,
+            log_scale_omni = log_scale_targets,
+            scale_actual_targets = true,
+            DataPipe((g: GaussianScaler) => {
+              GaussianScalerTF(
+                dtf.tensor_f64(causal_window)(
+                  g_scalers._2.mean.toArray.toSeq: _*
+                ),
+                dtf.tensor_f64(causal_window)(
+                  g_scalers._2.sigma.toArray.toSeq: _*
+                )
+              )
+            })
           )
-        })
-      )
+
+        case Right(mm_scalers) =>
+          process_predictions_bdv[DenseVector[Double], MinMaxScaler](
+            dataset.training_dataset,
+            predictions_train,
+            mm_scalers,
+            causal_window,
+            log_scale_omni = log_scale_targets,
+            scale_actual_targets = true,
+            DataPipe((g: MinMaxScaler) => {
+              MinMaxScalerTF(
+                dtf.tensor_f64(causal_window)(mm_scalers._2.min.toArray.toSeq: _*),
+                dtf.tensor_f64(causal_window)(mm_scalers._2.max.toArray.toSeq: _*)
+              )
+            })
+          )
+      }
 
       val reg_metrics_train =
         new RegressionMetricsTF(final_predictions_train, final_targets_train)
@@ -602,15 +651,29 @@ package object fte {
       (None, None)
     }
 
-    val results = helios.TunedModelRun2(
-      (dataset, scalers),
-      best_model,
-      reg_metrics_train,
-      Some(reg_metrics),
-      tf_summary_dir,
-      preds_train,
-      Some((final_predictions, pred_time_lags_test))
-    )
+    val results = scalers match {
+      case Left(g_scalers) =>
+        helios.TunedModelRun2(
+          (dataset, g_scalers),
+          best_model,
+          reg_metrics_train,
+          Some(reg_metrics),
+          tf_summary_dir,
+          preds_train,
+          Some((final_predictions, pred_time_lags_test))
+        )
+
+      case Right(mm_scalers) =>
+        helios.TunedModelRun2(
+          (dataset, mm_scalers),
+          best_model,
+          reg_metrics_train,
+          Some(reg_metrics),
+          tf_summary_dir,
+          preds_train,
+          Some((final_predictions, pred_time_lags_test))
+        )
+    }
 
     println("Writing model predictions: Test Data")
     helios.write_predictions[Double](
