@@ -853,12 +853,16 @@ package object data {
         )
     )
 
-    val load_slice_to_tensor = DataPipe[Seq[FTEPattern], DenseVector[Double]](
-      (s: Seq[FTEPattern]) => {
-        val xs: Seq[Double] = Seq(s.head._1) /* ++ s.map(_._2) */ ++ s.map(_._3.get).map(log_transformation)
-        DenseVector(xs.toArray)
+    val load_slice_to_tensor = DataPipe[(DateTime, Seq[FTEPattern]), (DateTime, DenseVector[Double])](
+      (s: (DateTime, Seq[FTEPattern])) => {
+
+        val num_days_year = new DateTime(s._1.getYear, 12, 31).getDayOfYear()
+        val t: Double = s._1.getDayOfYear.toDouble / num_days_year
+        val xs: Seq[Double] = Seq(t, s._2.head._1) ++ s._2.map(_._3.get).map(log_transformation)
+        (s._1, DenseVector(xs.toArray))
       })
 
+    
     val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
       (DateTime, Seq[FTEPattern])
     ]](
@@ -881,7 +885,7 @@ package object data {
         )
         .filter(DataPipe(_._2.length == 180))
         .map(crop_data_by_latitude)
-        .map(identityPipe[DateTime] * load_slice_to_tensor)
+        .map(load_slice_to_tensor)
         .to_zip(identityPipe[(DateTime, DenseVector[Double])])
     }
 
