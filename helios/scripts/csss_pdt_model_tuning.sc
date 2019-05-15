@@ -19,6 +19,7 @@ import breeze.numerics.sigmoid
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
+import org.platanios.tensorflow.api.learn.Mode
 
 def setup_exp_data(
   year_range: Range = 2011 to 2017,
@@ -202,6 +203,31 @@ def apply(
     dtflearn.bifurcation_layer("PDTNet", outputs_segment, timelag_segment)
   }
 
+  val output_mapping2 = {
+
+    val outputs_segment = if(data_scaling == "gauss") {
+      tf.learn.Linear[Double]("Outputs", sliding_window)
+    } else {
+      tf.learn.Linear[Double]("Outputs", sliding_window) >>
+        tf.learn.Sigmoid("ScaledOutputs")
+    }
+
+    val time_lag_segment = 
+      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
+        tf.learn.Softmax[Double]("Probability/Softmax")
+
+    val select_outputs = dtflearn.layer(
+      "Cast/Outputs",
+      MetaPipe[Mode, (Output[Double], Output[Double]), Output[Double]](_ => o => o._1)
+    )
+
+    val output_segment = 
+      dtflearn.bifurcation_layer("Bifurcation", outputs_segment, dtflearn.identity[Output[Double]]("ProjectFeat")) >>
+        dtflearn.bifurcation_layer("PDT", select_outputs, dtflearn.concat_tuple2[Double]("Concat_Out_Feat", 1) >> time_lag_segment)
+
+    output_segment
+  }
+
   val hyper_parameters = List(
     "sigma_sq",
     "alpha",
@@ -258,11 +284,11 @@ def apply(
       tf.learn.Flatten("FlattenFeatures") >>
       tf.learn.Cast[Float, Double]("Cast/Output") >>
       dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
-      output_mapping
+      output_mapping2
   } else {
     dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >>
       activation_func(net_layer_sizes.tail.length) >>
-      output_mapping
+      output_mapping2
   }
 
   val scope = dtfutils.get_scope(architecture) _
