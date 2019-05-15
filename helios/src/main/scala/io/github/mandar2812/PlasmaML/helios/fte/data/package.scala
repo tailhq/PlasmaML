@@ -856,7 +856,7 @@ package object data {
     val load_slice_to_tensor = DataPipe[(DateTime, Seq[FTEPattern]), (DateTime, DenseVector[Double])](
       (s: (DateTime, Seq[FTEPattern])) => {
 
-        val num_days_year = new DateTime(s._1.getYear, 12, 31).getDayOfYear()
+        val num_days_year = new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
         val t: Double = s._1.getDayOfYear.toDouble / num_days_year
         val xs: Seq[Double] = Seq(t, s._2.head._1) ++ s._2.map(_._3.get).map(log_transformation)
         (s._1, DenseVector(xs.toArray))

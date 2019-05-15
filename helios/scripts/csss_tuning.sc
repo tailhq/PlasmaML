@@ -39,7 +39,7 @@ val base_it_pdt = 2
 def ext_it_pdt  = base_it_pdt + 1
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2014,
+  start_year = 2012,
   end_year = 2016,
   test_year = 2016,
   crop_latitude = 5d,
@@ -49,7 +49,7 @@ val csss_exp = csss_pdt_model_tuning(
   log_scale_omni = false,
   log_scale_fte = false,
   time_window = time_window,
-  ts_transform_output = max_sw_6h,
+  ts_transform_output = median_sw_6h,
   network_size = Seq(80),
   use_persistence = true,
   activation_func = (i: Int) => tf.learn.Sigmoid(s"Act_$i"),//timelag.utils.getReLUAct3[Double](1, 1, i, 0.001f),
