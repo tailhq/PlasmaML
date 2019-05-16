@@ -484,13 +484,6 @@ package object fte {
         run_tuning()
       }
 
-    println("Chosen configuration:")
-    pprint.pprintln(config)
-    println(
-      "--------------------------------------------------------------------"
-    )
-
-    println("Training final model based on chosen configuration")
 
     val (best_model, best_config) = pdtModel.build(
       pdt_iterations_test,
