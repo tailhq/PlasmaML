@@ -16,6 +16,7 @@ import io.github.mandar2812.dynaml.probability._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.utils._
 import io.github.mandar2812.dynaml.{utils => dutils}
+import io.github.mandar2812.dynaml.analysis.implicits._
 import _root_.io.github.mandar2812.PlasmaML.omni.{OMNIData, OMNILoader}
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
@@ -27,6 +28,7 @@ import _root_.org.json4s.jackson.Serialization.{
   write => write_json
 }
 import org.json4s.jackson.JsonMethods._
+import nom.tam.fits._
 
 package object data {
 
@@ -160,14 +162,67 @@ package object data {
       }
   )
 
-  case class FTEPattern(data: (Double, Double, Option[Double])) extends AnyVal {
+  val brss_file = MetaPipe(
+    (data_path: Path) =>
+      (carrington_rotation: Int) =>
+        data_path / s"GONGbrss_csss${carrington_rotation}HR.fits"
+  )
+
+//Some hard-coded meta data for FTE/Bss files.
+//The latitude discretization
+  val latitude_grid = {
+    dutils
+      .range[Double](-1d, 1d, 360)
+      .map(math.asin)
+      .map(math.toDegrees)
+      .zipWithIndex
+      .filter(c => c._2 > 0 && c._2 <= 359 && c._2 % 2 == 1)
+      .map(_._1)
+      .map(x => BigDecimal.binary(x, new java.math.MathContext(4)).toDouble)
+  }
+
+//The longitude discretization
+  val longitude_grid = (1 to 360).map(_.toDouble)
+
+  case class HelioPattern(data: (Double, Double, Option[Double]))
+      extends AnyVal {
 
     def _1: Double         = data._1
     def _2: Double         = data._2
     def _3: Option[Double] = data._3
+
+    def lat: Double           = _2
+    def lon: Double           = _1
+    def value: Option[Double] = _3
   }
 
-  val process_fte_file = {
+  val fits_file_to_array = DataPipe((file: Path) => {
+    new Fits(file.toString)
+      .getHDU(0)
+      .getKernel()
+      .asInstanceOf[Array[Array[Float]]]
+      .toIterable
+  })
+
+  val fits_array_to_collection = DataPipe(
+    (arr: Iterable[Array[Float]]) =>
+      latitude_grid
+        .zip(arr)
+        .flatMap(
+          (s: (Double, Array[Float])) =>
+            longitude_grid
+              .zip(s._2)
+              .map(
+                (p: (Double, Float)) =>
+                  HelioPattern(p._1, s._1, Some(p._2.toDouble))
+              )
+        )
+        .toIterable
+  )
+
+  val read_brss_file = brss_file >> (fits_file_to_array > fits_array_to_collection)
+
+  val read_fte_file = {
     fte_file >> (
       trimLines >
         replaceWhiteSpaces >
@@ -181,7 +236,7 @@ package object data {
             case _: Exception => None
           }
 
-          FTEPattern(lon, lat, fte)
+          HelioPattern(lon, lat, fte)
 
         })
     )
@@ -203,36 +258,98 @@ package object data {
   def get_fte_for_rotation(
     data_path: Path
   )(cr: Int
-  ): Iterable[(Int, Iterable[FTEPattern])] =
+  ): Iterable[(Int, Iterable[HelioPattern])] =
     try {
-      Iterable((cr, process_fte_file(data_path)(cr)))
+      Iterable((cr, read_fte_file(data_path)(cr)))
     } catch {
       case _: java.nio.file.NoSuchFileException => Iterable()
     }
 
-  val process_rotation
-    : DataPipe[(Int, (CarringtonRotation, Iterable[FTEPattern])), Iterable[
-      (DateTime, FTEPattern)
-    ]] = DataPipe(
+  /**
+    * Load the source surface radial magnetic field (Brss) data.
+    *
+    * Assumes the files have the schema
+    * ""GONGbrss_csss{carrington_rotation}HR.fits""
+    *
+    * @param data_path Path containing the FTE data files.
+    * @param cr The Carrington rotation number
+    *
+    * @throws java.nio.file.NoSuchFileException if the files cannot be
+    *                                           found in the specified location
+    * */
+  def get_brss_for_rotation(
+    data_path: Path
+  )(cr: Int
+  ): Iterable[(Int, Iterable[HelioPattern])] =
+    try {
+      Iterable((cr, read_brss_file(data_path)(cr)))
+    } catch {
+      case _: java.nio.file.NoSuchFileException => Iterable()
+    }
+
+  val process_timestamps_rotation: DataPipe[
+    (Int, (CarringtonRotation, Iterable[HelioPattern])),
+    Iterable[(DateTime, HelioPattern)]
+  ] = DataPipe(
     (rotation_data) => {
 
-      val (_, (rotation, fte)) = rotation_data
+      val (_, (rotation, data)) = rotation_data
 
       val duration = new Duration(rotation.start, rotation.end)
 
       val time_jump = duration.getMillis / 360.0
 
-      val time_stamp = (p: FTEPattern) =>
+      val time_stamp = (p: HelioPattern) =>
         rotation.end.toInstant
-          .minus((time_jump * p._1).toLong)
+          .minus((time_jump * p.lon).toLong)
           .toDateTime
 
-      fte.map(
+      data.map(
         p =>
           (
             time_stamp(p),
             p
           )
+      )
+
+    }
+  )
+
+  val process_timestamps_rotation2: DataPipe[
+    (
+      Int,
+      (CarringtonRotation, (Iterable[HelioPattern], Iterable[HelioPattern]))
+    ),
+    (Iterable[(DateTime, HelioPattern)], Iterable[(DateTime, HelioPattern)])
+  ] = DataPipe(
+    (rotation_data) => {
+
+      val (_, (rotation, (fte, brss))) = rotation_data
+
+      val duration = new Duration(rotation.start, rotation.end)
+
+      val time_jump = duration.getMillis / 360.0
+
+      val time_stamp = (p: HelioPattern) =>
+        rotation.end.toInstant
+          .minus((time_jump * p.lon).toLong)
+          .toDateTime
+
+      (
+        fte.map(
+          p =>
+            (
+              time_stamp(p),
+              p
+            )
+        ),
+        brss.map(
+          p =>
+            (
+              time_stamp(p),
+              p
+            )
+        )
       )
 
     }
@@ -277,11 +394,11 @@ package object data {
     val end_rotation =
       carrington_rotation_table.filter(_._2.contains(end)).data.head._1
 
-    val clamp_fte: FTEPattern => FTEPattern = (p: FTEPattern) =>
+    val clamp_fte: HelioPattern => HelioPattern = (p: HelioPattern) =>
       p._3 match {
         case Some(f) =>
           if (math.abs(f) <= 1000d) p
-          else FTEPattern(p._1, p._2, Some(1000d * math.signum(f)))
+          else HelioPattern(p._1, p._2, Some(1000d * math.signum(f)))
         case None => p
       }
 
@@ -291,9 +408,11 @@ package object data {
       .dataset(start_rotation to end_rotation)
       .flatMap(load_fte_for_rotation)
       .map(
-        identityPipe[Int] * IterableDataPipe[FTEPattern, FTEPattern](clamp_fte)
+        identityPipe[Int] * IterableDataPipe[HelioPattern, HelioPattern](
+          clamp_fte
+        )
       )
-      .to_zip(identityPipe[(Int, Iterable[FTEPattern])])
+      .to_zip(identityPipe[(Int, Iterable[HelioPattern])])
 
     val fte_data = carrington_rotation_table.join(fte)
 
@@ -305,36 +424,38 @@ package object data {
         } else x
 
     val crop_data_by_latitude = DataPipe(
-      (pattern: (DateTime, Seq[FTEPattern])) =>
+      (pattern: (DateTime, Seq[HelioPattern])) =>
         (
           pattern._1,
           pattern._2.filter(ftep => math.abs(ftep._2) <= latitude_limit)
         )
     )
 
-    val load_slice_to_tensor = DataPipe[Seq[FTEPattern], Tensor[Double]](
-      (s: Seq[FTEPattern]) =>
+    val load_slice_to_tensor = DataPipe[Seq[HelioPattern], Tensor[Double]](
+      (s: Seq[HelioPattern]) =>
         dtf.tensor_f64(s.length)(s.map(_._3.get).map(log_transformation): _*)
     )
 
-    val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
-      (DateTime, Seq[FTEPattern])
-    ]](
-      _.toSeq.sortBy(_._1)
-    )
+    val sort_by_date =
+      DataPipe[Iterable[(DateTime, Seq[HelioPattern])], Iterable[
+        (DateTime, Seq[HelioPattern])
+      ]](
+        _.toSeq.sortBy(_._1)
+      )
 
-    val sort_by_latitude = DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[
-      (DateTime, Seq[FTEPattern])
-    ]](
-      _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
-    )
+    val group_by_time_sort_by_latitude =
+      DataPipe[Iterable[(DateTime, HelioPattern)], Iterable[
+        (DateTime, Seq[HelioPattern])
+      ]](
+        _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
+      )
 
     val processed_fte_data = {
       fte_data
         .flatMap(
-          process_rotation >
-            IterableDataPipe(image_dt_roundoff * identityPipe[FTEPattern]) >
-            sort_by_latitude >
+          process_timestamps_rotation >
+            IterableDataPipe(image_dt_roundoff * identityPipe[HelioPattern]) >
+            group_by_time_sort_by_latitude >
             sort_by_date
         )
         .filter(DataPipe(_._2.length == 180))
@@ -734,7 +855,6 @@ package object data {
     (GaussianScaler(mean_f, sigma_f), GaussianScaler(mean_t, sigma_t))
   }
 
-
   def scale_data_min_max(
     data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
   ): MinMaxSCALES = {
@@ -818,25 +938,15 @@ package object data {
     val end_rotation =
       carrington_rotation_table.filter(_._2.contains(end)).data.head._1
 
-    val clamp_fte: FTEPattern => FTEPattern = (p: FTEPattern) =>
-      p._3 match {
-        case Some(f) =>
-          if (math.abs(f) <= 1000d) p
-          else FTEPattern(p._1, p._2, Some(1000d * math.signum(f)))
-        case None => p
-      }
-
-    val load_fte_for_rotation = DataPipe(get_fte_for_rotation(data_path) _)
-
-    val fte = dtfdata
-      .dataset(start_rotation to end_rotation)
-      .flatMap(load_fte_for_rotation)
-      .map(
-        identityPipe[Int] * IterableDataPipe[FTEPattern, FTEPattern](clamp_fte)
-      )
-      .to_zip(identityPipe[(Int, Iterable[FTEPattern])])
-
-    val fte_data = carrington_rotation_table.join(fte)
+    val clamp_fte: DataPipe[HelioPattern, HelioPattern] = DataPipe(
+      (p: HelioPattern) =>
+        p._3 match {
+          case Some(f) =>
+            if (math.abs(f) <= 1000d) p
+            else HelioPattern(p._1, p._2, Some(1000d * math.signum(f)))
+          case None => p
+        }
+    )
 
     val log_transformation =
       (x: Double) =>
@@ -845,54 +955,124 @@ package object data {
           else math.log10(math.abs(x))
         } else x
 
+    val log_fte: DataPipe[HelioPattern, HelioPattern] = DataPipe(p => {
+      val new_val = p.value.map(log_transformation)
+      HelioPattern(p.lon, p.lat, new_val)
+    })
+
+    /* val load_fte_for_rotation  = DataPipe(get_fte_for_rotation(data_path) _)
+    val load_brss_for_rotation = DataPipe(get_brss_for_rotation(data_path) _) */
+
+    /* val fte = dtfdata
+      .dataset(start_rotation to end_rotation)
+      .flatMap(load_fte_for_rotation)
+      .map(
+        identityPipe[Int] * IterableDataPipe[HelioPattern, HelioPattern](
+          clamp_fte
+        )
+      )
+      .to_zip(identityPipe[(Int, Iterable[HelioPattern])])
+
+    val fte_data = carrington_rotation_table.join(fte) */
+
     val crop_data_by_latitude = DataPipe(
-      (pattern: (DateTime, Seq[FTEPattern])) =>
+      (pattern: (DateTime, Seq[HelioPattern])) =>
         (
           pattern._1,
-          pattern._2.filter(ftep => math.abs(ftep._2) <= latitude_limit)
+          pattern._2.filter(ftep => math.abs(ftep.lat) <= latitude_limit)
         )
     )
 
-    val load_slice_to_tensor = DataPipe[(DateTime, Seq[FTEPattern]), (DateTime, DenseVector[Double])](
-      (s: (DateTime, Seq[FTEPattern])) => {
+    val load_slice_to_bdv =
+      DataPipe[(DateTime, Seq[HelioPattern]), (DateTime, DenseVector[Double])](
+        (s: (DateTime, Seq[HelioPattern])) => {
 
-        val num_days_year = new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
-        val t: Double = s._1.getDayOfYear.toDouble / num_days_year
-        val xs: Seq[Double] = Seq(t, s._2.head._1) ++ s._2.map(_._3.get).map(log_transformation)
-        (s._1, DenseVector(xs.toArray))
-      })
+          val num_days_year =
+            new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
+          val t: Double = s._1.getDayOfYear.toDouble / num_days_year
+          val xs: Seq[Double] = Seq(t, s._2.head._1) ++ s._2
+            .map(_._3.get)
+          (s._1, DenseVector(xs.toArray))
+        }
+      )
 
-    
-    val sort_by_date = DataPipe[Iterable[(DateTime, Seq[FTEPattern])], Iterable[
-      (DateTime, Seq[FTEPattern])
-    ]](
-      _.toSeq.sortBy(_._1)
+    val sort_by_date =
+      DataPipe[
+        Iterable[(DateTime, Seq[HelioPattern])],
+        Iterable[(DateTime, Seq[HelioPattern])]
+      ](
+        _.toSeq.sortBy(_._1)
+      )
+
+    val group_by_time_sort_by_latitude =
+      DataPipe[
+        Iterable[(DateTime, HelioPattern)],
+        Iterable[(DateTime, Seq[HelioPattern])]
+      ](
+        _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_.lat)))
+      )
+
+    val sort_data =
+      IterableDataPipe(image_dt_roundoff * identityPipe[HelioPattern]) >
+        group_by_time_sort_by_latitude >
+        sort_by_date
+
+    val zip_fte_brss = DataPipe2(
+      (
+        fte: Iterable[(DateTime, Seq[HelioPattern])],
+        brss: Iterable[(DateTime, Seq[HelioPattern])]
+      ) => fte.zip(brss).map(p => (p._1._1, p._1._2 ++ p._2._2))
     )
 
-    val sort_by_latitude = DataPipe[Iterable[(DateTime, FTEPattern)], Iterable[
-      (DateTime, Seq[FTEPattern])
-    ]](
-      _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
-    )
+    val data = dtfdata
+      .dataset(start_rotation to end_rotation)
+      .map(
+        BifurcationPipe(
+          identityPipe[Int],
+          BifurcationPipe(read_fte_file(data_path), read_brss_file(data_path))
+        )
+      )
+      .map(
+        identityPipe[Int] * (
+          IterableDataPipe[HelioPattern, HelioPattern](clamp_fte > log_fte) *
+            identityPipe[Iterable[HelioPattern]]
+        )
+      )
+      .to_zip(
+        identityPipe[(Int, (Iterable[HelioPattern], Iterable[HelioPattern]))]
+      )
 
-    val processed_fte_data = {
+    val data_per_rotation = carrington_rotation_table.join(data)
+
+    val processed_data =
+      carrington_rotation_table
+        .join(data)
+        .flatMap(
+          process_timestamps_rotation2 > duplicate(sort_data) > zip_fte_brss
+        )
+        .filter(DataPipe(_._2.length == 360))
+        .map(crop_data_by_latitude)
+        .map(load_slice_to_bdv)
+        .to_zip(identityPipe[(DateTime, DenseVector[Double])])
+
+    /* val processed_fte_data = {
       fte_data
         .flatMap(
-          process_rotation >
-            IterableDataPipe(image_dt_roundoff * identityPipe[FTEPattern]) >
-            sort_by_latitude >
+          process_timestamps_rotation >
+            IterableDataPipe(image_dt_roundoff * identityPipe[HelioPattern]) >
+            group_by_time_sort_by_latitude >
             sort_by_date
         )
         .filter(DataPipe(_._2.length == 180))
         .map(crop_data_by_latitude)
-        .map(load_slice_to_tensor)
+        .map(load_slice_to_bdv)
         .to_zip(identityPipe[(DateTime, DenseVector[Double])])
     }
-
+     */
     println("Interpolating FTE values to fill hourly cadence requirement")
 
     val interpolated_fte = dtfdata.dataset(
-      processed_fte_data.data
+      processed_data.data
         .sliding(2)
         .filter(p => new Duration(p.head._1, p.last._1).getStandardHours > 1)
         .flatMap(i => {
@@ -931,7 +1111,7 @@ package object data {
         else s
     )
 
-    processed_fte_data
+    processed_data
       .concatenate(interpolated_fte)
       .transform(
         DataPipe[Iterable[(DateTime, DenseVector[Double])], Iterable[
@@ -1029,7 +1209,9 @@ package object data {
     }
 
     val omni_processing =
-      OMNILoader.biDirectionalWindow((27*24 - deltaT._1, deltaT._2), deltaT)(quantity) >
+      OMNILoader.biDirectionalWindow((27 * 24 - deltaT._1, deltaT._2), deltaT)(
+        quantity
+      ) >
         IterableDataPipe(
           (p: (DateTime, (Seq[Double], Seq[Double]))) =>
             p._1.isAfter(start) && p._1.isBefore(end)

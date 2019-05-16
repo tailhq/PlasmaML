@@ -86,7 +86,8 @@ object Dependencies {
     "joda-time" % "joda-time" % "2.10",
     "org.joda" % "joda-convert" % "2.1",
     "org.json4s" %% "json4s-native" % "3.6.2",
-    "com.typesafe.slick" %% "slick" % "3.2.3"
+    "com.typesafe.slick" %% "slick" % "3.2.3",
+    "gov.nasa.gsfc.heasarc" % "nom-tam-fits" % "1.15.2"
   )
 
   val dynaMLDependency = Seq(dynamlGroupID %% dynamlArtifact % dynaMLVersion)

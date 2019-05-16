@@ -189,7 +189,7 @@ def apply(
 
   val output_mapping = {
 
-    val outputs_segment = if(data_scaling == "gauss") {
+    val outputs_segment = if (data_scaling == "gauss") {
       tf.learn.Linear[Double]("Outputs", sliding_window)
     } else {
       tf.learn.Linear[Double]("Outputs", sliding_window) >>
@@ -205,25 +205,37 @@ def apply(
 
   val output_mapping2 = {
 
-    val outputs_segment = if(data_scaling == "gauss") {
+    val outputs_segment = if (data_scaling == "gauss") {
       tf.learn.Linear[Double]("Outputs", sliding_window)
     } else {
       tf.learn.Linear[Double]("Outputs", sliding_window) >>
         tf.learn.Sigmoid("ScaledOutputs")
     }
 
-    val time_lag_segment = 
-      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
+    val time_lag_segment =
+      tf.learn.Sigmoid[Double](s"Act_Prob") >>
+        tf.learn.Linear[Double]("TimeLags", sliding_window) >>
         tf.learn.Softmax[Double]("Probability/Softmax")
 
     val select_outputs = dtflearn.layer(
       "Cast/Outputs",
-      MetaPipe[Mode, (Output[Double], Output[Double]), Output[Double]](_ => o => o._1)
+      MetaPipe[Mode, (Output[Double], Output[Double]), Output[Double]](
+        _ => o => o._1
+      )
     )
 
-    val output_segment = 
-      dtflearn.bifurcation_layer("Bifurcation", outputs_segment, dtflearn.identity[Output[Double]]("ProjectFeat")) >>
-        dtflearn.bifurcation_layer("PDT", select_outputs, dtflearn.concat_tuple2[Double]("Concat_Out_Feat", 1) >> time_lag_segment)
+    val output_segment =
+      dtflearn.bifurcation_layer(
+        "Bifurcation",
+        outputs_segment,
+        dtflearn.identity[Output[Double]]("ProjectFeat")
+      ) >>
+        dtflearn.bifurcation_layer(
+          "PDT",
+          select_outputs,
+          dtflearn
+            .concat_tuple2[Double]("Concat_Out_Feat", 1) >> time_lag_segment
+        )
 
     output_segment
   }
