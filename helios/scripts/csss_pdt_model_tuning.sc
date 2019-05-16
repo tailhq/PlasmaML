@@ -212,10 +212,14 @@ def apply(
         tf.learn.Sigmoid("ScaledOutputs")
     }
 
-    val time_lag_segment =
+    val time_lag_segment = if(data_scaling == "gauss") {
       tf.learn.Sigmoid[Double](s"Act_Prob") >>
         tf.learn.Linear[Double]("TimeLags", sliding_window) >>
         tf.learn.Softmax[Double]("Probability/Softmax")
+    } else {
+      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
+        tf.learn.Softmax[Double]("Probability/Softmax")
+    }
 
     val select_outputs = dtflearn.layer(
       "Cast/Outputs",
@@ -249,7 +253,7 @@ def apply(
   val persistent_hyper_parameters = List("reg")
 
   val hyper_prior = Map(
-    "reg"      -> UniformRV(-5d, -3d),
+    "reg"      -> UniformRV(-6d, -4d),
     "alpha"    -> UniformRV(0.75d, 2d),
     "sigma_sq" -> UniformRV(1e-5, 5d)
   )
