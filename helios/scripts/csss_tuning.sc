@@ -31,17 +31,17 @@ val median_sw_24h = DataPipe(
   (xs: Seq[Double]) => xs.grouped(24).map(g => dutils.median(g.toStream)).toSeq
 )
 
-val fact            = 8
-val base_iterations = 40000
+val fact            = 15
+val base_iterations = 80000
 def ext_iterations  = base_iterations * fact
 
-val base_it_pdt = 2
-def ext_it_pdt  = base_it_pdt + 1
+val base_it_pdt = 3
+def ext_it_pdt  = base_it_pdt + 2
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2012,
+  start_year = 2008,
   end_year = 2016,
-  test_year = 2016,
+  test_year = 2015,
   crop_latitude = 5d,
   fraction_pca = 1d,
   fte_step = 0,
@@ -50,14 +50,14 @@ val csss_exp = csss_pdt_model_tuning(
   log_scale_fte = false,
   time_window = time_window,
   ts_transform_output = median_sw_6h,
-  network_size = Seq(80),
+  network_size = Seq(40, 80),
   use_persistence = true,
-  activation_func = (i: Int) => tf.learn.Sigmoid(s"Act_$i"),//timelag.utils.getReLUAct3[Double](1, 1, i, 0.001f),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
   num_samples = 4,
   quantity = OMNIData.Quantities.V_SW,
   reg_type = "L2",
-  batch_size = 128,
+  batch_size = 64,
   max_iterations = ext_iterations,
   max_iterations_tuning = base_iterations,
   pdt_iterations_tuning = base_it_pdt,
