@@ -212,7 +212,7 @@ def apply(
         tf.learn.Sigmoid("ScaledOutputs")
     }
 
-    val time_lag_segment = if(data_scaling == "gauss") {
+    val time_lag_segment = if (data_scaling == "gauss") {
       tf.learn.Sigmoid[Double](s"Act_Prob") >>
         tf.learn.Linear[Double]("TimeLags", sliding_window) >>
         tf.learn.Softmax[Double]("Probability/Softmax")
@@ -228,34 +228,33 @@ def apply(
       )
     )
 
-    val output_segment =
+    dtflearn.bifurcation_layer(
+      "Bifurcation",
+      outputs_segment,
+      dtflearn.identity[Output[Double]]("ProjectFeat")
+    ) >>
       dtflearn.bifurcation_layer(
-        "Bifurcation",
-        outputs_segment,
-        dtflearn.identity[Output[Double]]("ProjectFeat")
-      ) >>
-        dtflearn.bifurcation_layer(
-          "PDT",
-          select_outputs,
-          dtflearn
-            .concat_tuple2[Double]("Concat_Out_Feat", 1) >> time_lag_segment
-        )
-
-    output_segment
+        "PDT",
+        select_outputs,
+        dtflearn
+          .concat_tuple2[Double]("Concat_Out_Feat", 1) >> time_lag_segment
+      )
   }
 
   val hyper_parameters = List(
     "sigma_sq",
     "alpha",
-    "reg"
+    "reg",
+    "reg_output"
   )
 
-  val persistent_hyper_parameters = List("reg")
+  val persistent_hyper_parameters = List("reg", "reg_output")
 
   val hyper_prior = Map(
-    "reg"      -> UniformRV(-5.5d, -4d),
-    "alpha"    -> UniformRV(0.75d, 2d),
-    "sigma_sq" -> UniformRV(1e-5, 5d)
+    "reg"        -> UniformRV(-5.5d, -4d),
+    "reg_output" -> UniformRV(-6.5d, -5d),
+    "alpha"      -> UniformRV(0.75d, 2d),
+    "sigma_sq"   -> UniformRV(1e-5, 5d)
   )
 
   val params_enc = Encoder(
@@ -352,25 +351,46 @@ def apply(
     val reg =
       if (reg_type == "L2")
         L2Regularization[Double](
-          layer_scopes /* :+ output_scope */,
-          layer_parameter_names /* :+ "Outputs/Weights" */,
-          layer_datatypes /* :+ "FLOAT64" */,
-          layer_shapes /* :+ Shape(network_size.last, sliding_window) */,
+          layer_scopes,
+          layer_parameter_names,
+          layer_datatypes,
+          layer_shapes,
           math.exp(h("reg")),
           "L2Reg"
         )
       else
         L1Regularization[Double](
-          layer_scopes /* :+ output_scope */,
-          layer_parameter_names /* :+ "Outputs/Weights" */,
-          layer_datatypes /* :+ "FLOAT64" */,
-          layer_shapes /* :+ Shape(network_size.last, sliding_window) */,
+          layer_scopes,
+          layer_parameter_names,
+          layer_datatypes,
+          layer_shapes,
           math.exp(h("reg")),
+          "L1Reg"
+        )
+
+    val reg_output =
+      if (reg_type == "L2")
+        L2Regularization[Double](
+          Seq(output_scope),
+          Seq("Outputs/Weights"),
+          Seq("FLOAT64"),
+          Seq(Shape(network_size.last, sliding_window)),
+          math.exp(h("reg_output")),
+          "L2Reg"
+        )
+      else
+        L1Regularization[Double](
+          Seq(output_scope),
+          Seq("Outputs/Weights"),
+          Seq("FLOAT64"),
+          Seq(Shape(network_size.last, sliding_window)),
+          math.exp(h("reg_output")),
           "L1Reg"
         )
 
     lossFunc >>
       reg >>
+      reg_output >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
 
