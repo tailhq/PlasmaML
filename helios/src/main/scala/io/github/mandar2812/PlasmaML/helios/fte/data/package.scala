@@ -117,56 +117,15 @@ package object data {
   //Load the Carrington Rotation Table
   val carrington_rotation_table: Path = pwd / 'data / "CR_Table.rdb"
 
-  val process_carrington_file: DataPipe[Path, Iterable[Array[String]]] =
-    DataPipe((p: Path) => (read.lines ! p).toStream) >
-      dropHead >
-      dropHead >
-      trimLines >
-      replaceWhiteSpaces >
-      splitLine
-
   case class CarringtonRotation(start: DateTime, end: DateTime) {
 
     def contains(dt: DateTime): Boolean = dt.isAfter(start) && dt.isBefore(end)
   }
 
-  val read_time_stamps = DataPipe((s: Array[String]) => {
-
-    val datetime_pattern = "YYYY.MM.dd_HH:mm:ss"
-    val dt               = format.DateTimeFormat.forPattern(datetime_pattern)
-
-    val limits = (DateTime.parse(s(1), dt), DateTime.parse(s(3), dt))
-
-    (s.head.toInt, CarringtonRotation(limits._1, limits._2))
-  })
-
   val carrington_rotations: ZipDataSet[Int, CarringtonRotation] =
     dtfdata
-      .dataset(process_carrington_file(carrington_rotation_table))
-      .to_zip(read_time_stamps)
-
-  val read_lines_gong = (gong_file: Path) =>
-    (read.lines ! gong_file).toIterable.drop(3)
-
-  val read_lines_hmi = (hmi_file: Path) =>
-    (read.lines ! hmi_file).toIterable.drop(4)
-
-  val fte_file = MetaPipe(
-    (data_path: Path) =>
-      (carrington_rotation: Int) => {
-        val hmi_file  = data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
-        val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
-
-        if (exists ! gong_file) read_lines_gong(gong_file)
-        else read_lines_hmi(hmi_file)
-      }
-  )
-
-  val brss_file = MetaPipe(
-    (data_path: Path) =>
-      (carrington_rotation: Int) =>
-        data_path / s"GONGbrss_csss${carrington_rotation}HR.fits"
-  )
+      .dataset(pipes.process_carrington_file(carrington_rotation_table))
+      .to_zip(pipes.read_time_stamps)
 
 //Some hard-coded meta data for FTE/Bss files.
 //The latitude discretization
@@ -196,49 +155,247 @@ package object data {
     def value: Option[Double] = _3
   }
 
-  val fits_file_to_array = DataPipe((file: Path) => {
-    new Fits(file.toString)
-      .getHDU(0)
-      .getKernel()
-      .asInstanceOf[Array[Array[Float]]]
-      .toIterable
-  })
+  object pipes {
 
-  val fits_array_to_collection = DataPipe(
-    (arr: Iterable[Array[Float]]) =>
-      latitude_grid
-        .zip(arr)
-        .flatMap(
-          (s: (Double, Array[Float])) =>
-            longitude_grid
-              .zip(s._2)
-              .map(
-                (p: (Double, Float)) =>
-                  HelioPattern(p._1, s._1, Some(p._2.toDouble))
-              )
-        )
-        .toIterable
-  )
+    val read_time_stamps = DataPipe((s: Array[String]) => {
 
-  val read_brss_file = brss_file >> (fits_file_to_array > fits_array_to_collection)
+      val datetime_pattern = "YYYY.MM.dd_HH:mm:ss"
+      val dt               = format.DateTimeFormat.forPattern(datetime_pattern)
 
-  val read_fte_file = {
-    fte_file >> (
-      trimLines >
+      val limits = (DateTime.parse(s(1), dt), DateTime.parse(s(3), dt))
+
+      (s.head.toInt, CarringtonRotation(limits._1, limits._2))
+    })
+
+    val read_lines_gong = (gong_file: Path) =>
+      (read.lines ! gong_file).toIterable.drop(3)
+
+    val read_lines_hmi = (hmi_file: Path) =>
+      (read.lines ! hmi_file).toIterable.drop(4)
+
+    val process_carrington_file: DataPipe[Path, Iterable[Array[String]]] =
+      DataPipe((p: Path) => (read.lines ! p).toStream) >
+        dropHead >
+        dropHead >
+        trimLines >
         replaceWhiteSpaces >
-        splitLine >
-        IterableDataPipe((s: Array[String]) => s.length == 5) >
-        IterableDataPipe((s: Array[String]) => {
-          val (lon, lat) = (s.head.toDouble, s(1).toDouble)
-          val fte: Option[Double] = try {
-            Some(s(2).toDouble)
-          } catch {
-            case _: Exception => None
-          }
+        splitLine
 
-          HelioPattern(lon, lat, fte)
+    val fte_file = MetaPipe(
+      (data_path: Path) =>
+        (carrington_rotation: Int) => {
+          val hmi_file  = data_path / s"HMIfootpoint_ch_csss${carrington_rotation}HR.dat"
+          val gong_file = data_path / s"GONGfootpoint_ch_csss${carrington_rotation}HR.txt"
 
-        })
+          if (exists ! gong_file) read_lines_gong(gong_file)
+          else read_lines_hmi(hmi_file)
+        }
+    )
+
+    val brss_file = MetaPipe(
+      (data_path: Path) =>
+        (carrington_rotation: Int) =>
+          data_path / s"GONGbrss_csss${carrington_rotation}HR.fits"
+    )
+
+    val fits_file_to_array = DataPipe((file: Path) => {
+      new Fits(file.toString)
+        .getHDU(0)
+        .getKernel()
+        .asInstanceOf[Array[Array[Float]]]
+        .toIterable
+    })
+
+    val fits_array_to_collection = DataPipe(
+      (arr: Iterable[Array[Float]]) =>
+        latitude_grid
+          .zip(arr)
+          .flatMap(
+            (s: (Double, Array[Float])) =>
+              longitude_grid
+                .zip(s._2)
+                .map(
+                  (p: (Double, Float)) =>
+                    HelioPattern(p._1, s._1, Some(p._2.toDouble))
+                )
+          )
+          .toIterable
+    )
+
+    val read_brss_file = brss_file >> (fits_file_to_array > fits_array_to_collection)
+
+    val read_fte_file = {
+      fte_file >> (
+        trimLines >
+          replaceWhiteSpaces >
+          splitLine >
+          IterableDataPipe((s: Array[String]) => s.length == 5) >
+          IterableDataPipe((s: Array[String]) => {
+            val (lon, lat) = (s.head.toDouble, s(1).toDouble)
+            val fte: Option[Double] = try {
+              Some(s(2).toDouble)
+            } catch {
+              case _: Exception => None
+            }
+
+            HelioPattern(lon, lat, fte)
+
+          })
+      )
+
+    }
+
+    val clamp_fte: DataPipe[HelioPattern, HelioPattern] = DataPipe(
+      (p: HelioPattern) =>
+        p._3 match {
+          case Some(f) =>
+            if (math.abs(f) <= 1000d) p
+            else HelioPattern(p.lon, p.lat, Some(1000d * math.signum(f)))
+          case None => p
+        }
+    )
+
+    val log_transformation = (log_flag: Boolean) =>
+      (x: Double) =>
+        if (log_flag) {
+          if (math.abs(x) < 1d) 0d
+          else math.log10(math.abs(x))
+        } else x
+
+    def log_fte(
+      log_flag: Boolean
+    ): DataPipe[HelioPattern, HelioPattern] = DataPipe(
+      p =>
+        HelioPattern((p.lon, p.lat, p.value.map(log_transformation(log_flag))))
+    )
+
+    val process_timestamps_rotation: DataPipe[
+      (Int, (CarringtonRotation, Iterable[HelioPattern])),
+      Iterable[(DateTime, HelioPattern)]
+    ] = DataPipe(
+      (rotation_data) => {
+
+        val (_, (rotation, data)) = rotation_data
+
+        val duration = new Duration(rotation.start, rotation.end)
+
+        val time_jump = duration.getMillis / 360.0
+
+        val time_stamp = (p: HelioPattern) =>
+          rotation.end.toInstant
+            .minus((time_jump * p.lon).toLong)
+            .toDateTime
+
+        data.map(
+          p =>
+            (
+              time_stamp(p),
+              p
+            )
+        )
+
+      }
+    )
+
+    val process_timestamps_rotation2: DataPipe[
+      (
+        Int,
+        (CarringtonRotation, (Iterable[HelioPattern], Iterable[HelioPattern]))
+      ),
+      (Iterable[(DateTime, HelioPattern)], Iterable[(DateTime, HelioPattern)])
+    ] = DataPipe(
+      (rotation_data) => {
+
+        val (_, (rotation, (fte, brss))) = rotation_data
+
+        val duration = new Duration(rotation.start, rotation.end)
+
+        val time_jump = duration.getMillis / 360.0
+
+        val time_stamp = (p: HelioPattern) =>
+          rotation.end.toInstant
+            .minus((time_jump * p.lon).toLong)
+            .toDateTime
+
+        (
+          fte.map(
+            p =>
+              (
+                time_stamp(p),
+                p
+              )
+          ),
+          brss.map(
+            p =>
+              (
+                time_stamp(p),
+                p
+              )
+          )
+        )
+
+      }
+    )
+
+    val round_datetime_to_hour: DataPipe[DateTime, DateTime] = DataPipe(
+      (d: DateTime) =>
+        new DateTime(
+          d.getYear,
+          d.getMonthOfYear,
+          d.getDayOfMonth,
+          d.getHourOfDay,
+          0,
+          0
+        )
+    )
+
+    def crop_data_by_latitude(latitude_limit: Double) = DataPipe(
+      (pattern: (DateTime, Seq[HelioPattern])) =>
+        (
+          pattern._1,
+          pattern._2.filter(ftep => math.abs(ftep.lat) <= latitude_limit)
+        )
+    )
+
+    val load_slice_to_bdv =
+      DataPipe[(DateTime, Seq[HelioPattern]), (DateTime, DenseVector[Double])](
+        (s: (DateTime, Seq[HelioPattern])) => {
+
+          val num_days_year =
+            new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
+          val t: Double = s._1.getDayOfYear.toDouble / num_days_year
+          val xs: Seq[Double] = Seq(t, s._2.head._1) ++ s._2
+            .map(_._3.get)
+          (s._1, DenseVector(xs.toArray))
+        }
+      )
+
+    val sort_by_date =
+      DataPipe[
+        Iterable[(DateTime, Seq[HelioPattern])],
+        Iterable[(DateTime, Seq[HelioPattern])]
+      ](
+        _.toSeq.sortBy(_._1)
+      )
+
+    val group_by_time_sort_by_latitude =
+      DataPipe[
+        Iterable[(DateTime, HelioPattern)],
+        Iterable[(DateTime, Seq[HelioPattern])]
+      ](
+        _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_.lat)))
+      )
+
+    val sort_data =
+      IterableDataPipe(round_datetime_to_hour * identityPipe[HelioPattern]) >
+        group_by_time_sort_by_latitude >
+        sort_by_date
+
+    val zip_fte_brss = DataPipe2(
+      (
+        fte: Iterable[(DateTime, Seq[HelioPattern])],
+        brss: Iterable[(DateTime, Seq[HelioPattern])]
+      ) => fte.zip(brss).map(p => (p._1._1, p._1._2 ++ p._2._2))
     )
 
   }
@@ -260,7 +417,7 @@ package object data {
   )(cr: Int
   ): Iterable[(Int, Iterable[HelioPattern])] =
     try {
-      Iterable((cr, read_fte_file(data_path)(cr)))
+      Iterable((cr, pipes.read_fte_file(data_path)(cr)))
     } catch {
       case _: java.nio.file.NoSuchFileException => Iterable()
     }
@@ -282,90 +439,10 @@ package object data {
   )(cr: Int
   ): Iterable[(Int, Iterable[HelioPattern])] =
     try {
-      Iterable((cr, read_brss_file(data_path)(cr)))
+      Iterable((cr, pipes.read_brss_file(data_path)(cr)))
     } catch {
       case _: java.nio.file.NoSuchFileException => Iterable()
     }
-
-  val process_timestamps_rotation: DataPipe[
-    (Int, (CarringtonRotation, Iterable[HelioPattern])),
-    Iterable[(DateTime, HelioPattern)]
-  ] = DataPipe(
-    (rotation_data) => {
-
-      val (_, (rotation, data)) = rotation_data
-
-      val duration = new Duration(rotation.start, rotation.end)
-
-      val time_jump = duration.getMillis / 360.0
-
-      val time_stamp = (p: HelioPattern) =>
-        rotation.end.toInstant
-          .minus((time_jump * p.lon).toLong)
-          .toDateTime
-
-      data.map(
-        p =>
-          (
-            time_stamp(p),
-            p
-          )
-      )
-
-    }
-  )
-
-  val process_timestamps_rotation2: DataPipe[
-    (
-      Int,
-      (CarringtonRotation, (Iterable[HelioPattern], Iterable[HelioPattern]))
-    ),
-    (Iterable[(DateTime, HelioPattern)], Iterable[(DateTime, HelioPattern)])
-  ] = DataPipe(
-    (rotation_data) => {
-
-      val (_, (rotation, (fte, brss))) = rotation_data
-
-      val duration = new Duration(rotation.start, rotation.end)
-
-      val time_jump = duration.getMillis / 360.0
-
-      val time_stamp = (p: HelioPattern) =>
-        rotation.end.toInstant
-          .minus((time_jump * p.lon).toLong)
-          .toDateTime
-
-      (
-        fte.map(
-          p =>
-            (
-              time_stamp(p),
-              p
-            )
-        ),
-        brss.map(
-          p =>
-            (
-              time_stamp(p),
-              p
-            )
-        )
-      )
-
-    }
-  )
-
-  val image_dt_roundoff: DataPipe[DateTime, DateTime] = DataPipe(
-    (d: DateTime) =>
-      new DateTime(
-        d.getYear,
-        d.getMonthOfYear,
-        d.getDayOfMonth,
-        d.getHourOfDay,
-        0,
-        0
-      )
-  )
 
   implicit val dateOrdering: Ordering[DateTime] = new Ordering[DateTime] {
     override def compare(x: DateTime, y: DateTime): Int =
@@ -394,14 +471,6 @@ package object data {
     val end_rotation =
       carrington_rotation_table.filter(_._2.contains(end)).data.head._1
 
-    val clamp_fte: HelioPattern => HelioPattern = (p: HelioPattern) =>
-      p._3 match {
-        case Some(f) =>
-          if (math.abs(f) <= 1000d) p
-          else HelioPattern(p._1, p._2, Some(1000d * math.signum(f)))
-        case None => p
-      }
-
     val load_fte_for_rotation = DataPipe(get_fte_for_rotation(data_path) _)
 
     val fte = dtfdata
@@ -409,57 +478,32 @@ package object data {
       .flatMap(load_fte_for_rotation)
       .map(
         identityPipe[Int] * IterableDataPipe[HelioPattern, HelioPattern](
-          clamp_fte
+          pipes.clamp_fte
         )
       )
       .to_zip(identityPipe[(Int, Iterable[HelioPattern])])
 
     val fte_data = carrington_rotation_table.join(fte)
 
-    val log_transformation =
-      (x: Double) =>
-        if (log_flag) {
-          if (math.abs(x) < 1d) 0d
-          else math.log10(math.abs(x))
-        } else x
-
-    val crop_data_by_latitude = DataPipe(
-      (pattern: (DateTime, Seq[HelioPattern])) =>
-        (
-          pattern._1,
-          pattern._2.filter(ftep => math.abs(ftep._2) <= latitude_limit)
-        )
-    )
-
     val load_slice_to_tensor = DataPipe[Seq[HelioPattern], Tensor[Double]](
       (s: Seq[HelioPattern]) =>
-        dtf.tensor_f64(s.length)(s.map(_._3.get).map(log_transformation): _*)
+        dtf.tensor_f64(s.length)(
+          s.map(_._3.get).map(pipes.log_transformation(log_flag)): _*
+        )
     )
-
-    val sort_by_date =
-      DataPipe[Iterable[(DateTime, Seq[HelioPattern])], Iterable[
-        (DateTime, Seq[HelioPattern])
-      ]](
-        _.toSeq.sortBy(_._1)
-      )
-
-    val group_by_time_sort_by_latitude =
-      DataPipe[Iterable[(DateTime, HelioPattern)], Iterable[
-        (DateTime, Seq[HelioPattern])
-      ]](
-        _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_._2)))
-      )
 
     val processed_fte_data = {
       fte_data
         .flatMap(
-          process_timestamps_rotation >
-            IterableDataPipe(image_dt_roundoff * identityPipe[HelioPattern]) >
-            group_by_time_sort_by_latitude >
-            sort_by_date
+          pipes.process_timestamps_rotation >
+            IterableDataPipe(
+              pipes.round_datetime_to_hour * identityPipe[HelioPattern]
+            ) >
+            pipes.group_by_time_sort_by_latitude >
+            pipes.sort_by_date
         )
         .filter(DataPipe(_._2.length == 180))
-        .map(crop_data_by_latitude)
+        .map(pipes.crop_data_by_latitude(latitude_limit))
         .map(identityPipe[DateTime] * load_slice_to_tensor)
         .to_zip(identityPipe[(DateTime, Tensor[Double])])
     }
@@ -918,8 +962,20 @@ package object data {
 
   /**
     * Creates a DynaML data set consisting of time FTE values.
-    * The FTE values are loaded in a [[Tensor]] object.
-    * */
+    * The FTE values are loaded in a Breeze DenseVector.
+    *
+    * @param data_path The location containing the FTE/Brss data files
+    * @param carrington_rotation_table A data collection containing meta-data
+    *                                  about each Carrington Rotation
+    * @param log_flag Set to true if the FTE values should be expressed in log scale
+    * @param start Starting time stamp of the data
+    * @param end End time stamp of the data.
+    * @param deltaTFTE The size of the time history of the input features to
+    *                  use when constructing input vectors.
+    * @param fte_step The number of time steps to skip when constructing
+    *                 each element of the time history.
+    * @return A data collection consisting of (time stamp, input vector) tuples.
+    */
   def load_fte_data_bdv(
     data_path: Path,
     carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
@@ -932,81 +988,13 @@ package object data {
     conv_flag: Boolean
   ): ZipDataSet[DateTime, DenseVector[Double]] = {
 
+    //Find which carrington rotations contain
+    //the beginning and end of the data.
     val start_rotation =
       carrington_rotation_table.filter(_._2.contains(start)).data.head._1
 
     val end_rotation =
       carrington_rotation_table.filter(_._2.contains(end)).data.head._1
-
-    val clamp_fte: DataPipe[HelioPattern, HelioPattern] = DataPipe(
-      (p: HelioPattern) =>
-        p._3 match {
-          case Some(f) =>
-            if (math.abs(f) <= 1000d) p
-            else HelioPattern(p._1, p._2, Some(1000d * math.signum(f)))
-          case None => p
-        }
-    )
-
-    val log_transformation =
-      (x: Double) =>
-        if (log_flag) {
-          if (math.abs(x) < 1d) 0d
-          else math.log10(math.abs(x))
-        } else x
-
-    val log_fte: DataPipe[HelioPattern, HelioPattern] = DataPipe(
-      p => HelioPattern(p.lon, p.lat, p.value.map(log_transformation))
-    )
-
-    val crop_data_by_latitude = DataPipe(
-      (pattern: (DateTime, Seq[HelioPattern])) =>
-        (
-          pattern._1,
-          pattern._2.filter(ftep => math.abs(ftep.lat) <= latitude_limit)
-        )
-    )
-
-    val load_slice_to_bdv =
-      DataPipe[(DateTime, Seq[HelioPattern]), (DateTime, DenseVector[Double])](
-        (s: (DateTime, Seq[HelioPattern])) => {
-
-          val num_days_year =
-            new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
-          val t: Double = s._1.getDayOfYear.toDouble / num_days_year
-          val xs: Seq[Double] = Seq(t, s._2.head._1) ++ s._2
-            .map(_._3.get)
-          (s._1, DenseVector(xs.toArray))
-        }
-      )
-
-    val sort_by_date =
-      DataPipe[
-        Iterable[(DateTime, Seq[HelioPattern])],
-        Iterable[(DateTime, Seq[HelioPattern])]
-      ](
-        _.toSeq.sortBy(_._1)
-      )
-
-    val group_by_time_sort_by_latitude =
-      DataPipe[
-        Iterable[(DateTime, HelioPattern)],
-        Iterable[(DateTime, Seq[HelioPattern])]
-      ](
-        _.groupBy(_._1).map(p => (p._1, p._2.map(_._2).toSeq.sortBy(_.lat)))
-      )
-
-    val sort_data =
-      IterableDataPipe(image_dt_roundoff * identityPipe[HelioPattern]) >
-        group_by_time_sort_by_latitude >
-        sort_by_date
-
-    val zip_fte_brss = DataPipe2(
-      (
-        fte: Iterable[(DateTime, Seq[HelioPattern])],
-        brss: Iterable[(DateTime, Seq[HelioPattern])]
-      ) => fte.zip(brss).map(p => (p._1._1, p._1._2 ++ p._2._2))
-    )
 
     /**
       * Data Processing: Outline.
@@ -1022,15 +1010,16 @@ package object data {
         BifurcationPipe(
           identityPipe[Int],
           BifurcationPipe(
-            read_fte_file(data_path), 
-            read_brss_file(data_path)
+            pipes.read_fte_file(data_path),
+            pipes.read_brss_file(data_path)
           )
         )
       )
       .map(
         identityPipe[Int] * (
-          IterableDataPipe[HelioPattern, HelioPattern](clamp_fte > log_fte) *
-            identityPipe[Iterable[HelioPattern]]
+          IterableDataPipe[HelioPattern, HelioPattern](
+            pipes.clamp_fte > pipes.log_fte(log_flag)
+          ) * identityPipe[Iterable[HelioPattern]]
         )
       )
       .to_zip(
@@ -1057,11 +1046,11 @@ package object data {
       carrington_rotation_table
         .join(data)
         .flatMap(
-          process_timestamps_rotation2 > duplicate(sort_data) > zip_fte_brss
+          pipes.process_timestamps_rotation2 > duplicate(pipes.sort_data) > pipes.zip_fte_brss
         )
         .filter(DataPipe(_._2.length == 360))
-        .map(crop_data_by_latitude)
-        .map(load_slice_to_bdv)
+        .map(pipes.crop_data_by_latitude(latitude_limit))
+        .map(pipes.load_slice_to_bdv)
         .to_zip(identityPipe[(DateTime, DenseVector[Double])])
 
     /**
@@ -1113,9 +1102,10 @@ package object data {
     processed_data
       .concatenate(interpolated_fte)
       .transform(
-        DataPipe[Iterable[(DateTime, DenseVector[Double])], Iterable[
-          (DateTime, DenseVector[Double])
-        ]](_.toSeq.sortBy(_._1))
+        DataPipe[
+          Iterable[(DateTime, DenseVector[Double])],
+          Iterable[(DateTime, DenseVector[Double])]
+        ](_.toSeq.sortBy(_._1))
       )
       .transform(generate_history)
       .to_zip(identityPipe[(DateTime, DenseVector[Double])])
