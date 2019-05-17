@@ -187,22 +187,6 @@ def apply(
     Seq.fill(time_window._2)(0d)
   ).length
 
-  val output_mapping = {
-
-    val outputs_segment = if (data_scaling == "gauss") {
-      tf.learn.Linear[Double]("Outputs", sliding_window)
-    } else {
-      tf.learn.Linear[Double]("Outputs", sliding_window) >>
-        tf.learn.Sigmoid("ScaledOutputs")
-    }
-
-    val timelag_segment =
-      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
-        tf.learn.Softmax[Double]("Probability/Softmax")
-
-    dtflearn.bifurcation_layer("PDTNet", outputs_segment, timelag_segment)
-  }
-
   val output_mapping2 = {
 
     val outputs_segment = if (data_scaling == "gauss") {
@@ -212,14 +196,15 @@ def apply(
         tf.learn.Sigmoid("ScaledOutputs")
     }
 
-    val time_lag_segment = if (data_scaling == "gauss") {
-      tf.learn.Sigmoid[Double](s"Act_Prob") >>
+    val time_lag_segment =
+      dtflearn.tuple2_layer(
+        "CombineOutputsAndFeatures",
+        tf.learn.Sigmoid[Double](s"Act_Prob"),
+        dtflearn.identity[Output[Double]]("ProjectFeat")
+      ) >>
+        dtflearn.concat_tuple2[Double]("Concat_Out_Feat", 1) >>
         tf.learn.Linear[Double]("TimeLags", sliding_window) >>
         tf.learn.Softmax[Double]("Probability/Softmax")
-    } else {
-      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
-        tf.learn.Softmax[Double]("Probability/Softmax")
-    }
 
     val select_outputs = dtflearn.layer(
       "Cast/Outputs",
@@ -236,8 +221,7 @@ def apply(
       dtflearn.bifurcation_layer(
         "PDT",
         select_outputs,
-        dtflearn
-          .concat_tuple2[Double]("Concat_Out_Feat", 1) >> time_lag_segment
+        time_lag_segment
       )
   }
 
@@ -252,7 +236,7 @@ def apply(
 
   val hyper_prior = Map(
     "reg"        -> UniformRV(-5.5d, -4d),
-    "reg_output" -> UniformRV(-5d, -4.5d),
+    "reg_output" -> UniformRV(-6d, -4.5d),
     "alpha"      -> UniformRV(0.75d, 2d),
     "sigma_sq"   -> UniformRV(1e-5, 5d)
   )
@@ -393,43 +377,6 @@ def apply(
       reg_output >>
       tf.learn.ScalarSummary("Loss", "ModelLoss")
   }
-
-  /* fte.exp_cdt_alt(
-    architecture,
-    hyper_parameters,
-    persistent_hyper_parameters,
-    params_enc,
-    loss_func_generator,
-    hyper_prior,
-    hyp_mapping = hyp_mapping,
-    year_range = start_year to end_year,
-    test_year = test_year,
-    sw_threshold = sw_threshold,
-    quantity = quantity,
-    optimizer = optimization_algo,
-    miniBatch = batch_size,
-    iterations = max_iterations,
-    num_samples = num_samples,
-    hyper_optimizer = hyper_optimizer,
-    iterations_tuning = max_iterations_tuning,
-    pdt_iterations_tuning = pdt_iterations_tuning,
-    pdt_iterations_test = pdt_iterations_test,
-    latitude_limit = crop_latitude,
-    fraction_pca = fraction_pca,
-    deltaTFTE = history_fte,
-    fteStep = fte_step,
-    conv_flag = conv_flag,
-    log_scale_fte = log_scale_fte,
-    log_scale_omni = log_scale_omni,
-    deltaT = time_window,
-    ts_transform_output = ts_transform_output,
-    summary_top_dir = summary_dir,
-    hyp_opt_iterations = hyp_opt_iterations,
-    get_training_preds = get_training_preds,
-    existing_exp = existing_exp,
-    fitness_to_scalar = fitness_to_scalar,
-    checkpointing_freq = checkpointing_freq
-  ) */
 
   val (experiment_config, tf_summary_dir) = setup_exp_data(
     start_year to end_year,
