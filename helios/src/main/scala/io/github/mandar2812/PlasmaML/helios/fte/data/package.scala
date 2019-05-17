@@ -955,25 +955,9 @@ package object data {
           else math.log10(math.abs(x))
         } else x
 
-    val log_fte: DataPipe[HelioPattern, HelioPattern] = DataPipe(p => {
-      val new_val = p.value.map(log_transformation)
-      HelioPattern(p.lon, p.lat, new_val)
-    })
-
-    /* val load_fte_for_rotation  = DataPipe(get_fte_for_rotation(data_path) _)
-    val load_brss_for_rotation = DataPipe(get_brss_for_rotation(data_path) _) */
-
-    /* val fte = dtfdata
-      .dataset(start_rotation to end_rotation)
-      .flatMap(load_fte_for_rotation)
-      .map(
-        identityPipe[Int] * IterableDataPipe[HelioPattern, HelioPattern](
-          clamp_fte
-        )
-      )
-      .to_zip(identityPipe[(Int, Iterable[HelioPattern])])
-
-    val fte_data = carrington_rotation_table.join(fte) */
+    val log_fte: DataPipe[HelioPattern, HelioPattern] = DataPipe(
+      p => HelioPattern(p.lon, p.lat, p.value.map(log_transformation))
+    )
 
     val crop_data_by_latitude = DataPipe(
       (pattern: (DateTime, Seq[HelioPattern])) =>
@@ -1024,12 +1008,23 @@ package object data {
       ) => fte.zip(brss).map(p => (p._1._1, p._1._2 ++ p._2._2))
     )
 
+    /**
+      * Data Processing: Outline.
+      *
+      * We start by loading the raw FTE and BRSS data for each
+      * Carrington rotation. The FTE values are clamped to ensure
+      * they are not greater than 1000 (physically meaningless).
+      *
+      */
     val data = dtfdata
       .dataset(start_rotation to end_rotation)
       .map(
         BifurcationPipe(
           identityPipe[Int],
-          BifurcationPipe(read_fte_file(data_path), read_brss_file(data_path))
+          BifurcationPipe(
+            read_fte_file(data_path), 
+            read_brss_file(data_path)
+          )
         )
       )
       .map(
@@ -1042,8 +1037,22 @@ package object data {
         identityPipe[(Int, (Iterable[HelioPattern], Iterable[HelioPattern]))]
       )
 
-    val data_per_rotation = carrington_rotation_table.join(data)
-
+    /**
+      * After constructing `data`, the starting data collection,
+      * this is processed along with the Carrington Rotation table
+      * to give each data pattern a time stamp.
+      *
+      * t = DateTime(End of Rotation) - num_of_hours_in_rotation*Longitude/360
+      *
+      * After time stamping (rounding to hour), the FTE and Brss collections are
+      * grouped by their respective time stamps and sorted by latitude.
+      *
+      * Finally the sorted FTE and Brss collections for each rotation are zipped
+      * and only the patterns within the latitude limit are retained.
+      *
+      * Then the collections for each time stamp are loaded into Breeze Dense Vectors.
+      *
+      */
     val processed_data =
       carrington_rotation_table
         .join(data)
@@ -1055,22 +1064,11 @@ package object data {
         .map(load_slice_to_bdv)
         .to_zip(identityPipe[(DateTime, DenseVector[Double])])
 
-    /* val processed_fte_data = {
-      fte_data
-        .flatMap(
-          process_timestamps_rotation >
-            IterableDataPipe(image_dt_roundoff * identityPipe[HelioPattern]) >
-            group_by_time_sort_by_latitude >
-            sort_by_date
-        )
-        .filter(DataPipe(_._2.length == 180))
-        .map(crop_data_by_latitude)
-        .map(load_slice_to_bdv)
-        .to_zip(identityPipe[(DateTime, DenseVector[Double])])
-    }
-     */
+    /**
+      * The processed data set is now interpolated to ensure hourly cadence.
+      * If specified by the user, a time history of the inputs is also constructed.
+      */
     println("Interpolating FTE values to fill hourly cadence requirement")
-
     val interpolated_fte = dtfdata.dataset(
       processed_data.data
         .sliding(2)
@@ -1087,6 +1085,7 @@ package object data {
         .toIterable
     )
 
+    //Transformations which load time history of the input features.
     val load_history = (history: Iterable[(DateTime, DenseVector[Double])]) => {
 
       val history_size = history.toSeq.length / fte_step
