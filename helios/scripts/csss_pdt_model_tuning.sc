@@ -253,7 +253,7 @@ def apply(
   val persistent_hyper_parameters = List("reg")
 
   val hyper_prior = Map(
-    "reg"      -> UniformRV(-6d, -4.5d),
+    "reg"      -> UniformRV(-5.5d, -4d),
     "alpha"    -> UniformRV(0.75d, 2d),
     "sigma_sq" -> UniformRV(1e-5, 5d)
   )
@@ -352,19 +352,19 @@ def apply(
     val reg =
       if (reg_type == "L2")
         L2Regularization[Double](
-          layer_scopes :+ output_scope,
-          layer_parameter_names :+ "Outputs/Weights",
-          layer_datatypes :+ "FLOAT64",
-          layer_shapes :+ Shape(network_size.last, sliding_window),
+          layer_scopes /* :+ output_scope */,
+          layer_parameter_names /* :+ "Outputs/Weights" */,
+          layer_datatypes /* :+ "FLOAT64" */,
+          layer_shapes /* :+ Shape(network_size.last, sliding_window) */,
           math.exp(h("reg")),
           "L2Reg"
         )
       else
         L1Regularization[Double](
-          layer_scopes :+ output_scope,
-          layer_parameter_names :+ "Outputs/Weights",
-          layer_datatypes :+ "FLOAT64",
-          layer_shapes :+ Shape(network_size.last, sliding_window),
+          layer_scopes /* :+ output_scope */,
+          layer_parameter_names /* :+ "Outputs/Weights" */,
+          layer_datatypes /* :+ "FLOAT64" */,
+          layer_shapes /* :+ Shape(network_size.last, sliding_window) */,
           math.exp(h("reg")),
           "L1Reg"
         )
