@@ -70,15 +70,40 @@ def apply(
 
   val output_mapping = {
 
-    val outputs_segment =
-      //tf.learn.BatchNormalization[Double]("BatchNorm", fused = false) >>
+    val outputs_segment = if (data_scaling == "gauss") {
       tf.learn.Linear[Double]("Outputs", sliding_window)
+    } else {
+      tf.learn.Linear[Double]("Outputs", sliding_window) >>
+        tf.learn.Sigmoid("ScaledOutputs")
+    }
 
-    val timelag_segment =
-      tf.learn.Linear[Double]("TimeLags", sliding_window) >>
+    val time_lag_segment =
+      dtflearn.tuple2_layer(
+        "CombineOutputsAndFeatures",
+        tf.learn.Sigmoid[Double](s"Act_Prob"),
+        dtflearn.identity[Output[Double]]("ProjectFeat")
+      ) >>
+        dtflearn.concat_tuple2[Double]("Concat_Out_Feat", 1) >>
+        tf.learn.Linear[Double]("TimeLags", sliding_window) >>
         tf.learn.Softmax[Double]("Probability/Softmax")
 
-    dtflearn.bifurcation_layer("PDTNet", outputs_segment, timelag_segment)
+    val select_outputs = dtflearn.layer(
+      "Cast/Outputs",
+      MetaPipe[Mode, (Output[Double], Output[Double]), Output[Double]](
+        _ => o => o._1
+      )
+    )
+
+    dtflearn.bifurcation_layer(
+      "Bifurcation",
+      outputs_segment,
+      dtflearn.identity[Output[Double]]("ProjectFeat")
+    ) >>
+      dtflearn.bifurcation_layer(
+        "PDT",
+        select_outputs,
+        time_lag_segment
+      )
   }
 
   //Prediction architecture
