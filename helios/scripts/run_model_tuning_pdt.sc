@@ -35,6 +35,7 @@ def apply(
   iterations: Int = 150000,
   iterations_tuning: Int = 20000,
   pdt_iterations: Int = 2,
+  pdt_iterations_tuning: Int = 4,
   miniBatch: Int = 32,
   optimizer: Optimizer = tf.train.AdaDelta(0.01f),
   sum_dir_prefix: String = "cdt",
@@ -70,12 +71,7 @@ def apply(
 
   val output_mapping = {
 
-    val outputs_segment = if (data_scaling == "gauss") {
-      tf.learn.Linear[Double]("Outputs", sliding_window)
-    } else {
-      tf.learn.Linear[Double]("Outputs", sliding_window) >>
-        tf.learn.Sigmoid("ScaledOutputs")
-    }
+    val outputs_segment = tf.learn.Linear[Double]("Outputs", sliding_window)
 
     val time_lag_segment =
       dtflearn.tuple2_layer(
@@ -123,16 +119,17 @@ def apply(
   val hyper_parameters = List(
     "sigma_sq",
     "alpha",
-    "reg"
+    "reg",
+    "reg_output"
   )
 
-  val persistent_hyper_parameters = List("reg", "reg_timelag")
+  val persistent_hyper_parameters = List("reg", "reg_output")
 
   val hyper_prior = Map(
-    "reg"         -> UniformRV(-5d, -3d),
-    "reg_timelag" -> UniformRV(-5d, -4d),
-    "alpha"       -> UniformRV(0.75d, 2d),
-    "sigma_sq"    -> UniformRV(1e-5, 5d)
+    "reg"        -> UniformRV(-5.5d, -4d),
+    "reg_output" -> UniformRV(-7d, -6d),
+    "alpha"      -> UniformRV(0.75d, 2d),
+    "sigma_sq"   -> UniformRV(1e-5, 5d)
   )
 
   val params_enc = Encoder(
@@ -201,38 +198,49 @@ def apply(
         h("alpha")
       )
 
-      val reg_layer_timelag = L1Regularization[Double](
-        Seq(timelag_scope),
-        Seq("TimeLags/Weights"),
-        Seq("FLOAT64"),
-        Seq(Shape(num_neurons.last, sliding_window)),
-        math.exp(h("reg_timelag")),
-        "TimeLags/L1Reg"
-      )
-
-      val reg_layer =
-        if (regularization_type == "L1")
-          L1Regularization[Double](
-            layer_scopes :+ output_scope,
-            layer_parameter_names :+ "Outputs/Weights",
-            layer_datatypes :+ "FLOAT64",
-            layer_shapes :+ Shape(num_neurons.last, sliding_window),
-            math.exp(h("reg")),
-            "L1Reg"
-          )
-        else
+      val reg =
+        if (regularization_type == "L2")
           L2Regularization[Double](
-            layer_scopes :+ output_scope,
-            layer_parameter_names :+ "Outputs/Weights",
-            layer_datatypes :+ "FLOAT64",
-            layer_shapes :+ Shape(num_neurons.last, sliding_window),
+            layer_scopes,
+            layer_parameter_names,
+            layer_datatypes,
+            layer_shapes,
             math.exp(h("reg")),
             "L2Reg"
           )
+        else
+          L1Regularization[Double](
+            layer_scopes,
+            layer_parameter_names,
+            layer_datatypes,
+            layer_shapes,
+            math.exp(h("reg")),
+            "L1Reg"
+          )
+
+      val reg_output =
+        if (regularization_type == "L2")
+          L2Regularization[Double](
+            Seq(output_scope),
+            Seq("Outputs/Weights"),
+            Seq("FLOAT64"),
+            Seq(Shape(num_neurons.last, sliding_window)),
+            math.exp(h("reg_output")),
+            "L2Reg"
+          )
+        else
+          L1Regularization[Double](
+            Seq(output_scope),
+            Seq("Outputs/Weights"),
+            Seq("FLOAT64"),
+            Seq(Shape(num_neurons.last, sliding_window)),
+            math.exp(h("reg_output")),
+            "L1Reg"
+          )
 
       lossFunc >>
-        reg_layer >>
-        //reg_layer_timelag >>
+        reg >>
+        reg_output >>
         tf.learn.ScalarSummary("Loss", "ModelLoss")
     }
 
@@ -247,6 +255,7 @@ def apply(
       iterations,
       iterations_tuning,
       pdt_iterations,
+      pdt_iterations_tuning,
       optimizer,
       miniBatch,
       sum_dir_prefix,

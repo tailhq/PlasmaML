@@ -1924,6 +1924,7 @@ package object timelag {
     iterations: Int = 150000,
     iterations_tuning: Int = 20000,
     pdt_iterations: Int = 2,
+    pdt_iterations_tuning: Int = 4,
     optimizer: Optimizer = tf.train.AdaDelta(0.01f),
     miniBatch: Int = 512,
     sum_dir_prefix: String = "",
@@ -1969,7 +1970,7 @@ package object timelag {
         val tf_summary_dir = summaries_top_dir / summary_dir_index
 
         val (adjusted_iterations, adjusted_iterations_tuning) = (
-          iterations / (pdt_iterations + 1),
+          iterations / (pdt_iterations_tuning + 1),
           iterations_tuning / (pdt_iterations + 1)
         )
 
