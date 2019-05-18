@@ -75,9 +75,6 @@ def setup_exp_data(
     fraction_variance = adj_fraction_pca
   )
 
-  val existing_config =
-    fte.data.read_exp_config(tf_summary_dir_tmp / "config.json")
-
   val use_cached_config: Boolean =
     fte.data._config_match(tf_summary_dir_tmp, experiment_config)
 

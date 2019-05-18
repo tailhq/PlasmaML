@@ -90,7 +90,7 @@ package object data {
                 omni_deltaT("_2$mcI$sp").toInt
               ),
               omni_config("log_flag").asInstanceOf[Boolean],
-              omni_config("quantity").asInstanceOf[Int],
+              omni_config("quantity").asInstanceOf[BigInt].toInt,
               omni_config("use_persistence").asInstanceOf[Boolean]
             ),
             config("multi_output").asInstanceOf[Boolean],
