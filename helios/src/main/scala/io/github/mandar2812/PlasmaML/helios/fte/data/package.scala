@@ -364,8 +364,9 @@ package object data {
           val num_days_year =
             new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
           val t: Double = s._1.getDayOfYear.toDouble / num_days_year
-          val xs: Seq[Double] = Seq(t, s._2.head._1) ++ s._2
-            .map(_._3.get)
+          val xs: Seq[Double] = 
+            Seq(s._1.getYear.toDouble, s._2.head._1) ++ s._2.map(_._3.get)
+          
           (s._1, DenseVector(xs.toArray))
         }
       )
