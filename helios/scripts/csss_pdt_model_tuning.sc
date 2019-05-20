@@ -197,7 +197,8 @@ def apply(
     val time_lag_segment =
       dtflearn.tuple2_layer(
         "CombineOutputsAndFeatures",
-        tf.learn.Sigmoid[Double](s"Act_Prob"),
+        if (data_scaling == "gauss") tf.learn.Sigmoid[Double](s"Act_Prob")
+        else dtflearn.identity[Output[Double]]("ProjectOutputs"),
         dtflearn.identity[Output[Double]]("ProjectFeat")
       ) >>
         dtflearn.concat_tuple2[Double]("Concat_Out_Feat", 1) >>

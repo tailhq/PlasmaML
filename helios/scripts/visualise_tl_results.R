@@ -104,12 +104,13 @@ ggplot(scatter_df, aes(x = Velocity, y = floor(TimeLag), color = Type, fill = Ty
 
 ggsave(paste(iden, "scatter_v_tl.pdf", sep = ''), scale = 1.0, device = pdf())
 
-ggplot(rbind(errors_train, errors_test), aes(x=error_v, y=floor(error_lag))) + 
+#rbind(errors_train, errors_test)
+ggplot(errors_test, aes(x=error_v, y=floor(error_lag))) + 
   scale_alpha_continuous(limits = c(0, 0.2), breaks = seq(0, 0.2, by=0.025)) +
   geom_point(aes(alpha = 0.05), show.legend = FALSE) + 
   #stat_density2d(aes(color = "white"), show.legend = FALSE) + 
   #theme(legend.text=element_text(size=9), legend.position = "right") +
-  facet_grid(data ~ .) +
+  #facet_grid(data ~ .) +
   theme_gray(base_size = 20) +
   xlab("Error in Output") + 
   ylab("Error in Time Lag") + 
@@ -149,14 +150,14 @@ p <- ggplot(sample_df, aes(x = predv, y = actualv)) +
 
 ggsave(paste(iden, "lag_error_jus.pdf", sep = ''), p, scale = 1.0, device = pdf())
 
-ggplot(errors, aes(x=error_lag)) +
+ggplot(errors[errors$data == "test",], aes(x=error_lag)) +
   geom_histogram(
     aes(y=..density..),      # Histogram with density instead of count on y-axis
     binwidth=.5,
      colour="black", fill="white") +
-  geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+  #geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
   theme_gray(base_size = 20) +
-  xlab("Error: Time Lag") + facet_grid(data ~ .)
+  xlab("Error: Time Lag") #+ facet_grid(data ~ .)
 
 ggsave(paste(iden, "hist_errors_timelag.pdf", sep = ''), scale = 1.0, device = pdf())
 

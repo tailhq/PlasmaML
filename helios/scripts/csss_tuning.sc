@@ -31,7 +31,7 @@ val median_sw_24h = DataPipe(
   (xs: Seq[Double]) => xs.grouped(24).map(g => dutils.median(g.toStream)).toSeq
 )
 
-val fact            = 15
+val fact            = 20
 val base_iterations = 80000
 def ext_iterations  = base_iterations * fact
 
@@ -40,24 +40,24 @@ def ext_it_pdt  = base_it_pdt + 2
 
 val csss_exp = csss_pdt_model_tuning(
   start_year = 2008,
-  end_year = 2016,
+  end_year = 2017,
   test_year = 2015,
-  crop_latitude = 5d,
+  crop_latitude = 10d,
   fraction_pca = 1d,
   fte_step = 0,
   history_fte = 0,
   log_scale_omni = false,
-  log_scale_fte = false,
+  log_scale_fte = true,
   time_window = time_window,
-  ts_transform_output = median_sw_6h,
-  network_size = Seq(40, 80),
+  ts_transform_output = max_sw_24h,
+  network_size = Seq(50, 80),
   use_persistence = true,
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
   num_samples = 4,
   quantity = OMNIData.Quantities.V_SW,
   reg_type = "L2",
-  batch_size = 64,
+  batch_size = 128,
   max_iterations = ext_iterations,
   max_iterations_tuning = base_iterations,
   pdt_iterations_tuning = base_it_pdt,
@@ -66,7 +66,7 @@ val csss_exp = csss_pdt_model_tuning(
   summary_dir = env.summary_dir,
   get_training_preds = true,
   data_scaling = "gauss",
-  existing_exp = None //csss.experiments().lastOption
+  existing_exp = None
 )
 
 try {
