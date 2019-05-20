@@ -364,9 +364,9 @@ package object data {
           val num_days_year =
             new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
           val t: Double = s._1.getDayOfYear.toDouble / num_days_year
-          val xs: Seq[Double] = 
+          val xs: Seq[Double] =
             Seq(s._1.getYear.toDouble, s._2.head._1) ++ s._2.map(_._3.get)
-          
+
           (s._1, DenseVector(xs.toArray))
         }
       )
@@ -1299,47 +1299,81 @@ package object data {
     val read_json_record = IterableDataPipe((s: String) => parse(s))
 
     val load_record = IterableDataPipe((record: JValue) => {
-      val dt = dt_format.parseDateTime(
-        record
-          .findField(p => p._1 == "timestamp")
-          .get
-          ._2
-          .values
-          .asInstanceOf[String]
-      )
-      val features = load_input_pattern(
-        record
-          .findField(p => p._1 == "inputs")
-          .get
-          ._2
-          .values
-          .asInstanceOf[List[Double]]
-          .toArray
-      )
 
-      val targets = load_output_pattern(
-        record
-          .findField(p => p._1 == "targets")
-          .get
-          ._2
-          .values
-          .asInstanceOf[List[Double]]
-          .toArray
-      )
-      (dt, (features, targets))
+      val pattern = try {
+        val dt = dt_format.parseDateTime(
+          record
+            .findField(p => p._1 == "timestamp")
+            .get
+            ._2
+            .values
+            .asInstanceOf[String]
+        )
+        val features = load_input_pattern(
+          record
+            .findField(p => p._1 == "inputs")
+            .get
+            ._2
+            .values
+            .asInstanceOf[List[Double]]
+            .toArray
+        )
+
+        val targets = load_output_pattern(
+          record
+            .findField(p => p._1 == "targets")
+            .get
+            ._2
+            .values
+            .asInstanceOf[List[Double]]
+            .toArray
+        )
+        Some((dt, (features, targets)))
+
+      } catch {
+        case _: Exception => None
+      }
+
+      pattern
     })
 
     val pipeline = read_file > filter_non_empty_lines > read_json_record > load_record
 
+    val tr_data = dtfdata.dataset(pipeline(training_data_file))
+
+    val te_data = dtfdata.dataset(pipeline(test_data_file))
+
+    val clean_train_records = tr_data.filter(_.isDefined)
+    val clean_test_records = te_data.filter(_.isDefined)
+
+
+    val training_data_size = tr_data.size
+    val test_data_size = te_data.size
+
+    println("\nData Read Summary")
+    println("Train: ")
+    print("Total Records = ")
+    pprint.pprintln(training_data_size)
+    print("% of Clean Records = ")
+    pprint.pprintln((clean_train_records.size.toDouble/training_data_size)*100)
+    println()
+
+    println("Test: ")
+    print("Total Records = ")
+    pprint.pprintln(test_data_size)
+    print("% of Clean Records = ")
+    pprint.pprintln((clean_test_records.size.toDouble/test_data_size)*100)
+    println()
+    
+    type P = (DateTime, (T, U))
+
     TFDataSet(
-      dtfdata
-        .dataset(pipeline(training_data_file))
-        .to_zip(
-          identityPipe[(DateTime, (T, U))]
-        ),
-      dtfdata
-        .dataset(pipeline(test_data_file))
-        .to_zip(identityPipe[(DateTime, (T, U))])
+      clean_train_records
+        .map(DataPipe((p: Option[P]) => p.get))
+        .to_zip(identityPipe[P]),
+      clean_test_records
+        .map(DataPipe((p: Option[P]) => p.get))
+        .to_zip(identityPipe[P])
     )
   }
 
