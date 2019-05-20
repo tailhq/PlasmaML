@@ -50,7 +50,7 @@ def main(
 
       val out = compute_v(x)
 
-      (math.log(1 + math.exp(out/20.0)).toFloat, out + scala.util.Random.nextGaussian().toFloat)
+      (math.log(1 + math.exp(out/25.0)).toFloat, out + scala.util.Random.nextGaussian().toFloat)
     })
 
   val experiment_results = run_model_tuning_pdt(
