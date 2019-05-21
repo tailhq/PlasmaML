@@ -112,6 +112,15 @@ def setup_exp_data(
         true
   )
 
+  val tt_partition_random = DataPipe(
+    (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
+      if (scala.util.Random.nextDouble() >= 0.7)
+        false
+        //p._2._2.toArray.forall(_ < sw_threshold)
+      else
+        true
+  )
+
   if (!use_cached_data) {
 
     val dataset =
@@ -119,7 +128,7 @@ def setup_exp_data(
         fte_data_path,
         experiment_config,
         ts_transform_output,
-        tt_partition,
+        tt_partition_random,
         conv_flag
       )
 
