@@ -106,7 +106,8 @@ def setup_exp_data(
   val tt_partition = DataPipe(
     (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
       if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
-        p._2._2.toArray.forall(_ < sw_threshold)
+        false
+        //p._2._2.toArray.forall(_ < sw_threshold)
       else
         true
   )
