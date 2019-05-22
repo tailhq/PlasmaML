@@ -5,9 +5,9 @@ import $file.csss_so_tuning
 import $file.env
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
+import ammonite.ops._
 import ammonite.ops.ImplicitWd._
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
-import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.PlasmaML.omni.OMNIData
 
 @main
@@ -46,7 +46,7 @@ def main(
     max_iterations_tuning = csss.base_iterations,
     pdt_iterations_tuning = csss.base_it_pdt,
     pdt_iterations_test = csss.ext_it_pdt,
-    optimization_algo = tf.train.Adam(0.001f),
+    optimization_algo = org.platanios.tensorflow.api.tf.train.Adam(0.001f),
     summary_dir = env.summary_dir / csss_job_id,
     get_training_preds = true,
     data_scaling = "gauss",
@@ -70,7 +70,7 @@ def main(
     csss_exp.results.summary_dir,
     network_size = network_size,
     activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
-    optimization_algo = tf.train.Adam(0.01f),
+    optimization_algo = org.platanios.tensorflow.api.tf.train.Adam(0.01f),
     max_iterations = csss.ext_iterations,
     max_iterations_tuning = csss.base_iterations,
     batch_size = 512,
