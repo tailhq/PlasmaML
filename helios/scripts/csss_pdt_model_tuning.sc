@@ -24,6 +24,7 @@ import org.platanios.tensorflow.api.learn.Mode
 def setup_exp_data(
   year_range: Range = 2011 to 2017,
   test_year: Int = 2015,
+  test_month: Int = 10,
   sw_threshold: Double = 700d,
   quantity: Int = OMNIData.Quantities.V_SW,
   ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
@@ -112,6 +113,18 @@ def setup_exp_data(
         true
   )
 
+  val test_start_month = new DateTime(test_year, month, 1, 0, 0)
+
+  val test_end_month = test_start_month.plusMonths(1)
+
+  val tt_partition_one_month = DataPipe(
+    (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
+      if (p._1.isAfter(test_start_month) && p._1.isBefore(test_end_month))
+        false
+      else
+        true
+  )
+
   val tt_partition_random = DataPipe(
     (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
       if (scala.util.Random.nextDouble() >= 0.7)
@@ -128,7 +141,7 @@ def setup_exp_data(
         fte_data_path,
         experiment_config,
         ts_transform_output,
-        tt_partition_random,
+        tt_partition_one_month,
         conv_flag
       )
 
@@ -150,6 +163,7 @@ def apply(
   start_year: Int = 2011,
   end_year: Int = 2017,
   test_year: Int = 2015,
+  test_month: Int = 10,
   sw_threshold: Double = 700d,
   network_size: Seq[Int] = Seq(100, 60),
   activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
@@ -390,6 +404,7 @@ def apply(
   val (experiment_config, tf_summary_dir) = setup_exp_data(
     start_year to end_year,
     test_year = test_year,
+    test_month = test_month,
     sw_threshold = sw_threshold,
     quantity = quantity,
     ts_transform_output = ts_transform_output,

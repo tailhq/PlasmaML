@@ -13,8 +13,8 @@ import $exec.helios.scripts.env
 
 
 val num_neurons_exp2 = Seq(40, 40)
-val num_neurons_exp3 = Seq(60, 40)
-val num_neurons_exp4 = Seq(60, 40)
+val num_neurons_exp3 = Seq(40, 40)
+val num_neurons_exp4 = Seq(40, 40)
 val act_exp2 = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
 val act_exp3 = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
 val act_exp4 = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
@@ -30,7 +30,7 @@ val exp_set2 = tuning_exp2.main(
   train_test_separate = true,
   num_neurons = num_neurons_exp2,
   activation_func = act_exp2,
-  iterations = 100000,
+  iterations = 160000,
   iterations_tuning = 20000,
   pdt_iterations = 3,
   pdt_iterations_tuning = 5,
@@ -49,7 +49,7 @@ val exp_set2_bs = baseline_exp(
   d = 10,
   num_neurons = num_neurons_exp2,
   activation_func = act_exp2,
-  iterations = 100000,
+  iterations = 160000,
   iterations_tuning = 20000,
   miniBatch = 128,
   optimizer = tf.train.Adam(0.01f),
@@ -59,6 +59,12 @@ val exp_set2_bs = baseline_exp(
   hyp_opt_iterations = Some(8),
   regularization_types = Seq("L2"),
   checkpointing_freq = 1
+)
+
+timelag.utils.write_performance_baseline(
+  exp_set2_bs.head.results.metrics_train.get,
+  exp_set2_bs.head.results.metrics_test.get,
+  exp_set2_bs.head.results.summary_dir
 )
 
 timelag.organize_results(exp_set2, home / 'tmp / 'results_exp2, "exp2_")
@@ -82,7 +88,7 @@ val exp_set3 = tuning_exp3.main(
   train_test_separate = true,
   num_neurons = num_neurons_exp3,
   activation_func = act_exp3,
-  iterations = 160000,
+  iterations = 200000,
   iterations_tuning = 20000,
   pdt_iterations = 3,
   pdt_iterations_tuning = 5,
@@ -100,7 +106,7 @@ val exp_set3_bs = baseline_exp(
   exp_set3.head.results.summary_dir,
   num_neurons = num_neurons_exp3,
   activation_func = act_exp3,
-  iterations = 100000,
+  iterations = 200000,
   iterations_tuning = 20000,
   miniBatch = 128,
   optimizer = tf.train.Adam(0.01f),
@@ -126,19 +132,19 @@ val exp_set4 = tuning_exp4.main(
   d = 10,
   size_training = 10000,
   size_test = 2000,
-  sliding_window = 20,
-  noise = 0.3,
+  sliding_window = 10,
+  noise = 0.75,
   noiserot = 0.001,
   alpha = 0.01,
   train_test_separate = true,
   num_neurons = num_neurons_exp4,
   activation_func = act_exp4,
-  iterations = 160000,
+  iterations = 200000,
   iterations_tuning = 20000,
   pdt_iterations = 3,
   pdt_iterations_tuning = 5,
   miniBatch = 128,
-  optimizer = tf.train.Adam(0.001f),
+  optimizer = tf.train.Adam(0.01f),
   confounding = Seq(0d),
   num_samples = 4,
   hyper_optimizer = "gs",
