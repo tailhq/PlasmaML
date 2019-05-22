@@ -18,6 +18,7 @@ import _root_.io.github.mandar2812.dynaml.optimization.{
 import _root_.io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
 import _root_.io.github.mandar2812.dynaml.DynaMLPipe._
 import _root_.io.github.mandar2812.PlasmaML.helios
+import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.PlasmaML.helios.data.HeliosDataSet
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag.utils._
 import breeze.stats.distributions.ContinuousDistr
@@ -41,16 +42,17 @@ package object timelag {
 
     type MODEL
     type ESTIMATOR
-
     type DATA
+    type SCALERS
+    type METRICS
 
     val summary_dir: Path
 
-    val data_and_scales: (DATA, (GaussianScalerTF[T], GaussianScalerTF[T]))
+    val data_and_scales: (DATA, SCALERS)
 
-    val metrics_train: (RegressionMetricsTF[T], RegressionMetricsTF[T])
+    val metrics_train: METRICS
 
-    val metrics_test: (RegressionMetricsTF[T], RegressionMetricsTF[T])
+    val metrics_test: METRICS
 
     val model: MODEL
 
@@ -75,6 +77,10 @@ package object timelag {
 
     override type DATA = TFDataSet[(Tensor[T], Tensor[T])]
 
+    override type SCALERS = (GaussianScalerTF[T], GaussianScalerTF[T])
+
+    override type METRICS = (RegressionMetricsTF[T], RegressionMetricsTF[T])
+
     override type MODEL =
       TFModel[Output[T], Output[T], (Output[T], Output[T]), L, Tensor[T], DataType[
         T
@@ -86,6 +92,57 @@ package object timelag {
       dtflearn.SupEstimatorTF[Output[T], Output[T], (Output[T], Output[T]), (Output[T], Output[T]), L, ((Output[T], Output[T]), (Output[T], Output[T]))]
 
     override val estimator: ESTIMATOR = model.estimator.get
+  }
+
+  case class TunedModelRunBL[
+    InputPattern,
+    OutputPattern,
+    T: TF: IsFloatOrDouble,
+    In,
+    Loss: TF: IsFloatOrDouble,
+    IT,
+    ID,
+    IS,
+    TD,
+    IDD,
+    ISS
+  ](data_and_scales: (TFDataSet[(InputPattern, OutputPattern)],
+      (Scaler[InputPattern], ReversibleScaler[OutputPattern])),
+    model: TFModel[In, Output[T], Output[T], Loss, IT, ID, IS, Tensor[T], TD, Shape, Tensor[
+      T
+    ], IDD, ISS],
+    metrics_train: Option[RegressionMetricsTF[T]],
+    metrics_test: Option[RegressionMetricsTF[T]],
+    summary_dir: Path,
+    training_preds: Option[Tensor[T]],
+    test_preds: Option[Tensor[T]],
+    training_outputs: Option[Tensor[T]] = None,
+    test_outputs: Option[Tensor[T]] = None)
+      extends ModelRun[T, Loss] {
+
+    override type DATA = TFDataSet[(InputPattern, OutputPattern)]
+
+    override type METRICS = Option[RegressionMetricsTF[T]]
+
+    override type SCALERS =
+      (Scaler[InputPattern], ReversibleScaler[OutputPattern])
+
+    override type MODEL =
+      TFModel[In, Output[T], Output[T], Loss, IT, ID, IS, Tensor[T], TD, Shape, Tensor[
+        T
+      ], IDD, ISS]
+
+    override type ESTIMATOR =
+      Option[dtflearn.SupEstimatorTF[
+        In,
+        Output[T],
+        Output[T],
+        Output[T],
+        Loss,
+        (Output[T], (In, Output[T]))
+      ]]
+
+    override val estimator: ESTIMATOR = model.estimator
   }
 
   case class JointModelRun[T: TF: IsFloatOrDouble, L: TF: IsFloatOrDouble](
@@ -107,6 +164,10 @@ package object timelag {
       extends ModelRun[T, L] {
 
     override type DATA = HeliosDataSet[T, T]
+
+    override type SCALERS = (GaussianScalerTF[T], GaussianScalerTF[T])
+
+    override type METRICS = (RegressionMetricsTF[T], RegressionMetricsTF[T])
 
     override type MODEL =
       dtflearn.SupervisedModel[Output[T], Output[T], (Output[T], Output[T]), (Output[T], Output[T]), L]
@@ -137,6 +198,10 @@ package object timelag {
 
     override type DATA = HeliosDataSet[T, T]
 
+    override type SCALERS = (GaussianScalerTF[T], GaussianScalerTF[T])
+
+    override type METRICS = (RegressionMetricsTF[T], RegressionMetricsTF[T])
+
     override type MODEL =
       dtflearn.SupervisedModel[Output[T], Output[T], Output[T], Output[T], L]
 
@@ -164,6 +229,13 @@ package object timelag {
   ](config: ExperimentType[T],
     train_data: TLDATA[T],
     test_data: TLDATA[T],
+    results: Results)
+
+  case class ExperimentResult2[
+    T: TF: IsFloatOrDouble,
+    L: TF: IsFloatOrDouble,
+    Results <: ModelRun[T, L]
+  ](config: ExperimentType[T],
     results: Results)
 
   def plot_and_write_results[
@@ -2009,7 +2081,8 @@ package object timelag {
           prefetchSize = 10
         )
 
-        val batch_to_tensor = dtfpipe.EagerStack[T](axis = 0).zip(dtfpipe.EagerStack[T](axis = 0))
+        val batch_to_tensor =
+          dtfpipe.EagerStack[T](axis = 0).zip(dtfpipe.EagerStack[T](axis = 0))
 
         val tf_handle_ops = dtflearn.model.tf_data_handle_ops[
           (Tensor[T], Tensor[T]),
@@ -2191,10 +2264,11 @@ package object timelag {
           log_predictors = true,
           pattern_to_str = Some(
             DataPipe(
-              (i: (Tensor[T], Tensor[T])) => (
-                dtfutils.toDoubleSeq[T](i._1).mkString(",") + "\n",
-                dtfutils.toDoubleSeq[T](i._2).mkString(",") + "\n"
-              )
+              (i: (Tensor[T], Tensor[T])) =>
+                (
+                  dtfutils.toDoubleSeq[T](i._1).mkString(",") + "\n",
+                  dtfutils.toDoubleSeq[T](i._2).mkString(",") + "\n"
+                )
             )
           )
         )
@@ -2333,6 +2407,405 @@ package object timelag {
     )
 
     exp_results
+
+  }
+
+
+  type RESULTBL[T, L] = TunedModelRunBL[
+    Tensor[T],
+    Tensor[T],
+    T,
+    Output[T],
+    L,
+    Tensor[T],
+    DataType[T],
+    Shape,
+    DataType[T],
+    DataType[T],
+    Shape
+  ]
+  
+  def run_exp_baseline[T: TF: IsFloatOrDouble, L: TF: IsFloatOrDouble](
+    pdt_experiment: Path,
+    architecture: Layer[Output[T], Output[T]],
+    hyper_params: List[String],
+    loss_func_generator: dtflearn.tunable_tf_model.HyperParams => Layer[
+      (Output[T], Output[T]),
+      Output[L]
+    ],
+    fitness_func: Seq[
+      DataPipe2[Output[T], Output[T], Output[Float]]
+    ],
+    hyper_prior: Map[String, ContinuousRVWithDistr[Double, ContinuousDistr[
+      Double
+    ]]],
+    iterations: Int = 150000,
+    iterations_tuning: Int = 20000,
+    optimizer: Optimizer = tf.train.AdaDelta(0.01f),
+    miniBatch: Int = 512,
+    num_samples: Int = 20,
+    hyper_optimizer: String = "gs",
+    hyp_opt_iterations: Option[Int] = Some(5),
+    hyp_mapping: Option[Map[String, Encoder[Double, Double]]] = None,
+    epochFlag: Boolean = false,
+    confounding_factor: Double = 0d,
+    fitness_to_scalar: DataPipe[Seq[Tensor[Float]], Double] =
+      DataPipe[Seq[Tensor[Float]], Double](s =>
+          s.map(_.scalar.toDouble).sum / s.length),
+    eval_metric_names: Seq[String] = Seq("mse", "mae"),
+    checkpointing_freq: Int = 5
+  ): ExperimentResult2[T, L, RESULTBL[T, L]] = {
+
+    //Check the provided directory for serialized data sets.
+
+    val scatter_file_train = pdt_experiment / "train_scatter.csv"
+    val scatter_file_test  = pdt_experiment / "test_scatter.csv"
+
+
+    val train_features_file = pdt_experiment / "train_data_features.csv"
+    val train_targets_file  = pdt_experiment / "train_data_targets.csv"
+
+    val test_features_file = pdt_experiment / "test_data_features.csv"
+    val test_targets_file  = pdt_experiment / "test_data_targets.csv"
+
+    require(
+      exists ! pdt_experiment && Seq(
+        scatter_file_train,
+        scatter_file_test,
+        train_features_file,
+        train_targets_file,
+        test_features_file,
+        test_targets_file
+      ).forall(exists ! _),
+      s"Required train-test data files not found in ${pdt_experiment}"
+    )
+
+
+    val observed_time_lags = {
+      val lines = (read.lines! scatter_file_train).drop(1)
+
+      lines.map(l => l.split(",").last.toDouble)
+    }
+
+    def read_data(features_file: Path, targets_file: Path): DATABL[T] = {
+      val feat = (read.lines ! features_file) | (
+        line => {
+          val splits = line.split(",")
+          dtf.tensor_f64(splits.length)(splits.map(_.toDouble):_*).castTo[T]
+        }
+      )
+      val t = (read.lines ! targets_file) | (
+        line => {
+          val splits = line.split(",")
+          val mid: Int = splits.length / 2
+          val ys = splits.map(_.toDouble).toSeq 
+          dtf.tensor_f64(1)(ys(mid)).castTo[T].reshape(Shape(1))
+        }
+      )
+      feat.zip(t).toStream
+    }
+
+    //read the serialized data sets.
+    val train_collection = read_data(train_features_file, train_targets_file)
+    val test_collection  = read_data(test_features_file, test_targets_file)
+
+    val confounded_data: DATABL[T] =
+      confound_data(train_collection, confounding_factor)
+    val confounded_data_test: DATABL[T] =
+      confound_data(test_collection, confounding_factor)
+
+    val data_size          = train_collection.toSeq.length
+    val causal_window      = train_collection.head._2.shape(0)
+    val input_shape        = train_collection.head._1.shape
+    val actual_input_shape = confounded_data.head._1.shape
+    val num_test           = confounded_data_test.length
+
+    type SC_DATA =
+      (helios.data.TF_DATA[T, T], (GaussianScalerTF[T], GaussianScalerTF[T]))
+
+    val scale_data_pipeline = fte.data.scale_dataset[T]
+
+    val dataset = TFDataSet(
+      dtfdata.dataset(confounded_data),
+      dtfdata.dataset(confounded_data_test)
+    )
+
+    val model_train_eval = DataPipe(
+      (data_and_scales: SC_DATA) => {
+
+        val (tfdata, scalers) =
+          data_and_scales
+
+        val root_dir = pdt_experiment / up
+
+        val dir_name = s"bs_${pdt_experiment.segments.last}"
+
+        val tf_summary_dir = root_dir / dir_name
+
+        val stop_condition_tuning = get_stop_condition(
+          iterations_tuning,
+          0.05,
+          epochFlag,
+          data_size,
+          miniBatch
+        )
+
+        val stop_condition_test =
+          get_stop_condition(iterations, 0.01, epochFlag, data_size, miniBatch)
+
+        val stackOperationP = dtfpipe.EagerConcatenate[T](axis = 0)
+
+        val data_ops = dtflearn.model.data_ops[(Output[T], Output[T])](
+          shuffleBuffer = 10,
+          batchSize = miniBatch,
+          prefetchSize = 10
+        )
+
+        val batch_to_tensor = DataPipe((ds: Seq[(Tensor[T], Tensor[T])]) => {
+          val (xs, ys) = ds.unzip
+
+          (
+            dtfpipe.EagerStack[T](axis = 0).run(xs),
+            dtfpipe.EagerStack[T](axis = 0).run(ys)
+          )
+        })
+
+        val tf_handle_ops = dtflearn.model.tf_data_handle_ops[
+          (Tensor[T], Tensor[T]),
+          (Tensor[T], Tensor[T]),
+          Tensor[T],
+          (Output[T], Output[T])
+        ](
+          bufferSize = miniBatch * 2,
+          patternToTensor = Some(batch_to_tensor),
+          concatOpO = Some(stackOperationP)
+        )
+
+        val train_config_tuning =
+          dtflearn.tunable_tf_model.ModelFunction.hyper_params_to_dir >>
+            DataPipe(
+              (p: Path) =>
+                dtflearn.model.trainConfig[(Output[T], Output[T])](
+                  p,
+                  data_ops,
+                  optimizer,
+                  stop_condition_tuning,
+                  Some(
+                    get_train_hooks(
+                      p,
+                      iterations_tuning,
+                      epochFlag,
+                      data_size,
+                      miniBatch
+                    )
+                  )
+                )
+            )
+
+        val train_config_test =
+          dtflearn.model.trainConfig(
+            summaryDir = tf_summary_dir,
+            data_processing = data_ops,
+            optimizer = optimizer,
+            stopCriteria = stop_condition_test,
+            trainHooks = Some(
+              get_train_hooks(
+                tf_summary_dir,
+                iterations,
+                epochFlag,
+                data_size,
+                miniBatch,
+                4,
+                checkpointing_freq
+              )
+            )
+          )
+
+        val dTypeTag = TF[T]
+
+        val split_data = tfdata.training_dataset.partition(
+          DataPipe[(Tensor[T], Tensor[T]), Boolean](
+            _ => scala.util.Random.nextDouble() <= 0.7
+          )
+        )
+
+        val tunableTFModel = dtflearn.tunable_tf_model[
+          (Tensor[T], Tensor[T]),
+          Output[T],
+          Output[T],
+          Output[T],
+          L,
+          Tensor[T],
+          DataType[T],
+          Shape,
+          Tensor[T],
+          DataType[T],
+          Shape,
+          Tensor[T],
+          DataType[T],
+          Shape
+        ](
+          loss_func_generator,
+          hyper_params,
+          split_data.training_dataset,
+          tf_handle_ops,
+          fitness_func,
+          architecture,
+          (dTypeTag.dataType, input_shape),
+          (dTypeTag.dataType, Shape(causal_window)),
+          train_config_tuning(tf_summary_dir),
+          fitness_to_scalar = fitness_to_scalar,
+          validation_data = Some(split_data.test_dataset),
+          inMemory = false
+        )
+
+        val gs = hyper_optimizer match {
+          case "csa" =>
+            new CoupledSimulatedAnnealing[tunableTFModel.type](
+              tunableTFModel,
+              hyp_mapping
+            ).setMaxIterations(
+              hyp_opt_iterations.getOrElse(5)
+            )
+
+          case "gs" => new GridSearch[tunableTFModel.type](tunableTFModel)
+
+          case "cma" =>
+            new CMAES[tunableTFModel.type](
+              tunableTFModel,
+              hyper_params,
+              learning_rate = 0.8,
+              hyp_mapping
+            ).setMaxIterations(hyp_opt_iterations.getOrElse(5))
+
+          case _ => new GridSearch[tunableTFModel.type](tunableTFModel)
+        }
+
+        gs.setPrior(hyper_prior)
+
+        gs.setNumSamples(num_samples)
+
+        println(
+          "--------------------------------------------------------------------"
+        )
+        println("Initiating model tuning")
+        println(
+          "--------------------------------------------------------------------"
+        )
+
+        val (_, config) = gs.optimize(hyper_prior.mapValues(_.draw))
+
+        println(
+          "--------------------------------------------------------------------"
+        )
+        println("\nModel tuning complete")
+        println("Chosen configuration:")
+        pprint.pprintln(config)
+        println(
+          "--------------------------------------------------------------------"
+        )
+
+        println("Training final model based on chosen configuration")
+
+        write(
+          tf_summary_dir / "state.csv",
+          config.keys.mkString(start = "", sep = ",", end = "\n") +
+            config.values.mkString(start = "", sep = ",", end = "")
+        )
+
+        val best_model = tunableTFModel.train_model(
+          config,
+          Some(train_config_test),
+          Some(eval_metric_names.zip(fitness_func)),
+          Some(iterations / checkpointing_freq)
+        )
+
+        val extract_features = tup2_1[Tensor[T], Tensor[T]]
+
+        val handle_ops_input = dtflearn.model.tf_data_handle_ops[
+          Tensor[T],
+          Tensor[T],
+          Tensor[T],
+          Output[T]
+        ](
+          bufferSize = miniBatch * 2,
+          patternToTensor = Some(dtfpipe.EagerStack[T](axis = 0)),
+          concatOpO = Some(stackOperationP)
+        )
+
+        val model_predictions_test = best_model.infer_batch(
+          tfdata.test_dataset.map(extract_features),
+          handle_ops_input
+        )
+
+        val model_predictions_train = best_model.infer_batch(
+          tfdata.training_dataset.map(extract_features),
+          handle_ops_input
+        )
+
+        val test_predictions = scalers._2.i.run(model_predictions_test match {
+          case Left(tensor)      => tensor
+          case Right(collection) => collect_batched_predictions_bl(collection)
+        })
+
+        val train_predictions = scalers._2.i.run(model_predictions_train match {
+          case Left(tensor)      => tensor
+          case Right(collection) => collect_batched_predictions_bl(collection)
+        })
+
+        val num_train = train_predictions.shape(0)
+        val num_test = test_predictions.shape(0)
+
+        val metrics_output_train = new RegressionMetricsTF[T](
+          train_predictions.reshape(Shape(num_train)),
+          dtfpipe
+            .EagerStack[T](axis = 0)
+            .run(
+              dataset.training_dataset
+                .map(tup2_2[Tensor[T], Tensor[T]])
+                .data
+                .toSeq
+            ).reshape(Shape(num_train))
+        )
+
+        metrics_output_train.target_quantity_("Output: Train Data Set")
+
+        val metrics_output_test = new RegressionMetricsTF[T](
+          test_predictions.reshape(Shape(num_test)),
+          dtfpipe
+            .EagerStack[T](axis = 0)
+            .run(
+              dataset.test_dataset.map(tup2_2[Tensor[T], Tensor[T]]).data.toSeq
+            ).reshape(Shape(num_test))
+        )
+
+        metrics_output_test.target_quantity_("Output: Test Data Set")
+
+        TunedModelRunBL(
+          data_and_scales,
+          best_model,
+          Some(metrics_output_train),
+          Some(metrics_output_test),
+          tf_summary_dir,
+          Some(train_predictions),
+          Some(test_predictions)
+        )
+      }
+    )
+
+    val results_model_eval =
+      (scale_data_pipeline > model_train_eval).run(dataset)
+
+    ExperimentResult2[T, L, RESULTBL[T, L]](
+      ExperimentType[T](
+        true,
+        true,
+        "mode",
+        input_shape,
+        actual_input_shape
+      ),
+      results_model_eval
+    )
 
   }
 

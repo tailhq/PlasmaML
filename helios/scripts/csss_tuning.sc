@@ -31,7 +31,7 @@ val median_sw_24h = DataPipe(
   (xs: Seq[Double]) => xs.grouped(24).map(g => dutils.median(g.toStream)).toSeq
 )
 
-val fact            = 20
+val fact            = 10
 val base_iterations = 80000
 def ext_iterations  = base_iterations * fact
 
@@ -40,19 +40,20 @@ def ext_it_pdt  = base_it_pdt + 2
 
 val csss_exp = csss_pdt_model_tuning(
   start_year = 2008,
-  end_year = 2017,
-  test_year = 2015,
-  crop_latitude = 10d,
+  end_year = 2016,
+  test_year = 2011,
+  crop_latitude = 90d,
+  sw_threshold = 600d,
   fraction_pca = 1d,
   fte_step = 0,
   history_fte = 0,
   log_scale_omni = false,
   log_scale_fte = true,
   time_window = time_window,
-  ts_transform_output = max_sw_24h,
-  network_size = Seq(50, 80),
+  ts_transform_output = median_sw_6h,
+  network_size = Seq(40, 40, 40),
   use_persistence = true,
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
   hyper_optimizer = "gs",
   num_samples = 4,
   quantity = OMNIData.Quantities.V_SW,
@@ -85,14 +86,9 @@ helios.visualise_cdt_results(
   csss.scatter_plots_test(csss_exp.results.summary_dir).last
 )
 
-val csss_fixed = csss_so_tuning(
-  start_year = 2007,
-  end_year = 2016,
-  test_year = 2016,
+val csss_fixed = csss_so_tuning.baseline(
+  csss_exp.results.summary_dir,
   network_size = Seq(40, 40),
-  crop_latitude = 20d,
-  log_scale_fte = true,
-  use_persistence = true,
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   optimization_algo = tf.train.Adam(0.01f),
   max_iterations = ext_iterations,

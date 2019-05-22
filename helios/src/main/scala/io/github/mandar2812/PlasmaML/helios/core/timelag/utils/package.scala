@@ -31,10 +31,12 @@ package object utils {
 
   type PATTERN[T]     = ((Int, Tensor[T]), (Float, Float))
   type SLIDINGPATT[T] = (Int, (Tensor[T], Stream[Double], Float))
+  type PATTERNBL[T]   = (Tensor[T], Tensor[T])
 
   type DATA[T]        = Stream[PATTERN[T]]
   type SLIDINGDATA[T] = Stream[SLIDINGPATT[T]]
   type TLDATA[T]      = (DATA[T], SLIDINGDATA[T])
+  type DATABL[T]      = Stream[PATTERNBL[T]]
 
   type PROCDATA[T] = (HeliosDataSet[T, T], (Tensor[T], Tensor[T]))
 
@@ -381,6 +383,25 @@ package object utils {
     )
 
     (data_con, joined_data_con)
+  }
+
+  def confound_data[T: TF: IsFloatOrDouble](
+    dataset: DATABL[T],
+    confounding_factor: Double
+  ): DATABL[T] = {
+    require(
+      confounding_factor >= 0d && confounding_factor <= 1d,
+      "The confounding factor can only be between 0 and 1"
+    )
+
+    val d = dataset.head._1.shape(0).scalar
+
+    val num_sel_dims = math.ceil(d * (1d - confounding_factor)).toInt
+
+    val data_con =
+      dataset.map(patt => (patt._1(0 :: num_sel_dims), patt._2))
+
+    data_con
   }
 
   /**
@@ -1030,6 +1051,14 @@ package object utils {
       )
     )
 
+  def collect_batched_predictions_bl[T: TF: IsFloatOrDouble](
+    preds: DataSet[Tensor[T]]
+  ): Tensor[T] =
+  tfi.concatenate(
+    preds.data.toSeq,
+    axis = 0
+  )
+
   /**
     * Process the predictions made by a causal time lag model.
     *
@@ -1407,6 +1436,23 @@ package object utils {
     write.over(
       directory / s"test_performance.json",
       s"[${test_performance._1.to_json},\n${test_performance._2.to_json}]"
+    )
+  }
+
+  def write_performance_baseline[T: TF: IsReal](
+    train_performance: RegressionMetricsTF[T],
+    test_performance: RegressionMetricsTF[T],
+    directory: Path
+  ): Unit = {
+
+    write.over(
+      directory / s"training_performance.json",
+      s"${train_performance.to_json}"
+    )
+
+    write.over(
+      directory / s"test_performance.json",
+      s"${test_performance.to_json}"
     )
   }
 

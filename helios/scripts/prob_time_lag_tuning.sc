@@ -2,7 +2,8 @@ import $exec.helios.scripts.{
   pdt_const_lag_tuning => tuning_exp1,
   pdt_const_v_tuning => tuning_exp2,
   pdt_const_a_tuning => tuning_exp3,
-  pdt_softplus_tuning => tuning_exp4
+  pdt_softplus_tuning => tuning_exp4,
+  run_model_tuning_baseline => baseline_exp
 }
 
 import ammonite.ops.ImplicitWd._
@@ -10,6 +11,13 @@ import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import $exec.helios.scripts.env
 
+
+val num_neurons_exp2 = Seq(40, 40)
+val num_neurons_exp3 = Seq(60, 40)
+val num_neurons_exp4 = Seq(60, 40)
+val act_exp2 = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
+val act_exp3 = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
+val act_exp4 = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
 
 val exp_set2 = tuning_exp2.main(
   d = 10,
@@ -20,12 +28,29 @@ val exp_set2 = tuning_exp2.main(
   noiserot = 0.001,
   alpha = 0.01,
   train_test_separate = true,
-  num_neurons = Seq(40, 40),
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  num_neurons = num_neurons_exp2,
+  activation_func = act_exp2,
   iterations = 100000,
   iterations_tuning = 20000,
   pdt_iterations = 3,
   pdt_iterations_tuning = 5,
+  miniBatch = 128,
+  optimizer = tf.train.Adam(0.01f),
+  confounding = Seq(0d),
+  num_samples = 4,
+  hyper_optimizer = "gs",
+  hyp_opt_iterations = Some(8),
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 1
+)
+
+val exp_set2_bs = baseline_exp(
+  exp_set2.head.results.summary_dir,
+  d = 10,
+  num_neurons = num_neurons_exp2,
+  activation_func = act_exp2,
+  iterations = 100000,
+  iterations_tuning = 20000,
   miniBatch = 128,
   optimizer = tf.train.Adam(0.01f),
   confounding = Seq(0d),
@@ -55,12 +80,28 @@ val exp_set3 = tuning_exp3.main(
   noiserot = 0.001,
   alpha = 0.01,
   train_test_separate = true,
-  num_neurons = Seq(60, 40),
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  num_neurons = num_neurons_exp3,
+  activation_func = act_exp3,
   iterations = 160000,
   iterations_tuning = 20000,
   pdt_iterations = 3,
   pdt_iterations_tuning = 5,
+  miniBatch = 128,
+  optimizer = tf.train.Adam(0.01f),
+  confounding = Seq(0d),
+  num_samples = 4,
+  hyper_optimizer = "gs",
+  hyp_opt_iterations = Some(8),
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 1
+)
+
+val exp_set3_bs = baseline_exp(
+  exp_set3.head.results.summary_dir,
+  num_neurons = num_neurons_exp3,
+  activation_func = act_exp3,
+  iterations = 100000,
+  iterations_tuning = 20000,
   miniBatch = 128,
   optimizer = tf.train.Adam(0.01f),
   confounding = Seq(0d),
@@ -90,8 +131,8 @@ val exp_set4 = tuning_exp4.main(
   noiserot = 0.001,
   alpha = 0.01,
   train_test_separate = true,
-  num_neurons = Seq(60, 40),
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  num_neurons = num_neurons_exp4,
+  activation_func = act_exp4,
   iterations = 160000,
   iterations_tuning = 20000,
   pdt_iterations = 3,
@@ -105,6 +146,23 @@ val exp_set4 = tuning_exp4.main(
   regularization_types = Seq("L2"),
   checkpointing_freq = 1
 )
+
+val exp_set4_bs = baseline_exp(
+  exp_set4.head.results.summary_dir,
+  num_neurons = num_neurons_exp4,
+  activation_func = act_exp4,
+  iterations = 100000,
+  iterations_tuning = 20000,
+  miniBatch = 128,
+  optimizer = tf.train.Adam(0.01f),
+  confounding = Seq(0d),
+  num_samples = 4,
+  hyper_optimizer = "gs",
+  hyp_opt_iterations = Some(8),
+  regularization_types = Seq("L2"),
+  checkpointing_freq = 1
+)
+
 
 timelag.organize_results(exp_set4, home / 'tmp / 'results_exp4, "exp4_")
 %%(
