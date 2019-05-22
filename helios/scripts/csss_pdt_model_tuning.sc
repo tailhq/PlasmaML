@@ -4,7 +4,7 @@ import _root_.spire.implicits._
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.pipes._
-import _root_.io.github.mandar2812.dynaml.DynaMLPipe
+import _root_.io.github.mandar2812.dynaml.DynaMLPipe._
 import _root_.io.github.mandar2812.dynaml.analysis._
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import _root_.io.github.mandar2812.PlasmaML.omni.OMNIData
@@ -16,6 +16,7 @@ import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{
 }
 import _root_.io.github.mandar2812.PlasmaML.helios
 import breeze.numerics.sigmoid
+import breeze.linalg._
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
@@ -113,7 +114,7 @@ def setup_exp_data(
         true
   )
 
-  val test_start_month = new DateTime(test_year, month, 1, 0, 0)
+  val test_start_month = new DateTime(test_year, test_month, 1, 0, 0)
 
   val test_end_month = test_start_month.plusMonths(1)
 
