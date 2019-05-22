@@ -16,7 +16,7 @@ import _root_.io.github.mandar2812.dynaml.tensorflow.layers.{
 }
 import _root_.io.github.mandar2812.PlasmaML.helios
 import breeze.numerics.sigmoid
-import breeze.linalg._
+import breeze.linalg.{DenseVector, DenseMatrix}
 import org.platanios.tensorflow.api._
 import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
