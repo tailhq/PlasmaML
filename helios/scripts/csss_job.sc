@@ -5,6 +5,10 @@ import $file.csss_so_tuning
 import $file.env
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
+import ammonite.ops.ImplicitWd._
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
+import org.platanios.tensorflow.api._
+import _root_.io.github.mandar2812.PlasmaML.omni.OMNIData
 
 @main
 def main(
@@ -52,7 +56,7 @@ def main(
   try {
     %%(
       'Rscript,
-      script,
+      csss.script,
       csss_exp.results.summary_dir,
       csss.scatter_plots_test(csss_exp.results.summary_dir).last,
       "test_"
@@ -67,8 +71,8 @@ def main(
     network_size = network_size,
     activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
     optimization_algo = tf.train.Adam(0.01f),
-    max_iterations = ext_iterations,
-    max_iterations_tuning = base_iterations,
+    max_iterations = csss.ext_iterations,
+    max_iterations_tuning = csss.base_iterations,
     batch_size = 512,
     num_samples = 4
   )
