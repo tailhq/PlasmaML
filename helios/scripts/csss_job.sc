@@ -65,8 +65,8 @@ def main(
 
   val csss_fixed = csss_so_tuning.baseline(
     csss_exp.results.summary_dir,
-    network_size = Seq(40, 40),
-    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+    network_size = network_size,
+    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
     optimization_algo = tf.train.Adam(0.01f),
     max_iterations = ext_iterations,
     max_iterations_tuning = base_iterations,
