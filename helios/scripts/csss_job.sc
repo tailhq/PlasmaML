@@ -74,4 +74,10 @@ def main(
     num_samples = 4
   )
 
+  println("CDT Model Performance:")
+  csss_exp.results.metrics_test.get.print()
+
+  println("Base Line Model Performance:")
+  csss_fixed.results.metrics_test.get.print()
+
 }
