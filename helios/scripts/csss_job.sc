@@ -73,7 +73,7 @@ def main(
     optimization_algo = org.platanios.tensorflow.api.tf.train.Adam(0.01f),
     max_iterations = csss.ext_iterations,
     max_iterations_tuning = csss.base_iterations,
-    batch_size = 512,
+    batch_size = 128,
     num_samples = 4
   )
 
