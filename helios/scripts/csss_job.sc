@@ -2,7 +2,6 @@ import _root_.io.github.mandar2812.dynaml.{utils => dutils}
 import $file.csss
 import $file.csss_pdt_model_tuning
 import $file.csss_so_tuning
-import $file.csss_tuning
 import $file.env
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 import org.joda.time._
@@ -29,8 +28,8 @@ def main(
     history_fte = 0,
     log_scale_omni = false,
     log_scale_fte = true,
-    time_window = csss_tuning.time_window,
-    ts_transform_output = csss_tuning.median_sw_6h,
+    time_window = csss.time_window,
+    ts_transform_output = csss.median_sw_6h,
     network_size = Seq(40, 40, 40),
     use_persistence = true,
     activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
@@ -39,10 +38,10 @@ def main(
     quantity = OMNIData.Quantities.V_SW,
     reg_type = "L2",
     batch_size = 128,
-    max_iterations = csss_tuning.ext_iterations,
-    max_iterations_tuning = csss_tuning.base_iterations,
-    pdt_iterations_tuning = csss_tuning.base_it_pdt,
-    pdt_iterations_test = csss_tuning.ext_it_pdt,
+    max_iterations = csss.ext_iterations,
+    max_iterations_tuning = csss.base_iterations,
+    pdt_iterations_tuning = csss.base_it_pdt,
+    pdt_iterations_test = csss.ext_it_pdt,
     optimization_algo = tf.train.Adam(0.001f),
     summary_dir = env.summary_dir / csss_job_id,
     get_training_preds = true,
