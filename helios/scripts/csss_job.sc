@@ -66,21 +66,7 @@ def main(
   }
 
 
-  val csss_fixed = csss_so_tuning.baseline(
-    csss_exp.results.summary_dir,
-    network_size = network_size,
-    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
-    optimization_algo = org.platanios.tensorflow.api.tf.train.Adam(0.01f),
-    max_iterations = csss.ext_iterations,
-    max_iterations_tuning = csss.base_iterations,
-    batch_size = 128,
-    num_samples = 4
-  )
-
   println("CDT Model Performance:")
   csss_exp.results.metrics_test.get.print()
-
-  println("Base Line Model Performance:")
-  csss_fixed.results.metrics_test.get.print()
 
 }
