@@ -211,12 +211,13 @@ def apply() = {
     pdt_iterations = 3,
     pdt_iterations_tuning = 5,
     miniBatch = 128,
-    optimizer = org.platanios.tensorflow.api.tf.train.AdaDelta(0.01f),
+    optimizer = org.platanios.tensorflow.api.tf.train.Adam(0.01f),
     confounding = Seq(0d),
-    num_samples = 20,
+    num_samples = 4,
     hyper_optimizer = "gs",
     hyp_opt_iterations = Some(8),
-    regularization_types = Seq("L2")
+    regularization_types = Seq("L2"),
+    checkpointing_freq = 1  
   )
 
   timelag.organize_results(exp_set1, home / 'tmp / 'results_exp1, "exp1_")
