@@ -15,7 +15,7 @@ def main(
   csss_job_id: String,
   test_year: Int = 2015,
   test_month: Int = 10,
-  network_size: Seq[Int] = Seq(40, 40, 40)
+  network_size: Seq[Int] = Seq(40, 60)
 ) = {
 
   val dt = DateTime.now()
@@ -34,9 +34,9 @@ def main(
     log_scale_fte = true,
     time_window = csss.time_window,
     ts_transform_output = csss.median_sw_6h,
-    network_size = Seq(40, 40, 40),
+    network_size = network_size,
     use_persistence = true,
-    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
+    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
     hyper_optimizer = "gs",
     num_samples = 4,
     quantity = OMNIData.Quantities.V_SW,
@@ -69,7 +69,7 @@ def main(
   val csss_fixed = csss_so_tuning.baseline(
     csss_exp.results.summary_dir,
     network_size = network_size,
-    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
+    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
     optimization_algo = org.platanios.tensorflow.api.tf.train.Adam(0.01f),
     max_iterations = csss.ext_iterations,
     max_iterations_tuning = csss.base_iterations,

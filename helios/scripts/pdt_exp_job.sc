@@ -1,10 +1,8 @@
-import $file.{
-  pdt_const_lag_tuning => tuning_exp1,
-  pdt_const_v_tuning => tuning_exp2,
-  pdt_const_a_tuning => tuning_exp3,
-  pdt_softplus_tuning => tuning_exp4,
-  run_model_tuning_baseline => baseline_exp
-}
+import $file.{pdt_const_lag_tuning => tuning_exp1}
+import $file.{pdt_const_v_tuning => tuning_exp2}
+import $file.{pdt_const_a_tuning => tuning_exp3}
+import $file.{pdt_softplus_tuning => tuning_exp4}
+import $file.{run_model_tuning_baseline => baseline_exp}
 import ammonite.ops._
 import ammonite.ops.ImplicitWd._
 import _root_io.github.mandar2812.dynaml.tensorflow._
@@ -14,9 +12,9 @@ import $file.env
 import _root_.io.github.mandar2812.dynaml.repl.Router.main
 
 @main
-def main() = {
-    
-  val num_neurons_exp2 = Seq(40, 40)
+def apply() = {
+
+  val num_neurons_exp2 = Seq(60, 40)
   val num_neurons_exp3 = Seq(60, 40)
   val num_neurons_exp4 = Seq(60, 40)
   val act_exp2         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
@@ -27,7 +25,7 @@ def main() = {
     d = 10,
     size_training = 10000,
     size_test = 2000,
-    sliding_window = 10,
+    sliding_window = 15,
     noise = 0.75,
     noiserot = 0.001,
     alpha = 0.02,
@@ -85,7 +83,7 @@ def main() = {
     d = 10,
     size_training = 10000,
     size_test = 2000,
-    sliding_window = 10,
+    sliding_window = 15,
     noise = 0.75,
     noiserot = 0.001,
     alpha = 0.02,
@@ -142,7 +140,7 @@ def main() = {
     d = 10,
     size_training = 10000,
     size_test = 2000,
-    sliding_window = 10,
+    sliding_window = 15,
     noise = 0.75,
     noiserot = 0.001,
     alpha = 0.02,
@@ -199,7 +197,7 @@ def main() = {
     d = 10,
     size_training = 8000,
     size_test = 2000,
-    sliding_window = 20,
+    sliding_window = 15,
     noise = 0.7,
     noiserot = 0.001,
     alpha = 0.02,
@@ -249,5 +247,12 @@ def main() = {
     exp_set1_bs.head.results.metrics_train.get,
     exp_set1_bs.head.results.metrics_test.get,
     exp_set1_bs.head.results.summary_dir
+  )
+
+  (
+    (exp_set1, exp_set1_bs),
+    (exp_set2, exp_set2_bs),
+    (exp_set3, exp_set3_bs),
+    (exp_set4, exp_set4_bs)
   )
 }
