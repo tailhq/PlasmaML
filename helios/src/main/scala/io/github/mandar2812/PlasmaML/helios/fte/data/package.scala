@@ -365,7 +365,7 @@ package object data {
             new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
           val t: Double = s._1.getDayOfYear.toDouble / num_days_year
           val xs: Seq[Double] =
-            Seq(s._1.getYear.toDouble, s._2.head._1) ++ s._2.map(_._3.get)
+            Seq(s._1.getYear.toDouble, t, s._2.head.lon) ++ s._2.map(_.value.get)
 
           (s._1, DenseVector(xs.toArray))
         }
@@ -961,6 +961,155 @@ package object data {
     (MinMaxScaler(min_f, max_f), MinMaxScaler(min_t, max_t))
   }
 
+
+    /**
+    * Creates a DynaML data set consisting of time FTE values.
+    * The FTE values are loaded in a Breeze DenseVector.
+    *
+    * @param data_path The location containing the FTE/Brss data files
+    * @param carrington_rotation_table A data collection containing meta-data
+    *                                  about each Carrington Rotation
+    * @param log_flag Set to true if the FTE values should be expressed in log scale
+    * @param start Starting time stamp of the data
+    * @param end End time stamp of the data.
+    * @param deltaTFTE The size of the time history of the input features to
+    *                  use when constructing input vectors.
+    * @param fte_step The number of time steps to skip when constructing
+    *                 each element of the time history.
+    * @return A data collection consisting of (time stamp, input vector) tuples.
+    */
+    def load_fte_data_bdv(
+      data_path: Path,
+      carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
+      log_flag: Boolean,
+      start: DateTime,
+      end: DateTime
+    )(deltaTFTE: Int,
+      fte_step: Int,
+      latitude_limit: Double,
+      conv_flag: Boolean
+    ): ZipDataSet[DateTime, DenseVector[Double]] = {
+  
+      //Find which carrington rotations contain
+      //the beginning and end of the data.
+      val start_rotation =
+        carrington_rotation_table.filter(_._2.contains(start)).data.head._1
+  
+      val end_rotation =
+        carrington_rotation_table.filter(_._2.contains(end)).data.head._1
+  
+      /**
+        * Data Processing: Outline.
+        *
+        * We start by loading the raw FTE and BRSS data for each
+        * Carrington rotation. The FTE values are clamped to ensure
+        * they are not greater than 1000 (physically meaningless).
+        *
+        */
+      val data = dtfdata
+        .dataset(start_rotation to end_rotation)
+        .map(
+          BifurcationPipe(
+            identityPipe[Int],
+            pipes.read_fte_file(data_path)
+          )
+        )
+        .map(
+          identityPipe[Int] *
+            IterableDataPipe[HelioPattern, HelioPattern](
+              pipes.clamp_fte > pipes.log_fte(log_flag)
+            )
+        )
+        .to_zip(
+          identityPipe[(Int, Iterable[HelioPattern])]
+        )
+  
+      /**
+        * After constructing `data`, the starting data collection,
+        * this is processed along with the Carrington Rotation table
+        * to give each data pattern a time stamp.
+        *
+        * t = DateTime(End of Rotation) - num_of_hours_in_rotation*Longitude/360
+        *
+        * After time stamping (rounding to hour), the FTE and Brss collections are
+        * grouped by their respective time stamps and sorted by latitude.
+        *
+        * Finally the sorted FTE and Brss collections for each rotation are zipped
+        * and only the patterns within the latitude limit are retained.
+        *
+        * Then the collections for each time stamp are loaded into Breeze Dense Vectors.
+        *
+        */
+      val processed_data =
+        carrington_rotation_table
+          .join(data)
+          .flatMap(
+            pipes.process_timestamps_rotation > pipes.sort_data
+          )
+          .filter(DataPipe(_._2.length == 180))
+          .map(pipes.crop_data_by_latitude(latitude_limit))
+          .map(pipes.load_slice_to_bdv)
+          .to_zip(identityPipe[(DateTime, DenseVector[Double])])
+  
+      /**
+        * The processed data set is now interpolated to ensure hourly cadence.
+        * If specified by the user, a time history of the inputs is also constructed.
+        */
+      println("Interpolating FTE values to fill hourly cadence requirement")
+      val interpolated_fte = dtfdata.dataset(
+        processed_data.data
+          .sliding(2)
+          .filter(p => new Duration(p.head._1, p.last._1).getStandardHours > 1)
+          .flatMap(i => {
+            val duration  = new Duration(i.head._1, i.last._1).getStandardHours
+            val delta_fte = (i.last._2 - i.head._2) / duration.toDouble
+  
+            (1 until duration.toInt)
+              .map(
+                l => (i.head._1.plusHours(l), i.head._2 + delta_fte * l.toDouble)
+              )
+          })
+          .toIterable
+      )
+  
+      //Transformations which load time history of the input features.
+      val load_history = (history: Iterable[(DateTime, DenseVector[Double])]) => {
+  
+        val history_size = history.toSeq.length / fte_step
+  
+        val hs = history
+          .map(_._2)
+          .toSeq
+          .zipWithIndex
+          .filter(_._2 % fte_step == 0)
+          .map(_._1)
+  
+        (
+          history.last._1,
+          DenseVector.vertcat(hs: _*)
+        )
+      }
+  
+      val generate_history = DataPipe(
+        (s: Iterable[(DateTime, DenseVector[Double])]) =>
+          if (deltaTFTE > 0)
+            s.sliding((deltaTFTE * fte_step) + 1).map(load_history).toIterable
+          else s
+      )
+  
+      processed_data
+        .concatenate(interpolated_fte)
+        .transform(
+          DataPipe[
+            Iterable[(DateTime, DenseVector[Double])],
+            Iterable[(DateTime, DenseVector[Double])]
+          ](_.toSeq.sortBy(_._1))
+        )
+        .transform(generate_history)
+        .to_zip(identityPipe[(DateTime, DenseVector[Double])])
+  
+    }
+  
   /**
     * Creates a DynaML data set consisting of time FTE values.
     * The FTE values are loaded in a Breeze DenseVector.
@@ -977,7 +1126,7 @@ package object data {
     *                 each element of the time history.
     * @return A data collection consisting of (time stamp, input vector) tuples.
     */
-  def load_fte_data_bdv(
+  def load_fte_data_bdv2(
     data_path: Path,
     carrington_rotation_table: ZipDataSet[Int, CarringtonRotation],
     log_flag: Boolean,
