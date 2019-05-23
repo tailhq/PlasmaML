@@ -14,9 +14,9 @@ import _root_.io.github.mandar2812.dynaml.repl.Router.main
 @main
 def apply() = {
 
-  val num_neurons_exp2 = Seq(60, 40)
-  val num_neurons_exp3 = Seq(60, 40)
-  val num_neurons_exp4 = Seq(60, 40)
+  val num_neurons_exp2 = Seq(40, 40)
+  val num_neurons_exp3 = Seq(40, 40)
+  val num_neurons_exp4 = Seq(40, 40)
   val act_exp2         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
   val act_exp3         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
   val act_exp4         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
