@@ -1,11 +1,11 @@
-import $file.{pdt_const_lag_tuning => tuning_exp1}
-import $file.{pdt_const_v_tuning => tuning_exp2}
-import $file.{pdt_const_a_tuning => tuning_exp3}
-import $file.{pdt_softplus_tuning => tuning_exp4}
-import $file.{run_model_tuning_baseline => baseline_exp}
+import $file.pdt_const_lag_tuning
+import $file.pdt_const_v_tuning
+import $file.pdt_const_a_tuning
+import $file.pdt_softplus_tuning
+import $file.run_model_tuning_baseline
 import ammonite.ops._
 import ammonite.ops.ImplicitWd._
-import _root_io.github.mandar2812.dynaml.tensorflow._
+import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import $file.env
 
@@ -21,7 +21,7 @@ def apply() = {
   val act_exp3         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
   val act_exp4         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
 
-  val exp_set2 = tuning_exp2.main(
+  val exp_set2 = pdt_const_v_tuning.main(
     d = 10,
     size_training = 10000,
     size_test = 2000,
@@ -56,7 +56,7 @@ def apply() = {
     "results_exp2"
   )
 
-  val exp_set2_bs = baseline_exp(
+  val exp_set2_bs = run_model_tuning_baseline(
     exp_set2.head.results.summary_dir,
     d = 10,
     num_neurons = num_neurons_exp2,
@@ -79,7 +79,7 @@ def apply() = {
     exp_set2_bs.head.results.summary_dir
   )
 
-  val exp_set3 = tuning_exp3.main(
+  val exp_set3 = pdt_const_a_tuning.main(
     d = 10,
     size_training = 10000,
     size_test = 2000,
@@ -114,8 +114,9 @@ def apply() = {
     "results_exp3"
   )
 
-  val exp_set3_bs = baseline_exp(
+  val exp_set3_bs = run_model_tuning_baseline(
     exp_set3.head.results.summary_dir,
+    d = 10,
     num_neurons = num_neurons_exp3,
     activation_func = act_exp3,
     iterations = 200000,
@@ -136,7 +137,7 @@ def apply() = {
     exp_set3_bs.head.results.summary_dir
   )
 
-  val exp_set4 = tuning_exp4.main(
+  val exp_set4 = pdt_softplus_tuning.main(
     d = 10,
     size_training = 10000,
     size_test = 2000,
@@ -171,8 +172,9 @@ def apply() = {
     "results_exp4"
   )
 
-  val exp_set4_bs = baseline_exp(
+  val exp_set4_bs = run_model_tuning_baseline(
     exp_set4.head.results.summary_dir,
+    d = 10,
     num_neurons = num_neurons_exp4,
     activation_func = act_exp4,
     iterations = 100000,
@@ -193,7 +195,7 @@ def apply() = {
     exp_set4_bs.head.results.summary_dir
   )
 
-  val exp_set1 = tuning_exp1.main(
+  val exp_set1 = pdt_const_lag_tuning.main(
     d = 10,
     size_training = 8000,
     size_test = 2000,
@@ -227,8 +229,9 @@ def apply() = {
     "results_exp1"
   )
 
-  val exp_set1_bs = baseline_exp(
+  val exp_set1_bs = run_model_tuning_baseline(
     exp_set1.head.results.summary_dir,
+    d = 10,
     num_neurons = num_neurons_exp2,
     activation_func = act_exp2,
     iterations = 100000,
