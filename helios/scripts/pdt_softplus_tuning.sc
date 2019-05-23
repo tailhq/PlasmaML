@@ -43,14 +43,14 @@ def main(
   //Output computation
   val beta = 100f
 
-  val compute_v = DataPipe[Tensor[Double], Float]((v: Tensor[Double]) => v.square.mean().scalar.asInstanceOf[Float]*beta/d)
+  val compute_v = DataPipe[Tensor[Double], Float]((v: Tensor[Double]) => v.square.mean().scalar.asInstanceOf[Float]*beta/d + 40f)
 
   val compute_output: DataPipe[Tensor[Double], (Float, Float)] = DataPipe(
     (x: Tensor[Double]) => {
 
       val out = compute_v(x)
 
-      (math.log(1 + math.exp(out/100.0)).toFloat, out + scala.util.Random.nextGaussian().toFloat)
+      (math.log(1 + math.exp(out/20.0)).toFloat, out + scala.util.Random.nextGaussian().toFloat)
     })
 
   val experiment_results = run_model_tuning_pdt(

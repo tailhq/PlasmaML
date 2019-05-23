@@ -10,7 +10,12 @@ import $exec.helios.scripts.csss
 import $exec.helios.scripts.env
 
 val exp_dirs =
-  (2 to 4).flatMap(i => ls ! home / "tmp" / s"results_exp$i" |? (_.isDir))
+  (1 to 4).flatMap(
+    i =>
+      ls ! home / "tmp" / s"results_exp$i" |? (
+        p => p.isDir && !p.segments.last.contains("bs_")
+      )
+  )
 
 val extract_state = (p: Path) => {
   val lines = read.lines ! p / "state.csv"
@@ -38,26 +43,6 @@ val stabilities = exp_dirs.map(exp_dir => {
     triple._3,
     state,
     params_enc
-  )
-
-})
-
-val stabilities2 = exp_dirs2.map(exp_dir => {
-
-  val state = extract_state(exp_dir)
-
-  val triple = timelag.utils.read_cdt_model_preds(
-    exp_dir / "test_predictions.csv",
-    exp_dir / "test_probabilities.csv",
-    exp_dir / "test_data_targets.csv"
-  )
-
-  timelag.utils.compute_stability_metrics(
-    triple._1,
-    triple._2,
-    triple._3,
-    state,
-    helios.learn.cdt_loss.params_enc
   )
 
 })

@@ -45,7 +45,7 @@ def main(
   val compute_output = DataPipe(
     (v: Tensor[Double]) =>
       (
-        v.square.mean().scalar.asInstanceOf[Float]*beta*1f/d + 100,
+        v.square.mean().scalar.asInstanceOf[Float]*beta*0.5f/d + 100,
         beta*0.05f
       )
   )
