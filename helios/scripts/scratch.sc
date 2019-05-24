@@ -138,3 +138,10 @@ def plot_pattern(pattern: P): Unit = {
       .toString("HH:00 d MMMM, yyyy")
   )
 }
+
+
+val test_labels = {
+  val test_files = folds_dtlr.flatMap(p => ls! p |? (_.segments.last.contains("test_data")))
+
+  
+}

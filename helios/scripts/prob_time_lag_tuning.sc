@@ -12,8 +12,8 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import $exec.helios.scripts.env
 
 
-val num_neurons_exp2 = Seq(60, 40)
-val num_neurons_exp3 = Seq(60, 40)
+val num_neurons_exp2 = Seq(40, 40)
+val num_neurons_exp3 = Seq(40, 40)
 val num_neurons_exp4 = Seq(60, 40)
 val act_exp2         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
 val act_exp3         = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f)
@@ -55,7 +55,7 @@ timelag.organize_results(exp_set2, home / 'tmp / 'results_exp2, "exp2_")
 )
 
 val exp_set2_bs = baseline_exp(
-  exp_set2.head.results.summary_dir,
+  exp_dirs(1),//exp_set2.head.results.summary_dir,
   d = 10,
   num_neurons = num_neurons_exp2,
   activation_func = act_exp2,
@@ -113,7 +113,8 @@ timelag.organize_results(exp_set3, home / 'tmp / 'results_exp3, "exp3_")
 )
 
 val exp_set3_bs = baseline_exp(
-  exp_set3.head.results.summary_dir,
+  exp_dirs(0),//exp_set3.head.results.summary_dir,
+  d = 10,
   num_neurons = num_neurons_exp3,
   activation_func = act_exp3,
   iterations = 200000,
@@ -170,7 +171,8 @@ timelag.organize_results(exp_set4, home / 'tmp / 'results_exp4, "exp4_")
 )
 
 val exp_set4_bs = baseline_exp(
-  exp_set4.head.results.summary_dir,
+  exp_dirs(4),//exp_set4.head.results.summary_dir,
+  d = 10,
   num_neurons = num_neurons_exp4,
   activation_func = act_exp4,
   iterations = 100000,

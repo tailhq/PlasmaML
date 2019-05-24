@@ -198,6 +198,12 @@ package object data {
           data_path / s"GONGbrss_csss${carrington_rotation}HR.fits"
     )
 
+    val brcp_file = MetaPipe(
+      (data_path: Path) =>
+        (carrington_rotation: Int) =>
+          data_path / s"GONGbrcp_csss${carrington_rotation}HR.fits"
+    )
+
     val fits_file_to_array = DataPipe((file: Path) => {
       new Fits(file.toString)
         .getHDU(0)
@@ -223,7 +229,7 @@ package object data {
     )
 
     val read_brss_file = brss_file >> (fits_file_to_array > fits_array_to_collection)
-
+    val read_brcp_file = brcp_file >> (fits_file_to_array > fits_array_to_collection)
     val read_fte_file = {
       fte_file >> (
         trimLines >
@@ -1161,7 +1167,7 @@ package object data {
           identityPipe[Int],
           BifurcationPipe(
             pipes.read_fte_file(data_path),
-            pipes.read_brss_file(data_path)
+            pipes.read_brcp_file(data_path)
           )
         )
       )
@@ -1602,7 +1608,7 @@ package object data {
     )
 
     println("\nProcessing FTE Data")
-    val fte_data = load_fte_data_bdv(
+    val fte_data = load_fte_data_bdv2(
       fte_data_path,
       carrington_rotations,
       log_scale_fte,
