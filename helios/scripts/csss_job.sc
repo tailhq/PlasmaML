@@ -15,7 +15,7 @@ def main(
   csss_job_id: String,
   test_year: Int = 2015,
   test_month: Int = 10,
-  network_size: Seq[Int] = Seq(40, 60)
+  network_size: Seq[Int] = Seq(60, 40)
 ) = {
 
   val dt = DateTime.now()
