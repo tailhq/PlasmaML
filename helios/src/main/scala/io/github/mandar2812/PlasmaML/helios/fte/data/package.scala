@@ -1327,6 +1327,47 @@ package object data {
 
   }
 
+  def load_omni_inputs(
+    start: DateTime,
+    end: DateTime,
+    solar_wind_params: Seq[Int] = Seq(OMNIData.Quantities.sunspot_number)
+  ): ZipDataSet[DateTime, DenseVector[Double]] = {
+
+    val omni_data_path = pwd / 'data
+
+    println(s"Loading OMNI quantity indices: ${solar_wind_params}")
+
+    solar_wind_params.foreach(s => if(OMNIData.columnNames.contains(s)) println(s"Column $s: ${OMNIData.columnNames(s)}"))
+
+    val load_omni_file =
+      fileToStream >
+        replaceWhiteSpaces >
+        extractTrainingFeatures(
+          OMNIData.dateColumns ++ solar_wind_params,
+          OMNIData.columnFillValues
+        ) >
+        OMNILoader.processWithDateTime >
+        IterableDataPipe(
+          (p: (DateTime, Seq[Double])) => p._2.forall(x => !x.isNaN)
+        )
+
+    dtfdata
+      .dataset(start.getYear to end.getYear)
+      .map(
+        DataPipe(
+          (i: Int) =>
+            omni_data_path.toString() + "/" + OMNIData.getFilePattern(i)
+        )
+      )
+      .flatMap(load_omni_file)
+      .to_zip(
+        identityPipe[DateTime] * DataPipe[Seq[Double], DenseVector[Double]](
+          xs => DenseVector(xs.toArray)
+        )
+      )
+
+  }
+
   /**
     * Load the OMNI solar wind time series as a [[Tensor]]
     *
@@ -1601,6 +1642,8 @@ package object data {
     *
     * @param tt_partition A data pipeline which decides which data patterns lie in training or test data sets.
     *
+    * @param exogenous_inputs A set of OMNI data set quantities which should be used as exogenous data sources.
+    *
     */
   def generate_dataset(
     fte_data_path: Path,
@@ -1609,7 +1652,8 @@ package object data {
     tt_partition: DataPipe[(DateTime, (DenseVector[Double], DenseVector[
           Double
         ])), Boolean],
-    conv_flag: Boolean = false
+    conv_flag: Boolean = false,
+    exogenous_inputs: Seq[Int] = Seq(OMNIData.Quantities.sunspot_number)
   ): helios.data.DATA[DenseVector[Double], DenseVector[Double]] = {
 
     val FteOmniConfig(
@@ -1665,12 +1709,12 @@ package object data {
 
     println("Constructing joined data set")
 
-    omni_data match {
-      case Right(omni) => fte_data.join(omni).partition(tt_partition)
+    val fte_omni = omni_data match {
+      case Right(omni) => fte_data.join(omni)
       case Left(omni) =>
         fte_data
           .join(omni)
-          .map(
+          .to_zip(
             identityPipe[DateTime] * DataPipe(
               (p: (
                 DenseVector[Double],
@@ -1678,7 +1722,28 @@ package object data {
               )) => (DenseVector.vertcat(p._1, p._2._1), p._2._2)
             )
           )
-          .partition(tt_partition)
+    }
+
+    if (exogenous_inputs.isEmpty) {
+      fte_omni.partition(tt_partition)
+    } else {
+      println("Joining exogenous inputs")
+
+      val ex_data = load_omni_inputs(start, end, exogenous_inputs)
+
+      fte_omni
+        .join(ex_data)
+        .map(
+          identityPipe[DateTime] * DataPipe(
+            (p: (
+              (DenseVector[Double], DenseVector[Double]),
+              DenseVector[Double]
+            )) => {
+              (DenseVector.vertcat(p._1._1, p._2), p._1._2)
+            }
+          )
+        )
+        .partition(tt_partition)
     }
 
   }
