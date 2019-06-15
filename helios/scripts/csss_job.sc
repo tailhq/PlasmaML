@@ -22,7 +22,7 @@ def main(
 
   val csss_exp = csss_pdt_model_tuning(
     start_year = 2008,
-    end_year = 2016,
+    end_year = 2017,
     test_year = test_year,
     test_month = test_month,
     crop_latitude = 90d,
