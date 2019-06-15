@@ -143,11 +143,11 @@ def setup_exp_data(
         experiment_config,
         ts_transform_output,
         tt_partition_one_month,
-        conv_flag,
+        conv_flag/* ,
         Seq(
           OMNIData.Quantities.sunspot_number, 
           OMNIData.Quantities.F10_7
-        )
+        ) */
       )
 
     println("Serializing data sets")
