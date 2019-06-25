@@ -39,7 +39,7 @@ val base_it_pdt = 3
 def ext_it_pdt  = base_it_pdt + 2
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2008,
+  start_year = 2015,
   end_year = 2016,
   test_year = 2015,
   test_month = 10,
@@ -68,6 +68,7 @@ val csss_exp = csss_pdt_model_tuning(
   summary_dir = env.summary_dir,
   get_training_preds = true,
   data_scaling = "gauss",
+  use_copula = true,
   existing_exp = None
 )
 

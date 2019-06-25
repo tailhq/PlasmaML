@@ -5,6 +5,7 @@ import org.joda.time._
 import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe._
+import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
 import io.github.mandar2812.dynaml.evaluation.{
   ClassificationMetricsTF,
@@ -18,6 +19,7 @@ import io.github.mandar2812.PlasmaML.helios.data._
 import io.github.mandar2812.PlasmaML.dynamics.mhd._
 import _root_.io.github.mandar2812.dynaml.graphics.charts.Highcharts._
 import breeze.stats.distributions.ContinuousDistr
+import breeze.linalg.DenseVector
 import _root_.io.github.mandar2812.dynaml.probability.ContinuousRVWithDistr
 import _root_.io.github.mandar2812.dynaml.optimization.{
   CMAES,
@@ -160,20 +162,21 @@ package object helios {
     * the training/evaluation process.
     *
     * */
-  sealed abstract class ModelRun[T] {
+  sealed abstract class ModelRun {
 
     type DATA_PATTERN
     type SCALERS
     type MODEL
     type ESTIMATOR
+    type METRICS
 
     val summary_dir: Path
 
     val data_and_scales: (TFDataSet[DATA_PATTERN], SCALERS)
 
-    val metrics_train: Option[RegressionMetricsTF[T]]
+    val metrics_train: Option[METRICS]
 
-    val metrics_test: Option[RegressionMetricsTF[T]]
+    val metrics_test: Option[METRICS]
 
     val model: MODEL
 
@@ -193,7 +196,7 @@ package object helios {
     summary_dir: Path,
     training_preds: Option[ITT],
     test_preds: Option[ITT])
-      extends ModelRun[T] {
+      extends ModelRun {
 
     override type DATA_PATTERN = (IT, Tensor[T])
 
@@ -204,6 +207,8 @@ package object helios {
 
     override type ESTIMATOR =
       dtflearn.SupEstimatorTF[In, Output[T], ArchOut, ArchOut, Loss, (ArchOut, (In, Output[T]))]
+
+    override type METRICS = RegressionMetricsTF[T]
   }
 
   case class TunedModelRun[
@@ -230,7 +235,7 @@ package object helios {
     test_preds: Option[ITT],
     training_outputs: Option[ITT] = None,
     test_outputs: Option[ITT] = None)
-      extends ModelRun[T] {
+      extends ModelRun {
 
     override type DATA_PATTERN = (DateTime, (InputPattern, Tensor[T]))
 
@@ -251,6 +256,8 @@ package object helios {
         (ArchOut, (In, Output[T]))
       ]]
 
+    override type METRICS = RegressionMetricsTF[T]
+
     override val estimator: ESTIMATOR = model.estimator
   }
 
@@ -267,18 +274,20 @@ package object helios {
     TD,
     ITT,
     IDD,
-    ISS
+    ISS,
+    M,
+    PR
   ](data_and_scales: (TFDataSet[(DateTime, (InputPattern, OutputPattern))],
       (Scaler[InputPattern], ReversibleScaler[OutputPattern])),
     model: TFModel[In, Output[T], ArchOut, Loss, IT, ID, IS, Tensor[T], TD, Shape, ITT, IDD, ISS],
-    metrics_train: Option[RegressionMetricsTF[T]],
-    metrics_test: Option[RegressionMetricsTF[T]],
+    metrics_train: Option[M],
+    metrics_test: Option[M],
     summary_dir: Path,
-    training_preds: Option[ITT],
-    test_preds: Option[ITT],
+    training_preds: Option[PR],
+    test_preds: Option[PR],
     training_outputs: Option[ITT] = None,
     test_outputs: Option[ITT] = None)
-      extends ModelRun[T] {
+      extends ModelRun {
 
     override type DATA_PATTERN = (DateTime, (InputPattern, OutputPattern))
 
@@ -297,6 +306,8 @@ package object helios {
         Loss,
         (ArchOut, (In, Output[T]))
       ]]
+
+    override type METRICS = M
 
     override val estimator: ESTIMATOR = model.estimator
   }
@@ -330,7 +341,7 @@ package object helios {
     test_data: DATA,
     results: SupervisedModelRun[T, In, ArchOut, Loss, IT, ITT])
 
-  case class Experiment[T, Run <: ModelRun[T], Conf <: Config](
+  case class Experiment[T, Run <: ModelRun, Conf <: Config](
     config: Conf,
     results: Run)
 
@@ -347,6 +358,7 @@ package object helios {
     (DataType[T], DataType[T]),
     (Shape, Shape)
   ]
+
 
   def process_predictions[T: TF: IsNotQuantized: IsHalfOrFloatOrDouble](
     predictions: (Tensor[T], Tensor[T]),
@@ -620,18 +632,19 @@ package object helios {
   }
 
   def write_predictions[T: TF: IsFloatOrDouble](
-    outputs: (Tensor[T], Tensor[T]),
+    outputs: Tensor[T],
+    probabilities: Tensor[T],
     summary_dir: Path,
     identifier: String
   ): Unit = {
 
-    val h  = outputs._1.shape(1)
-    val h2 = outputs._2.shape(1)
+    val h  = outputs.shape(1)
+    val h2 = probabilities.shape(1)
 
     write.over(
       summary_dir / s"predictions_${identifier}.csv",
       dtfutils
-        .toDoubleSeq(outputs._1)
+        .toDoubleSeq(outputs)
         .grouped(h)
         .map(_.mkString(","))
         .mkString("\n")
@@ -640,13 +653,41 @@ package object helios {
     write.over(
       summary_dir / s"probabilities_${identifier}.csv",
       dtfutils
-        .toDoubleSeq(outputs._2)
+        .toDoubleSeq(probabilities)
         .grouped(h2)
         .map(_.mkString(","))
         .mkString("\n")
     )
 
   }
+
+  def write_predictions[T: TF: IsFloatOrDouble](
+    outputs: Seq[DenseVector[Double]],
+    probabilities: Tensor[T],
+    summary_dir: Path,
+    identifier: String
+  ): Unit = {
+
+    val h2 = probabilities.shape(1)
+
+    write.over(
+      summary_dir / s"predictions_${identifier}.csv",
+      outputs
+        .map(_.toArray.mkString(","))
+        .mkString("\n")
+    )
+
+    write.over(
+      summary_dir / s"probabilities_${identifier}.csv",
+      dtfutils
+        .toDoubleSeq(probabilities)
+        .grouped(h2)
+        .map(_.mkString(","))
+        .mkString("\n")
+    )
+
+  }
+
 
   def write_processed_predictions(
     preds: Seq[Double],
@@ -703,6 +744,18 @@ package object helios {
   def write_performance[T: TF: IsReal](
     fileID: String,
     performance: RegressionMetricsTF[T],
+    directory: Path
+  ): Unit = {
+
+    write.over(
+      directory / s"performance_${fileID}.json",
+      s"[${performance.to_json}]"
+    )
+  }
+
+  def write_performance(
+    fileID: String,
+    performance: RegressionMetrics,
     directory: Path
   ): Unit = {
 
@@ -1691,14 +1744,16 @@ package object helios {
 
     //Write model outputs for test data
     helios.write_predictions[Double](
-      (scalers._2.i(test_predictions._1), test_predictions._2),
+      scalers._2.i(test_predictions._1),
+      test_predictions._2,
       tf_summary_dir,
       s"test_${time_stamp}"
     )
 
     //Write model outputs for training data
     helios.write_predictions[Double](
-      (scalers._2.i(train_predictions._1), train_predictions._2),
+      scalers._2.i(train_predictions._1), 
+      train_predictions._2,
       tf_summary_dir,
       s"train_${time_stamp}"
     )

@@ -50,6 +50,7 @@ def main(
     summary_dir = env.summary_dir / csss_job_id,
     get_training_preds = true,
     data_scaling = "gauss",
+    use_copula = true,
     existing_exp = None
   )
 

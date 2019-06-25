@@ -1,6 +1,7 @@
 import _root_.org.joda.time._
 import _root_.ammonite.ops._
 import _root_.spire.implicits._
+import _root_.io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.pipes._
@@ -109,7 +110,7 @@ def setup_exp_data(
     (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
       if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
         false
-        //p._2._2.toArray.forall(_ < sw_threshold)
+      //p._2._2.toArray.forall(_ < sw_threshold)
       else
         true
   )
@@ -130,7 +131,7 @@ def setup_exp_data(
     (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
       if (scala.util.Random.nextDouble() >= 0.7)
         false
-        //p._2._2.toArray.forall(_ < sw_threshold)
+      //p._2._2.toArray.forall(_ < sw_threshold)
       else
         true
   )
@@ -143,9 +144,9 @@ def setup_exp_data(
         experiment_config,
         ts_transform_output,
         tt_partition_one_month,
-        conv_flag/* ,
+        conv_flag /* ,
         Seq(
-          OMNIData.Quantities.sunspot_number, 
+          OMNIData.Quantities.sunspot_number,
           OMNIData.Quantities.F10_7
         ) */
       )
@@ -199,8 +200,12 @@ def apply(
   reg_type: String = "L2",
   existing_exp: Option[Path] = None,
   checkpointing_freq: Int = 1,
-  data_scaling: String = "gauss"
-): helios.Experiment[Double, fte.ModelRunTuning[DenseVector[Double]], fte.data.FteOmniConfig] = {
+  data_scaling: String = "gauss",
+  use_copula: Boolean = false
+): helios.Experiment[Double, fte.ModelRunTuning[
+  DenseVector[Double],
+  RegressionMetrics
+], fte.data.FteOmniConfig] = {
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     dtfutils.get_ffstack_properties(
@@ -217,7 +222,10 @@ def apply(
   val output_mapping2 = {
 
     val outputs_segment = if (data_scaling == "gauss") {
-      tf.learn.Linear[Double]("Outputs", sliding_window)
+      if (use_copula)
+        tf.learn.Linear[Double]("Outputs", sliding_window) >> 
+          tf.learn.Sigmoid("OutputCopula")
+      else tf.learn.Linear[Double]("Outputs", sliding_window)
     } else {
       tf.learn.Linear[Double]("Outputs", sliding_window) >>
         tf.learn.Sigmoid("ScaledOutputs")
@@ -450,7 +458,8 @@ def apply(
     fitness_to_scalar,
     checkpointing_freq,
     experiment_config.omni_config.log_flag,
-    data_scaling = data_scaling
+    data_scaling = data_scaling,
+    use_copula = use_copula
   )
 
   helios.Experiment(

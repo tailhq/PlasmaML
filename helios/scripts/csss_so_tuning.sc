@@ -1,6 +1,7 @@
 import _root_.org.joda.time._
 import _root_.ammonite.ops._
 import _root_.spire.implicits._
+import _root_.io.github.mandar2812.dynaml.evaluation.RegressionMetricsTF
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.pipes._
@@ -50,7 +51,7 @@ def apply(
   reg_type: String = "L2",
   existing_exp: Option[Path] = None,
   checkpointing_freq: Int = 1
-): helios.Experiment[Double, fte.ModelRunTuningSO[DenseVector[Double]], fte.data.FteOmniConfig] = {
+): helios.Experiment[Double, fte.ModelRunTuningSO[DenseVector[Double], RegressionMetricsTF[Double]], fte.data.FteOmniConfig] = {
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     dtfutils.get_ffstack_properties(
@@ -192,7 +193,7 @@ def baseline(
   reg_type: String = "L2",
   existing_exp: Option[Path] = None,
   checkpointing_freq: Int = 1
-): helios.Experiment[Double, fte.ModelRunTuningSO[DenseVector[Double]], fte.data.FteOmniConfig] = {
+): helios.Experiment[Double, fte.ModelRunTuningSO[DenseVector[Double], RegressionMetricsTF[Double]], fte.data.FteOmniConfig] = {
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
     dtfutils.get_ffstack_properties(
