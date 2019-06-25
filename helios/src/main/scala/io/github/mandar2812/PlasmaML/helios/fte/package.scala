@@ -528,7 +528,7 @@ package object fte {
     val extract_features = tup2_1[DenseVector[Double], DenseVector[Double]]
 
     val model_predictions_test = best_model.infer_batch(
-      dataset.test_dataset.map(extract_tensors > extract_features),
+      scaled_data.test_dataset.map(extract_tensors > extract_features),
       tf_handle_input
     )
 
@@ -545,7 +545,7 @@ package object fte {
     ) = scalers match {
       case Left(g_scalers) =>
         process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
-          dataset.test_dataset,
+          scaled_data.test_dataset,
           predictions,
           if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler) else g_scalers,
           causal_window,
@@ -555,7 +555,7 @@ package object fte {
 
       case Right(mm_scalers) =>
         process_predictions_bdv2[DenseVector[Double], MinMaxScaler](
-          dataset.test_dataset,
+          scaled_data.test_dataset,
           predictions,
           mm_scalers,
           causal_window,
@@ -589,7 +589,7 @@ package object fte {
       ) = scalers match {
         case Left(g_scalers) =>
           process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
-            dataset.training_dataset,
+            scaled_data.training_dataset,
             predictions_train,
             if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler) else g_scalers,
             causal_window,
@@ -599,7 +599,7 @@ package object fte {
 
         case Right(mm_scalers) =>
           process_predictions_bdv2[DenseVector[Double], MinMaxScaler](
-            dataset.training_dataset,
+            scaled_data.training_dataset,
             predictions_train,
             mm_scalers,
             causal_window,
@@ -664,7 +664,7 @@ package object fte {
           RegressionMetrics,
           (Seq[Double], Seq[Double])
         ](
-          (dataset, if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler) else g_scalers),
+          (scaled_data, if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler) else g_scalers),
           best_model,
           reg_metrics_train,
           Some(reg_metrics),
@@ -691,7 +691,7 @@ package object fte {
           RegressionMetrics,
           (Seq[Double], Seq[Double])
         ](
-          (dataset, mm_scalers),
+          (scaled_data, mm_scalers),
           best_model,
           reg_metrics_train,
           Some(reg_metrics),
