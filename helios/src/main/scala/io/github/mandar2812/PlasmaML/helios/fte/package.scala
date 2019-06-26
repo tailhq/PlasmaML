@@ -231,9 +231,10 @@ package object fte {
 
     val scaled_data = if (use_copula) {
       println("Using Gaussian copulas for 0-1 target scaling")
-      val scale_gauss_copula = identityPipe[DateTime] * (identityPipe[
-        DenseVector[Double]
-      ] * ProbitScaler)
+      val scale_gauss_copula =
+        identityPipe[DateTime] * (
+          identityPipe[DenseVector[Double]] * ProbitScaler
+        )
 
       dataset.copy(
         dataset.training_dataset.map(scale_gauss_copula),
@@ -546,10 +547,13 @@ package object fte {
       pred_time_lags_test
     ) = scalers match {
       case Left(g_scalers) =>
-        process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
+        process_predictions_bdv2[DenseVector[Double], ReversibleScaler[
+          DenseVector[Double]
+        ]](
           scaled_data.test_dataset,
           predictions,
-          if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler) else g_scalers,
+          if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler)
+          else g_scalers,
           causal_window,
           log_scale_omni = log_scale_targets,
           scale_actual_targets = false
@@ -590,10 +594,13 @@ package object fte {
         pred_time_lags_train
       ) = scalers match {
         case Left(g_scalers) =>
-          process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
+          process_predictions_bdv2[DenseVector[Double], ReversibleScaler[
+            DenseVector[Double]
+          ]](
             scaled_data.training_dataset,
             predictions_train,
-            if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler) else g_scalers,
+            if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler)
+            else g_scalers,
             causal_window,
             log_scale_omni = log_scale_targets,
             scale_actual_targets = true
@@ -666,7 +673,11 @@ package object fte {
           RegressionMetrics,
           (Seq[Double], Seq[Double])
         ](
-          (scaled_data, if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler) else g_scalers),
+          (
+            scaled_data,
+            if (use_copula) (g_scalers._1, g_scalers._2 > ProbitScaler)
+            else g_scalers
+          ),
           best_model,
           reg_metrics_train,
           Some(reg_metrics),

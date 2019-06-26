@@ -39,7 +39,7 @@ val base_it_pdt = 3
 def ext_it_pdt  = base_it_pdt + 2
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2015,
+  start_year = 2010,
   end_year = 2018,
   test_year = 2018,
   test_month = 10,
