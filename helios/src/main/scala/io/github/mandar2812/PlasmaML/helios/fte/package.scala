@@ -237,7 +237,9 @@ package object fte {
 
       dataset.copy(
         dataset.training_dataset.map(scale_gauss_copula),
-        dataset.test_dataset.map(scale_gauss_copula)
+        dataset.test_dataset.map(
+          identityPipe[(DateTime, (DenseVector[Double], DenseVector[Double]))]
+        )
       )
     } else {
       dataset
