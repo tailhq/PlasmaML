@@ -59,6 +59,98 @@ package object data {
     fraction_variance: Double = 1d)
       extends helios.Config
 
+  private[helios] case class QuantileSegment(
+    data_points: (Double, Double),
+    ranks: (Long, Long)) {
+
+    def contains(x: Double): Boolean = x >= data_points._1 && x < data_points._2
+
+    def contains_rank(r: Int): Boolean = r >= ranks._1 && r <= ranks._2
+
+  }
+
+  class QuantileScaler(
+    val ys: Seq[QuantileSegment],
+    val sample_size: Long,
+    val limits: (Double, Double) = (Double.NegativeInfinity,
+      Double.PositiveInfinity))
+      extends ReversibleScaler[Double] {
+
+    override def run(data: Double): Double =
+      if (data <= limits._1) 0d
+      else if (data >= limits._2) 1d
+      else {
+        //Find the first quantile segment the data point belongs to
+        val segment = ys.view.find(s => s.contains(data)).get
+
+        val d = 
+          if(segment.data_points._1 == Double.NegativeInfinity) 0d 
+          else data - segment.data_points._1
+
+        val rank_diff  = segment.ranks._2 - segment.ranks._1
+        val data_range = segment.data_points._2 - segment.data_points._1
+
+
+        (segment.ranks._1 + rank_diff * d / data_range) / sample_size
+      }
+
+    override val i: Scaler[Double] = Scaler((p: Double) => {
+
+      require(
+        p >= 0d && p <= 1d,
+        "For a quantile (inv CDF) function, input must lie in [0, 1]"
+      )
+
+      if (p == 0d) limits._1
+      else if (p == 1d) limits._2
+      else {
+        val m: Double = (1d + p) / 3
+        val h: Double = p * sample_size + m
+
+        val j     = math.floor(h).toInt
+        val gamma = h - j
+
+        val segment =
+          ys.find(s => s.contains_rank(j) && s.contains_rank(j + 1)).get
+
+        if (segment.ranks._2 - segment.ranks._1 > 1) segment.data_points._1
+        else
+          (1d - gamma) * segment.data_points._1 + gamma * segment.data_points._2
+      }
+    })
+
+  }
+
+  object QuantileScaler {
+    def apply(
+      xs: Seq[Double],
+      limits: (Double, Double) = (Double.NegativeInfinity,
+        Double.PositiveInfinity)
+    ): QuantileScaler = {
+
+      val xss = (Seq(limits._1, limits._2) ++ xs).sorted
+
+      val ys =
+        xss.zipWithIndex
+          .groupBy(_._1)
+          .toSeq
+          .map(c => (c._1, c._2.map(_._2).max))
+          .sortBy(_._2)
+          .sliding(2)
+          .map(
+            c =>
+              QuantileSegment(
+                data_points = (c.head._1, c.last._1),
+                ranks = (c.head._2, c.last._2)
+              )
+          )
+          .toSeq
+
+      new QuantileScaler(ys, xs.length, limits)
+
+    }
+  }
+
   def read_exp_config(file: Path): Option[FteOmniConfig] =
     if (exists ! file) {
       try {
@@ -1337,7 +1429,11 @@ package object data {
 
     println(s"Loading OMNI quantity indices: ${solar_wind_params}")
 
-    solar_wind_params.foreach(s => if(OMNIData.columnNames.contains(s)) println(s"Column $s: ${OMNIData.columnNames(s)}"))
+    solar_wind_params.foreach(
+      s =>
+        if (OMNIData.columnNames.contains(s))
+          println(s"Column $s: ${OMNIData.columnNames(s)}")
+    )
 
     val load_omni_file =
       fileToStream >
