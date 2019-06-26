@@ -272,7 +272,7 @@ def apply(
 
   val hyper_prior = Map(
     "reg"        -> UniformRV(-5.5d, -4d),
-    "reg_output" -> (if (use_copula) UniformRV(-4d, -2.5d) else UniformRV(-7d, -6d)),
+    "reg_output" -> (if (use_copula) UniformRV(-5d, -3d) else UniformRV(-7d, -6d)),
     "alpha"      -> UniformRV(0.75d, 2d),
     "sigma_sq"   -> UniformRV(1e-5, 5d)
   )
