@@ -221,29 +221,40 @@ package object fte {
     val data_size = dataset.training_dataset.size
 
     println("Scaling data attributes")
-    val scalers: Either[SCALES, MinMaxSCALES] = if (data_scaling == "gauss") {
+    val scalers: Either[SCALES, HySCALES] = if (data_scaling == "gauss") {
       println("Performing Gaussian Scaling")
       Left(scale_data(dataset))
     } else {
-      println("Performing 0-1 Scaling")
-      Right(scale_data_min_max(dataset))
+      println("Performing hybrid gaussian 0-1 Scaling")
+      Right(scale_data_hybrid(dataset))
     }
 
-    val scaled_data = if (use_copula) {
-      println("Using Gaussian copulas for 0-1 target scaling")
-      val scale_gauss_copula =
-        identityPipe[DateTime] * (
-          identityPipe[DenseVector[Double]] * ProbitScaler
-        )
+    val scaled_data = {
+
+      val scale_only_targets = scalers match {
+        case Left(g_scalers) =>
+          if (use_copula) {
+            println("Using Gaussian copulas for 0-1 target scaling")
+            identityPipe[DateTime] * (
+              identityPipe[DenseVector[Double]] * (g_scalers._2 > ProbitScaler)
+            )
+          } else {
+            identityPipe[DateTime] * (
+              identityPipe[DenseVector[Double]] * g_scalers._2
+            )
+          }
+
+        case Right(h_scalers) =>
+          println("Performing empirical CDF based scaling of targets")
+          identityPipe[DateTime] * (
+            identityPipe[DenseVector[Double]] * h_scalers._2
+          )
+      }
 
       dataset.copy(
-        dataset.training_dataset.map(scale_gauss_copula),
-        dataset.test_dataset.map(
-          identityPipe[(DateTime, (DenseVector[Double], DenseVector[Double]))]
-        )
+        training_dataset = dataset.training_dataset.map(scale_only_targets)
       )
-    } else {
-      dataset
+
     }
 
     val split_data = scaled_data.training_dataset.partition(
@@ -560,7 +571,7 @@ package object fte {
         )
 
       case Right(mm_scalers) =>
-        process_predictions_bdv2[DenseVector[Double], MinMaxScaler](
+        process_predictions_bdv2[DenseVector[Double], SolarWindQQScaler](
           scaled_data.test_dataset,
           predictions,
           mm_scalers,
@@ -607,7 +618,7 @@ package object fte {
           )
 
         case Right(mm_scalers) =>
-          process_predictions_bdv2[DenseVector[Double], MinMaxScaler](
+          process_predictions_bdv2[DenseVector[Double], SolarWindQQScaler](
             scaled_data.training_dataset,
             predictions_train,
             mm_scalers,

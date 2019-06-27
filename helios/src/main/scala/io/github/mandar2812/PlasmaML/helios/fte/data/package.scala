@@ -101,9 +101,15 @@ package object data {
         "For a quantile (inv CDF) function, input must lie in [0, 1]"
       )
 
-      if (p == 0d) limits._1
-      else if (p == 1d) limits._2
-      else {
+      if (p == 0d) {
+
+        if(limits._1 != Double.NegativeInfinity) limits._1 else Double.MinValue
+
+      } else if (p == 1d) {
+
+        if(limits._2 != Double.PositiveInfinity) limits._2 else Double.MaxValue
+      
+      } else {
         val m: Double = (1d + p) / 3
         val h: Double = p * sample_size + m
 
@@ -150,6 +156,20 @@ package object data {
 
     }
   }
+
+  class SolarWindQQScaler(
+    xs: Seq[Double],
+    limits: (Double, Double) = (100d, 1300d)) extends 
+    ReversibleScaler[DenseVector[Double]] {
+
+      val qs = QuantileScaler(xs, limits)
+
+      override def run(data: DenseVector[Double]): DenseVector[Double] = data.map(qs.run)
+
+      override val i: Scaler[DenseVector[Double]] = Scaler(
+        (v: DenseVector[Double]) => v.map(qs.i.run)
+      )
+  } 
 
   def read_exp_config(file: Path): Option[FteOmniConfig] =
     if (exists ! file) {
@@ -936,9 +956,11 @@ package object data {
 
     })
 
-  type SCALES = (GaussianScaler, GaussianScaler)
+  type SCALES       = (GaussianScaler, GaussianScaler)
 
   type MinMaxSCALES = (MinMaxScaler, MinMaxScaler)
+
+  type HySCALES     = (GaussianScaler, SolarWindQQScaler)
 
   def scale_data(
     data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
@@ -973,13 +995,13 @@ package object data {
       DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
         p => {
 
-          //Standardize features
+          //Standardize features using in place transformation
           p._2._1 :-= mean_f
           p._2._1 :/= sigma_f
 
           //Standardize targets
-          p._2._2 :-= mean_t
-          p._2._2 :/= sigma_t
+          //p._2._2 :-= mean_t
+          //p._2._2 :/= sigma_t
 
         }
       )
@@ -988,7 +1010,7 @@ package object data {
       DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
         p => {
 
-          //Standardize only features
+          //Standardize features using in place transformation
           p._2._1 :-= mean_f
           p._2._1 :/= sigma_f
 
@@ -999,6 +1021,65 @@ package object data {
     data.test_dataset.foreach(std_test)
     (GaussianScaler(mean_f, sigma_f), GaussianScaler(mean_t, sigma_t))
   }
+
+  def scale_data_hybrid(
+    data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
+  ): HySCALES = {
+    val (mean_f, sigma_sq_f) = dutils.getStats(
+      data.training_dataset
+        .map(
+          tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > tup2_1[
+            DenseVector[Double],
+            DenseVector[Double]
+          ]
+        )
+        .data
+    )
+
+    val sigma_f = sqrt(sigma_sq_f)
+
+    val qqscaler = new SolarWindQQScaler(
+      data.training_dataset
+        .map(
+          tup2_2[DateTime, (DenseVector[Double], DenseVector[Double])] > 
+            tup2_2[
+              DenseVector[Double],
+              DenseVector[Double]
+            ] > 
+            DataPipe((v: DenseVector[Double]) => v(0))
+        )
+        .data
+        .toSeq
+    )
+
+
+    val std_training =
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+        p => {
+
+          //Standardize features using in place transformation
+          p._2._1 :-= mean_f
+          p._2._1 :/= sigma_f
+
+        }
+      )
+
+    val std_test =
+      DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Unit](
+        p => {
+
+          //Standardize features using in place transformation
+          p._2._1 :-= mean_f
+          p._2._1 :/= sigma_f
+
+        }
+      )
+
+    data.training_dataset.foreach(std_training)
+    data.test_dataset.foreach(std_test)
+    (GaussianScaler(mean_f, sigma_f), qqscaler)
+  }
+
 
   def scale_data_min_max(
     data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
