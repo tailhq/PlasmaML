@@ -1,4 +1,6 @@
 repl.sess.save() 
+
+
 import _root_.io.github.mandar2812.dynaml.{utils => dutils}
 import $exec.helios.scripts.csss
 import $exec.helios.scripts.csss_pdt_model_tuning
@@ -42,7 +44,7 @@ def ext_it_pdt  = base_it_pdt + 2
 val csss_exp = csss_pdt_model_tuning(
   start_year = 2008,
   end_year = 2016,
-  test_year = 2018,
+  test_year = 2015,
   test_month = 10,
   crop_latitude = 90d,
   sw_threshold = 600d,
@@ -53,12 +55,16 @@ val csss_exp = csss_pdt_model_tuning(
   log_scale_fte = true,
   time_window = time_window,
   ts_transform_output = median_sw_6h,
-  network_size = Seq(60, 40),
+  network_size = Seq(40, 40),
   use_persistence = true,
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
   num_samples = 4,
   quantity = OMNIData.Quantities.V_SW,
+  omni_ext = Seq(
+    OMNIData.Quantities.sunspot_number,
+    OMNIData.Quantities.F10_7
+  ),
   reg_type = "L2",
   batch_size = 128,
   max_iterations = ext_iterations,

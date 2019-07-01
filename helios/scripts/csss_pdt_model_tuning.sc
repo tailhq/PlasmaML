@@ -29,6 +29,7 @@ def setup_exp_data(
   test_month: Int = 10,
   sw_threshold: Double = 700d,
   quantity: Int = OMNIData.Quantities.V_SW,
+  omni_ext: Seq[Int] = Seq(OMNIData.Quantities.sunspot_number),
   ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
     identityPipe[Seq[Double]],
   deltaT: (Int, Int) = (48, 72),
@@ -144,11 +145,8 @@ def setup_exp_data(
         experiment_config,
         ts_transform_output,
         tt_partition_one_month,
-        conv_flag /* ,
-        Seq(
-          OMNIData.Quantities.sunspot_number,
-          OMNIData.Quantities.F10_7
-        ) */
+        conv_flag,
+        omni_ext
       )
 
     println("Serializing data sets")
@@ -182,6 +180,7 @@ def apply(
   log_scale_omni: Boolean = false,
   conv_flag: Boolean = false,
   quantity: Int = OMNIData.Quantities.V_SW,
+  omni_ext: Seq[Int] = Seq(OMNIData.Quantities.sunspot_number),
   time_window: (Int, Int) = (48, 56),
   use_persistence: Boolean = false,
   ts_transform_output: DataPipe[Seq[Double], Seq[Double]] =
