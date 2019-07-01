@@ -55,7 +55,7 @@ val csss_exp = csss_pdt_model_tuning(
   ts_transform_output = median_sw_6h,
   network_size = Seq(60, 40),
   use_persistence = true,
-  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
+  activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
   hyper_optimizer = "gs",
   num_samples = 4,
   quantity = OMNIData.Quantities.V_SW,

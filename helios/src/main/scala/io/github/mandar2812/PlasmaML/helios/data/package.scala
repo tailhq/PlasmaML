@@ -1398,7 +1398,7 @@ package object data {
 
     val json_records = dataset.map(process_pattern).data.mkString(",\n")
 
-    write.over(directory / s"$identifier.json", s"$json_records")
+    write.over(directory / s"$identifier.json", s"$json_records", createFolders = true)
   }
 
   /**

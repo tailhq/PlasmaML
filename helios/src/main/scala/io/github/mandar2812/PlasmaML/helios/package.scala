@@ -647,7 +647,8 @@ package object helios {
         .toDoubleSeq(outputs)
         .grouped(h)
         .map(_.mkString(","))
-        .mkString("\n")
+        .mkString("\n"),
+      createFolders = true
     )
 
     write.over(
@@ -656,7 +657,8 @@ package object helios {
         .toDoubleSeq(probabilities)
         .grouped(h2)
         .map(_.mkString(","))
-        .mkString("\n")
+        .mkString("\n"),
+      createFolders = true
     )
 
   }
@@ -674,7 +676,8 @@ package object helios {
       summary_dir / s"predictions_${identifier}.csv",
       outputs
         .map(_.toArray.mkString(","))
-        .mkString("\n")
+        .mkString("\n"),
+      createFolders = true
     )
 
     write.over(
@@ -683,7 +686,8 @@ package object helios {
         .toDoubleSeq(probabilities)
         .grouped(h2)
         .map(_.mkString(","))
-        .mkString("\n")
+        .mkString("\n"),
+      createFolders = true
     )
 
   }
@@ -749,7 +753,8 @@ package object helios {
 
     write.over(
       directory / s"performance_${fileID}.json",
-      s"[${performance.to_json}]"
+      s"[${performance.to_json}]",
+      createFolders = true
     )
   }
 
@@ -761,7 +766,8 @@ package object helios {
 
     write.over(
       directory / s"performance_${fileID}.json",
-      s"[${performance.to_json}]"
+      s"[${performance.to_json}]",
+      createFolders = true
     )
   }
 
@@ -1583,7 +1589,8 @@ package object helios {
       write.over(
         tf_summary_dir / "state.csv",
         best_config.keys.mkString(start = "", sep = ",", end = "\n") +
-          best_config.values.mkString(start = "", sep = ",", end = "")
+          best_config.values.mkString(start = "", sep = ",", end = ""),
+        createFolders = true
       )
 
       best_config
