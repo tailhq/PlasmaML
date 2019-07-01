@@ -419,6 +419,7 @@ def apply(
     test_month = test_month,
     sw_threshold = sw_threshold,
     quantity = quantity,
+    omni_ext = omni_ext,
     ts_transform_output = ts_transform_output,
     deltaT = time_window,
     use_persistence = use_persistence,
