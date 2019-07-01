@@ -469,14 +469,14 @@ package object helios {
 
     val checkpoints =
       if (exists(tf_summary_dir))
-        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.last
+        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.toSeq.last
           .contains("model.ckpt-"))
       else Seq()
 
     val checkpoint_max =
       if (checkpoints.isEmpty) 0
       else
-        (checkpoints | (_.segments.last
+        (checkpoints | (_.segments.toSeq.last
           .split("-")
           .last
           .split('.')
@@ -1438,14 +1438,14 @@ package object helios {
 
     val checkpoints =
       if (exists ! tf_summary_dir)
-        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.last
+        ls ! tf_summary_dir |? (_.isFile) |? (_.segments.toSeq.last
           .contains("model.ckpt-"))
       else Seq()
 
     val checkpoint_max =
       if (checkpoints.isEmpty) 0
       else
-        (checkpoints | (_.segments.last
+        (checkpoints | (_.segments.toSeq.last
           .split("-")
           .last
           .split('.')

@@ -203,9 +203,9 @@ package object fte {
     val dataset = {
       println("Using serialized data set")
 
-      val training_data_file = (ls ! tf_summary_dir |? (_.segments.last
+      val training_data_file = (ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("training_data_"))).last
-      val test_data_file = (ls ! tf_summary_dir |? (_.segments.last
+      val test_data_file = (ls ! tf_summary_dir |? (_.segments.toSeq.last
         .contains("test_data_"))).last
 
       read_data_set[DenseVector[Double], DenseVector[Double]](
@@ -1128,9 +1128,9 @@ package object fte {
     val dataset = {
       println("Using serialized data set")
 
-      val training_data_file = (ls ! experiment |? (_.segments.last
+      val training_data_file = (ls ! experiment |? (_.segments.toSeq.last
         .contains("training_data_"))).last
-      val test_data_file = (ls ! experiment |? (_.segments.last
+      val test_data_file = (ls ! experiment |? (_.segments.toSeq.last
         .contains("test_data_"))).last
 
       read_data_set[DenseVector[Double], DenseVector[Double]](
@@ -1146,7 +1146,7 @@ package object fte {
 
     val root_dir = experiment / up
 
-    val dir_name       = s"bs_${experiment.segments.last}"
+    val dir_name       = s"bs_${experiment.segments.toSeq.last}"
     val tf_summary_dir = root_dir / dir_name
 
     val input_dim = dataset.training_dataset.data.head._2._1.size

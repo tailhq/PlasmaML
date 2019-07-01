@@ -1,3 +1,4 @@
+repl.sess.save() 
 import _root_.io.github.mandar2812.dynaml.{utils => dutils}
 import $exec.helios.scripts.csss
 import $exec.helios.scripts.csss_pdt_model_tuning
@@ -39,8 +40,8 @@ val base_it_pdt = 3
 def ext_it_pdt  = base_it_pdt + 2
 
 val csss_exp = csss_pdt_model_tuning(
-  start_year = 2010,
-  end_year = 2018,
+  start_year = 2008,
+  end_year = 2016,
   test_year = 2018,
   test_month = 10,
   crop_latitude = 90d,

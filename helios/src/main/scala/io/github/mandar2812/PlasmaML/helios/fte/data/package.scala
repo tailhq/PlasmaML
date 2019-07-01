@@ -1941,9 +1941,9 @@ package object data {
 
   def _dataset_serialized(tf_summary_dir: Path): Boolean = {
 
-    val training_data_files = ls ! tf_summary_dir |? (_.segments.last
+    val training_data_files = ls ! tf_summary_dir |? (_.segments.toSeq.last
       .contains("training_data_"))
-    val test_data_files = ls ! tf_summary_dir |? (_.segments.last
+    val test_data_files = ls ! tf_summary_dir |? (_.segments.toSeq.last
       .contains("test_data_"))
 
     training_data_files.length > 0 && test_data_files.length > 0

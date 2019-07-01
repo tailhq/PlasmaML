@@ -4,14 +4,14 @@ import ammonite.ops.ImplicitWd._
 import _root_.io.github.mandar2812.dynaml.pipes._
 
 def experiments() =
-  ls ! env.summary_dir |? (_.isDir) |? (_.segments.last.contains("fte"))
+  ls ! env.summary_dir |? (_.isDir) |? (_.segments.toSeq.last.contains("fte"))
 
 
 def scatter_plots_test(summary_dir: Path) =
-  ls ! summary_dir |? (_.segments.last.contains("scatter_test"))
+  ls ! summary_dir |? (_.segments.toSeq.last.contains("scatter_test"))
 
 def scatter_plots_train(summary_dir: Path) =
-  ls ! summary_dir |? (_.segments.last.contains("scatter_train"))
+  ls ! summary_dir |? (_.segments.toSeq.last.contains("scatter_train"))
 
 val script = pwd / 'helios / 'scripts / "visualise_tl.R"
 

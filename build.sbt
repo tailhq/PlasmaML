@@ -10,7 +10,6 @@ val heapSize = Option(System.getProperty("heap")).getOrElse("8096m")
 lazy val commonSettings = Seq(
   organization := "io.github.mandar2812",
   scalaVersion in ThisBuild := scala,
-  crossScalaVersions in ThisBuild := crossScala,
   libraryDependencies in ThisBuild ++= (commonDependencies ++ dynaMLDependency ++ tensorflowDependency),
   resolvers in ThisBuild ++= Seq(
     "jzy3d-releases" at "http://maven.jzy3d.org/releases",

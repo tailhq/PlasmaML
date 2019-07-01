@@ -1,3 +1,5 @@
+repl.sess.save()
+
 import $exec.helios.scripts.{
   tl_const_lag_tuning => tuning_exp1,
   tl_const_v_tuning => tuning_exp2,

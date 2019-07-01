@@ -6,11 +6,9 @@ object Dependencies {
 
   val scala_major = 2.12
 
-  val scala_minor = 4
+  val scala_minor = 8
 
   val scala = s"$scala_major.$scala_minor"
-
-  val crossScala = Seq("2.12.4")
 
   val tfscala_version = "0.4.2-SNAPSHOT"
 
