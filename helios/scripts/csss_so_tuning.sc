@@ -1,7 +1,7 @@
 import _root_.org.joda.time._
 import _root_.ammonite.ops._
 import _root_.spire.implicits._
-import _root_.io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.pipes._
