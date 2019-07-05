@@ -1103,6 +1103,8 @@ package object fte {
     log_scale_fte: Boolean = false,
     log_scale_omni: Boolean = false,
     conv_flag: Boolean = false,
+    data_scaling: String = "gauss",
+    use_copula: Boolean = false,
     optimizer: tf.train.Optimizer = tf.train.AdaDelta(0.001f),
     iterations: Int = 50000,
     iterations_tuning: Int = 10000,
@@ -1115,7 +1117,7 @@ package object fte {
     checkpointing_freq: Int = 1
   ): helios.Experiment[Double, ModelRunTuningSO[
     DenseVector[Double],
-    RegressionMetricsTF[Double]
+    RegressionMetrics
   ], FteOmniConfig] = {
 
     require(
@@ -1154,17 +1156,51 @@ package object fte {
     val num_pred_dims = 1
 
     println("Scaling data attributes")
-    val scalers = scale_data(dataset)
+    val scalers: Either[SCALES, HySCALES] = if (data_scaling == "gauss") {
+      println("Performing Gaussian Scaling")
+      Left(scale_data(dataset))
+    } else {
+      println("Performing hybrid gaussian 0-1 Scaling")
+      Right(scale_data_hybrid(dataset))
+    }
 
-    val data_size = dataset.training_dataset.size
+    val scaled_data = {
 
-    val split_data = dataset.training_dataset.partition(
+      val scale_only_targets = scalers match {
+        case Left(g_scalers) =>
+          if (use_copula) {
+            println("Using Gaussian copulas for 0-1 target scaling")
+            identityPipe[DateTime] * (
+              identityPipe[DenseVector[Double]] * (g_scalers._2 > ProbitScaler)
+            )
+          } else {
+            identityPipe[DateTime] * (
+              identityPipe[DenseVector[Double]] * g_scalers._2
+            )
+          }
+
+        case Right(h_scalers) =>
+          println("Performing empirical CDF based scaling of targets")
+          identityPipe[DateTime] * (
+            identityPipe[DenseVector[Double]] * h_scalers._2
+          )
+      }
+
+      dataset.copy(
+        training_dataset = dataset.training_dataset.map(scale_only_targets)
+      )
+
+    }
+
+    val data_size = scaled_data.training_dataset.size
+
+    val split_data = scaled_data.training_dataset.partition(
       DataPipe[(DateTime, (DenseVector[Double], DenseVector[Double])), Boolean](
         _ => scala.util.Random.nextDouble() <= 0.7
       )
     )
 
-    val input_shape = Shape(dataset.training_dataset.data.head._2._1.size)
+    val input_shape = Shape(scaled_data.training_dataset.data.head._2._1.size)
 
     val load_pattern_in_tensor =
       IterableDataPipe(
@@ -1398,26 +1434,38 @@ package object fte {
       tf_handle_input
     )
 
-    val scaler_targets_tf = GaussianScalerTF(
-      dtf.tensor_f64(num_pred_dims)(scalers._2.mean.toArray.toSeq: _*),
-      dtf.tensor_f64(num_pred_dims)(scalers._2.sigma.toArray.toSeq: _*)
-    )
-
-    val pred_targets = model_predictions_test match {
-      case Left(pred_tensor) =>
-        scaler_targets_tf.i(pred_tensor).reshape(Shape(nTest))
-      case Right(pred_coll) =>
-        tfi.stack(pred_coll.map(scaler_targets_tf.i).data.toSeq, axis = 0)
+    val targets_scaler: ReversibleScaler[DenseVector[Double]] = scalers match {
+      case Left(g_scalers)   => g_scalers._2 > ProbitScaler
+      case Right(mm_scalers) => mm_scalers._2
     }
 
-    val stacked_targets = Tensor(
-      dataset.test_dataset.data.toSeq.map(_._2._2.toArray.head)
-    ).reshape(Shape(nTest))
+    val convert_tensor_to_breeze = DataPipe(
+      (t: Tensor[Double]) => dtfutils.toDoubleSeq(t).toSeq.map(DenseVector(_))
+    )
+
+    val pred_targets: Seq[Double] = model_predictions_test match {
+
+      case Left(pred_tensor) =>
+        convert_tensor_to_breeze(pred_tensor)
+          .map(targets_scaler.i.run)
+          .map(_(0))
+
+      case Right(pred_coll) =>
+        convert_tensor_to_breeze(
+          tfi.concatenate(pred_coll.data.toSeq, axis = 0)
+        ).map(targets_scaler.i.run).map(_(0))
+    }
+
+    val actual_targets: Seq[Double] =
+      dataset.test_dataset.data.toSeq.map(_._2._2(0))
 
     val reg_metrics = if (log_scale_omni) {
-      new RegressionMetricsTF(pred_targets.exp, stacked_targets.exp)
+      new RegressionMetrics(
+        pred_targets.map(math.exp).zip(actual_targets.map(math.exp)).toList,
+        nTest
+      )
     } else {
-      new RegressionMetricsTF(pred_targets, stacked_targets)
+      new RegressionMetrics(pred_targets.zip(actual_targets).toList, nTest)
     }
 
     val dt = DateTime.now()
@@ -1428,17 +1476,31 @@ package object fte {
       tf_summary_dir
     )
 
-    val results
-      : ModelRunTuningSO[DenseVector[Double], RegressionMetricsTF[Double]] =
-      helios.TunedModelRun2(
-        (dataset, scalers),
-        best_model,
-        None,
-        Some(reg_metrics),
-        tf_summary_dir,
-        None,
-        None
-      )
+    val results: ModelRunTuningSO[DenseVector[Double], RegressionMetrics] =
+      scalers match {
+        case Left(g_scalers) =>
+          helios.TunedModelRun2(
+            (dataset, (g_scalers._1, g_scalers._2 > ProbitScaler)),
+            best_model,
+            None,
+            Some(reg_metrics),
+            tf_summary_dir,
+            None,
+            None
+          )
+
+        case Right(mm_scalers) =>
+          helios.TunedModelRun2(
+            (dataset, mm_scalers),
+            best_model,
+            None,
+            Some(reg_metrics),
+            tf_summary_dir,
+            None,
+            None
+          )
+
+      }
 
     helios.Experiment(
       experiment_config,
