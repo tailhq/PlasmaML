@@ -214,8 +214,12 @@ def baseline(
   )
 
   //Prediction architecture
-  val architecture =
+  val architecture = if(use_copula || data_scaling != "gauss") {
+    dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail) >> 
+      dtflearn.Phi("OutputsQQ")
+  } else {
     dtflearn.feedforward_stack[Double](activation_func)(net_layer_sizes.tail)
+  }
 
   val scope = dtfutils.get_scope(architecture) _
 
