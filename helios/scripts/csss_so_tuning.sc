@@ -305,7 +305,9 @@ def baseline(
     iterations_tuning = max_iterations_tuning,
     hyp_opt_iterations = hyp_opt_iterations,
     fitness_to_scalar = fitness_to_scalar,
-    checkpointing_freq = checkpointing_freq
+    checkpointing_freq = checkpointing_freq,
+    data_scaling = data_scaling,
+    use_copula = use_copula
   )
 }
 
