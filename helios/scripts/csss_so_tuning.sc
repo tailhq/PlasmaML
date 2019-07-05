@@ -192,7 +192,9 @@ def baseline(
   hyp_opt_iterations: Option[Int] = Some(5),
   reg_type: String = "L2",
   existing_exp: Option[Path] = None,
-  checkpointing_freq: Int = 1
+  checkpointing_freq: Int = 1,
+  data_scaling: String = "gauss",
+  use_copula: Boolean = false
 ): helios.Experiment[Double, fte.ModelRunTuningSO[DenseVector[Double], RegressionMetrics], fte.data.FteOmniConfig] = {
 
   val (net_layer_sizes, layer_shapes, layer_parameter_names, layer_datatypes) =
