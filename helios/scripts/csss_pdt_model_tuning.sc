@@ -131,11 +131,17 @@ def setup_exp_data(
       val rMap = fte.data.carrington_rotations.data.toMap
       val rot  = rMap(rotation_number)
 
-      println(s"Test Data Range: ${rot.start.minusDays(deltaT._1)} to ${rot.end.minusDays(deltaT._1)}")
+      val adj_test_start = rot.start.minusHours(deltaT._1)
+
+      val adj_test_end = rot.end.minusHours(deltaT._1)
+
+      println(
+        s"Test Data Range: ${adj_test_start} to ${adj_test_end}"
+      )
 
       DataPipe(
         (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
-          if (p._1.isAfter(rot.start.minusDays(deltaT._2)) && p._1.isBefore(rot.end))
+          if (p._1.isAfter(adj_test_start) && p._1.isBefore(adj_test_end))
             false
           else
             true
