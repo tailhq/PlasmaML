@@ -6,6 +6,7 @@ import org.joda.time.format.DateTimeFormat
 import breeze.linalg.{DenseVector, DenseMatrix}
 import breeze.math._
 import breeze.numerics._
+import breeze.stats.distributions.Gaussian
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.tensorflow.data._
@@ -72,7 +73,8 @@ package object data {
   class QuantileScaler(
     val ys: Seq[QuantileSegment],
     val sample_size: Long,
-    val limits: (Double, Double) = (Double.NegativeInfinity,
+    val limits: (Double, Double) = (
+      Double.NegativeInfinity,
       Double.PositiveInfinity))
       extends ReversibleScaler[Double] {
 
@@ -130,7 +132,8 @@ package object data {
   object QuantileScaler {
     def apply(
       xs: Seq[Double],
-      limits: (Double, Double) = (Double.NegativeInfinity,
+      limits: (Double, Double) = (
+        Double.NegativeInfinity,
         Double.PositiveInfinity)
     ): QuantileScaler = {
 
@@ -152,7 +155,7 @@ package object data {
           )
           .toSeq
 
-      new QuantileScaler(ys, xs.length, limits)
+      new QuantileScaler(ys, xss.length, limits)
 
     }
   }
@@ -169,7 +172,18 @@ package object data {
       override val i: Scaler[DenseVector[Double]] = Scaler(
         (v: DenseVector[Double]) => v.map(qs.i.run)
       )
-  } 
+  }
+  
+  object InvProbitScaler extends ReversibleScaler[DenseVector[Double]] {
+    
+    private val gaussian = Gaussian(0d, 1d)
+
+    override def run(data: DenseVector[Double]): DenseVector[Double] = data.map(gaussian.inverseCdf)
+    
+    override val i: Scaler[DenseVector[Double]] = Scaler(
+      (x: DenseVector[Double]) => x.map(gaussian.cdf)
+    )
+  }
 
   def read_exp_config(file: Path): Option[FteOmniConfig] =
     if (exists ! file) {
@@ -960,7 +974,7 @@ package object data {
 
   type MinMaxSCALES = (MinMaxScaler, MinMaxScaler)
 
-  type HySCALES     = (GaussianScaler, SolarWindQQScaler)
+  type HySCALES     = (GaussianScaler, ReversibleScaler[DenseVector[Double]])
 
   def scale_data(
     data: helios.data.DATA[DenseVector[Double], DenseVector[Double]]
@@ -1077,7 +1091,7 @@ package object data {
 
     data.training_dataset.foreach(std_training)
     data.test_dataset.foreach(std_test)
-    (GaussianScaler(mean_f, sigma_f), qqscaler)
+    (GaussianScaler(mean_f, sigma_f), qqscaler > InvProbitScaler)
   }
 
 

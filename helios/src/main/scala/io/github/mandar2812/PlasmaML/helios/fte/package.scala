@@ -571,7 +571,7 @@ package object fte {
         )
 
       case Right(mm_scalers) =>
-        process_predictions_bdv2[DenseVector[Double], SolarWindQQScaler](
+        process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
           scaled_data.test_dataset,
           predictions,
           mm_scalers,
@@ -618,7 +618,7 @@ package object fte {
           )
 
         case Right(mm_scalers) =>
-          process_predictions_bdv2[DenseVector[Double], SolarWindQQScaler](
+          process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
             scaled_data.training_dataset,
             predictions_train,
             mm_scalers,

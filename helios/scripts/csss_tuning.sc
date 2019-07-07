@@ -96,12 +96,14 @@ helios.visualise_cdt_results(
 )
 
 val csss_fixed = csss_so_tuning.baseline(
-  csss_exp.results.summary_dir,
-  network_size = Seq(60, 40),
+  env.summary_dir/exps(8) //exp_dir,//csss_exp.results.summary_dir,
+  network_size = Seq(40, 40),
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   optimization_algo = tf.train.Adam(0.001f),
   max_iterations = ext_iterations,
   max_iterations_tuning = base_iterations,
-  batch_size = 512,
-  num_samples = 4
+  batch_size = 128,
+  num_samples = 4,
+  data_scaling = "hybrid",
+  use_copula = true
 )

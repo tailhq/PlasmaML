@@ -226,8 +226,7 @@ def apply(
           dtflearn.Phi("OutputCopula")
       else tf.learn.Linear[Double]("Outputs", sliding_window)
     } else {
-      tf.learn.Linear[Double]("Outputs", sliding_window) >> 
-          dtflearn.Phi("OutputCopula")
+      tf.learn.Linear[Double]("Outputs", sliding_window)
     }
 
     val time_lag_segment =
