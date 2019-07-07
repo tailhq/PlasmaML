@@ -27,6 +27,7 @@ def setup_exp_data(
   year_range: Range = 2011 to 2017,
   test_year: Int = 2015,
   test_month: Int = 10,
+  test_rotation: Option[Int] = None,
   sw_threshold: Double = 700d,
   quantity: Int = OMNIData.Quantities.V_SW,
   omni_ext: Seq[Int] = Seq(OMNIData.Quantities.sunspot_number),
@@ -107,15 +108,6 @@ def setup_exp_data(
     new DateTime(test_year, 12, 31, 23, 59)
   )
 
-  val tt_partition = DataPipe(
-    (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
-      if (p._1.isAfter(test_start) && p._1.isBefore(test_end))
-        false
-      //p._2._2.toArray.forall(_ < sw_threshold)
-      else
-        true
-  )
-
   val test_start_month = new DateTime(test_year, test_month, 1, 0, 0)
 
   val test_end_month = test_start_month.plusMonths(1)
@@ -128,11 +120,33 @@ def setup_exp_data(
         true
   )
 
+  val tt_partition = test_rotation match {
+
+    case None => {
+      println(s"Test Data Range: ${test_start_month} to ${test_end_month}")
+      tt_partition_one_month
+    }
+
+    case Some(rotation_number) => {
+      val rMap = fte.data.carrington_rotations.data.toMap
+      val rot  = rMap(rotation_number)
+
+      println(s"Test Data Range: ${rot.start.minusDays(deltaT._1)} to ${rot.end.minusDays(deltaT._1)}")
+
+      DataPipe(
+        (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
+          if (p._1.isAfter(rot.start.minusDays(deltaT._2)) && p._1.isBefore(rot.end))
+            false
+          else
+            true
+      )
+    }
+  }
+
   val tt_partition_random = DataPipe(
     (p: (DateTime, (DenseVector[Double], DenseVector[Double]))) =>
       if (scala.util.Random.nextDouble() >= 0.7)
         false
-      //p._2._2.toArray.forall(_ < sw_threshold)
       else
         true
   )
@@ -144,7 +158,7 @@ def setup_exp_data(
         fte_data_path,
         experiment_config,
         ts_transform_output,
-        tt_partition_one_month,
+        tt_partition,
         conv_flag,
         omni_ext
       )
@@ -168,6 +182,7 @@ def apply(
   end_year: Int = 2017,
   test_year: Int = 2015,
   test_month: Int = 10,
+  test_rotation: Option[Int] = None,
   sw_threshold: Double = 700d,
   network_size: Seq[Int] = Seq(100, 60),
   activation_func: Int => Layer[Output[Double], Output[Double]] = (i: Int) =>
@@ -222,7 +237,7 @@ def apply(
 
     val outputs_segment = if (data_scaling == "gauss") {
       if (use_copula)
-        tf.learn.Linear[Double]("Outputs", sliding_window) >> 
+        tf.learn.Linear[Double]("Outputs", sliding_window) >>
           dtflearn.Phi("OutputCopula")
       else tf.learn.Linear[Double]("Outputs", sliding_window)
     } else {
@@ -269,10 +284,11 @@ def apply(
   val persistent_hyper_parameters = List("reg", "reg_output")
 
   val hyper_prior = Map(
-    "reg"        -> UniformRV(-5.5d, -4d),
-    "reg_output" -> (if (use_copula) UniformRV(-5d, -3d) else UniformRV(-7d, -6d)),
-    "alpha"      -> UniformRV(0.75d, 2d),
-    "sigma_sq"   -> UniformRV(1e-5, 5d)
+    "reg" -> UniformRV(-5.5d, -4d),
+    "reg_output" -> (if (use_copula) UniformRV(-5d, -3d)
+                     else UniformRV(-7d, -6d)),
+    "alpha"    -> UniformRV(0.75d, 2d),
+    "sigma_sq" -> UniformRV(1e-5, 5d)
   )
 
   val params_enc = Encoder(
@@ -416,6 +432,7 @@ def apply(
     start_year to end_year,
     test_year = test_year,
     test_month = test_month,
+    test_rotation = test_rotation,
     sw_threshold = sw_threshold,
     quantity = quantity,
     omni_ext = omni_ext,

@@ -15,16 +15,18 @@ def main(
   csss_job_id: String,
   test_year: Int = 2015,
   test_month: Int = 10,
+  test_rotation: Int = -1,
   network_size: Seq[Int] = Seq(60, 40)
 ) = {
 
   val dt = DateTime.now()
 
   val csss_exp = csss_pdt_model_tuning(
-    start_year = 2010,
-    end_year = 2018,
-    test_year = 2018,
-    test_month = 10,
+    start_year = 2008,
+    end_year = 2016,
+    test_year = test_year,
+    test_month = test_month,
+    test_rotation = if(test_rotation == -1) None else Some(test_rotation),
     crop_latitude = 90d,
     sw_threshold = 600d,
     fraction_pca = 1d,
