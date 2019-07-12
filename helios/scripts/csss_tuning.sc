@@ -56,7 +56,7 @@ val csss_exp = csss_pdt_model_tuning(
   log_scale_fte = true,
   time_window = time_window,
   ts_transform_output = median_sw_6h,
-  network_size = Seq(40, 40),
+  network_size = Seq(50, 50),
   use_persistence = true,
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   hyper_optimizer = "gs",
@@ -97,8 +97,8 @@ helios.visualise_cdt_results(
 )
 
 val csss_fixed = csss_so_tuning.baseline(
-  env.summary_dir/exps(8) //exp_dir,//csss_exp.results.summary_dir,
-  network_size = Seq(40, 40),
+  csss_exp,//env.summary_dir/exps(8) //exp_dir,//csss_exp.results.summary_dir,
+  network_size = Seq(50, 50),
   activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
   optimization_algo = tf.train.Adam(0.001f),
   max_iterations = ext_iterations,
