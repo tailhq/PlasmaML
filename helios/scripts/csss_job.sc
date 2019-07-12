@@ -9,6 +9,7 @@ import ammonite.ops._
 import ammonite.ops.ImplicitWd._
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import _root_.io.github.mandar2812.PlasmaML.omni.OMNIData
+import org.platanios.tensorflow.api._
 
 @main
 def main(
@@ -34,7 +35,7 @@ def main(
     history_fte = 0,
     log_scale_omni = false,
     log_scale_fte = true,
-    time_window = time_window,
+    time_window = csss.time_window,
     ts_transform_output = csss.median_sw_6h,
     network_size = network_size,
     use_persistence = true,
