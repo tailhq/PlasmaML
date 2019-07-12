@@ -13,7 +13,7 @@ import org.platanios.tensorflow.api._
 
 @main
 def main(
-  csss_job_id: String,
+  csss_job_id: String = "",
   test_year: Int = 2015,
   test_month: Int = 10,
   test_rotation: Int = -1,
@@ -23,6 +23,7 @@ def main(
   val dt = DateTime.now()
 
   val csss_exp = csss_pdt_model_tuning(
+    csss_job_id = if(csss_job_id != "") Some(csss_job_id) else None,
     start_year = 2008,
     end_year = 2016,
     test_year = test_year,
@@ -43,6 +44,10 @@ def main(
     hyper_optimizer = "gs",
     num_samples = 4,
     quantity = OMNIData.Quantities.V_SW,
+    omni_ext = Seq(
+      OMNIData.Quantities.sunspot_number,
+      OMNIData.Quantities.F10_7
+    ),
     reg_type = "L2",
     batch_size = 128,
     max_iterations = csss.ext_iterations,

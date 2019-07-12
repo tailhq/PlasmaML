@@ -24,6 +24,7 @@ import org.platanios.tensorflow.api.learn.layers.{Activation, Layer}
 import org.platanios.tensorflow.api.learn.Mode
 
 def setup_exp_data(
+  csss_job_id: Option[String] = None,
   year_range: Range = 2011 to 2017,
   test_year: Int = 2015,
   test_month: Int = 10,
@@ -60,8 +61,12 @@ def setup_exp_data(
     else sum_dir_prefix + "_tl_" + dt.toString("YYYY-MM-dd-HH-mm")
   }
 
+  val candidate_path = 
+    if(csss_job_id.isDefined) summary_top_dir / csss_job_id.get / summary_dir_index
+    else summary_top_dir / summary_dir_index
+
   val tf_summary_dir_tmp =
-    existing_exp.getOrElse(summary_top_dir / summary_dir_index)
+    existing_exp.getOrElse(candidate_path)
 
   val adj_fraction_pca = 1d
 
@@ -92,9 +97,9 @@ def setup_exp_data(
     )
 
     fte.data
-      .write_exp_config(experiment_config, summary_top_dir / summary_dir_index)
+      .write_exp_config(experiment_config, candidate_path)
 
-    summary_top_dir / summary_dir_index
+    candidate_path
   }
 
   val use_cached_data = if (use_cached_config) {
@@ -184,6 +189,7 @@ def setup_exp_data(
 
 @main
 def apply(
+  csss_job_id: Option[String] = None,
   start_year: Int = 2011,
   end_year: Int = 2017,
   test_year: Int = 2015,
@@ -435,6 +441,7 @@ def apply(
   }
 
   val (experiment_config, tf_summary_dir) = setup_exp_data(
+    csss_job_id,
     start_year to end_year,
     test_year = test_year,
     test_month = test_month,
