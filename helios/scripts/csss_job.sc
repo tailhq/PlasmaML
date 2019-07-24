@@ -17,7 +17,7 @@ def main(
   test_year: Int = 2015,
   test_month: Int = 10,
   test_rotation: Int = -1,
-  network_size: Seq[Int] = Seq(50, 50)
+  network_size: Seq[Int] = Seq(50, 50, 50)
 ) = {
 
   val dt = DateTime.now()
