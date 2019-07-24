@@ -855,7 +855,7 @@ package object data {
           compressPCA(fraction)
       } else {
         DataPipe[Iterable[DenseVector[Double]], Scaler[DenseVector[Double]]](
-          _ => Scaler(identity[DenseVector[Double]])
+          _ => Scaler(identityPipe[DenseVector[Double]])
         )
       }
 
