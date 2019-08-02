@@ -434,6 +434,8 @@ object RDExperiment {
 
     logger.info("Writing domain information in "+"diffusion_domain.csv")
 
+    if(!exists(resultsPath)) mkdir! resultsPath
+
     write(resultsPath/"diffusion_domain.csv", domainSpec.keys.mkString(",")+"\n"+domainSpec.values.mkString(","))
 
     val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
@@ -519,6 +521,8 @@ object RDExperiment {
 
     logger.info("Writing domain information in "+"diffusion_domain.csv")
 
+    if(!exists(resultsPath)) mkdir! resultsPath
+    
     write(resultsPath/"diffusion_domain.csv", domainSpec.keys.mkString(",")+"\n"+domainSpec.values.mkString(","))
 
     val (lShellVec, timeVec) = RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
