@@ -1,6 +1,15 @@
 import $exec.helios.scripts.env
 import $exec.helios.scripts.csss
 import _root_.io.github.mandar2812.dynaml.evaluation._ 
+import _root_.io.github.mandar2812.dynaml.tensorflow.data._
+import _root_.io.github.mandar2812.dynaml.tensorflow._
+import _root_.io.github.mandar2812.PlasmaML.helios.fte
+import _root_.io.github.mandar2812.PlasmaML.helios
+import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
+
+import _root_.org.platanios.tensorflow.api._
+
+
 
 val cv_experiment_name = "exp_cv_gs"
 
@@ -57,7 +66,7 @@ val scatter =
 
 val scatter_file = local_exp_dir / "scatter_test.csv"
 
-os.write(scatter_file, scatter)
+os.write.over(scatter_file, scatter.mkString("\n"))
 
 val metrics = new RegressionMetrics(
   scatter

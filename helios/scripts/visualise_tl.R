@@ -14,11 +14,13 @@ setwd(direc)
 scatter_df <- read.csv(file, header = FALSE)
 colnames(scatter_df) <- c("Prediction", "Actual", "TimeLag")
 
+palette <- c("#000000", "#CC0C0099", "#5C88DA99")
 
 ggplot(scatter_df, aes(x=Actual, y=Prediction)) +
   theme_gray(base_size = 20) + 
-  geom_point(alpha=1/3) +    
-  geom_smooth(method=lm) +
+  geom_point(alpha=0.3) + 
+  stat_density_2d(colour = "blue", size=0.65, alpha = 0.85) +
+  geom_abline(slope = 1, intercept = 0, color = "#CC0C0099", size=1.1, alpha=1) +
   ylab(TeX('$\\hat{v}$  (km/s)')) +
   xlab(TeX('$v$  (km/s)'))
 
