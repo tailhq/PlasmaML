@@ -129,7 +129,7 @@ def apply(
 
     val positive_params_hyp_prior = hyp
       .filter(h => h.contains("_beta") || h.contains("_gamma"))
-      .map(h => (h, new Uniform(0d, 5d)))
+      .map(h => (h, new Uniform(-5d, 5d)))
       .toMap
 
     val gaussian_hyp_params = hyp
