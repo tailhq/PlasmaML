@@ -22,7 +22,7 @@ def apply(
   lambda_gt: (Double, Double, Double, Double) = (math.log(math.pow(10d,
         -4) * math.pow(10d, 2.5d) / 2.4), 1d, 0d, 0.18),
   q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45)
-) = {
+): RDExperiment.Result[SGRadialDiffusionModel] = {
 
   measurement_noise = GaussianRV(0.0, 0.5)
   num_bulk_data = bulk_data_size
@@ -149,7 +149,7 @@ def apply(
 
   //Create the MCMC sampler
   val mcmc_sampler =
-    new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
+    new AdaptiveHyperParameterMCMC[SGRadialDiffusionModel, ContinuousDistr[Double]](
       model,
       h_prior,
       burn
@@ -195,7 +195,7 @@ def apply(
     "injection"
   )
 
-  (
+  RDExperiment.Result(
     solution,
     (boundary_data, bulk_data),
     model,
