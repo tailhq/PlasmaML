@@ -57,7 +57,8 @@ class SGRadialDiffusionModel(
   val timeDomain: (Double, Double),
   val quadrature: GaussianQuadrature =
     SGRadialDiffusionModel.eightPointGaussLegendre,
-  val hyper_param_basis: Map[String, MagParamBasis] = Map())
+  val hyper_param_basis: Map[String, MagParamBasis] = Map(),
+  val basisCovFlag: Boolean = true)
     extends GloballyOptimizable {
 
   protected val logger: Logger = Logger.getLogger(this.getClass)
@@ -370,7 +371,8 @@ class SGRadialDiffusionModel(
 
       AbstractGPRegressionModel.logLikelihood(
         std_targets - surrogate,
-        k_uu + noise_mat_psd + phi * phi.t
+        if (basisCovFlag) k_uu + noise_mat_psd + phi * phi.t
+        else k_uu + noise_mat_psd
       )
 
     } catch {

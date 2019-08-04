@@ -21,7 +21,8 @@ def apply(
   num_post_samples: Int = 5000,
   lambda_gt: (Double, Double, Double, Double) = (math.log(math.pow(10d,
         -4) * math.pow(10d, 2.5d) / 2.4), 1d, 0d, 0.18),
-  q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45)
+  q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45),
+  basisCovFlag: Boolean = true
 ): RDExperiment.Result[SGRadialDiffusionModel] = {
 
   measurement_noise = GaussianRV(0.0, 0.5)
@@ -102,7 +103,8 @@ def apply(
     boundary_data ++ bulk_data,
     chebyshev_hybrid_basis,
     lShellLimits,
-    timeLimits /*,
+    timeLimits,
+    basisCovFlag = basisCovFlag /*,
     hyper_param_basis = hyp_basis*/
   )
 
@@ -127,19 +129,24 @@ def apply(
       .map(h => (h, new LogNormal(0d, 1d)))
       .toMap
 
-    val positive_params_hyp_prior = hyp
-      .filter(h => h.contains("_beta") || h.contains("_gamma"))
+    val hyp_params_set1 = hyp
+      .filter(h => h.contains("_gamma"))
       .map(h => (h, new Uniform(-5d, 5d)))
       .toMap
 
-    val gaussian_hyp_params = hyp
+    val hyp_params_set2 = hyp
       .filter(
         h => h.contains("_alpha") || (h.contains("_b") && !h.contains("_beta"))
       )
       .map(h => (h, new Uniform(-2d, 2d)))
       .toMap
 
-    kernel_hyp_prior ++ positive_params_hyp_prior ++ gaussian_hyp_params
+    val hyp_params_set3 = hyp
+      .filter(h => h.contains("_beta"))
+      .map(h => (h, new Uniform(0d, 5d)))
+      .toMap
+
+    kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3
   }
 
   val h_prior = hyper_prior(hyp)
@@ -149,7 +156,9 @@ def apply(
 
   //Create the MCMC sampler
   val mcmc_sampler =
-    new AdaptiveHyperParameterMCMC[SGRadialDiffusionModel, ContinuousDistr[Double]](
+    new AdaptiveHyperParameterMCMC[SGRadialDiffusionModel, ContinuousDistr[
+      Double
+    ]](
       model,
       h_prior,
       burn
