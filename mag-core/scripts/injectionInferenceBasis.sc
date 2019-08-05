@@ -49,19 +49,19 @@ def apply(
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_laguerre_basis(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_hermite_basis(
     lShellLimits,
     basisSize._1,
     timeLimits,
     basisSize._2
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](1d, deltaL, deltaT)(
+  val seKernel = new GenExpSpaceTimeKernel[Double](0d, deltaL, deltaT)(
     sqNormDouble,
     l1NormDouble
   )
 
-  val noiseKernel = new DiracTuple2Kernel(1.5)
+  val noiseKernel = new DiracTuple2Kernel(reg_data)
 
   noiseKernel.block_all_hyper_parameters
 
