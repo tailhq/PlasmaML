@@ -483,7 +483,7 @@ object SGRadialDiffusionModel {
         val point  = (s.head._1, s.last._1)
         val weight = s.head._2 * s.last._2
 
-        (point, weight)
+        (point, 1d/weight)
       })
       .unzip
 
