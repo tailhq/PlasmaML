@@ -323,6 +323,37 @@ class SGRadialDiffusionModel(
     (A \ responses, psi)
   }
 
+  def get_design_mat(
+    g: DenseMatrix[Double],
+    h: DenseMatrix[Double]
+  ): DenseMatrix[Double] =
+    DenseMatrix.vertcat(
+      DenseVector.ones[Double](g.rows).toDenseMatrix,
+      phi * g.t,
+      h * g.t
+    )
+
+  def get_surrogate(
+    h: Map[String, Double]
+  ): DataPipe[Iterable[(Double, Double)], Iterable[Double]] = {
+
+    val (params, psi) = getParams(h)
+
+    DataPipe((xs: Iterable[(Double, Double)]) => {
+
+      val phi_mat: DenseMatrix[Double] = designMatrixFlow(xs.toStream)
+
+      val dMat: DenseMatrix[Double] = get_design_mat(phi_mat, psi)
+
+      println(s"Dimensions of design matrix ${dMat.rows} * ${dMat.cols}")
+      println(s"Dimensions of parameter matrix ${params.size} * 1")
+
+      val surrogate_predictor: DenseVector[Double] = dMat.t * params
+
+      surrogate_predictor.toArray.map(x => (x * psd_std) + psd_mean)
+    })
+  }
+
   /**
     * Computes the log-likelihood of the observational data,
     * given the hyper-parameter configuration.
@@ -339,11 +370,7 @@ class SGRadialDiffusionModel(
 
       val (params, psi) = getParams(h)
 
-      val dMat = DenseMatrix.vertcat(
-        DenseVector.ones[Double](num_observations).toDenseMatrix,
-        phi * phi.t,
-        psi * phi.t
-      )
+      val dMat = get_design_mat(phi, psi)
 
       val surrogate = dMat.t * params
 
@@ -383,6 +410,121 @@ class SGRadialDiffusionModel(
 
 }
 
+class GalerkinRDModel(
+  override val Kp: DataPipe[Double, Double],
+  init_dll_params: (Double, Double, Double, Double),
+  init_lambda_params: (Double, Double, Double, Double),
+  init_q_params: (Double, Double, Double, Double)
+)(override val covariance: LocalScalarKernel[(Double, Double)],
+  override val noise_psd: DiracTuple2Kernel,
+  override val psd_data: Stream[((Double, Double), Double)],
+  override val basis: PSDBasis,
+  override val lShellDomain: (Double, Double),
+  override val timeDomain: (Double, Double),
+  override val quadrature: GaussianQuadrature =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
+  override val hyper_param_basis: Map[String, MagParamBasis] = Map(),
+  override val basisCovFlag: Boolean = true)
+    extends SGRadialDiffusionModel(
+      Kp,
+      init_dll_params,
+      init_lambda_params,
+      init_q_params
+    )(
+      covariance,
+      noise_psd,
+      psd_data,
+      basis,
+      lShellDomain,
+      timeDomain,
+      quadrature,
+      hyper_param_basis,
+      basisCovFlag
+    ) {
+
+  override def getParams(
+    h: Map[String, Double]
+  ): (DenseVector[Double], DenseMatrix[Double]) = {
+    setState(h)
+
+    println("Constructing Model for PSD")
+
+    val dll      = diffusionField(operator_state)
+    val grad_dll = diffusionField.gradL.apply(operator_state)
+    val lambda   = lossRate(operator_state)
+    val q        = injection_process(operator_state)
+
+    val psi_basis = basis.operator_basis(dll, grad_dll, lambda)
+
+    val (psi_stream, f_stream, lambda_stream) = ghost_points
+      .map(
+        p => (psi_basis(p), (q(p) - lambda(p) * psd_mean) / psd_std, lambda(p))
+      )
+      .unzip3
+
+    val g_basis_mat =
+      if (hyper_param_basis.isEmpty) DenseMatrix(1.0)
+      else
+        hyper_param_basis
+          .filterKeys(effective_hyper_parameters.contains(_))
+          .map(kv => kv._2(_current_state(kv._1)).toDenseMatrix)
+          .reduceLeft((u, v) => kron(u, v))
+          .toDenseMatrix
+
+    print("Dimension  = ")
+    pprint.pprintln(basis.dimension * g_basis_mat.cols)
+
+    val (psi, f, lambda_vec) = (
+      DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix): _*),
+      DenseVector(f_stream.toArray),
+      DenseVector(lambda_stream.toArray)
+    )
+
+    val phi_ext = kron(g_basis_mat, phi)
+
+    val psi_ext = kron(g_basis_mat, psi)
+
+    val (no, nc) = (num_observations, num_colocation_points)
+
+    val ones_obs = DenseVector.fill[Double](no)(1d)
+
+    val omega_phi = phi_ext * phi_ext.t
+
+    val omega_cross = phi_ext * psi_ext.t
+
+    val omega_psi = psi_ext * psi_ext.t
+
+    val responses = DenseVector.vertcat(
+      DenseVector(0d),
+      f
+    )
+
+    def I(n: Int): DenseMatrix[Double] = DenseMatrix.eye[Double](n)
+
+    val A = DenseMatrix.vertcat(
+      DenseMatrix.horzcat(
+        DenseMatrix(0d),
+        lambda_vec.toDenseMatrix
+      ),
+      DenseMatrix.horzcat(
+        lambda_vec.toDenseMatrix.t,
+        omega_psi + (quadrature_weight_matrix * regCol)
+      )
+    )
+
+    (A \ responses, psi)
+  }
+
+  override def get_design_mat(
+    g: DenseMatrix[Double],
+    h: DenseMatrix[Double]
+  ): DenseMatrix[Double] =
+    DenseMatrix.vertcat(
+      DenseVector.ones[Double](g.rows).toDenseMatrix,
+      h * g.t
+    )
+
+}
 object SGRadialDiffusionModel {
 
   sealed trait QuadratureRule
@@ -483,7 +625,7 @@ object SGRadialDiffusionModel {
         val point  = (s.head._1, s.last._1)
         val weight = s.head._2 * s.last._2
 
-        (point, 1d/weight)
+        (point, 1d / weight)
       })
       .unzip
 
