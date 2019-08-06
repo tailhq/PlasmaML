@@ -38,7 +38,7 @@ def apply(
   val (diff_process, loss_process, injection_process) = (
     MagTrend(Kp, "dll"),
     MagTrend(Kp, "lambda"),
-    MagTrend(Kp, "Q")//new ConstantMagProcess("Q", 0d)
+    MagTrend(Kp, "Q") //new ConstantMagProcess("Q", 0d)
   )
 
   val forward_model = MagRadialDiffusion(
@@ -81,6 +81,11 @@ def apply(
         kv => ("sensitivity_" + kv._1, plot3d.draw(to_pairs(kv._2)))
       )
 
-  (forward_model, solution, sensitivity, plots)
+  (
+    forward_model,
+    to_pairs(solution),
+    sensitivity.mapValues(to_pairs),
+    plots
+  )
 
 }
