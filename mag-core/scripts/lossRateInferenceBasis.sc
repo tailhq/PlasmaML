@@ -24,7 +24,8 @@ def apply(
   num_post_samples: Int = 5000,
   lambda_gt: (Double, Double, Double, Double) = (-1, 1.5, 0d, -0.4),
   q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45),
-  basisCovFlag: Boolean = true
+  basisCovFlag: Boolean = true,
+  modelType: String = "pure"
 ) = {
 
   measurement_noise = GaussianRV(0.0, 0.5)
@@ -94,17 +95,38 @@ def apply(
     )
     .toMap
 
-  val model =
-    new SGRadialDiffusionModel(Kp, dll_params, (0d, 0.2, 0d, 0.0), q_params)(
-      seKernel,
-      noiseKernel,
-      boundary_data ++ bulk_data,
-      chebyshev_hybrid_basis,
-      lShellLimits,
-      timeLimits,
-      basisCovFlag = basisCovFlag  /*,
-      hyper_param_basis = hyp_basis*/
-    )
+    val model = if (modelType == "pure") {
+      new GalerkinRDModel(
+        Kp,
+        dll_params,
+        lambda_gt,
+        (0.01, 0.01d, 0.01, 0.01)
+      )(
+        seKernel,
+        noiseKernel,
+        boundary_data ++ bulk_data,
+        chebyshev_hybrid_basis,
+        lShellLimits,
+        timeLimits,
+        basisCovFlag = basisCovFlag
+      )
+    } else {
+      new SGRadialDiffusionModel(
+        Kp,
+        dll_params,
+        lambda_gt,
+        (0.01, 0.01d, 0.01, 0.01)
+      )(
+        seKernel,
+        noiseKernel,
+        boundary_data ++ bulk_data,
+        chebyshev_hybrid_basis,
+        lShellLimits,
+        timeLimits,
+        basisCovFlag = basisCovFlag
+      )
+    }
+  
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++

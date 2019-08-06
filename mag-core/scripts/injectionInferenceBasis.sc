@@ -57,12 +57,12 @@ def apply(
     basisSize._2
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](0d, deltaL, deltaT)(
+  val seKernel = new GenExpSpaceTimeKernel[Double](reg_data, deltaL, deltaT)(
     sqNormDouble,
     l1NormDouble
   )
 
-  val noiseKernel = new DiracTuple2Kernel(reg_data)
+  val noiseKernel = new DiracTuple2Kernel(0d)
 
   noiseKernel.block_all_hyper_parameters
 
@@ -106,8 +106,7 @@ def apply(
       chebyshev_hybrid_basis,
       lShellLimits,
       timeLimits,
-      basisCovFlag = basisCovFlag /*,
-    hyper_param_basis = hyp_basis*/
+      basisCovFlag = basisCovFlag
     )
   } else {
     new SGRadialDiffusionModel(
@@ -122,8 +121,7 @@ def apply(
       chebyshev_hybrid_basis,
       lShellLimits,
       timeLimits,
-      basisCovFlag = basisCovFlag /*,
-    hyper_param_basis = hyp_basis*/
+      basisCovFlag = basisCovFlag
     )
   }
 

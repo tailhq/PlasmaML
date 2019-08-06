@@ -10,14 +10,16 @@ import io.github.mandar2812.PlasmaML.dynamics.diffusion._
 import io.github.mandar2812.PlasmaML.dynamics.diffusion.RDSettings._
 
 def apply(
-  lambda_gt: (Double, Double, Double, Double) = (-1, 1.5, 0d, -0.4),
-  q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45),
+  lambda: (Double, Double, Double, Double) = lambda_params,
+  q: (Double, Double, Double, Double) = q_params,
+  num_bins_l: Int = 50,
+  num_bins_t: Int = 100,
   param: String = "dll_beta"
 ) = {
 
-  lambda_params = lambda_gt
+  lambda_params = lambda
 
-  q_params = q_gt
+  q_params = q
 
   initialPSD = (l: Double) => {
     val c = utils.chebyshev(
@@ -30,13 +32,13 @@ def apply(
     )
   }
 
-  nL = 200
-  nT = 100
+  nL = num_bins_l
+  nT = num_bins_t
 
   val (diff_process, loss_process, injection_process) = (
     MagTrend(Kp, "dll"),
     MagTrend(Kp, "lambda"),
-    MagTrend(Kp, "Q")
+    MagTrend(Kp, "Q")//new ConstantMagProcess("Q", 0d)
   )
 
   val forward_model = MagRadialDiffusion(
