@@ -54,7 +54,8 @@ def apply(
     lShellLimits,
     basisSize._1,
     timeLimits,
-    basisSize._2
+    basisSize._2,
+    kind = 2
   )
 
   val seKernel = new GenExpSpaceTimeKernel[Double](reg_data, deltaL, deltaT)(
