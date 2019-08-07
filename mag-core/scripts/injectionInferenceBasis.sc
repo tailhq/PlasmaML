@@ -54,12 +54,12 @@ def apply(
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_laguerre_basis(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_space_time_basis(
     lShellLimits,
     basisSize._1,
     timeLimits,
     basisSize._2,
-    kind = 1
+    kind = (1, 2)
   )
 
   val seKernel = new GenExpSpaceTimeKernel[Double](0d, deltaL, deltaT)(
