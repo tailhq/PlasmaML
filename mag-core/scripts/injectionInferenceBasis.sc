@@ -112,8 +112,6 @@ def apply(
     kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3
   }
 
-  val h_prior = hyper_prior(hyp)
-
   val hyp_basis = Seq("Q_b", "lambda_b")
     .map(
       h =>
@@ -127,13 +125,12 @@ def apply(
     )
     .toMap
 
-  val initial_sample = h_prior.draw
-
+  
   val initial_config = (
-    initial_sample("Q_alpha"),
-    initial_sample("Q_beta"),
-    initial_sample("Q_gamma"),
-    initial_sample("Q_b")
+    new Uniform(-2d, 2d).draw,
+    new Uniform(0d, 5d).draw,
+    new Uniform(-5d, 5d).draw,
+    new Uniform(-2d, 2d).draw
   )
 
   val model = if (modelType == "pure") {
@@ -185,6 +182,9 @@ def apply(
   model.block(blocked_hyp: _*)
 
   val hyp = model.effective_hyper_parameters
+
+
+  val h_prior = hyper_prior(hyp)
 
   model.regCol = reg_galerkin
   model.regObs = reg_data
