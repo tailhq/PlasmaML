@@ -17,6 +17,10 @@ def apply(
   basisSize: (Int, Int) = (4, 4),
   reg_data: Double = 0.5,
   reg_galerkin: Double = 1.0,
+  quadrature_l: SGRadialDiffusionModel.QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
+  quadrature_t: SGRadialDiffusionModel.QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
   burn: Int = 2000,
   num_post_samples: Int = 5000,
   lambda_gt: (Double, Double, Double, Double) = (math.log(math.pow(10d,
@@ -81,65 +85,6 @@ def apply(
     Kp
   )
 
-  val hyp_basis = Seq("Q_b", "lambda_b")
-    .map(
-      h =>
-        (
-          h,
-          if (h.contains("_alpha") || h.contains("_b")) hermite_basis(4)
-          else if (h.contains("_beta") || h.contains("_gamma"))
-            laguerre_basis(4, 0d)
-          else hermite_basis(4)
-        )
-    )
-    .toMap
-
-  val model = if (modelType == "pure") {
-    new GalerkinRDModel(
-      Kp,
-      dll_params,
-      lambda_gt,
-      (0.01, 0.01d, 0.01, 0.01)
-    )(
-      seKernel,
-      noiseKernel,
-      boundary_data ++ bulk_data,
-      chebyshev_hybrid_basis,
-      lShellLimits,
-      timeLimits,
-      basisCovFlag = basisCovFlag
-    )
-  } else {
-    new SGRadialDiffusionModel(
-      Kp,
-      dll_params,
-      lambda_gt,
-      (0.01, 0.01d, 0.01, 0.01)
-    )(
-      seKernel,
-      noiseKernel,
-      boundary_data ++ bulk_data,
-      chebyshev_hybrid_basis,
-      lShellLimits,
-      timeLimits,
-      basisCovFlag = basisCovFlag
-    )
-  }
-
-  val blocked_hyp = {
-    model.blocked_hyper_parameters ++
-      model.hyper_parameters.filter(
-        c =>
-          c.contains("dll") ||
-            c.contains("base::") ||
-            c.contains("lambda_")
-      )
-  }
-
-  model.block(blocked_hyp: _*)
-
-  val hyp = model.effective_hyper_parameters
-
   def hyper_prior(hyp: List[String]): Map[String, ContinuousDistr[Double]] = {
 
     val kernel_hyp_prior = hyp
@@ -168,6 +113,78 @@ def apply(
   }
 
   val h_prior = hyper_prior(hyp)
+
+  val hyp_basis = Seq("Q_b", "lambda_b")
+    .map(
+      h =>
+        (
+          h,
+          if (h.contains("_alpha") || h.contains("_b")) hermite_basis(4)
+          else if (h.contains("_beta") || h.contains("_gamma"))
+            laguerre_basis(4, 0d)
+          else hermite_basis(4)
+        )
+    )
+    .toMap
+
+  val initial_sample = h_prior.draw
+
+  val initial_config = (
+    initial_sample("Q_alpha"),
+    initial_sample("Q_beta"),
+    initial_sample("Q_gamma"),
+    initial_sample("Q_b")
+  )
+
+  val model = if (modelType == "pure") {
+    new GalerkinRDModel(
+      Kp,
+      dll_params,
+      lambda_gt,
+      initial_config
+    )(
+      seKernel,
+      noiseKernel,
+      boundary_data ++ bulk_data,
+      chebyshev_hybrid_basis,
+      lShellLimits,
+      timeLimits,
+      quadrature_l,
+      quadrature_t,
+      basisCovFlag = basisCovFlag
+    )
+  } else {
+    new SGRadialDiffusionModel(
+      Kp,
+      dll_params,
+      lambda_gt,
+      initial_config
+    )(
+      seKernel,
+      noiseKernel,
+      boundary_data ++ bulk_data,
+      chebyshev_hybrid_basis,
+      lShellLimits,
+      timeLimits,
+      quadrature_l,
+      quadrature_t,
+      basisCovFlag = basisCovFlag
+    )
+  }
+
+  val blocked_hyp = {
+    model.blocked_hyper_parameters ++
+      model.hyper_parameters.filter(
+        c =>
+          c.contains("dll") ||
+            c.contains("base::") ||
+            c.contains("lambda_")
+      )
+  }
+
+  model.block(blocked_hyp: _*)
+
+  val hyp = model.effective_hyper_parameters
 
   model.regCol = reg_galerkin
   model.regObs = reg_data
@@ -249,6 +266,6 @@ def main(
     basisSize,
     reg_data,
     reg_galerkin,
-    burn,
-    num_post_samples
+    burn = burn,
+    num_post_samples = num_post_samples
   )

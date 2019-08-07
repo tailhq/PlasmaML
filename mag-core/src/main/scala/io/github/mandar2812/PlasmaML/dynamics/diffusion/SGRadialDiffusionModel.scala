@@ -11,6 +11,8 @@ import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.utils
 import org.apache.log4j.Logger
+import io.github.mandar2812.dynaml.probability.UniformRV
+import io.github.mandar2812.PlasmaML.dynamics.diffusion.SGRadialDiffusionModel.QuadratureRule
 
 /**
   * Inverse inference over plasma radial diffusion parameters.
@@ -41,8 +43,10 @@ import org.apache.log4j.Logger
   *
   * @param timeDomain A tuple specifying the limits of the temporal domain (t)
   *
-  * @param quadrature A Gaussian quadrature method, used for computing an approximation
-  *                   to the weak form PDE.
+  * @param quadrature_l A quadrature method (space domain), used for computing an approximation
+  *                     to the weak form PDE.
+  * @param quadrature_t A quadrature method (time domain), used for computing an approximation
+  *                     to the weak form PDE.
   * */
 class SGRadialDiffusionModel(
   val Kp: DataPipe[Double, Double],
@@ -55,7 +59,9 @@ class SGRadialDiffusionModel(
   val basis: PSDBasis,
   val lShellDomain: (Double, Double),
   val timeDomain: (Double, Double),
-  val quadrature: GaussianQuadrature =
+  val quadrature_l: QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
+  val quadrature_t: QuadratureRule =
     SGRadialDiffusionModel.eightPointGaussLegendre,
   val hyper_param_basis: Map[String, MagParamBasis] = Map(),
   val basisCovFlag: Boolean = true)
@@ -82,7 +88,7 @@ class SGRadialDiffusionModel(
     Stream[(Double, Double)],
     DenseMatrix[Double]
   ) =
-    SGRadialDiffusionModel.quadrature_primitives(quadrature)(
+    SGRadialDiffusionModel.quadrature_primitives(quadrature_l, quadrature_t)(
       lShellDomain,
       timeDomain
     )
@@ -421,7 +427,9 @@ class GalerkinRDModel(
   override val basis: PSDBasis,
   override val lShellDomain: (Double, Double),
   override val timeDomain: (Double, Double),
-  override val quadrature: GaussianQuadrature =
+  override val quadrature_l: QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
+  override val quadrature_t: QuadratureRule =
     SGRadialDiffusionModel.eightPointGaussLegendre,
   override val hyper_param_basis: Map[String, MagParamBasis] = Map(),
   override val basisCovFlag: Boolean = true)
@@ -437,7 +445,8 @@ class GalerkinRDModel(
       basis,
       lShellDomain,
       timeDomain,
-      quadrature,
+      quadrature_l,
+      quadrature_t,
       hyper_param_basis,
       basisCovFlag
     ) {
@@ -527,12 +536,30 @@ class GalerkinRDModel(
 }
 object SGRadialDiffusionModel {
 
-  sealed trait QuadratureRule
+  sealed trait QuadratureRule {
+    def scale(lower: Double, upper: Double): (Seq[Double], Seq[Double])
+  }
 
+  case class MonteCarloQuadrature(num: Int) extends QuadratureRule {
+    val nodes: Seq[Double] = UniformRV(0d, 1d).iid(num).draw
+
+    val weights: Seq[Double] = Seq.fill[Double](num)(1d / num.toDouble)
+
+    override def scale(
+      lower: Double,
+      upper: Double
+    ): (Seq[Double], Seq[Double]) = {
+      (nodes.map(x => lower + x * (upper - lower)), weights)
+    }
+
+  }
   case class GaussianQuadrature(nodes: Seq[Double], weights: Seq[Double])
       extends QuadratureRule {
 
-    def scale(lower: Double, upper: Double): (Seq[Double], Seq[Double]) = {
+    override def scale(
+      lower: Double,
+      upper: Double
+    ): (Seq[Double], Seq[Double]) = {
 
       val sc_nodes = nodes.map(n => {
         val mid_point = (lower + upper) / 2d
@@ -554,6 +581,9 @@ object SGRadialDiffusionModel {
       sc_weights.zip(sc_nodes.map(f)).map(c => c._2 * c._1).sum
     }
   }
+
+  def monte_carlo_quadrature(num: Int): MonteCarloQuadrature =
+    MonteCarloQuadrature(num)
 
   val twoPointGaussLegendre = GaussianQuadrature(
     Seq(-0.5773502692d, 0.5773502692d),
@@ -603,20 +633,22 @@ object SGRadialDiffusionModel {
   /**
     * Compute the colocation points (quadrature nodes) and weights.
     *
-    * @param quadrature A [[GaussianQuadrature]] rule
-    * @param lShellDomain L-shell domain limits
+    * @param quadrature_l A [[QuadratureRule]] rule, for the space domain.
+    * @param quadrature_t A [[QuadratureRule]] rule, for the time domain.
+    * @param lShellDomain L-shell domain limits.
     * @param timeDomain Temporal domain limits.
     * */
   def quadrature_primitives(
-    quadrature: GaussianQuadrature
+    quadrature_l: QuadratureRule,
+    quadrature_t: QuadratureRule
   )(lShellDomain: (Double, Double),
     timeDomain: (Double, Double)
   ): (Stream[(Double, Double)], DenseMatrix[Double]) = {
 
     val (l_nodes, l_weights) =
-      quadrature.scale(lShellDomain._1, lShellDomain._2)
+      quadrature_l.scale(lShellDomain._1, lShellDomain._2)
 
-    val (t_nodes, t_weights) = quadrature.scale(timeDomain._1, timeDomain._2)
+    val (t_nodes, t_weights) = quadrature_t.scale(timeDomain._1, timeDomain._2)
 
     val (points, weights) = utils
       .combine(Seq(l_nodes.zip(l_weights), t_nodes.zip(t_weights)))

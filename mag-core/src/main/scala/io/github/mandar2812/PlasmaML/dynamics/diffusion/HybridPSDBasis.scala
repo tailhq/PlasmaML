@@ -48,12 +48,23 @@ abstract class HybridPSDBasis(
 
 object HybridPSDBasis {
 
+  /**
+    * Creates a Chebyshev basis function expansion.
+    *
+    * [C<sub>1</sub>(x), ... , C<sup>n</sup>(x)]
+    *
+    * @param domainLimits The lower and upper limits of the input domain X.
+    * @param maxDegree The maximum degree polynomial up to which the basis is constructed.
+    * @param biasFlag Set to true, if C<sub>0</sub>(x) should also be included in the basis,
+    *                 defaults to false.
+    * @param kind Choose the Chebyshev polynomial of the first or second kind, defaults to 1.
+    */
   def chebyshev_basis(
     domainLimits: (Double, Double),
     maxDegree: Int,
     biasFlag: Boolean = false,
     kind: Int = 1
-  ) = {
+  ): (Basis[Double], Basis[Double], Basis[Double]) = {
 
     def T(n: Int, x: Double) = utils.chebyshev(n, x, kind = 1)
 
