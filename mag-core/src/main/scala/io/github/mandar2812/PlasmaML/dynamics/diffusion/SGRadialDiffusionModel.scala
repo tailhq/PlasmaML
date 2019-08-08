@@ -316,13 +316,13 @@ class SGRadialDiffusionModel(
       ),
       DenseMatrix.horzcat(
         ones_obs.toDenseMatrix.t,
-        omega_phi + I(no) * regObs,
-        omega_cross
+        omega_phi * reg + I(no) * regObs,
+        omega_cross * reg
       ),
       DenseMatrix.horzcat(
         lambda_vec.toDenseMatrix.t,
-        omega_cross.t,
-        omega_psi + (quadrature_weight_matrix * regCol)
+        omega_cross.t * reg,
+        (omega_psi * reg) + (quadrature_weight_matrix * regCol)
       )
     )
 
@@ -335,8 +335,8 @@ class SGRadialDiffusionModel(
   ): DenseMatrix[Double] =
     DenseMatrix.vertcat(
       DenseVector.ones[Double](g.rows).toDenseMatrix,
-      phi * g.t,
-      h * g.t
+      (phi * g.t) * reg,
+      (h * g.t) * reg
     )
 
   def get_surrogate(
@@ -404,7 +404,7 @@ class SGRadialDiffusionModel(
 
       AbstractGPRegressionModel.logLikelihood(
         std_targets - surrogate,
-        if (basisCovFlag) k_uu + noise_mat_psd + phi * phi.t
+        if (basisCovFlag) k_uu + noise_mat_psd + (phi * phi.t)*reg
         else k_uu + noise_mat_psd
       )
 
@@ -517,7 +517,7 @@ class GalerkinRDModel(
       ),
       DenseMatrix.horzcat(
         lambda_vec.toDenseMatrix.t,
-        omega_psi + (quadrature_weight_matrix * regCol)
+        omega_psi * reg + (quadrature_weight_matrix * regCol)
       )
     )
 
@@ -530,7 +530,7 @@ class GalerkinRDModel(
   ): DenseMatrix[Double] =
     DenseMatrix.vertcat(
       DenseVector.ones[Double](g.rows).toDenseMatrix,
-      h * g.t
+      (h * g.t) * reg
     )
 
 }

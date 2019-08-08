@@ -15,6 +15,7 @@ def apply(
   bulk_data_size: Int = 50,
   boundary_data_size: Int = 50,
   basisSize: (Int, Int) = (4, 4),
+  reg: Double = 1d,
   reg_data: Double = 0.5,
   reg_galerkin: Double = 1.0,
   quadrature_l: SGRadialDiffusionModel.QuadratureRule =
@@ -62,12 +63,12 @@ def apply(
     kind = 1
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](0d, deltaL, deltaT)(
+  val seKernel = new GenExpSpaceTimeKernel[Double](1d, deltaL, deltaT)(
     sqNormDouble,
     l1NormDouble
   )
 
-  val noiseKernel = new DiracTuple2Kernel(reg_data)
+  val noiseKernel = new DiracTuple2Kernel(1d)
 
   noiseKernel.block_all_hyper_parameters
 
@@ -193,6 +194,7 @@ def apply(
 
   model.regCol = reg_galerkin
   model.regObs = reg_data
+  model.reg    = reg
 
   //Create the MCMC sampler
   val mcmc_sampler =
