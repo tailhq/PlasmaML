@@ -130,7 +130,7 @@ class MagRadialDiffusion[T](
         val s0: DenseVector[Double] = DenseVector.zeros(lShellVec.length)
 
 
-        diffusion_solver.solve(grad_lambda_mat *:* psd_mat, diffProfile, lossProfile)(s0)
+        diffusion_solver.solve(-grad_lambda_mat *:* psd_mat, diffProfile, lossProfile)(s0)
       })
 
       keys.zip(sensitivities).toMap
