@@ -923,7 +923,7 @@ object RDSettings {
   var (nL, nT) = (200, 50)
 
   var lShellLimits: (Double, Double) = (1.0, 7.0)
-  var timeLimits: (Double, Double)   = (0.0, 5.0)
+  var timeLimits: (Double, Double)   = (0.0, 9.0)
 
   def domainSpec: Map[String, Double] = Map(
     "nL"   -> nL.toDouble,
@@ -945,7 +945,7 @@ object RDSettings {
     (math.log(math.pow(10d, -4) * math.pow(10d, 2.5d) / 2.4), 1d, 0d, 0.18)
 
   var q_params: (Double, Double, Double, Double) =
-    (Double.NegativeInfinity, 0d, 0d, 0d)
+    (-1.5, 0d, 0d, 0.25d)
 
   val quantities_loss = Map(
     "lambda_alpha" -> 0x03B1.toChar,
@@ -983,11 +983,19 @@ object RDSettings {
     )
 
   var Kp: DataPipe[Double, Double] = DataPipe((t: Double) => {
-    if (t <= 0d) 2.5
-    else if (t < 1.5) 2.5 + 4 * t
-    else if (t >= 1.5 && t < 3d) 8.5
-    else if (t >= 3d && t <= 5d) 17.5 - 3 * t
+    if (t <= 2d) 2.5
+    else if (t < 3.5) 2.5 + 4 * (t - 2d)
+    else if (t >= 3.5 && t < 5d) 8.5
+    else if (t >= 5d && t <= 7d) 23.5 - 3 * t
     else 2.5
+  })
+
+  var dKp_dt: DataPipe[Double, Double] = DataPipe((t: Double) => {
+    if (t <= 2d) 0d
+    else if (t < 3.5) 4d 
+    else if (t >= 3.5 && t < 5d) 0d
+    else if (t >= 5d && t <= 7d) 3
+    else 0d
   })
 
   def dll: (Double, Double) => Double =

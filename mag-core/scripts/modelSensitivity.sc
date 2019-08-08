@@ -23,13 +23,11 @@ def apply(
 
   initialPSD = (l: Double) => {
     val c = utils.chebyshev(
-      3,
-      2 * (l - lShellLimits._1) / (lShellLimits._2 - lShellLimits._1) - 1
+      2,
+      2 * (l - lShellLimits._1) / (lShellLimits._2 - lShellLimits._1) - 1,
+      kind = 1
     )
-    4000d + 1000 * c - 1000 * utils.chebyshev(
-      5,
-      2 * (l - lShellLimits._1) / (lShellLimits._2 - lShellLimits._1) - 1
-    )
+    101d - 100*c
   }
 
   nL = num_bins_l
@@ -38,7 +36,7 @@ def apply(
   val (diff_process, loss_process, injection_process) = (
     MagTrend(Kp, "dll"),
     MagTrend(Kp, "lambda"),
-    MagTrend(Kp, "Q") //new ConstantMagProcess("Q", 0d)
+    BoundaryInjection(Kp, lShellLimits._2, "Q")
   )
 
   val forward_model = MagRadialDiffusion(
@@ -60,15 +58,15 @@ def apply(
 
   val sensitivity_diff = forward_model.sensitivity(
     DiffusionField(diff_process.transform._keys)
-  )(diff_params_map, loss_params_map, inj_params_map)(_ => 0d)
+  )(diff_params_map, loss_params_map, inj_params_map)(initialPSD)
 
   val sensitivity_loss = forward_model.sensitivity(
     LossRate(loss_process.transform._keys)
-  )(diff_params_map, loss_params_map, inj_params_map)(_ => 0d)
+  )(diff_params_map, loss_params_map, inj_params_map)(initialPSD)
 
   val sensitivity_inj = forward_model.sensitivity(
     Injection(injection_process.transform._keys)
-  )(diff_params_map, loss_params_map, inj_params_map)(_ => 0d)
+  )(diff_params_map, loss_params_map, inj_params_map)(initialPSD)
 
   val sensitivity = sensitivity_diff ++ sensitivity_loss ++ sensitivity_inj
 
@@ -76,7 +74,7 @@ def apply(
     RadialDiffusion.to_input_output_pairs(lShellLimits, timeLimits, nL, nT) _
 
   val plots =
-    Map("psd" -> plot3d.draw(to_pairs(solution))) ++
+    Map("psd" -> plot3d.draw(to_pairs(solution).map(c => (c._1, math.log10(c._2))))) ++
       sensitivity.map(
         kv => ("sensitivity_" + kv._1, plot3d.draw(to_pairs(kv._2)))
       )

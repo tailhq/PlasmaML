@@ -81,7 +81,7 @@ class SGRadialDiffusionModel(
 
   val lossRate: MagTrend = MagTrend(Kp, "lambda")
 
-  val injection_process: MagTrend = MagTrend(Kp, "Q")
+  val injection_process: BoundaryInjection = BoundaryInjection(Kp, lShellDomain._2, "Q")
 
   //Compute the integration nodes and weights for the domain.
   val (ghost_points, quadrature_weight_matrix): (

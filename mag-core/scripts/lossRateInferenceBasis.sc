@@ -20,6 +20,10 @@ def apply(
   basisSize: (Int, Int) = (20, 19),
   reg_data: Double = 0.5,
   reg_galerkin: Double = 1.0,
+  quadrature_l: SGRadialDiffusionModel.QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
+  quadrature_t: SGRadialDiffusionModel.QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
   burn: Int = 2000,
   num_post_samples: Int = 5000,
   lambda_gt: (Double, Double, Double, Double) = (-1, 1.5, 0d, -0.4),
@@ -28,7 +32,7 @@ def apply(
   modelType: String = "pure"
 ) = {
 
-  measurement_noise = GaussianRV(0.0, 0.5)
+  measurement_noise = GaussianRV(0.0, 1d)
   num_bulk_data = bulk_data_size
   num_boundary_data = boundary_data_size
 
@@ -167,7 +171,7 @@ def apply(
     h_prior,
     samples,
     basisSize,
-    "HybridMQ",
+    "ChebyshevHermite",
     (model.regCol, model.regObs)
   )
 

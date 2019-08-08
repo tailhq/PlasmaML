@@ -14,8 +14,8 @@ import io.github.mandar2812.dynaml.pipes._
   *
   * @author mandar2812 date 27/06/2017.
   * */
-case class MagnetosphericProcessTrend[T](
-  Kp: DataPipe[Double, Double]
+class MagnetosphericProcessTrend[T](
+  val Kp: DataPipe[Double, Double]
 )(val transform: Encoder[T, (Double, Double, Double, Double)])
     extends MetaPipe[T, (Double, Double), Double] {
 
@@ -86,8 +86,8 @@ case class MagnetosphericProcessTrend[T](
           val (l, t)                  = lt
           val (alpha, beta, gamma, b) = transform(p)
           val kp                      = Kp(t)
-          math.log(10.0) * kp * 
-            (math.exp(alpha) * math.pow(l, beta) + gamma) * 
+          math.log(10.0) * kp *
+            (math.exp(alpha) * math.pow(l, beta) + gamma) *
             math.pow(10d, b * kp)
         }
     )
@@ -109,6 +109,101 @@ object MagnetosphericProcessTrend {
 
 }
 
+case class BoundaryInjection(
+  override val Kp: DataPipe[Double, Double],
+  val l0: Double,
+  val prefix: String)
+    extends MagnetosphericProcessTrend[Map[String, Double]](Kp)(
+      MagnetosphericProcessTrend.getEncoder(prefix)
+    ) {
+
+  import MagnetosphericProcessTrend.MAGProcess
+
+  override val transform: MagConfigEncoding =
+    MagnetosphericProcessTrend.getEncoder(prefix)
+
+  override def run(data: Map[String, Double]) = {
+    val (alpha, beta, gamma, b) = transform(data)
+
+    DataPipe((lt: (Double, Double)) => {
+      val (l, t) = lt
+
+      val kp = Kp(t)
+      (math.exp(alpha) * math.exp(-beta * math.pow(l - l0, 2d)) + gamma) * 
+        math.pow(10d, b * kp)
+    })
+
+  }
+
+  override def gradL: MAGProcess[Map[String, Double]] =
+    MetaPipe(
+      (p: Map[String, Double]) =>
+        (lt: (Double, Double)) => {
+          val (l, t)              = lt
+          val (alpha, beta, _, b) = transform(p)
+          val kp                  = Kp(t)
+          (-2 * beta * math.exp(alpha) * math
+            .exp(-beta * math.pow(l - l0, 2d))) * (l - l0) * math
+            .pow(10d, b * kp)
+        }
+    )
+
+  override def grad: Seq[MAGProcess[Map[String, Double]]] = {
+
+    val grad_alpha = MetaPipe(
+      (p: Map[String, Double]) =>
+        (lt: (Double, Double)) => {
+          val (l, t)              = lt
+          val (alpha, beta, _, b) = transform(p)
+          val kp                  = Kp(t)
+          (math.exp(alpha) * math
+            .exp(-beta * math.pow(l - l0, 2d))) * math
+            .pow(10d, b * kp)
+        }
+    )
+
+    val grad_beta = MetaPipe(
+      (p: Map[String, Double]) =>
+        (lt: (Double, Double)) => {
+          val (l, t)              = lt
+          val (alpha, beta, _, b) = transform(p)
+          val kp                  = Kp(t)
+          (-math.exp(alpha) * 
+            math.exp(-beta * math.pow(l - l0, 2d))) *
+            math.pow(l - l0, 2d) *
+            math.pow(10d, b * kp)
+        }
+    )
+
+    val grad_gamma = MetaPipe(
+      (p: Map[String, Double]) =>
+        (lt: (Double, Double)) => {
+          val (l, t)       = lt
+          val (_, _, _, b) = transform(p)
+          val kp           = Kp(t)
+          math.pow(10d, b * kp)
+        }
+    )
+
+    val grad_b = MetaPipe(
+      (p: Map[String, Double]) =>
+        (lt: (Double, Double)) => {
+          val (l, t)                  = lt
+          val (alpha, beta, gamma, b) = transform(p)
+          val kp                      = Kp(t)
+          math.log(10d) * kp *
+            (math.exp(alpha) *
+              math.exp(-beta * math.pow(l - l0, 2d)) +
+              gamma) *
+            math.pow(10d, b * kp)
+        }
+    )
+
+    Seq(grad_alpha, grad_beta, grad_gamma, grad_b)
+  }
+
+}
+
 class MagTrend(override val Kp: DataPipe[Double, Double], val prefix: String)
     extends MagnetosphericProcessTrend[Map[String, Double]](Kp)(
       MagnetosphericProcessTrend.getEncoder(prefix)
@@ -124,10 +219,10 @@ object MagTrend {
     new MagTrend(Kp, prefix)
 }
 
-class SimpleMagTrend(prefix: String)
+case class SimpleMagTrend(override val prefix: String)
     extends MagTrend(DataPipe((_: Double) => 0d), prefix)
 
-class ConstantMagProcess(prefix: String, value: Double = 0d)
+case class ConstantMagProcess(override val prefix: String, value: Double = 0d)
     extends MagTrend(DataPipe((_: Double) => 0d), prefix) {
 
   override def run(

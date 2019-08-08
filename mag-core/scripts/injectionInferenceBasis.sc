@@ -30,7 +30,7 @@ def apply(
   modelType: String = "pure"
 ): RDExperiment.Result[SGRadialDiffusionModel] = {
 
-  measurement_noise = GaussianRV(0.0, 0.5)
+  measurement_noise = GaussianRV(0.0, 1d)
   num_bulk_data = bulk_data_size
   num_boundary_data = boundary_data_size
 
@@ -54,12 +54,12 @@ def apply(
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_space_time_basis(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_hermite_basis(
     lShellLimits,
     basisSize._1,
     timeLimits,
     basisSize._2,
-    kind = (1, 2)
+    kind = 1
   )
 
   val seKernel = new GenExpSpaceTimeKernel[Double](0d, deltaL, deltaT)(
@@ -99,9 +99,9 @@ def apply(
 
     val hyp_params_set2 = hyp
       .filter(
-        h => h.contains("_alpha") || (h.contains("_b") && !h.contains("_beta"))
+        h => h.contains("_alpha")
       )
-      .map(h => (h, new Uniform(-2d, 2d)))
+      .map(h => (h, new Uniform(-5d, 5d)))
       .toMap
 
     val hyp_params_set3 = hyp
@@ -109,7 +109,12 @@ def apply(
       .map(h => (h, new Uniform(0d, 5d)))
       .toMap
 
-    kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3
+    val hyp_params_set4 = hyp
+      .filter(h => h.contains("_b"))
+      .map(h => (h, new Uniform(0d, 2d)))
+      .toMap
+
+    kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3 ++ hyp_params_set4
   }
 
   val hyp_basis = Seq("Q_b", "lambda_b")
@@ -127,10 +132,10 @@ def apply(
 
   
   val initial_config = (
-    new Uniform(-2d, 2d).draw,
+    new Uniform(-5d, 5d).draw,
     new Uniform(0d, 5d).draw,
     new Uniform(-5d, 5d).draw,
-    new Uniform(-2d, 2d).draw
+    new Uniform(0d, 2d).draw
   )
 
   val model = if (modelType == "pure") {
@@ -210,7 +215,7 @@ def apply(
     h_prior,
     samples,
     basisSize,
-    "HybridMQ",
+    "ChebyshevHermite",
     (model.regCol, model.regObs)
   )
 

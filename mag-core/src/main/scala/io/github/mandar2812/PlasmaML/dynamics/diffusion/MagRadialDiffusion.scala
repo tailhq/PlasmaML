@@ -22,18 +22,18 @@ import breeze.linalg.{DenseMatrix, DenseVector}
   * */
 class MagRadialDiffusion[T](
   diffusion: MagnetosphericProcessTrend[T],
-  lossRate:  MagnetosphericProcessTrend[T],
-  injection: MagnetosphericProcessTrend[T])(
-  lShellLimits: (Double, Double),
+  lossRate: MagnetosphericProcessTrend[T],
+  injection: MagnetosphericProcessTrend[T]
+)(lShellLimits: (Double, Double),
   timeLimits: (Double, Double),
-  nL: Int, nT: Int)
-  extends Serializable {
+  nL: Int,
+  nT: Int)
+    extends Serializable {
 
   import MagRadialDiffusion._
 
   private lazy val diffusion_solver: RadialDiffusion =
     new RadialDiffusion(lShellLimits, timeLimits, nL, nT)
-
 
   lazy val stencil: (Seq[Double], Seq[Double]) = diffusion_solver.stencil
 
@@ -43,18 +43,26 @@ class MagRadialDiffusion[T](
     diffusion_params: T,
     loss_params: T,
     injection_params: T,
-    f0: DenseVector[Double]): Stream[DenseVector[Double]] = {
+    f0: DenseVector[Double]
+  ): Stream[DenseVector[Double]] = {
 
     val (diffusionField, lossField, injectionField) = (
-      diffusion(diffusion_params), lossRate(loss_params), injection(injection_params)
+      diffusion(diffusion_params),
+      lossRate(loss_params),
+      injection(injection_params)
     )
 
+    val diffProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+      (i, j) => diffusionField(lShellVec(i), timeVec(j))
+    )
 
-    val diffProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => diffusionField(lShellVec(i), timeVec(j)))
+    val injectionProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+      (i, j) => injectionField(lShellVec(i), timeVec(j))
+    )
 
-    val injectionProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => injectionField(lShellVec(i), timeVec(j)))
-
-    val lossProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => lossField(lShellVec(i), timeVec(j)))
+    val lossProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+      (i, j) => lossField(lShellVec(i), timeVec(j))
+    )
 
     diffusion_solver.solve(injectionProfile, diffProfile, lossProfile)(f0)
   }
@@ -62,16 +70,15 @@ class MagRadialDiffusion[T](
   def solve(
     diffusion_params: T,
     loss_params: T,
-    injection_params: T)(
-    f0: Double => Double): Stream[DenseVector[Double]] = {
-
+    injection_params: T
+  )(f0: Double => Double
+  ): Stream[DenseVector[Double]] = {
 
     val dll = (l: Double, t: Double) => diffusion(diffusion_params)((l, t))
 
     val lambda = (l: Double, t: Double) => lossRate(loss_params)((l, t))
 
     val q = (l: Double, t: Double) => injection(injection_params)((l, t))
-
 
     diffusion_solver.solve(q, dll, lambda)(f0)
   }
@@ -81,25 +88,31 @@ class MagRadialDiffusion[T](
     diffusion_params: T,
     loss_params: T,
     injection_params: T,
-    f0: DenseVector[Double]): Map[String, Stream[DenseVector[Double]]] = parameter match {
+    f0: DenseVector[Double]
+  ): Map[String, Stream[DenseVector[Double]]] = parameter match {
 
     case Injection(keys) => {
 
       val (diffusionField, lossField) = (
-        diffusion(diffusion_params), lossRate(loss_params)
+        diffusion(diffusion_params),
+        lossRate(loss_params)
       )
 
-      val diffProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => diffusionField(lShellVec(i), timeVec(j)))
+      val diffProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => diffusionField(lShellVec(i), timeVec(j))
+      )
 
-      val lossProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => lossField(lShellVec(i), timeVec(j)))
+      val lossProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => lossField(lShellVec(i), timeVec(j))
+      )
 
       val sensitivities = injection.grad.map(grad_q_i => {
 
-        val grad_q_mat = DenseMatrix.tabulate[Double](nL+1,nT+1)(
-          (i,j) => grad_q_i(injection_params)(lShellVec(i), timeVec(j)))
+        val grad_q_mat = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+          (i, j) => grad_q_i(injection_params)(lShellVec(i), timeVec(j))
+        )
 
         val s0: DenseVector[Double] = DenseVector.zeros(lShellVec.length)
-
 
         diffusion_solver.solve(grad_q_mat, diffProfile, lossProfile)(s0)
       })
@@ -109,90 +122,122 @@ class MagRadialDiffusion[T](
 
     case LossRate(keys) => {
       val (diffusionField, lossField, injectionField) = (
-        diffusion(diffusion_params), lossRate(loss_params), injection(injection_params)
+        diffusion(diffusion_params),
+        lossRate(loss_params),
+        injection(injection_params)
       )
 
-      val diffProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => diffusionField(lShellVec(i), timeVec(j)))
+      val diffProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => diffusionField(lShellVec(i), timeVec(j))
+      )
 
-      val lossProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => lossField(lShellVec(i), timeVec(j)))
+      val lossProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => lossField(lShellVec(i), timeVec(j))
+      )
 
-      val injectionProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => injectionField(lShellVec(i), timeVec(j)))
+      val injectionProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => injectionField(lShellVec(i), timeVec(j))
+      )
 
-      val psd = diffusion_solver.solve(injectionProfile, diffProfile, lossProfile)(f0)
+      val psd =
+        diffusion_solver.solve(injectionProfile, diffProfile, lossProfile)(f0)
 
-      val psd_mat = DenseMatrix.horzcat(psd.map(_.asDenseMatrix.t):_*)
+      val psd_mat = DenseMatrix.horzcat(psd.map(_.asDenseMatrix.t): _*)
 
       val sensitivities = lossRate.grad.map(grad_lambda_i => {
 
-        val grad_lambda_mat = DenseMatrix.tabulate[Double](nL+1,nT+1)(
-          (i,j) => grad_lambda_i(loss_params)(lShellVec(i), timeVec(j)))
+        val grad_lambda_mat = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+          (i, j) => grad_lambda_i(loss_params)(lShellVec(i), timeVec(j))
+        )
 
         val s0: DenseVector[Double] = DenseVector.zeros(lShellVec.length)
 
-
-        diffusion_solver.solve(-grad_lambda_mat *:* psd_mat, diffProfile, lossProfile)(s0)
+        diffusion_solver
+          .solve(-grad_lambda_mat *:* psd_mat, diffProfile, lossProfile)(s0)
       })
 
       keys.zip(sensitivities).toMap
     }
 
-
     case DiffusionField(keys) => {
       val (diffusionField, lossField, injectionField) = (
-        diffusion(diffusion_params), lossRate(loss_params), injection(injection_params)
+        diffusion(diffusion_params),
+        lossRate(loss_params),
+        injection(injection_params)
       )
 
-      val diffProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => diffusionField(lShellVec(i), timeVec(j)))
+      val diffProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => diffusionField(lShellVec(i), timeVec(j))
+      )
 
-      val lossProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => lossField(lShellVec(i), timeVec(j)))
+      val lossProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => lossField(lShellVec(i), timeVec(j))
+      )
 
-      val injectionProfile = DenseMatrix.tabulate[Double](nL+1,nT+1)((i,j) => injectionField(lShellVec(i), timeVec(j)))
+      val injectionProfile = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
+        (i, j) => injectionField(lShellVec(i), timeVec(j))
+      )
 
-      val psd = diffusion_solver.solve(injectionProfile, diffProfile, lossProfile)(f0)
+      val psd =
+        diffusion_solver.solve(injectionProfile, diffProfile, lossProfile)(f0)
 
       val sensitivities = diffusion.grad.map(grad_dll_i => {
 
         val s0: DenseVector[Double] = DenseVector.zeros(lShellVec.length)
 
         val grad_dll_i_matrix = DenseMatrix.tabulate[Double](nL + 1, nT + 1)(
-          (i,j) => grad_dll_i(diffusion_params)(lShellVec(i), timeVec(j)))
+          (i, j) => grad_dll_i(diffusion_params)(lShellVec(i), timeVec(j))
+        )
 
-        val grad_dll_params: Seq[(Seq[Seq[Double]], Seq[Seq[Double]])] = RadialDiffusion.getModelStackParams(
-          lShellLimits, timeLimits, nL, nT)(
-          DenseMatrix.zeros[Double](nL + 1, nT + 1),
-          grad_dll_i_matrix,
-          DenseMatrix.zeros[Double](nL + 1, nT + 1)).map(
-          pattern => (pattern._1, pattern._2))
-
+        val grad_dll_params: Seq[(Seq[Seq[Double]], Seq[Seq[Double]])] =
+          RadialDiffusion
+            .getModelStackParams(lShellLimits, timeLimits, nL, nT)(
+              DenseMatrix.zeros[Double](nL + 1, nT + 1),
+              grad_dll_i_matrix,
+              DenseMatrix.zeros[Double](nL + 1, nT + 1)
+            )
+            .map(pattern => (pattern._1, pattern._2))
 
         val injection_mat_eff =
           DenseMatrix.horzcat(
-            psd.sliding(2).toSeq.zip(grad_dll_params).map(pattern => {
+            psd
+              .sliding(2)
+              .toSeq
+              .zip(grad_dll_params)
+              .map(pattern => {
 
-              val (psd_hist, (alph, bet)) = pattern
+                val (psd_hist, (alph, bet)) = pattern
 
-              val alpha_mat = DenseMatrix.tabulate[Double](nL + 1, nL + 1)(
-                (i, j) => if(i == j || math.abs(i - j) == 1) alph(i)(j - i + 1) else 0d
-              )
+                val alpha_mat = DenseMatrix.tabulate[Double](nL + 1, nL + 1)(
+                  (i, j) =>
+                    if (i == j || math.abs(i - j) == 1) alph(i)(j - i + 1)
+                    else 0d
+                )
 
-              val beta_mat = DenseMatrix.tabulate[Double](nL + 1, nL + 1)(
-                (i, j) => if(i == j || math.abs(i - j) == 1) bet(i)(j - i + 1) else 0d
-              )
+                val beta_mat = DenseMatrix.tabulate[Double](nL + 1, nL + 1)(
+                  (i, j) =>
+                    if (i == j || math.abs(i - j) == 1) bet(i)(j - i + 1)
+                    else 0d
+                )
 
-              val invT = DenseMatrix.eye[Double](nL + 1) * (nT/(timeLimits._2 - timeLimits._1))
+                val invT = DenseMatrix
+                  .eye[Double](nL + 1) * (nT / (timeLimits._2 - timeLimits._1))
 
-              val alpha_mat_adj = alpha_mat - invT
+                val alpha_mat_adj = alpha_mat - invT
 
-              val beta_mat_adj  = beta_mat  - invT
+                val beta_mat_adj = beta_mat - invT
 
-              alpha_mat_adj*psd_hist.head - beta_mat_adj*psd_hist.last
-            }).map(_.toDenseMatrix.t):_*
+                alpha_mat_adj * psd_hist.head - beta_mat_adj * psd_hist.last
+              })
+              .map(_.toDenseMatrix.t): _*
           )
 
-
         diffusion_solver.solve(
-          DenseMatrix.horzcat(injection_mat_eff, DenseMatrix.zeros[Double](nL + 1, 1)),
-          diffProfile, lossProfile)(s0)
+          DenseMatrix
+            .horzcat(injection_mat_eff, DenseMatrix.zeros[Double](nL + 1, 1)),
+          diffProfile,
+          lossProfile
+        )(s0)
       })
 
       keys.zip(sensitivities).toMap
@@ -202,18 +247,21 @@ class MagRadialDiffusion[T](
   }
 
   def sensitivity(
-    parameter: Parameter)(
-    diffusion_params: T,
+    parameter: Parameter
+  )(diffusion_params: T,
     loss_params: T,
-    injection_params: T)(
-    f0: Double => Double): Map[String, Stream[DenseVector[Double]]] =
+    injection_params: T
+  )(f0: Double => Double
+  ): Map[String, Stream[DenseVector[Double]]] =
     sensitivity(
-      parameter, diffusion_params, loss_params, injection_params,
+      parameter,
+      diffusion_params,
+      loss_params,
+      injection_params,
       DenseVector(lShellVec.map(f0).toArray)
     )
 
 }
-
 
 object MagRadialDiffusion {
 
@@ -228,11 +276,16 @@ object MagRadialDiffusion {
   def apply[T](
     diffusion: MagnetosphericProcessTrend[T],
     lossRate: MagnetosphericProcessTrend[T],
-    injection: MagnetosphericProcessTrend[T])(
-    lShellLimits: (Double, Double),
+    injection: MagnetosphericProcessTrend[T]
+  )(lShellLimits: (Double, Double),
     timeLimits: (Double, Double),
-    nL: Int, nT: Int): MagRadialDiffusion[T] =
-    new MagRadialDiffusion(
-      diffusion, lossRate, injection)(
-      lShellLimits, timeLimits, nL, nT)
+    nL: Int,
+    nT: Int
+  ): MagRadialDiffusion[T] =
+    new MagRadialDiffusion(diffusion, lossRate, injection)(
+      lShellLimits,
+      timeLimits,
+      nL,
+      nT
+    )
 }

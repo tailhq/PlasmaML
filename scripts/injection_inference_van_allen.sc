@@ -24,10 +24,16 @@ def apply(
   basisSize: (Int, Int) = (4, 4),
   reg_data: Double = 0.5,
   reg_galerkin: Double = 1.0,
+  quadrature_l: SGRadialDiffusionModel.QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
+  quadrature_t: SGRadialDiffusionModel.QuadratureRule =
+    SGRadialDiffusionModel.eightPointGaussLegendre,
   burn: Int = 2000,
   num_post_samples: Int = 5000,
   num_bins_l: Int = 100,
-  num_bins_t: Int = 100
+  num_bins_t: Int = 100,
+  basisCovFlag: Boolean = true,
+  modelType: String = "pure"
 ) = {
 
   val formatter = DateTimeFormat.forPattern("dd-MMM-yyyy HH:mm:ss")
@@ -134,35 +140,57 @@ def apply(
   nL = num_bins_l
   nT = num_bins_t
 
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_laguerre_basis(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_hermite_basis(
     lShellLimits,
     basisSize._1,
     timeLimits,
     basisSize._2
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](1d, deltaL, deltaT)(
+  val seKernel = new GenExpSpaceTimeKernel[Double](0d, deltaL, deltaT)(
     sqNormDouble,
     l1NormDouble
   )
 
-  val noiseKernel = new DiracTuple2Kernel(1.5)
+  val noiseKernel = new DiracTuple2Kernel(reg_data)
 
   noiseKernel.block_all_hyper_parameters
 
-  val model = new SGRadialDiffusionModel(
-    kp,
-    dll_params,
-    lambda_params,
-    (0.01, 0.01d, 0.01, 0.01)
-  )(
-    seKernel,
-    noiseKernel,
-    training_data.data.toStream,
-    chebyshev_hybrid_basis,
-    lShellLimits,
-    timeLimits
-  )
+  val model = if (modelType == "pure") {
+    new GalerkinRDModel(
+      Kp,
+      dll_params,
+      lambda_gt,
+      initial_config
+    )(
+      seKernel,
+      noiseKernel,
+      boundary_data ++ bulk_data,
+      chebyshev_hybrid_basis,
+      lShellLimits,
+      timeLimits,
+      quadrature_l,
+      quadrature_t,
+      basisCovFlag = basisCovFlag
+    )
+  } else {
+    new SGRadialDiffusionModel(
+      Kp,
+      dll_params,
+      lambda_gt,
+      initial_config
+    )(
+      seKernel,
+      noiseKernel,
+      boundary_data ++ bulk_data,
+      chebyshev_hybrid_basis,
+      lShellLimits,
+      timeLimits,
+      quadrature_l,
+      quadrature_t,
+      basisCovFlag = basisCovFlag
+    )
+  }
 
   /*model.covariance.setHyperParameters(
     Map("sigma" -> model.psd_std) ++
