@@ -182,26 +182,26 @@ if(lossFlag == "loss") {
   ggsave("histogram_Q_beta_posterior.png")
   
   
-  ggplot(prior_samples, aes(x=exp(Q_alpha))) +
+  ggplot(prior_samples, aes(x=Q_alpha)) +
     geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
     theme_gray(base_size = 24) +
     xlab(expression(alpha)) +
-    geom_vline(aes(xintercept=exp(ground_truth$Q_alpha)),   # Ignore NA values for mean
+    geom_vline(aes(xintercept=ground_truth$Q_alpha),   # Ignore NA values for mean
                color="red", linetype="dashed", size=0.75)
   ggsave("histogram_Q_alpha_prior.png")
   
   
-  ggplot(posterior_samples[exp(posterior_samples$"Q_alpha") < 50,], aes(x=exp(Q_alpha))) +
+  ggplot(posterior_samples, aes(x=Q_alpha)) +
     geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
                    binwidth=.5,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
     theme_gray(base_size = 24) +
     xlab(expression(alpha)) +
-    geom_vline(aes(xintercept=exp(ground_truth$Q_alpha)),   # Ignore NA values for mean
+    geom_vline(aes(xintercept=ground_truth$Q_alpha),   # Ignore NA values for mean
                color="red", linetype="dashed", size=0.75)
   ggsave("histogram_Q_alpha_posterior.png")
   
