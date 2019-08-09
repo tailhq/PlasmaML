@@ -103,36 +103,36 @@ if(lossFlag == "loss") {
 } else {
 
   qplot(
-    prior_samples$"Q_gamma",  prior_samples$"Q_b",
-    xlab = expression(gamma), ylab = expression(b))
-  ggsave("scatter_gamma_b_prior.png")
+    prior_samples$"Q_beta",  prior_samples$"Q_b",
+    xlab = expression(beta), ylab = expression(b))
+  ggsave("scatter_beta_b_prior.png")
 
   qplot(
-    posterior_samples$"Q_gamma", posterior_samples$"Q_b",
-    xlab = expression(gamma), ylab = expression(b))
-  ggsave("scatter_gamma_b_posterior.png")
+    posterior_samples$"Q_beta", posterior_samples$"Q_b",
+    xlab = expression(beta), ylab = expression(b))
+  ggsave("scatter_beta_b_posterior.png")
 
-  ggplot(prior_samples[prior_samples$Q_gamma < 100,], aes(x=Q_gamma)) +
-    geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
-                   binwidth=.5,
-                   colour="black", fill="white") +
-    geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-    theme_gray(base_size = 24) +
-    xlab(expression(gamma)) +
-    geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=.75)
-  ggsave("histogram_Q_gamma_prior.png")
+  # ggplot(prior_samples[prior_samples$Q_gamma < 100,], aes(x=Q_gamma)) +
+  #   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+  #                  binwidth=.5,
+  #                  colour="black", fill="white") +
+  #   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+  #   theme_gray(base_size = 24) +
+  #   xlab(expression(gamma)) +
+  #   geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
+  #              color="red", linetype="dashed", size=.75)
+  # ggsave("histogram_Q_gamma_prior.png")
 
-  ggplot(posterior_samples, aes(x=Q_gamma)) +
-    geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
-                   binwidth=.5,
-                   colour="black", fill="white") +
-    geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-    theme_gray(base_size = 24) +
-    xlab(expression(gamma)) +
-    geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
-               color="red", linetype="dashed", size=.75)
-  ggsave("histogram_Q_gamma_posterior.png")
+  # ggplot(posterior_samples, aes(x=Q_gamma)) +
+  #   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+  #                  binwidth=.5,
+  #                  colour="black", fill="white") +
+  #   geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
+  #   theme_gray(base_size = 24) +
+  #   xlab(expression(gamma)) +
+  #   geom_vline(aes(xintercept=ground_truth$Q_gamma),   # Ignore NA values for mean
+  #              color="red", linetype="dashed", size=.75)
+  # ggsave("histogram_Q_gamma_posterior.png")
 
 
   ggplot(prior_samples, aes(x=Q_b)) +

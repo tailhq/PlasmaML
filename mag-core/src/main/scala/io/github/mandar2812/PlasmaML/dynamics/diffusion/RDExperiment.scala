@@ -440,6 +440,25 @@ object RDExperiment {
 
     }
 
+    if (params_injection.contains("Q_beta") && params_injection.contains(
+          "Q_b"
+        )) {
+
+      scatter(samples.map(c => (c("Q_beta"), c("Q_b"))))
+      if (gt.nonEmpty) {
+        hold()
+        scatter(Seq((gt("Q_beta"), gt("Q_b"))))
+        legend(Seq("Posterior Samples", "Ground Truth"))
+      } else legend(Seq("Posterior Samples"))
+
+      title("Posterior Samples Q:- " + 0x03B2.toChar + " vs b")
+      xAxis("Q: " + 0x03B2.toChar)
+      yAxis("Q: b")
+
+      if (gt.nonEmpty) unhold()
+
+    }
+
     if (params_injection.contains("Q_alpha") && params_injection.contains(
           "Q_beta"
         )) {

@@ -119,24 +119,11 @@ def apply(
     kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3 ++ hyp_params_set4
   }
 
-  val hyp_basis = Seq("Q_b", "lambda_b")
-    .map(
-      h =>
-        (
-          h,
-          if (h.contains("_alpha") || h.contains("_b")) hermite_basis(4)
-          else if (h.contains("_beta") || h.contains("_gamma"))
-            laguerre_basis(4, 0d)
-          else hermite_basis(4)
-        )
-    )
-    .toMap
-
   
   val initial_config = (
     new Uniform(-5d, 5d).draw,
     new Uniform(0d, 5d).draw,
-    new Uniform(-5d, 5d).draw,
+    0d,
     new Uniform(0d, 2d).draw
   )
 
@@ -182,7 +169,8 @@ def apply(
         c =>
           c.contains("dll") ||
             c.contains("base::") ||
-            c.contains("lambda_")
+            c.contains("lambda_") || 
+            c.contains("_gamma")
       )
   }
 
