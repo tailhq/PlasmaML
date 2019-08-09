@@ -253,7 +253,7 @@ class SGRadialDiffusionModel(
   ): (DenseVector[Double], DenseMatrix[Double]) = {
     setState(h)
 
-    println("Constructing Model for PSD")
+    //println("Constructing Model for PSD")
 
     val dll      = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)
@@ -277,8 +277,8 @@ class SGRadialDiffusionModel(
           .reduceLeft((u, v) => kron(u, v))
           .toDenseMatrix
 
-    print("Dimension  = ")
-    pprint.pprintln(basis.dimension * g_basis_mat.cols)
+    //print("Dimension  = ")
+    //pprint.pprintln(basis.dimension * g_basis_mat.cols)
 
     val (psi, f, lambda_vec) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix): _*),
@@ -383,21 +383,21 @@ class SGRadialDiffusionModel(
       val modelVariance = norm(
         targets.map(psd => (psd - psd_mean) / psd_std) - surrogate
       ) / num_observations
-      print("variance = ")
-      pprint.pprintln(modelVariance)
+      //print("variance = ")
+      //pprint.pprintln(modelVariance)
 
       /*
        * Construct partitioned covariance matrix
        * */
 
-      println("Constructing partitions of covariance matrix")
+      //println("Constructing partitions of covariance matrix")
 
-      println("Partition K_uu")
+      //println("Partition K_uu")
       val k_uu = covariance
         .buildKernelMatrix(psd_data.map(_._1), num_observations)
         .getKernelMatrix
 
-      println("Partition K_nn")
+      //println("Partition K_nn")
       val noise_mat_psd = noise_psd
         .buildKernelMatrix(psd_data.map(_._1), num_observations)
         .getKernelMatrix
@@ -456,7 +456,7 @@ class GalerkinRDModel(
   ): (DenseVector[Double], DenseMatrix[Double]) = {
     setState(h)
 
-    println("Constructing Model for PSD")
+    //println("Constructing Model for PSD")
 
     val dll      = diffusionField(operator_state)
     val grad_dll = diffusionField.gradL.apply(operator_state)
@@ -480,8 +480,8 @@ class GalerkinRDModel(
           .reduceLeft((u, v) => kron(u, v))
           .toDenseMatrix
 
-    print("Dimension  = ")
-    pprint.pprintln(basis.dimension * g_basis_mat.cols)
+    //print("Dimension  = ")
+    //pprint.pprintln(basis.dimension * g_basis_mat.cols)
 
     val (psi, f, lambda_vec) = (
       DenseMatrix.vertcat(psi_stream.map(_.toDenseMatrix): _*),

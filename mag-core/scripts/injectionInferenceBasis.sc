@@ -55,7 +55,8 @@ def apply(
 
   val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
 
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_hermite_basis(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
+    1d,
     lShellLimits,
     basisSize._1,
     timeLimits,
