@@ -203,7 +203,7 @@ def apply(
     "injection"
   )
 
-  RDExperiment.ResultSyn(
+  RDExperiment.ResultSynthetic(
     solution,
     (boundary_data, bulk_data),
     model,
