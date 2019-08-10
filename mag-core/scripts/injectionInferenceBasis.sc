@@ -29,7 +29,7 @@ def apply(
   q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45),
   basisCovFlag: Boolean = true,
   modelType: String = "pure"
-): RDExperiment.Result[SGRadialDiffusionModel] = {
+): RDExperiment.ResultSynthetic[SGRadialDiffusionModel] = {
 
   measurement_noise = GaussianRV(0.0, 1d)
   num_bulk_data = bulk_data_size
