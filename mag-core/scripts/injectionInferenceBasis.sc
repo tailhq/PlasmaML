@@ -206,7 +206,7 @@ def apply(
     h_prior,
     samples,
     basisSize,
-    "ChebyshevHermite",
+    s"ChebyshevIMQ[beta=1]",
     (model.regCol, model.regObs)
   )
 
