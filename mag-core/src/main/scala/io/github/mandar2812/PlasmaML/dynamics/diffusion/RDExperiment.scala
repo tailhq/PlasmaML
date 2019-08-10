@@ -26,13 +26,15 @@ import io.github.mandar2812.dynaml.probability.{
 import io.github.mandar2812.dynaml.utils.{combine, getStats}
 import io.github.mandar2812.dynaml.utils
 import io.github.mandar2812.dynaml.analysis.implicits._
+import io.github.mandar2812.dynaml.tensorflow.data.DataSet
+import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
+import io.github.mandar2812.dynaml.probability.mcmc.AdaptiveHyperParameterMCMC
+import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
+
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import ammonite.ops._
 import org.apache.log4j.Logger
-import io.github.mandar2812.dynaml.optimization.GloballyOptimizable
-import io.github.mandar2812.dynaml.probability.mcmc.AdaptiveHyperParameterMCMC
-import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
 
 /**
   * <h3>Radial Diffusion Experiments</h3>
@@ -46,7 +48,7 @@ object RDExperiment {
 
   private val logger = Logger.getLogger(this.getClass)
 
-  case class Result[T <: GloballyOptimizable](
+  case class ResultSynthetic[T <: GloballyOptimizable](
     solution: Stream[DenseVector[Double]],
     data: (Stream[((Double, Double), Double)],
       Stream[((Double, Double), Double)]),
@@ -55,6 +57,17 @@ object RDExperiment {
     sampler: AdaptiveHyperParameterMCMC[T, ContinuousDistr[Double]],
     samples: Stream[Map[String, Double]],
     results_dir: Path)
+
+  case class Result[T <: GloballyOptimizable](
+    data: DataSet[(DateTime, (Double, Double))],
+    training_data: DataSet[((Double, Double), Double)],
+    kp: DataPipe[Double, Double],
+    model: T,
+    hyper_param_prior: Map[String, ContinuousDistr[Double]],
+    sampler: AdaptiveHyperParameterMCMC[T, ContinuousDistr[Double]],
+    samples: Stream[Map[String, Double]],
+    results_dir: Path
+  )
 
   /**
     * Create the radial diffusion solver
@@ -171,27 +184,37 @@ object RDExperiment {
     * Defines a sensible default hyper-prior over diffusion
     * parameters.
     * */
-  def hyper_prior(hyp: List[String]): Map[String, ContinuousDistr[Double]] = {
+    def hyper_prior(hyp: List[String]): Map[String, ContinuousDistr[Double]] = {
 
-    val kernel_hyp_prior = hyp
-      .filter(_.contains("base::"))
-      .map(h => (h, new LogNormal(0d, 1d)))
-      .toMap
-
-    val positive_params_hyp_prior = hyp
-      .filter(h => h.contains("_beta") || h.contains("_gamma"))
-      .map(h => (h, new LogNormal(0d, 1d)))
-      .toMap
-
-    val gaussian_hyp_params = hyp
-      .filter(
-        h => h.contains("_alpha") || (h.contains("_b") && !h.contains("_beta"))
-      )
-      .map(h => (h, new Gaussian(0d, 1d)))
-      .toMap
-
-    kernel_hyp_prior ++ positive_params_hyp_prior ++ gaussian_hyp_params
-  }
+      val kernel_hyp_prior = hyp
+        .filter(_.contains("base::"))
+        .map(h => (h, new LogNormal(0d, 1d)))
+        .toMap
+  
+      val hyp_params_set1 = hyp
+        .filter(h => h.contains("_gamma"))
+        .map(h => (h, new Uniform(-5d, 5d)))
+        .toMap
+  
+      val hyp_params_set2 = hyp
+        .filter(
+          h => h.contains("_alpha")
+        )
+        .map(h => (h, new Uniform(-10d, 10d)))
+        .toMap
+  
+      val hyp_params_set3 = hyp
+        .filter(h => h.contains("_beta"))
+        .map(h => (h, new Uniform(0d, 10d)))
+        .toMap
+  
+      val hyp_params_set4 = hyp
+        .filter(h => h.contains("_b") && !h.contains("_beta"))
+        .map(h => (h, new Uniform(-2d, 2d)))
+        .toMap
+  
+      kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3 ++ hyp_params_set4
+    }
 
   /**
     * Print a sampling report to the console.
@@ -668,7 +691,7 @@ object RDExperiment {
   }
 
   def plot_surrogate[M <: SGRadialDiffusionModel](
-    exp_result: RDExperiment.Result[M]
+    exp_result: RDExperiment.ResultSynthetic[M]
   ) = {
 
     val colocation_points = RDExperiment.readColocation(

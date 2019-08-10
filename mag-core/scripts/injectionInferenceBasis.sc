@@ -87,42 +87,10 @@ def apply(
     Kp
   )
 
-  def hyper_prior(hyp: List[String]): Map[String, ContinuousDistr[Double]] = {
-
-    val kernel_hyp_prior = hyp
-      .filter(_.contains("base::"))
-      .map(h => (h, new LogNormal(0d, 1d)))
-      .toMap
-
-    val hyp_params_set1 = hyp
-      .filter(h => h.contains("_gamma"))
-      .map(h => (h, new Uniform(-5d, 5d)))
-      .toMap
-
-    val hyp_params_set2 = hyp
-      .filter(
-        h => h.contains("_alpha")
-      )
-      .map(h => (h, new Uniform(-5d, 5d)))
-      .toMap
-
-    val hyp_params_set3 = hyp
-      .filter(h => h.contains("_beta"))
-      .map(h => (h, new Uniform(0d, 5d)))
-      .toMap
-
-    val hyp_params_set4 = hyp
-      .filter(h => h.contains("_b") && !h.contains("_beta"))
-      .map(h => (h, new Uniform(0d, 2d)))
-      .toMap
-
-    kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3 ++ hyp_params_set4
-  }
-
   
   val initial_config = (
-    new Uniform(-5d, 5d).draw,
-    new Uniform(0d, 5d).draw,
+    new Uniform(-10d, 10d).draw,
+    new Uniform(0d, 10d).draw,
     0d,
     new Uniform(0d, 2d).draw
   )
@@ -179,7 +147,7 @@ def apply(
   val hyp = model.effective_hyper_parameters
 
 
-  val h_prior = hyper_prior(hyp)
+  val h_prior = RDExperiment.hyper_prior(hyp)
 
   model.regCol = reg_galerkin
   model.regObs = reg_data
@@ -235,7 +203,7 @@ def apply(
     "injection"
   )
 
-  RDExperiment.Result(
+  RDExperiment.ResultSyn(
     solution,
     (boundary_data, bulk_data),
     model,

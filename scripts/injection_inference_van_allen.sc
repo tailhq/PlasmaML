@@ -20,20 +20,20 @@ import org.joda.time.format.DateTimeFormat
 
 @main
 def apply(
-  data_path: Path = home / 'Downloads / "psd_data_tLf.txt",
-  basisSize: (Int, Int) = (4, 4),
-  reg_data: Double = 0.5,
-  reg_galerkin: Double = 1.0,
+  data_path: Path = home / 'CWI / "psd_data_tLf.txt",
+  basisSize: (Int, Int) = (5, 40),
+  reg_data: Double = 2d,
+  reg_galerkin: Double = 0.0001,
   quadrature_l: SGRadialDiffusionModel.QuadratureRule =
     SGRadialDiffusionModel.eightPointGaussLegendre,
   quadrature_t: SGRadialDiffusionModel.QuadratureRule =
     SGRadialDiffusionModel.eightPointGaussLegendre,
   burn: Int = 2000,
   num_post_samples: Int = 5000,
-  num_bins_l: Int = 100,
+  num_bins_l: Int = 50,
   num_bins_t: Int = 100,
   basisCovFlag: Boolean = true,
-  modelType: String = "pure"
+  modelType: String = "hybrid"
 ) = {
 
   val formatter = DateTimeFormat.forPattern("dd-MMM-yyyy HH:mm:ss")
@@ -93,14 +93,14 @@ def apply(
     .dataset(Iterable(omni_file.toString()))
     .flatMap(read_kp_data)
     .filter(filter_kp_data)
-    .map(process_time_stamp * Scaler[Double](_ / 10.0))
+    .map(process_time_stamp * Scaler((x: Double) => x / 10.0))
 
   val (tmin, tmax) = (kp_data.data.minBy(_._1)._1, kp_data.data.maxBy(_._1)._1)
 
   val kp_map = kp_data.data.toMap
 
-  val scale_time   = Scaler[Double](t => 5 * (t - tmin) / (tmax - tmin))
-  val rescale_time = Scaler[Double](t => t * (tmax - tmin) / 5 + tmin)
+  val scale_time   = Scaler((t: Double) => 5 * (t - tmin) / (tmax - tmin))
+  val rescale_time = Scaler((t: Double) => t * (tmax - tmin) / 5 + tmin)
 
   val compute_kp = DataPipe[Double, Double]((t: Double) => {
     if (t <= tmin) kp_map.minBy(_._1)._2
@@ -123,7 +123,7 @@ def apply(
 
   val training_data = van_allen_data
     .map(
-      process_time_stamp * (identityPipe[Double] * Scaler[Double](_ / psd_min))
+      process_time_stamp * (identityPipe[Double] * Scaler((p: Double) => p / psd_min))
     )
     .map(
       (p: (Int, (Double, Double))) =>
@@ -140,32 +140,44 @@ def apply(
   nL = num_bins_l
   nT = num_bins_t
 
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_hermite_basis(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
+    1d,
     lShellLimits,
     basisSize._1,
     timeLimits,
-    basisSize._2
+    basisSize._2,
+    kind = 1
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](0d, deltaL, deltaT)(
+  val seKernel = new GenExpSpaceTimeKernel[Double](1d, deltaL, deltaT)(
     sqNormDouble,
     l1NormDouble
   )
 
-  val noiseKernel = new DiracTuple2Kernel(reg_data)
+  val noiseKernel = new DiracTuple2Kernel(1d)
 
   noiseKernel.block_all_hyper_parameters
 
+  
+  val initial_config = (
+    new Uniform(-10d, 10d).draw,
+    new Uniform(0d, 5d).draw,
+    0d,
+    new Uniform(0d, 2d).draw
+  )
+
+
+
   val model = if (modelType == "pure") {
     new GalerkinRDModel(
-      Kp,
+      kp,
       dll_params,
-      lambda_gt,
+      lambda_params,
       initial_config
     )(
       seKernel,
       noiseKernel,
-      boundary_data ++ bulk_data,
+      training_data.data.toStream,
       chebyshev_hybrid_basis,
       lShellLimits,
       timeLimits,
@@ -175,14 +187,14 @@ def apply(
     )
   } else {
     new SGRadialDiffusionModel(
-      Kp,
+      kp,
       dll_params,
-      lambda_gt,
+      lambda_params,
       initial_config
     )(
       seKernel,
       noiseKernel,
-      boundary_data ++ bulk_data,
+      training_data.data.toStream,
       chebyshev_hybrid_basis,
       lShellLimits,
       timeLimits,
@@ -192,18 +204,14 @@ def apply(
     )
   }
 
-  /*model.covariance.setHyperParameters(
-    Map("sigma" -> model.psd_std) ++
-      model.covariance.state.filterNot(_._1 == "sigma"))
-
-   */
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
       model.hyper_parameters.filter(
         c =>
           c.contains("dll") ||
             c.contains("base::") ||
-            c.contains("lambda_")
+            c.contains("lambda_") || 
+            c.contains("_gamma")
       )
   }
 
@@ -218,7 +226,7 @@ def apply(
 
   //Create the MCMC sampler
   val mcmc_sampler =
-    new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
+    new AdaptiveHyperParameterMCMC[SGRadialDiffusionModel, ContinuousDistr[Double]](
       model,
       h_prior,
       burn
@@ -233,7 +241,7 @@ def apply(
     h_prior,
     posterior_samples,
     basisSize,
-    "ChebyshevLaguerre",
+    s"ChebyshevIMQ[beta=1]",
     (model.regCol, model.regObs)
   )
 
@@ -265,11 +273,12 @@ def apply(
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
-  (
+  RDExperiment.Result(
     van_allen_data,
-    kp,
     training_data,
+    kp,
     model,
+    h_prior,
     mcmc_sampler,
     posterior_samples,
     resPath
