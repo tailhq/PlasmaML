@@ -210,7 +210,7 @@ object RDExperiment {
   
       val hyp_params_set4 = hyp
         .filter(h => h.contains("_b") && !h.contains("_beta"))
-        .map(h => (h, new Uniform(-2d, 2d)))
+        .map(h => (h, new Uniform(0d, 2d)))
         .toMap
   
       kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3 ++ hyp_params_set4
