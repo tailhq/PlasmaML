@@ -13,77 +13,90 @@ import io.github.mandar2812.dynaml.pipes._
   *
   * */
 class GaussianPSDBasis(
-  lShellLimits: (Double, Double), nL: Int,
-  timeLimits: (Double, Double), nT: Int,
+  lShellLimits: (Double, Double),
+  nL: Int,
+  timeLimits: (Double, Double),
+  nT: Int,
   logScales: (Boolean, Boolean) = (false, false))
-  extends PSDRadialBasis(
-    lShellLimits, nL,
-    timeLimits, nT,
-    logScales) {
+    extends PSDRadialBasis(lShellLimits, nL, timeLimits, nT, logScales) {
 
   val (basisL, basisT) = (
     RadialBasis.gaussianBasis(lSeq, scalesL, bias = false),
-    RadialBasis.gaussianBasis(tSeq, scalesT, bias = false))
+    RadialBasis.gaussianBasis(tSeq, scalesT, bias = false)
+  )
 
-  val productBasis: Basis[(Double, Double)] = basisL*basisT
+  val productBasis: Basis[(Double, Double)] = basisL * basisT
 
   override protected val f: ((Double, Double)) => DenseVector[Double] =
     (x: (Double, Double)) => productBasis(x)
 
+  override val f_l: ((Double, Double)) => DenseVector[Double] =
+    (x: (Double, Double)) => {
+      val (l, _) = x
 
-  override val f_l: ((Double, Double)) => DenseVector[Double] = (x: (Double, Double)) => {
-    val (l, _) = x
+      DenseVector(
+        centers
+          .zip(scales)
+          .map(cs => {
+            val ((l_tilda, _), (theta_s, theta_t)) = cs
+            val grL                                = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
 
-    DenseVector(
-      centers.zip(scales).map(cs => {
-        val ((l_tilda, _), (theta_s, theta_t)) = cs
-        val grL = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
+            val sq = (s: Double) => s * s
 
-        val sq = (s: Double) => s*s
+            val (invThetaS, _) = (sq(1 / theta_s), sq(1 / theta_t))
 
-        val (invThetaS, _) = (sq(1/theta_s), sq(1/theta_t))
+            0.5 * invThetaS * grL(1, 0)
+          })
+          .toArray
+      ) *:*
+        f(x)
+    }
 
-        0.5*invThetaS*grL(1, 0)
-      }).toArray) *:*
-      f(x)
-  }
+  override val f_ll: ((Double, Double)) => DenseVector[Double] =
+    (x: (Double, Double)) => {
+      val (l, _) = x
 
-  override val f_ll: ((Double, Double)) => DenseVector[Double] = (x: (Double, Double)) => {
-    val (l, _) = x
+      DenseVector(
+        centers
+          .zip(scales)
+          .map(cs => {
+            val ((l_tilda, _), (theta_s, theta_t)) = cs
 
+            val grL = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
+            val sq  = (s: Double) => s * s
 
-    DenseVector(
-      centers.zip(scales).map(cs => {
-        val ((l_tilda, _), (theta_s, theta_t)) = cs
+            val (invThetaS, _) = (sq(1 / theta_s), sq(1 / theta_t))
 
-        val grL = (i: Int, j: Int) => gradSqNormDouble(i, j)(l, l_tilda)
-        val sq = (s: Double) => s*s
+            val gs = 0.5 * invThetaS * sq(grL(1, 0)) - grL(2, 0)
 
-        val (invThetaS, _) = (sq(1/theta_s), sq(1/theta_t))
+            0.5 * invThetaS * gs
+          })
+          .toArray
+      ) *:*
+        f(x)
+    }
 
-        val gs = 0.5*invThetaS*sq(grL(1, 0)) - grL(2, 0)
+  override val f_t: ((Double, Double)) => DenseVector[Double] =
+    (x: (Double, Double)) => {
+      val (_, t) = x
 
-        0.5*invThetaS*gs
-      }).toArray) *:*
-      f(x)
-  }
+      DenseVector(
+        centers
+          .zip(scales)
+          .map(cs => {
+            val ((_, t_tilda), (theta_s, theta_t)) = cs
 
-  override val f_t: ((Double, Double)) => DenseVector[Double] = (x: (Double, Double)) => {
-    val (_, t) = x
+            val grT = (i: Int, j: Int) => gradSqNormDouble(i, j)(t, t_tilda)
 
-    DenseVector(
-      centers.zip(scales).map(cs => {
-        val ((_, t_tilda), (theta_s, theta_t)) = cs
+            val sq = (s: Double) => s * s
 
-        val grT = (i: Int, j: Int) => gradSqNormDouble(i, j)(t, t_tilda)
+            val (_, invThetaT) = (sq(1 / theta_s), sq(1 / theta_t))
 
-        val sq = (s: Double) => s*s
-
-        val (_, invThetaT) = (sq(1/theta_s), sq(1/theta_t))
-
-        0.5*invThetaT*grT(1, 0)
-      }).toArray) *:*
-      f(x)
-  }
+            0.5 * invThetaT * grT(1, 0)
+          })
+          .toArray
+      ) *:*
+        f(x)
+    }
 
 }

@@ -34,7 +34,7 @@ def apply(
   num_bins_t: Int = 100,
   basisCovFlag: Boolean = true,
   modelType: String = "hybrid"
-) = {
+): RDExperiment.Result[SGRadialDiffusionModel] = {
 
   val formatter = DateTimeFormat.forPattern("dd-MMM-yyyy HH:mm:ss")
 
@@ -123,7 +123,9 @@ def apply(
 
   val training_data = van_allen_data
     .map(
-      process_time_stamp * (identityPipe[Double] * Scaler((p: Double) => p / psd_min))
+      process_time_stamp * (identityPipe[Double] * Scaler(
+        (p: Double) => p / psd_min
+      ))
     )
     .map(
       (p: (Int, (Double, Double))) =>
@@ -133,12 +135,19 @@ def apply(
   println("Training data ")
   pprint.pprintln(training_data.data)
 
-  timeLimits = (0d, tmax)
+  val timeLimits = (0d, tmax.toDouble)
 
-  lShellLimits = (1d, 7d)
+  val lShellLimits = (1d, 7d)
 
-  nL = num_bins_l
-  nT = num_bins_t
+  val nL = num_bins_l
+  val nT = num_bins_t
+
+  val rd_domain = RDDomain(
+    Domain(lShellLimits),
+    nL,
+    Domain(timeLimits),
+    nT
+  )
 
   val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
     1d,
@@ -149,16 +158,16 @@ def apply(
     kind = 1
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](1d, deltaL, deltaT)(
-    sqNormDouble,
-    l1NormDouble
-  )
+  val seKernel =
+    new GenExpSpaceTimeKernel[Double](1d, deltaL(rd_domain), deltaT(rd_domain))(
+      sqNormDouble,
+      l1NormDouble
+    )
 
   val noiseKernel = new DiracTuple2Kernel(1d)
 
   noiseKernel.block_all_hyper_parameters
 
-  
   val initial_config = (
     new Uniform(-10d, 10d).draw,
     new Uniform(0d, 5d).draw,
@@ -166,13 +175,11 @@ def apply(
     new Uniform(0d, 2d).draw
   )
 
-
-
   val model = if (modelType == "pure") {
     new GalerkinRDModel(
       kp,
-      dll_params,
-      lambda_params,
+      defaults.dll_params.values,
+      defaults.lambda_params.values,
       initial_config
     )(
       seKernel,
@@ -188,8 +195,8 @@ def apply(
   } else {
     new SGRadialDiffusionModel(
       kp,
-      dll_params,
-      lambda_params,
+      defaults.dll_params.values,
+      defaults.lambda_params.values,
       initial_config
     )(
       seKernel,
@@ -210,7 +217,7 @@ def apply(
         c =>
           c.contains("dll") ||
             c.contains("base::") ||
-            c.contains("lambda_") || 
+            c.contains("lambda_") ||
             c.contains("_gamma")
       )
   }
@@ -226,7 +233,9 @@ def apply(
 
   //Create the MCMC sampler
   val mcmc_sampler =
-    new AdaptiveHyperParameterMCMC[SGRadialDiffusionModel, ContinuousDistr[Double]](
+    new AdaptiveHyperParameterMCMC[SGRadialDiffusionModel, ContinuousDistr[
+      Double
+    ]](
       model,
       h_prior,
       burn
@@ -236,6 +245,8 @@ def apply(
   val posterior_samples = mcmc_sampler.iid(num_post_samples).draw
 
   val resPath = RDExperiment.writeResults(
+    rd_domain,
+    kp,
     training_data.data.toStream,
     model.ghost_points,
     h_prior,

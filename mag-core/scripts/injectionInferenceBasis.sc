@@ -24,47 +24,51 @@ def apply(
     SGRadialDiffusionModel.eightPointGaussLegendre,
   burn: Int = 2000,
   num_post_samples: Int = 5000,
-  lambda_gt: (Double, Double, Double, Double) = (math.log(math.pow(10d,
-        -4) * math.pow(10d, 2.5d) / 2.4), 1d, 0d, 0.18),
+  lambda_gt: (Double, Double, Double, Double) = defaults.lambda_params.values,
   q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45),
   basisCovFlag: Boolean = true,
   modelType: String = "pure"
 ): RDExperiment.ResultSynthetic[SGRadialDiffusionModel] = {
 
-  measurement_noise = GaussianRV(0.0, 1d)
-  num_bulk_data = bulk_data_size
-  num_boundary_data = boundary_data_size
+  val measurement_noise = GaussianRV(0.0, 1d)
+  val num_bulk_data     = bulk_data_size
+  val num_boundary_data = boundary_data_size
 
-  lambda_params = lambda_gt
+  val lambda_params = MagParams(lambda_gt)
 
-  q_params = q_gt
+  val q_params = MagParams(q_gt)
 
-  initialPSD = (l: Double) => {
+  val RDDomain(lShell, _, time, _) = defaults.rd_domain
+
+  val f0 = (l: Double) => {
     val c = utils.chebyshev(
       3,
-      2 * (l - lShellLimits._1) / (lShellLimits._2 - lShellLimits._1) - 1
+      2 * (l - lShell.limits._1) / (lShell.limits._2 - lShell.limits._1) - 1
     )
-    4000d + 1000 * c - 1000 * utils.chebyshev(
+    2000d + 500 * c - 500 * utils.chebyshev(
       5,
-      2 * (l - lShellLimits._1) / (lShellLimits._2 - lShellLimits._1) - 1
+      2 * (l - lShell.limits._1) / (lShell.limits._2 - lShell.limits._1) - 1
     )
   }
 
-  nL = 200
-  nT = 100
-
-  val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
+  val rds = RDExperiment.solver(
+    defaults.rd_domain
+  )
 
   val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
     1d,
-    lShellLimits,
+    lShell.limits,
     basisSize._1,
-    timeLimits,
+    time.limits,
     basisSize._2,
     kind = 1
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](1d, deltaL, deltaT)(
+  val seKernel = new GenExpSpaceTimeKernel[Double](
+    1d,
+    deltaL(defaults.rd_domain),
+    deltaT(defaults.rd_domain)
+  )(
     sqNormDouble,
     l1NormDouble
   )
@@ -74,20 +78,26 @@ def apply(
   noiseKernel.block_all_hyper_parameters
 
   val (solution, (boundary_data, bulk_data), _) =
-    RDExperiment.generateData(rds, dll, lambda, Q, initialPSD)(
+    RDExperiment.generateData(
+      rds,
+      dll(defaults.dll_params, defaults.Kp),
+      lambda(lambda_params, defaults.Kp),
+      Q(q_params, defaults.Kp, defaults.rd_domain),
+      f0
+    )(
       measurement_noise,
       num_boundary_data,
       num_bulk_data,
-      num_dummy_data
+      0
     )
 
-  RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(
-    initialPSD,
+  RDExperiment.visualisePSD(
+    defaults.rd_domain,
+    f0,
     solution,
-    Kp
+    defaults.Kp
   )
 
-  
   val initial_config = (
     new Uniform(-10d, 10d).draw,
     new Uniform(0d, 10d).draw,
@@ -97,8 +107,8 @@ def apply(
 
   val model = if (modelType == "pure") {
     new GalerkinRDModel(
-      Kp,
-      dll_params,
+      defaults.Kp,
+      defaults.dll_params.values,
       lambda_gt,
       initial_config
     )(
@@ -106,16 +116,16 @@ def apply(
       noiseKernel,
       boundary_data ++ bulk_data,
       chebyshev_hybrid_basis,
-      lShellLimits,
-      timeLimits,
+      defaults.rd_domain.l_shell.limits,
+      defaults.rd_domain.time.limits,
       quadrature_l,
       quadrature_t,
       basisCovFlag = basisCovFlag
     )
   } else {
     new SGRadialDiffusionModel(
-      Kp,
-      dll_params,
+      defaults.Kp,
+      defaults.dll_params.values,
       lambda_gt,
       initial_config
     )(
@@ -123,8 +133,8 @@ def apply(
       noiseKernel,
       boundary_data ++ bulk_data,
       chebyshev_hybrid_basis,
-      lShellLimits,
-      timeLimits,
+      defaults.rd_domain.l_shell.limits,
+      defaults.rd_domain.time.limits,
       quadrature_l,
       quadrature_t,
       basisCovFlag = basisCovFlag
@@ -137,7 +147,7 @@ def apply(
         c =>
           c.contains("dll") ||
             c.contains("base::") ||
-            c.contains("lambda_") || 
+            c.contains("lambda_") ||
             c.contains("_gamma")
       )
   }
@@ -146,12 +156,11 @@ def apply(
 
   val hyp = model.effective_hyper_parameters
 
-
   val h_prior = RDExperiment.hyper_prior(hyp)
 
   model.regCol = reg_galerkin
   model.regObs = reg_data
-  model.reg    = reg
+  model.reg = reg
 
   //Create the MCMC sampler
   val mcmc_sampler =
@@ -167,6 +176,15 @@ def apply(
   val samples = mcmc_sampler.iid(num_post_samples).draw
 
   val resPath = RDExperiment.writeResults(
+    DataConfig(
+      defaults.rd_domain,
+      defaults.dll_params,
+      lambda_params,
+      q_params,
+      f0,
+      defaults.Kp,
+      measurement_noise
+    ),
     solution,
     boundary_data,
     bulk_data,
@@ -186,9 +204,11 @@ def apply(
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
+  val ground_truth_map = gt(defaults.dll_params, lambda_params, q_params)
+
   RDExperiment.visualiseResultsInjection(
     if (num_post_samples > 5000) samples.takeRight(5000) else samples,
-    gt,
+    ground_truth_map,
     h_prior
   )
 
@@ -198,12 +218,21 @@ def apply(
       .filter(quantities_injection.contains)
       .map(c => (c, quantities_injection(c)))
       .toMap,
-    gt,
+    ground_truth_map,
     mcmc_sampler.sampleAcceptenceRate,
     "injection"
   )
 
   RDExperiment.ResultSynthetic(
+    DataConfig(
+      defaults.rd_domain,
+      defaults.dll_params,
+      lambda_params,
+      q_params,
+      f0,
+      defaults.Kp,
+      measurement_noise
+    ),
     solution,
     (boundary_data, bulk_data),
     model,

@@ -26,44 +26,51 @@ def apply(
     SGRadialDiffusionModel.eightPointGaussLegendre,
   burn: Int = 2000,
   num_post_samples: Int = 5000,
-  lambda_gt: (Double, Double, Double, Double) = (-1, 1.5, 0d, -0.4),
-  q_gt: (Double, Double, Double, Double) = (-0.5, 1.0d, 0.5, 0.45),
+  lambda_gt: (Double, Double, Double, Double) = defaults.lambda_params.values,
+  q_gt: (Double, Double, Double, Double) = defaults.q_params.values,
   basisCovFlag: Boolean = true,
   modelType: String = "pure"
-) = {
+): RDExperiment.ResultSynthetic[SGRadialDiffusionModel] = {
 
-  measurement_noise = GaussianRV(0.0, 1d)
-  num_bulk_data = bulk_data_size
-  num_boundary_data = boundary_data_size
+  val measurement_noise = GaussianRV(0.0, 1d)
+  val num_bulk_data     = bulk_data_size
+  val num_boundary_data = boundary_data_size
 
-  lambda_params = lambda_gt
+  val lambda_params = MagParams(lambda_gt)
 
-  q_params = q_gt
+  val q_params = MagParams(q_gt)
 
-  initialPSD = (l: Double) => {
+  val RDDomain(lShell, _, time, _) = defaults.rd_domain
+
+  val f0 = (l: Double) => {
     val c = utils.chebyshev(
       3,
-      2 * (l - lShellLimits._1) / (lShellLimits._2 - lShellLimits._1) - 1
+      2 * (l - lShell.limits._1) / (lShell.limits._2 - lShell.limits._1) - 1
     )
     4000d + 1000 * c - 1000 * utils.chebyshev(
       5,
-      2 * (l - lShellLimits._1) / (lShellLimits._2 - lShellLimits._1) - 1
+      2 * (l - lShell.limits._1) / (lShell.limits._2 - lShell.limits._1) - 1
     )
   }
 
-  nL = 200
-  nT = 100
-
-  val rds = RDExperiment.solver(lShellLimits, timeLimits, nL, nT)
-
-  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_laguerre_basis(
-    lShellLimits,
-    basisSize._1,
-    timeLimits,
-    basisSize._2
+  val rds = RDExperiment.solver(
+    defaults.rd_domain
   )
 
-  val seKernel = new GenExpSpaceTimeKernel[Double](1d, deltaL, deltaT)(
+  val chebyshev_hybrid_basis = HybridPSDBasis.chebyshev_imq_basis(
+    1d,
+    lShell.limits,
+    basisSize._1,
+    time.limits,
+    basisSize._2,
+    kind = 1
+  )
+
+  val seKernel = new GenExpSpaceTimeKernel[Double](
+    1d,
+    deltaL(defaults.rd_domain),
+    deltaT(defaults.rd_domain)
+  )(
     sqNormDouble,
     l1NormDouble
   )
@@ -73,17 +80,24 @@ def apply(
   noiseKernel.block_all_hyper_parameters
 
   val (solution, (boundary_data, bulk_data), _) =
-    RDExperiment.generateData(rds, dll, lambda, Q, initialPSD)(
+    RDExperiment.generateData(
+      rds,
+      dll(defaults.dll_params, defaults.Kp),
+      lambda(lambda_params, defaults.Kp),
+      Q(q_params, defaults.Kp, defaults.rd_domain),
+      f0
+    )(
       measurement_noise,
       num_boundary_data,
       num_bulk_data,
-      num_dummy_data
+      0
     )
 
-  RDExperiment.visualisePSD(lShellLimits, timeLimits, nL, nT)(
-    initialPSD,
+  RDExperiment.visualisePSD(
+    defaults.rd_domain,
+    f0,
     solution,
-    Kp
+    defaults.Kp
   )
 
   val hyp_basis = Seq("Q_b", "lambda_b")
@@ -99,38 +113,48 @@ def apply(
     )
     .toMap
 
-    val model = if (modelType == "pure") {
-      new GalerkinRDModel(
-        Kp,
-        dll_params,
-        lambda_gt,
-        (0.01, 0.01d, 0.01, 0.01)
-      )(
-        seKernel,
-        noiseKernel,
-        boundary_data ++ bulk_data,
-        chebyshev_hybrid_basis,
-        lShellLimits,
-        timeLimits,
-        basisCovFlag = basisCovFlag
-      )
-    } else {
-      new SGRadialDiffusionModel(
-        Kp,
-        dll_params,
-        lambda_gt,
-        (0.01, 0.01d, 0.01, 0.01)
-      )(
-        seKernel,
-        noiseKernel,
-        boundary_data ++ bulk_data,
-        chebyshev_hybrid_basis,
-        lShellLimits,
-        timeLimits,
-        basisCovFlag = basisCovFlag
-      )
-    }
-  
+  val initial_config = (
+    new Uniform(-10d, 10d).draw,
+    new Uniform(0d, 10d).draw,
+    0d,
+    new Uniform(0d, 2d).draw
+  )
+
+  val model = if (modelType == "pure") {
+    new GalerkinRDModel(
+      defaults.Kp,
+      defaults.dll_params.values,
+      lambda_gt,
+      initial_config
+    )(
+      seKernel,
+      noiseKernel,
+      boundary_data ++ bulk_data,
+      chebyshev_hybrid_basis,
+      defaults.rd_domain.l_shell.limits,
+      defaults.rd_domain.time.limits,
+      quadrature_l,
+      quadrature_t,
+      basisCovFlag = basisCovFlag
+    )
+  } else {
+    new SGRadialDiffusionModel(
+      defaults.Kp,
+      defaults.dll_params.values,
+      lambda_gt,
+      initial_config
+    )(
+      seKernel,
+      noiseKernel,
+      boundary_data ++ bulk_data,
+      chebyshev_hybrid_basis,
+      defaults.rd_domain.l_shell.limits,
+      defaults.rd_domain.time.limits,
+      quadrature_l,
+      quadrature_t,
+      basisCovFlag = basisCovFlag
+    )
+  }
 
   val blocked_hyp = {
     model.blocked_hyper_parameters ++
@@ -154,7 +178,7 @@ def apply(
 
   //Create the MCMC sampler
   val mcmc_sampler =
-    new AdaptiveHyperParameterMCMC[model.type, ContinuousDistr[Double]](
+    new AdaptiveHyperParameterMCMC[SGRadialDiffusionModel, ContinuousDistr[Double]](
       model,
       h_prior,
       burn
@@ -164,6 +188,15 @@ def apply(
   val samples = mcmc_sampler.iid(num_post_samples).draw
 
   val resPath = RDExperiment.writeResults(
+    DataConfig(
+      defaults.rd_domain,
+      defaults.dll_params,
+      lambda_params,
+      q_params,
+      f0,
+      defaults.Kp,
+      measurement_noise
+    ),
     solution,
     boundary_data,
     bulk_data,
@@ -171,7 +204,7 @@ def apply(
     h_prior,
     samples,
     basisSize,
-    "ChebyshevHermite",
+    s"ChebyshevIMQ[beta=1]",
     (model.regCol, model.regObs)
   )
 
@@ -183,9 +216,11 @@ def apply(
     case e: ammonite.ops.ShelloutException => pprint.pprintln(e)
   }
 
+  val ground_truth_map = gt(defaults.dll_params, lambda_params, q_params)
+
   RDExperiment.visualiseResultsLoss(
     if (num_post_samples > 5000) samples.takeRight(5000) else samples,
-    gt,
+    ground_truth_map,
     h_prior
   )
 
@@ -195,11 +230,20 @@ def apply(
       .filter(quantities_loss.contains)
       .map(c => (c, quantities_loss(c)))
       .toMap,
-    gt,
+    ground_truth_map,
     mcmc_sampler.sampleAcceptenceRate
   )
 
-  (
+  RDExperiment.ResultSynthetic(
+    DataConfig(
+      defaults.rd_domain,
+      defaults.dll_params,
+      lambda_params,
+      q_params,
+      f0,
+      defaults.Kp,
+      measurement_noise
+    ),
     solution,
     (boundary_data, bulk_data),
     model,
@@ -226,6 +270,6 @@ def main(
     basisSize,
     reg_data,
     reg_galerkin,
-    burn,
-    num_post_samples
+    burn = burn,
+    num_post_samples = num_post_samples
   )

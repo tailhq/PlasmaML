@@ -313,7 +313,7 @@ object TestOmniARX {
             (instance: (DenseVector[Double], Double)) => {
 
               (
-                (instance._1 - meanFeatures) :/ stdDevFeatures,
+                (instance._1 - meanFeatures) /:/ stdDevFeatures,
                 (instance._2 - meanTargets) / stdDevTargets
               )
             }

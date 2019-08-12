@@ -227,7 +227,7 @@ if(lossFlag == "loss") {
         binwidth=.5,
         colour="black", fill="white") +
         geom_density(alpha=.2, fill="#FF6666")  +# Overlay with transparent density plot
-        xlab(expression((alpha)))
+        xlab(expression(alpha))
 
     ggsave("histogram_alpha_posterior.png")
 

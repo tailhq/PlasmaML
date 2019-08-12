@@ -35,6 +35,7 @@ import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import ammonite.ops._
 import org.apache.log4j.Logger
+import org.apache.spark.rdd.RDD
 
 /**
   * <h3>Radial Diffusion Experiments</h3>
@@ -49,6 +50,7 @@ object RDExperiment {
   private val logger = Logger.getLogger(this.getClass)
 
   case class ResultSynthetic[T <: GloballyOptimizable](
+    config: DataConfig,
     solution: Stream[DenseVector[Double]],
     data: (Stream[((Double, Double), Double)],
       Stream[((Double, Double), Double)]),
@@ -66,25 +68,22 @@ object RDExperiment {
     hyper_param_prior: Map[String, ContinuousDistr[Double]],
     sampler: AdaptiveHyperParameterMCMC[T, ContinuousDistr[Double]],
     samples: Stream[Map[String, Double]],
-    results_dir: Path
-  )
+    results_dir: Path)
 
   /**
     * Create the radial diffusion solver
     * from the domain descriptions.
     *
-    * @param lShellLimits The lower and upper limits of L-shell
-    * @param timeLimits The lower and upper limits of time
-    * @param nL The number bins in L-shell
-    * @param nT Number of bins in time
+    * @param domain Details of the space-time domain.
+    *
     * */
-  def solver(
-    lShellLimits: (Double, Double),
-    timeLimits: (Double, Double),
-    nL: Int,
-    nT: Int
-  ): RadialDiffusion =
-    RadialDiffusion(lShellLimits, timeLimits, nL, nT)
+  def solver(domain: RDDomain): RadialDiffusion =
+    RadialDiffusion(
+      domain.l_shell.limits,
+      domain.time.limits,
+      domain.nL,
+      domain.nT
+    )
 
   /**
     * Generate synthetic PSD data for an inference experiment.
@@ -184,37 +183,37 @@ object RDExperiment {
     * Defines a sensible default hyper-prior over diffusion
     * parameters.
     * */
-    def hyper_prior(hyp: List[String]): Map[String, ContinuousDistr[Double]] = {
+  def hyper_prior(hyp: List[String]): Map[String, ContinuousDistr[Double]] = {
 
-      val kernel_hyp_prior = hyp
-        .filter(_.contains("base::"))
-        .map(h => (h, new LogNormal(0d, 1d)))
-        .toMap
-  
-      val hyp_params_set1 = hyp
-        .filter(h => h.contains("_gamma"))
-        .map(h => (h, new Uniform(-5d, 5d)))
-        .toMap
-  
-      val hyp_params_set2 = hyp
-        .filter(
-          h => h.contains("_alpha")
-        )
-        .map(h => (h, new Uniform(-10d, 10d)))
-        .toMap
-  
-      val hyp_params_set3 = hyp
-        .filter(h => h.contains("_beta"))
-        .map(h => (h, new Uniform(0d, 10d)))
-        .toMap
-  
-      val hyp_params_set4 = hyp
-        .filter(h => h.contains("_b") && !h.contains("_beta"))
-        .map(h => (h, new Uniform(0d, 2d)))
-        .toMap
-  
-      kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3 ++ hyp_params_set4
-    }
+    val kernel_hyp_prior = hyp
+      .filter(_.contains("base::"))
+      .map(h => (h, new LogNormal(0d, 1d)))
+      .toMap
+
+    val hyp_params_set1 = hyp
+      .filter(h => h.contains("_gamma"))
+      .map(h => (h, new Uniform(-5d, 5d)))
+      .toMap
+
+    val hyp_params_set2 = hyp
+      .filter(
+        h => h.contains("_alpha")
+      )
+      .map(h => (h, new Uniform(-10d, 10d)))
+      .toMap
+
+    val hyp_params_set3 = hyp
+      .filter(h => h.contains("_beta"))
+      .map(h => (h, new Uniform(0d, 10d)))
+      .toMap
+
+    val hyp_params_set4 = hyp
+      .filter(h => h.contains("_b") && !h.contains("_beta"))
+      .map(h => (h, new Uniform(0d, 2d)))
+      .toMap
+
+    kernel_hyp_prior ++ hyp_params_set1 ++ hyp_params_set2 ++ hyp_params_set3 ++ hyp_params_set4
+  }
 
   /**
     * Print a sampling report to the console.
@@ -277,11 +276,8 @@ object RDExperiment {
     * @param Kp Kp index as a function ([[DataPipe]]) of time.
     * */
   def visualisePSD(
-    lShellLimits: (Double, Double),
-    timeLimits: (Double, Double),
-    nL: Int,
-    nT: Int
-  )(initialPSD: (Double) => Double,
+    domain: RDDomain,
+    initialPSD: (Double) => Double,
     solution: Stream[DenseVector[Double]],
     Kp: DataPipe[Double, Double]
   ): Unit = {
@@ -290,7 +286,12 @@ object RDExperiment {
     val tMax = 10
 
     val (lShellVec, timeVec) =
-      RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
+      RadialDiffusion.buildStencil(
+        domain.l_shell.limits,
+        domain.nL,
+        domain.time.limits,
+        domain.nT
+      )
 
     val lSlices = utils.range[Double](0d, lShellVec.length, lMax).map(_.toInt)
 
@@ -534,6 +535,7 @@ object RDExperiment {
     * @return The path where results are written.
     * */
   def writeResults(
+    config: DataConfig,
     solution: Stream[DenseVector[Double]],
     boundary_data: Stream[((Double, Double), Double)],
     bulk_data: Stream[((Double, Double), Double)],
@@ -544,6 +546,16 @@ object RDExperiment {
     basisType: String,
     reg: (Double, Double)
   ): Path = {
+
+    val DataConfig(
+      rd_domain,
+      dll_params,
+      lambad_params,
+      q_params,
+      initial_psd,
+      _,
+      measurement_noise
+    ) = config
 
     val dateTime = new DateTime()
 
@@ -583,14 +595,20 @@ object RDExperiment {
 
     write(
       resultsPath / "diffusion_domain.csv",
-      domainSpec.keys.mkString(",") + "\n" + domainSpec.values.mkString(",")
+      domainSpec(rd_domain).keys
+        .mkString(",") + "\n" + domainSpec(rd_domain).values.mkString(",")
     )
 
     val (lShellVec, timeVec) =
-      RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
+      RadialDiffusion.buildStencil(
+        rd_domain.l_shell.limits,
+        rd_domain.nL,
+        rd_domain.time.limits,
+        rd_domain.nT
+      )
 
-    val initial_condition = lShellVec.map(l => Seq(l, initialPSD(l)))
-    val kp                = timeVec.map(t => Seq(t, Kp(t)))
+    val initial_condition = lShellVec.map(l => Seq(l, initial_psd(l)))
+    val kp                = timeVec.map(t => Seq(t, config.Kp(t)))
 
     logger.info("Writing initial PSD in " + "initial_psd.csv")
     write(
@@ -604,10 +622,13 @@ object RDExperiment {
       kp.map(_.mkString(",")).mkString("\n")
     )
 
+    val ground_truth = gt(dll_params, lambad_params, q_params)
+
     logger.info("Writing Diffusion parameters in " + "diffusion_params.csv")
     write(
       resultsPath / "diffusion_params.csv",
-      gt.keys.mkString(",") + "\n" + gt.values.mkString(",") + "\n"
+      ground_truth.keys.mkString(",") + "\n" + ground_truth.values
+        .mkString(",") + "\n"
     )
 
     logger.info(
@@ -690,51 +711,9 @@ object RDExperiment {
     resultsPath
   }
 
-  def plot_surrogate[M <: SGRadialDiffusionModel](
-    exp_result: RDExperiment.ResultSynthetic[M]
-  ) = {
-
-    val colocation_points = RDExperiment.readColocation(
-      exp_result.results_dir / "colocation_points.csv"
-    )
-
-    val (lShellVec, timeVec) =
-      RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
-
-    val solution_data = timeVec
-      .zip(exp_result.solution.map(_.toArray.toSeq).map(lShellVec.zip(_)))
-      .flatMap(c => c._2.map(d => ((d._1, c._1), d._2)))
-      .toStream
-
-    val solution_data_features = solution_data.map(_._1)
-
-    val solution_targets = solution_data.map(_._2)
-
-    val surrogate_model = exp_result.model.get_surrogate(gt)
-
-    val mean = surrogate_model(solution_data_features)
-
-    val surrogate_preds =
-      solution_data
-        .zip(mean)
-        .map(c => (c._1._1, c._1._2, c._2))
-
-    val metrics = new RegressionMetrics(
-      surrogate_preds.map(p => (p._3, p._2)).toList,
-      surrogate_preds.length
-    )
-
-    (
-      surrogate_preds,
-      metrics,
-      plot3d.draw(surrogate_preds.map(p => (p._1, p._2))),
-      plot3d.draw(surrogate_preds.map(p => (p._1, p._3))),
-      plot3d.draw(surrogate_preds.map(p => (p._1, p._2 - p._3)))
-    )
-
-  }
-
   def writeResults(
+    rd_domain: RDDomain,
+    Kp: DataPipe[Double, Double],
     bulk_data: Stream[((Double, Double), Double)],
     colocation_points: Stream[(Double, Double)],
     hyper_prior: Map[String, ContinuousDistr[Double]],
@@ -745,6 +724,8 @@ object RDExperiment {
   ): Path = {
 
     val dateTime = new DateTime()
+
+    val domain_spec = domainSpec(rd_domain)
 
     val dtString =
       dateTime.toString(DateTimeFormat.forPattern("yyyy_MM_dd_H_mm"))
@@ -762,31 +743,31 @@ object RDExperiment {
 
     write(
       resultsPath / "diffusion_domain.csv",
-      domainSpec.keys.mkString(",") + "\n" + domainSpec.values.mkString(",")
+      domain_spec.keys.mkString(",") + "\n" + domain_spec.values.mkString(",")
     )
 
     val (lShellVec, timeVec) =
-      RadialDiffusion.buildStencil(lShellLimits, nL, timeLimits, nT)
+      RadialDiffusion.buildStencil(
+        rd_domain.l_shell.limits,
+        rd_domain.nL,
+        rd_domain.time.limits,
+        rd_domain.nT
+      )
 
-    val initial_condition = lShellVec.map(l => Seq(l, initialPSD(l)))
-    val kp                = timeVec.map(t => Seq(t, Kp(t)))
+    /* val initial_condition =
+      lShellVec.map(l => Seq(l, initialPSD(rd_domain)(l))) */
+    val kp = timeVec.map(t => Seq(t, Kp(t)))
 
-    logger.info("Writing initial PSD in " + "initial_psd.csv")
+    /* logger.info("Writing initial PSD in " + "initial_psd.csv")
     write(
       resultsPath / "initial_psd.csv",
       initial_condition.map(_.mkString(",")).mkString("\n")
-    )
+    ) */
 
     logger.info("Writing Kp profile in " + "kp_profile.csv")
     write(
       resultsPath / "kp_profile.csv",
       kp.map(_.mkString(",")).mkString("\n")
-    )
-
-    val (m, v) = (measurement_noise.mu, measurement_noise.sigma)
-    write(
-      resultsPath / "measurement_noise.csv",
-      "mean,sigma\n" + m + "," + v + "\n"
     )
 
     logger.info("Writing observed bulk data in " + "bulk_data.csv")
@@ -847,6 +828,63 @@ object RDExperiment {
     resultsPath
   }
 
+  def plot_surrogate[M <: SGRadialDiffusionModel](
+    exp_result: RDExperiment.ResultSynthetic[M]
+  ) = {
+
+    val colocation_points = RDExperiment.readColocation(
+      exp_result.results_dir / "colocation_points.csv"
+    )
+
+    val rd_domain = exp_result.config.rd_domain
+
+    val (lShellVec, timeVec) =
+      RadialDiffusion.buildStencil(
+        rd_domain.l_shell.limits,
+        rd_domain.nL,
+        rd_domain.time.limits,
+        rd_domain.nT
+      )
+
+    val solution_data = timeVec
+      .zip(exp_result.solution.map(_.toArray.toSeq).map(lShellVec.zip(_)))
+      .flatMap(c => c._2.map(d => ((d._1, c._1), d._2)))
+      .toStream
+
+    val solution_data_features = solution_data.map(_._1)
+
+    val solution_targets = solution_data.map(_._2)
+
+    val surrogate_model = exp_result.model.get_surrogate(
+      gt(
+        exp_result.config.dll_params,
+        exp_result.config.lambda_params,
+        exp_result.config.q_params
+      )
+    )
+
+    val mean = surrogate_model(solution_data_features)
+
+    val surrogate_preds =
+      solution_data
+        .zip(mean)
+        .map(c => (c._1._1, c._1._2, c._2))
+
+    val metrics = new RegressionMetrics(
+      surrogate_preds.map(p => (p._3, p._2)).toList,
+      surrogate_preds.length
+    )
+
+    (
+      surrogate_preds,
+      metrics,
+      plot3d.draw(surrogate_preds.map(p => (p._1, p._2))),
+      plot3d.draw(surrogate_preds.map(p => (p._1, p._3))),
+      plot3d.draw(surrogate_preds.map(p => (p._1, p._2 - p._3)))
+    )
+
+  }
+
   val readFile = DataPipe((p: Path) => (read.lines ! p).toStream)
 
   val processLines = IterableDataPipe(
@@ -894,9 +932,6 @@ object RDExperiment {
 
     val m_info = model_params.zip(model_info.head).toMap
 
-    regColocation = m_info("regCol").toDouble
-    regData = m_info("regData").toDouble
-
     val basisInfo = (m_info("type"), (m_info("nL").toInt, m_info("nT").toInt))
 
     val solution = (readFile > processLines > IterableDataPipe(
@@ -917,37 +952,53 @@ object RDExperiment {
       (read.lines ! resultsPath / "diffusion_params.csv").head.split(',').toSeq
     )(resultsPath / "diffusion_params.csv").head
 
-    dll_params = (
-      groundTruth("dll_alpha"),
-      groundTruth("dll_beta"),
-      groundTruth("dll_gamma"),
-      groundTruth("dll_b")
+    val dll_params = MagParams(
+      (
+        groundTruth("dll_alpha"),
+        groundTruth("dll_beta"),
+        groundTruth("dll_gamma"),
+        groundTruth("dll_b")
+      )
     )
 
-    q_params = (
-      groundTruth("Q_alpha"),
-      groundTruth("Q_beta"),
-      groundTruth("Q_gamma"),
-      groundTruth("Q_b")
+    val q_params = MagParams(
+      (
+        groundTruth("dll_alpha"),
+        groundTruth("dll_beta"),
+        groundTruth("dll_gamma"),
+        groundTruth("dll_b")
+      )
     )
 
-    lambda_params = (
-      groundTruth("lambda_alpha"),
-      groundTruth("lambda_beta"),
-      groundTruth("lambda_gamma"),
-      groundTruth("lambda_b")
+    val lambda_params = MagParams(
+      (
+        groundTruth("dll_alpha"),
+        groundTruth("dll_beta"),
+        groundTruth("dll_gamma"),
+        groundTruth("dll_b")
+      )
     )
 
-    nL = domainInfo("nL").toInt
+    val nL = domainInfo("nL").toInt
 
-    nT = domainInfo("nT").toInt
+    val nT = domainInfo("nT").toInt
 
-    lShellLimits = (domainInfo("lMin"), domainInfo("lMax"))
-    timeLimits = (domainInfo("tMin"), domainInfo("tMax"))
+    val lShellLimits = (domainInfo("lMin"), domainInfo("lMax"))
+    val timeLimits   = (domainInfo("tMin"), domainInfo("tMax"))
 
-    measurement_noise = GaussianRV(noiseInfo("mean"), noiseInfo("sigma"))
+    val measurement_noise = GaussianRV(noiseInfo("mean"), noiseInfo("sigma"))
 
     (
+      RDDomain(
+        Domain(lShellLimits),
+        nL,
+        Domain(timeLimits),
+        nT
+      ),
+      dll_params,
+      lambda_params,
+      q_params,
+      measurement_noise,
       solution,
       (boundary_data, bulk_data),
       colocation_points,
@@ -962,32 +1013,74 @@ object RDExperiment {
 object RDSettings {
 
   /*Define the data generation primitives*/
-  var (nL, nT) = (200, 50)
+  case class Domain(val limits: (Double, Double)) extends AnyVal
 
-  var lShellLimits: (Double, Double) = (1.0, 7.0)
-  var timeLimits: (Double, Double)   = (0.0, 9.0)
+  case class RDDomain(l_shell: Domain, nL: Int, time: Domain, nT: Int)
 
-  def domainSpec: Map[String, Double] = Map(
-    "nL"   -> nL.toDouble,
-    "nT"   -> nT.toDouble,
-    "lMin" -> lShellLimits._1,
-    "lMax" -> lShellLimits._2,
-    "tMin" -> timeLimits._1,
-    "tMax" -> timeLimits._2
+  case class MagParams(values: (Double, Double, Double, Double)) extends AnyVal
+
+  case class DataConfig(
+    rd_domain: RDDomain,
+    dll_params: MagParams,
+    lambda_params: MagParams,
+    q_params: MagParams,
+    initial_psd: Double => Double,
+    Kp: DataPipe[Double, Double],
+    measurement_noise: GaussianRV)
+
+  object defaults {
+    val rd_domain: RDDomain = RDDomain(
+      Domain((1d, 7d)),
+      200,
+      Domain((0d, 9d)),
+      50
+    )
+
+    val dll_params: MagParams =
+      MagParams(
+        (math.log(math.exp(0d) * math.pow(10d, -9.325)), 10d, 0d, 0.506)
+      )
+
+    val lambda_params: MagParams =
+      MagParams(
+        (math.log(math.pow(10d, -4) * math.pow(10d, 2.5d) / 2.4), 1d, 0d, 0.18)
+      )
+
+    val q_params: MagParams =
+      MagParams((-1.5, 0d, 0d, 0.25d))
+
+    val Kp: DataPipe[Double, Double] = DataPipe((t: Double) => {
+      if (t <= 2d) 2.5
+      else if (t < 3.5) 2.5 + 4 * (t - 2d)
+      else if (t >= 3.5 && t < 5d) 8.5
+      else if (t >= 5d && t <= 7d) 23.5 - 3 * t
+      else 2.5
+    })
+
+    val dKp_dt: DataPipe[Double, Double] = DataPipe((t: Double) => {
+      if (t <= 2d) 0d
+      else if (t < 3.5) 4d
+      else if (t >= 3.5 && t < 5d) 0d
+      else if (t >= 5d && t <= 7d) 3
+      else 0d
+    })
+
+  }
+
+  def domainSpec(rd_domain: RDDomain): Map[String, Double] = Map(
+    "nL"   -> rd_domain.nL.toDouble,
+    "nT"   -> rd_domain.nT.toDouble,
+    "lMin" -> rd_domain.l_shell.limits._1,
+    "lMax" -> rd_domain.l_shell.limits._2,
+    "tMin" -> rd_domain.l_shell.limits._1,
+    "tMax" -> rd_domain.l_shell.limits._2
   )
 
-  def deltaL: Double = (lShellLimits._2 - lShellLimits._1) / nL
+  def deltaL(rd_domain: RDDomain): Double =
+    (rd_domain.l_shell.limits._2 - rd_domain.l_shell.limits._1) / rd_domain.nL
 
-  def deltaT: Double = (timeLimits._2 - timeLimits._1) / nT
-
-  var dll_params: (Double, Double, Double, Double) =
-    (math.log(math.exp(0d) * math.pow(10d, -9.325)), 10d, 0d, 0.506)
-
-  var lambda_params: (Double, Double, Double, Double) =
-    (math.log(math.pow(10d, -4) * math.pow(10d, 2.5d) / 2.4), 1d, 0d, 0.18)
-
-  var q_params: (Double, Double, Double, Double) =
-    (-1.5, 0d, 0d, 0.25d)
+  def deltaT(rd_domain: RDDomain): Double =
+    (rd_domain.time.limits._2 - rd_domain.time.limits._1) / rd_domain.nT
 
   val quantities_loss = Map(
     "lambda_alpha" -> 0x03B1.toChar,
@@ -1008,70 +1101,58 @@ object RDSettings {
     "diffusion" -> 0x03BA.toChar
   )
 
-  def gt =
+  def gt(dll_params: MagParams, lambda_params: MagParams, q_params: MagParams) =
     Map(
-      "dll_alpha"    -> dll_params._1,
-      "dll_beta"     -> dll_params._2,
-      "dll_gamma"    -> dll_params._3,
-      "dll_b"        -> dll_params._4,
-      "lambda_alpha" -> lambda_params._1,
-      "lambda_beta"  -> lambda_params._2,
-      "lambda_gamma" -> lambda_params._3,
-      "lambda_b"     -> lambda_params._4,
-      "Q_alpha"      -> q_params._1,
-      "Q_beta"       -> q_params._2,
-      "Q_gamma"      -> q_params._3,
-      "Q_b"          -> q_params._4
+      "dll_alpha"    -> dll_params.values._1,
+      "dll_beta"     -> dll_params.values._2,
+      "dll_gamma"    -> dll_params.values._3,
+      "dll_b"        -> dll_params.values._4,
+      "lambda_alpha" -> lambda_params.values._1,
+      "lambda_beta"  -> lambda_params.values._2,
+      "lambda_gamma" -> lambda_params.values._3,
+      "lambda_b"     -> lambda_params.values._4,
+      "Q_alpha"      -> q_params.values._1,
+      "Q_beta"       -> q_params.values._2,
+      "Q_gamma"      -> q_params.values._3,
+      "Q_b"          -> q_params.values._4
     )
 
-  var Kp: DataPipe[Double, Double] = DataPipe((t: Double) => {
-    if (t <= 2d) 2.5
-    else if (t < 3.5) 2.5 + 4 * (t - 2d)
-    else if (t >= 3.5 && t < 5d) 8.5
-    else if (t >= 5d && t <= 7d) 23.5 - 3 * t
-    else 2.5
-  })
+  def dll(
+    dll_params: MagParams,
+    Kp: DataPipe[Double, Double]
+  )(l: Double,
+    t: Double
+  ): Double =
+    (math.exp(dll_params.values._1) * math.pow(l, dll_params.values._2) + dll_params.values._3) * math
+      .pow(10, dll_params.values._4 * Kp(t))
 
-  var dKp_dt: DataPipe[Double, Double] = DataPipe((t: Double) => {
-    if (t <= 2d) 0d
-    else if (t < 3.5) 4d 
-    else if (t >= 3.5 && t < 5d) 0d
-    else if (t >= 5d && t <= 7d) 3
-    else 0d
-  })
+  def Q(
+    q_params: MagParams,
+    Kp: DataPipe[Double, Double],
+    rd_domain: RDDomain
+  )(l: Double,
+    t: Double
+  ): Double = {
+    val (alpha, beta, gamma, b) = q_params.values
+    (math.exp(alpha) * math.exp(
+      -beta * math.pow(l - rd_domain.l_shell.limits._2, 2d)
+    ) + gamma) *
+      math.pow(10d, b * Kp(t))
+  }
 
-  def dll: (Double, Double) => Double =
-    (l: Double, t: Double) =>
-      (math.exp(dll_params._1) * math.pow(l, dll_params._2) + dll_params._3) * math
-        .pow(10, dll_params._4 * Kp(t))
+  def lambda(
+    lambda_params: MagParams,
+    Kp: DataPipe[Double, Double]
+  )(l: Double,
+    t: Double
+  ): Double =
+    (math.exp(lambda_params.values._1) * math.pow(l, lambda_params.values._2) + lambda_params.values._3) * math
+      .pow(10, lambda_params.values._4 * Kp(t))
 
-  def Q: (Double, Double) => Double =
-    (l: Double, t: Double) =>
-      (math.exp(q_params._1) * math.pow(l, q_params._2) + q_params._3) * math
-        .pow(10, q_params._4 * Kp(t))
+  protected def omega(rd_domain: RDDomain): Double =
+    2 * math.Pi / (rd_domain.l_shell.limits._2 - rd_domain.l_shell.limits._1)
 
-  def lambda: (Double, Double) => Double =
-    (l: Double, t: Double) =>
-      (math.exp(lambda_params._1) * math.pow(l, lambda_params._2) + lambda_params._3) * math
-        .pow(10, lambda_params._4 * Kp(t))
-
-  protected def omega: Double =
-    2 * math.Pi / (lShellLimits._2 - lShellLimits._1)
-
-  var initialPSD: (Double) => Double = (l: Double) =>
-    Bessel.i1(omega * (l - lShellLimits._1)) * 1e2 + 100
-
-  var measurement_noise = GaussianRV(0.0, 0.5)
-
-  var num_boundary_data = 50
-  var num_bulk_data     = 100
-  var num_dummy_data    = 200
-
-  var regData = 0.01
-
-  var regColocation = 1e-8
-
-  var lMax = 10
-  var tMax = 10
+  def initialPSD(rd_domain: RDDomain)(l: Double) =
+    Bessel.i1(omega(rd_domain) * (l - rd_domain.l_shell.limits._1)) * 1e2 + 100
 
 }

@@ -1500,7 +1500,7 @@ object DstMOGPExperiment {
       )
     } else {
       IterableDataPipe(
-        (m: Iterable[RegressionMetrics]) => m.map(_.kpi() :/ 63.0)
+        (m: Iterable[RegressionMetrics]) => m.map(_.kpi() /:/ 63.0)
       ) >
         DataPipe(
           (metrics: Iterable[Iterable[DenseVector[Double]]]) =>
@@ -1593,7 +1593,7 @@ object DstMOGPExperiment {
       )
     } else {
       IterableDataPipe(
-        (m: Iterable[RegressionMetrics]) => m.map(_.kpi() :/ 63.0)
+        (m: Iterable[RegressionMetrics]) => m.map(_.kpi() /:/ 63.0)
       ) >
         DataPipe(
           (metrics: Iterable[Iterable[DenseVector[Double]]]) =>
