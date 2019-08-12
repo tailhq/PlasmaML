@@ -124,8 +124,8 @@ def apply(
     new GalerkinRDModel(
       defaults.Kp,
       defaults.dll_params.values,
-      lambda_gt,
-      initial_config
+      initial_config,
+      q_gt
     )(
       seKernel,
       noiseKernel,
@@ -141,8 +141,8 @@ def apply(
     new SGRadialDiffusionModel(
       defaults.Kp,
       defaults.dll_params.values,
-      lambda_gt,
-      initial_config
+      initial_config,
+      q_gt
     )(
       seKernel,
       noiseKernel,
