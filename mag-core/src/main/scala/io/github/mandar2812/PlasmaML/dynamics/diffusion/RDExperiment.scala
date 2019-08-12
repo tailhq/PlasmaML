@@ -730,7 +730,27 @@ object RDExperiment {
     val dtString =
       dateTime.toString(DateTimeFormat.forPattern("yyyy_MM_dd_H_mm"))
 
-    val resultsPath = pwd / ".cache" / ("radial-diffusion-exp_" + dtString)
+    val host: Option[String] = try {
+      Some(
+        java.net.InetAddress
+          .getLocalHost()
+          .toString
+          .split('/')
+          .head
+          .split('.')
+          .head
+      )
+    } catch {
+      case _: java.net.UnknownHostException => None
+      case _: Exception                     => None
+    }
+
+    val hostStr: String = host match {
+      case None    => ""
+      case Some(h) => h + "_"
+    }
+
+    val resultsPath = pwd / ".cache" / (s"${hostStr}in-situ-data-exp_${dtString}")
 
     logger.info(
       "Writing results of radial diffusion experiment in directory: " + resultsPath
