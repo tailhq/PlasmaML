@@ -27,22 +27,22 @@ if (lossFlag == "loss") {
     prior_samples$"lambda_beta", prior_samples$"lambda_b",
     xlab = expression(beta), ylab = expression(b))
 
-  ggsave("scatter_beta_b_prior.png")
+  ggsave("van_allen_scatter_beta_b_prior.png")
 
   qplot(
     posterior_samples$"lambda_beta", posterior_samples$"lambda_b",
     xlab = expression(beta), ylab = expression(b))
-  ggsave("scatter_lambda_beta_b_posterior.png")
+  ggsave("van_allen_scatter_lambda_beta_b_posterior.png")
 
   qplot(
     prior_samples$"lambda_beta", prior_samples$"lambda_alpha",
     xlab = expression(beta), ylab = expression(alpha))
-  ggsave("scatter_lambda_beta_alpha_prior.png")
+  ggsave("van_allen_scatter_lambda_beta_alpha_prior.png")
 
   qplot(
     posterior_samples$"lambda_beta", posterior_samples$"lambda_alpha",
     xlab = expression(beta), ylab = expression(alpha))
-  ggsave("scatter_lambda_beta_alpha_posterior.png")
+  ggsave("van_allen_scatter_lambda_beta_alpha_posterior.png")
 
 
   ggplot(samples, aes(x = lambda_beta, y = lambda_b)) +
@@ -57,7 +57,7 @@ if (lossFlag == "loss") {
     ylab(expression(b)) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("prior_posterior_scatter_lambda_beta_b.png")
+  ggsave("van_allen_prior_posterior_scatter_lambda_beta_b.png")
 
   ggplot(samples, aes(x = lambda_alpha, y = lambda_b)) +
     geom_point(alpha = 0.5, aes(color = sample)) +
@@ -71,7 +71,7 @@ if (lossFlag == "loss") {
     ylab(expression(b)) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("prior_posterior_scatter_lambda_alpha_b.png")
+  ggsave("van_allen_prior_posterior_scatter_lambda_alpha_b.png")
 
 
   ggplot(prior_samples, aes(x = lambda_beta)) +
@@ -82,7 +82,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab(expression(beta))
 
-  ggsave("histogram_lambda_beta_prior.png")
+  ggsave("van_allen_histogram_lambda_beta_prior.png")
 
   ggplot(posterior_samples, aes(x = lambda_beta)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -92,7 +92,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab(expression(beta))
 
-  ggsave("histogram_lambda_beta_posterior.png")
+  ggsave("van_allen_histogram_lambda_beta_posterior.png")
 
   ggplot(samples, aes(x = lambda_beta)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -103,7 +103,7 @@ if (lossFlag == "loss") {
     facet_grid(sample ~ .) +
     xlab(expression(beta))
 
-  ggsave("histogram_lambda_beta.png")
+  ggsave("van_allen_histogram_lambda_beta.png")
 
   ggplot(samples, aes(x = lambda_beta)) +
     geom_density(alpha = .2, aes(fill = sample)) + # Overlay with transparent density plot
@@ -116,7 +116,7 @@ if (lossFlag == "loss") {
        labels = c("posterior", "prior")) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("density_lambda_beta.png")
+  ggsave("van_allen_density_lambda_beta.png")
 
   ggplot(prior_samples, aes(x = lambda_b)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -126,7 +126,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab("b")
 
-  ggsave("histogram_lambda_b_prior.png")
+  ggsave("van_allen_histogram_lambda_b_prior.png")
 
   ggplot(posterior_samples, aes(x = lambda_b)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -136,7 +136,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab("b")
 
-  ggsave("histogram_lambda_b_posterior.png")
+  ggsave("van_allen_histogram_lambda_b_posterior.png")
 
   ggplot(samples, aes(x = lambda_b)) +
     geom_density(alpha = .2, aes(fill = sample)) + # Overlay with transparent density plot
@@ -149,7 +149,7 @@ if (lossFlag == "loss") {
        labels = c("posterior", "prior")) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("density_lambda_b.png")
+  ggsave("van_allen_density_lambda_b.png")
 
   ggplot(samples, aes(x = lambda_b)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -161,7 +161,7 @@ if (lossFlag == "loss") {
     xlab(expression(b))
 
 
-  ggsave("histogram_lambda_b.png")
+  ggsave("van_allen_histogram_lambda_b.png")
 
   ggplot(prior_samples, aes(x = lambda_alpha)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -171,7 +171,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab(expression(alpha))
 
-  ggsave("histogram_lambda_alpha_prior.png")
+  ggsave("van_allen_histogram_lambda_alpha_prior.png")
 
   ggplot(posterior_samples, aes(x = lambda_alpha)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -181,7 +181,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab(expression(alpha))
 
-  ggsave("histogram_lambda_alpha_posterior.png")
+  ggsave("van_allen_histogram_lambda_alpha_posterior.png")
 
   ggplot(samples, aes(x = lambda_alpha)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -192,7 +192,7 @@ if (lossFlag == "loss") {
     facet_grid(sample ~ .) +
     xlab(expression(alpha))
 
-  ggsave("histogram_lambda_alpha.png")
+  ggsave("van_allen_histogram_lambda_alpha.png")
 
   ggplot(samples, aes(x = lambda_alpha)) +
     geom_density(alpha = .2, aes(fill = sample)) + # Overlay with transparent density plot
@@ -205,7 +205,7 @@ if (lossFlag == "loss") {
        labels = c("posterior", "prior")) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("density_lambda_alpha.png")
+  ggsave("van_allen_density_lambda_alpha.png")
 
 } else {
 
@@ -214,22 +214,22 @@ if (lossFlag == "loss") {
     prior_samples$"Q_beta", prior_samples$"Q_b",
     xlab = expression(beta), ylab = expression(b))
 
-  ggsave("scatter_Q_beta_b_prior.png")
+  ggsave("van_allen_scatter_Q_beta_b_prior.png")
 
   qplot(
     posterior_samples$"Q_beta", posterior_samples$"Q_b",
     xlab = expression(beta), ylab = expression(b))
-  ggsave("scatter_Q_beta_b_posterior.png")
+  ggsave("van_allen_scatter_Q_beta_b_posterior.png")
 
   qplot(
     prior_samples$"Q_beta", prior_samples$"Q_alpha",
     xlab = expression(beta), ylab = expression(alpha))
-  ggsave("scatter_Q_beta_alpha_prior.png")
+  ggsave("van_allen_scatter_Q_beta_alpha_prior.png")
 
   qplot(
     posterior_samples$"Q_beta", posterior_samples$"Q_alpha",
     xlab = expression(beta), ylab = expression(alpha))
-  ggsave("scatter_Q_beta_alpha_posterior.png")
+  ggsave("van_allen_scatter_Q_beta_alpha_posterior.png")
 
 
   ggplot(samples, aes(x = Q_beta, y = Q_b)) +
@@ -244,7 +244,7 @@ if (lossFlag == "loss") {
     ylab(expression(b)) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("prior_posterior_scatter_Q_beta_b.png")
+  ggsave("van_allen_prior_posterior_scatter_Q_beta_b.png")
 
   ggplot(samples, aes(x = Q_alpha, y = Q_b)) +
     geom_point(alpha = 0.5, aes(color = sample)) +
@@ -258,7 +258,7 @@ if (lossFlag == "loss") {
     ylab(expression(b)) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("prior_posterior_scatter_Q_alpha_b.png")
+  ggsave("van_allen_prior_posterior_scatter_Q_alpha_b.png")
 
 
   ggplot(prior_samples, aes(x = Q_beta)) +
@@ -269,7 +269,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab(expression(beta))
 
-  ggsave("histogram_Q_beta_prior.png")
+  ggsave("van_allen_histogram_Q_beta_prior.png")
 
   ggplot(posterior_samples, aes(x = Q_beta)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -279,7 +279,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     xlab(expression(beta))
 
-  ggsave("histogram_Q_beta_posterior.png")
+  ggsave("van_allen_histogram_Q_beta_posterior.png")
 
   ggplot(samples, aes(x = Q_beta)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -290,7 +290,7 @@ if (lossFlag == "loss") {
     facet_grid(sample ~ .) +
     xlab(expression(beta))
 
-  ggsave("histogram_Q_beta.png")
+  ggsave("van_allen_histogram_Q_beta.png")
 
   ggplot(samples, aes(x = Q_beta)) +
     geom_density(alpha = .2, aes(fill = sample)) + # Overlay with transparent density plot
@@ -303,7 +303,7 @@ if (lossFlag == "loss") {
        labels = c("posterior", "prior")) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("density_Q_beta.png")
+  ggsave("van_allen_density_Q_beta.png")
 
   ggplot(prior_samples, aes(x = Q_b)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -312,7 +312,7 @@ if (lossFlag == "loss") {
     geom_density(alpha = .2, fill = "#FF6666") + # Overlay with transparent density plot
   theme_gray(base_size = 24) +
     xlab("b") +
-  ggsave("histogram_Q_b_prior.png")
+  ggsave("van_allen_histogram_Q_b_prior.png")
 
   ggplot(posterior_samples, aes(x = Q_b)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -321,7 +321,7 @@ if (lossFlag == "loss") {
     geom_density(alpha = .2, fill = "#FF6666") + # Overlay with transparent density plot
   theme_gray(base_size = 24) +
     xlab("b") +
-  ggsave("histogram_Q_b_posterior.png")
+  ggsave("van_allen_histogram_Q_b_posterior.png")
 
   ggplot(samples, aes(x = Q_b)) +
     geom_density(alpha = .2, aes(fill = sample)) + # Overlay with transparent density plot
@@ -334,7 +334,7 @@ if (lossFlag == "loss") {
        labels = c("posterior", "prior")) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("density_Q_b.png")
+  ggsave("van_allen_density_Q_b.png")
 
   ggplot(samples, aes(x = Q_b)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -344,7 +344,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     facet_grid(sample ~ .) +
     xlab(expression(b)) +
-  ggsave("histogram_Q_b.png")
+  ggsave("van_allen_histogram_Q_b.png")
 
   ggplot(prior_samples, aes(x = Q_alpha)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -353,7 +353,7 @@ if (lossFlag == "loss") {
     geom_density(alpha = .2, fill = "#FF6666") + # Overlay with transparent density plot
   theme_gray(base_size = 24) +
     xlab(expression(alpha)) +
-  ggsave("histogram_Q_alpha_prior.png")
+  ggsave("van_allen_histogram_Q_alpha_prior.png")
 
   ggplot(posterior_samples, aes(x = Q_alpha)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -362,7 +362,7 @@ if (lossFlag == "loss") {
     geom_density(alpha = .2, fill = "#FF6666") + # Overlay with transparent density plot
   theme_gray(base_size = 24) +
     xlab(expression(alpha)) +
-  ggsave("histogram_Q_alpha_posterior.png")
+  ggsave("van_allen_histogram_Q_alpha_posterior.png")
 
   ggplot(samples, aes(x = Q_alpha)) +
     geom_histogram(aes(y = ..density..), # Histogram with density instead of count on y-axis
@@ -372,7 +372,7 @@ if (lossFlag == "loss") {
   theme_gray(base_size = 24) +
     facet_grid(sample ~ .) +
     xlab(expression(alpha)) +
-  ggsave("histogram_Q_alpha.png")
+  ggsave("van_allen_histogram_Q_alpha.png")
 
   ggplot(samples, aes(x = Q_alpha)) +
     geom_density(alpha = .2, aes(fill = sample)) + # Overlay with transparent density plot
@@ -385,7 +385,7 @@ if (lossFlag == "loss") {
        labels = c("posterior", "prior")) +
     theme(legend.position = "top", legend.direction = "horizontal")
 
-  ggsave("density_Q_alpha.png")
+  ggsave("van_allen_density_Q_alpha.png")
 
 }
 
