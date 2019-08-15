@@ -154,8 +154,8 @@ def apply(
       (p: (Int, (Double, Double))) => ((p._2._1, p._1.toDouble), p._2._2)
     )
 
-  println("Training data ")
-  pprint.pprintln(training_data.data)
+  //println("Training data ")
+  //pprint.pprintln(training_data.data)
 
   val timeLimits = (0d, tmax.toDouble)
 
