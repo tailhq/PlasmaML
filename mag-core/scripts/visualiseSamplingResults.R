@@ -1,5 +1,6 @@
 #/usr/bin/Rscript
 library(ggplot2)
+library(latex2exp)
 args <- commandArgs(trailingOnly = TRUE)
 direc <- args[1]
 lossFlag <- args[2]
@@ -18,6 +19,27 @@ ground_truth <- read.csv("diffusion_params.csv", header = TRUE, na.strings = c("
 samples <- rbind(prior_samples, posterior_samples)
 colnames(samples) <- colnames(posterior_samples)
 samples$sample <- as.factor(samples$sample)
+
+psd_data <- read.csv("bulk_data.csv")
+psd_boundary <- read.csv("boundary_data.csv")
+colnames(psd_data) <- c("l", "t", "psd")
+colnames(psd_boundary) <- colnames(psd_data)
+
+colocation_points <- read.csv("colocation_points.csv")
+colocation_points$psd <- rep(NA, nrow(colocation_points))
+colnames(colocation_points) <- c("l","t", "psd")
+
+
+ggplot(rbind(psd_data,psd_boundary), aes(x=t, y=l)) +
+  geom_point(aes(color=log10(psd)), size = 1.5) +
+  scale_color_viridis_c(name = TeX('$\\log_{10} \ f(L^{*}, t) $')) +
+  geom_point(data = colocation_points, aes(x=t, y=l), shape=4, size=2.5, color="red") +
+  theme_gray(base_size = 22) +
+  ylab(TeX('$L^{*}$')) +
+  xlab(TeX('$t$')) +
+  theme(legend.position="top", legend.direction = "horizontal")
+
+ggsave("data_and_design_points.png")
 
 if(lossFlag == "loss") {
   qplot(
