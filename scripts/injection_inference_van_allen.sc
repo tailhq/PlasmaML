@@ -21,8 +21,8 @@ import org.joda.time.format.DateTimeFormat
 @main
 def apply(
   data_path: Path = home / 'CWI / "data_psd_mageis.txt",
-  start_time: DateTime = new DateTime(2013, 3, 1, 0, 0, 0),
-  end_time: DateTime = new DateTime(2013, 4, 1, 0, 0, 0),
+  start_time: DateTime = new DateTime(2013, 3, 17, 0, 0, 0),
+  end_time: DateTime = new DateTime(2013, 3, 18, 12, 0, 0),
   basisSize: (Int, Int) = (5, 40),
   reg_data: Double = 2d,
   reg_galerkin: Double = 0.0001,
@@ -71,7 +71,7 @@ def apply(
   val filter_van_allen_data = DataPipe[(DateTime, (Double, Double)), Boolean](
     p =>
       p._1.isAfter(start_time) && p._1
-        .isBefore(end_time) && p._1.getMinuteOfHour == 0
+        .isBefore(end_time) /*  && p._1.getMinuteOfHour == 0 */
   )
 
   val van_allen_data = dtfdata
@@ -99,7 +99,7 @@ def apply(
   val process_time_stamp = DataPipe[DateTime, Int](d => {
 
     val period = new Duration(time_limits_van_allen._1._1, d)
-    period.getStandardHours.toInt
+    period.getStandardMinutes().toInt
 
   })
 
@@ -125,17 +125,34 @@ def apply(
   val scale_time   = Scaler((t: Double) => 5 * (t - tmin) / (tmax - tmin))
   val rescale_time = Scaler((t: Double) => t * (tmax - tmin) / 5 + tmin)
 
+  case class KpSegment(
+    time_limits: (Double, Double),
+    kp_values: (Double, Double)) {
+    def contains(x: Double): Boolean = x >= time_limits._1 && x < time_limits._2
+    def interpolate(x: Double): Double =
+      kp_values._1 + (kp_values._2 - kp_values._1) * (x - time_limits._1) / (time_limits._2 - time_limits._1)
+  }
+
+  val kp_segments = kp_data.data.toSeq
+    .sortBy(_._1)
+    .sliding(2)
+    .toIterable
+    .map(xs => KpSegment((xs.head._1, xs.last._1), (xs.head._2, xs.last._2)))
+
   val compute_kp = DataPipe[Double, Double]((t: Double) => {
-    if (t <= tmin) kp_map.minBy(_._1)._2
+    if (t < tmin) kp_map.minBy(_._1)._2
     else if (t >= tmax) kp_map.maxBy(_._1)._2
     else {
-      val (lower, upper) =
+      /* val (lower, upper) =
         (kp_map(math.floor(t).toInt), kp_map(math.ceil(t).toInt))
 
       if (math.ceil(t) == math.floor(t)) lower
       else
         lower + (t - math.floor(t)) * (upper - lower) / (math.ceil(t) - math
-          .floor(t))
+          .floor(t)) */
+
+      val segment = kp_segments.view.find(s => s.contains(t)).get
+      segment.interpolate(t)
     }
 
   })
@@ -154,8 +171,8 @@ def apply(
       (p: (Int, (Double, Double))) => ((p._2._1, p._1.toDouble), p._2._2)
     )
 
-  //println("Training data ")
-  //pprint.pprintln(training_data.data)
+  println("Training data ")
+  pprint.pprintln(training_data.data)
 
   val timeLimits = (0d, tmax.toDouble)
 
