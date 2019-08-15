@@ -99,8 +99,8 @@ def apply(
 
   val kp_map = kp_data.data.toMap
 
-  val scale_time   = Scaler((t: Double) => 5 * (t - tmin) / (tmax - tmin))
-  val rescale_time = Scaler((t: Double) => t * (tmax - tmin) / 5 + tmin)
+  //val scale_time   = Scaler((t: Double) => 5 * (t - tmin) / (tmax - tmin))
+  //val rescale_time = Scaler((t: Double) => t * (tmax - tmin) / 5 + tmin)
 
   val compute_kp = DataPipe[Double, Double]((t: Double) => {
     if (t <= tmin) kp_map.minBy(_._1)._2
@@ -117,7 +117,7 @@ def apply(
 
   })
 
-  val kp = rescale_time > compute_kp
+  val kp = compute_kp
 
   val psd_min = van_allen_data.data.minBy(_._2._2)._2._2
 
@@ -129,7 +129,7 @@ def apply(
     )
     .map(
       (p: (Int, (Double, Double))) =>
-        ((scale_time(p._1.toDouble), p._2._1), p._2._2)
+        ((p._1.toDouble, p._2._1), p._2._2)
     )
 
   println("Training data ")

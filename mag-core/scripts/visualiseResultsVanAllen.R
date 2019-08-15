@@ -22,6 +22,19 @@ samples <- rbind(prior_samples, posterior_samples)
 colnames(samples) <- colnames(posterior_samples)
 samples$sample <- as.factor(samples$sample)
 
+psd_data <- read.csv("bulk_data.csv")
+colnames(psd_data) <- c("l", "t", "psd")
+colocation_points <- read.csv("colocation_points.csv")
+colocation_points$psd <- rep(NA, nrow(colocation_points))
+colnames(colocation_points) <- c("l","t", "psd")
+
+
+ggplot(psd_data, aes(x=t, y=l)) +
+  geom_point(aes(color=log10(psd)), size = 1.5) +
+  scale_color_viridis_c() +
+  geom_point(data = colocation_points, aes(x=t, y=l), shape=4, size=2)
+
+ggsave("data_and_design_points.png")
 if (lossFlag == "loss") {
   qplot(
     prior_samples$"lambda_beta", prior_samples$"lambda_b",
