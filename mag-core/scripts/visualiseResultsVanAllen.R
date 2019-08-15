@@ -34,12 +34,12 @@ ggplot(psd_data, aes(x=t, y=l)) +
   geom_point(aes(color=log10(psd)), size = 1.5) +
   scale_color_viridis_c(name = TeX('$\\log_{10} \ f(L^{*}, t) $')) +
   geom_point(data = colocation_points, aes(x=t, y=l), shape=4, size=2.5, color="red") +
-  theme_gray(base_size = 22) +
+  theme_gray(base_size = 20) +
   ylab(TeX('$L^{*}$')) +
   xlab(TeX('$t$')) +
   theme(legend.position="top", legend.direction = "horizontal")
 
-ggsave("data_and_design_points.png")
+ggsave("data_and_design_points_van_allen.png")
 if (lossFlag == "loss") {
   qplot(
     prior_samples$"lambda_beta", prior_samples$"lambda_b",
