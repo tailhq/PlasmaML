@@ -20,7 +20,9 @@ import org.joda.time.format.DateTimeFormat
 
 @main
 def apply(
-  data_path: Path = home / 'CWI / "psd_data_tLf.txt",
+  data_path: Path = home / 'CWI / "data_psd_mageis.txt",
+  start_time: DateTime = new DateTime(2013, 3, 1, 0, 0, 0),
+  end_time: DateTime = new DateTime(2013, 4, 1, 0, 0, 0),
   basisSize: (Int, Int) = (5, 40),
   reg_data: Double = 2d,
   reg_galerkin: Double = 0.0001,
@@ -36,6 +38,13 @@ def apply(
   modelType: String = "hybrid"
 ): RDExperiment.Result[SGRadialDiffusionModel] = {
 
+  println("Data Range ")
+  println("------------")
+  print("Start: ")
+  pprint.pprintln(start_time)
+  print("End: ")
+  pprint.pprintln(end_time)
+
   val formatter = DateTimeFormat.forPattern("dd-MMM-yyyy HH:mm:ss")
 
   val process_date = DataPipe[String, DateTime](formatter.parseDateTime)
@@ -48,22 +57,29 @@ def apply(
   }
 
   val read_van_allen_data = fileToStream >
-    dropHead >
+    trimLines >
+    replaceWhiteSpaces >
     splitLine >
     IterableDataPipe[Array[String], (DateTime, (Double, Double))](
       (xs: Array[String]) => {
-        (process_date(xs.head), (xs.tail.head.toDouble, xs.tail.last.toDouble))
+        val date = xs.take(2).mkString(" ")
+        val data = xs.takeRight(2)
+        (process_date(date), (data.head.toDouble, data.last.toDouble))
       }
     )
 
   val filter_van_allen_data = DataPipe[(DateTime, (Double, Double)), Boolean](
-    p => p._1.getMinuteOfHour == 0
+    p =>
+      p._1.isAfter(start_time) && p._1
+        .isBefore(end_time) && p._1.getMinuteOfHour == 0
   )
 
   val van_allen_data = dtfdata
     .dataset(Iterable(data_path.toString()))
     .flatMap(read_van_allen_data)
     .filter(filter_van_allen_data)
+
+  println(s"Data set size = ${van_allen_data.size} patterns")
 
   val time_limits_van_allen =
     (van_allen_data.data.minBy(_._1), van_allen_data.data.maxBy(_._1))
@@ -87,10 +103,17 @@ def apply(
 
   })
 
-  val omni_file = pwd / 'data / "omni2_2012.csv"
+  val omni_files = {
+    val start_year = start_time.getYear
+    val end_year   = end_time.getYear
+
+    (start_year to end_year).toIterable
+      .map(y => pwd / 'data / omni_data.getFilePattern(y))
+      .map(_.toString)
+  }
 
   val kp_data = dtfdata
-    .dataset(Iterable(omni_file.toString()))
+    .dataset(omni_files)
     .flatMap(read_kp_data)
     .filter(filter_kp_data)
     .map(process_time_stamp * Scaler((x: Double) => x / 10.0))
@@ -99,8 +122,8 @@ def apply(
 
   val kp_map = kp_data.data.toMap
 
-  //val scale_time   = Scaler((t: Double) => 5 * (t - tmin) / (tmax - tmin))
-  //val rescale_time = Scaler((t: Double) => t * (tmax - tmin) / 5 + tmin)
+  val scale_time   = Scaler((t: Double) => 5 * (t - tmin) / (tmax - tmin))
+  val rescale_time = Scaler((t: Double) => t * (tmax - tmin) / 5 + tmin)
 
   val compute_kp = DataPipe[Double, Double]((t: Double) => {
     if (t <= tmin) kp_map.minBy(_._1)._2
@@ -128,8 +151,7 @@ def apply(
       ))
     )
     .map(
-      (p: (Int, (Double, Double))) =>
-        ((p._2._1, p._1.toDouble), p._2._2)
+      (p: (Int, (Double, Double))) => ((p._2._1, p._1.toDouble), p._2._2)
     )
 
   println("Training data ")
