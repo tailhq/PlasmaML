@@ -129,7 +129,7 @@ def apply(
     )
     .map(
       (p: (Int, (Double, Double))) =>
-        ((p._1.toDouble, p._2._1), p._2._2)
+        ((p._2._1, p._1.toDouble), p._2._2)
     )
 
   println("Training data ")
