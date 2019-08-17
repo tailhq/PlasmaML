@@ -32,7 +32,7 @@ colnames(colocation_points) <- c("l","t", "psd")
 
 ggplot(psd_data, aes(x=t, y=l)) +
   geom_point(aes(color=log10(psd)), size = 1.5) +
-  scale_color_viridis_c(name = TeX('$\\log_{10} \ f(L^{*}, t) $')) +
+  scale_color_viridis_c(name = TeX('$\\log_{10} \\left( \\frac{f(L^{*}, t)}{f_{min}} \\right) $')) +
   geom_point(data = colocation_points, aes(x=t, y=l), shape=4, size=2.5, color="red") +
   theme_gray(base_size = 20) +
   ylab(TeX('$L^{*}$')) +

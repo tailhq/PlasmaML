@@ -39,7 +39,7 @@ ggplot(rbind(psd_data,psd_boundary), aes(x=t, y=l)) +
   xlab(TeX('$t$')) +
   theme(legend.position="top", legend.direction = "horizontal")
 
-ggsave("data_and_design_points.png")
+ggsave("data_and_design_points_synthetic.png")
 
 if(lossFlag == "loss") {
   qplot(
