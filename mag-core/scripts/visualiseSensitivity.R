@@ -26,12 +26,12 @@ s_df_rest$parameter <- factor(as.character(s_df_rest$parameter), labels = c("alp
 s_df$quantity <- factor(
     s_df$quantity, 
     levels = c("Q", "dll", "lambda"),
-    labels = unname(TeX(c('$Q(L^*, t)$', '$\\kappa(L^*, t)$', '$\\lambda(L^*, t)$'))))
+    labels = unname(TeX(c('$q(L^*, t)$', '$\\kappa(L^*, t)$', '$\\lambda(L^*, t)$'))))
 
 s_df_b$quantity <- factor(
   s_df_b$quantity, 
   levels = c("Q", "dll", "lambda"),
-  labels = unname(TeX(c('$Q(L^*, t)$', '$\\kappa(L^*, t)$', '$\\lambda(L^*, t)$'))))
+  labels = unname(TeX(c('$q(L^*, t)$', '$\\kappa(L^*, t)$', '$\\lambda(L^*, t)$'))))
 
 s_df_rest$quantity <- factor(
   s_df_rest$quantity, 
