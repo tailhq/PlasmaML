@@ -1,6 +1,6 @@
 package io.github.mandar2812.PlasmaML.helios.core
 
-import io.github.mandar2812.dynaml.evaluation.MetricsTF
+import io.github.mandar2812.dynaml.tensorflow.evaluation.MetricsTF
 import org.platanios.tensorflow.api._
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 

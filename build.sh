@@ -4,11 +4,13 @@ gpuFlag=${2:-false}
 
 heapSize=${1:-4096m}
 
-updateBashEnv=${3:-true}
+updateBashEnv=${4:-true}
+
+pTF=${3:-false}
 
 echo "Commencing PlasmaML Build with: Executable Heap Size = $heapSize and GPU Flag = $gpuFlag"
 
-sbt -Dheap=${heapSize} -Dgpu=${gpuFlag} stage
+sbt -Dheap=${heapSize} -Dgpu=${gpuFlag} -DpackagedTF=${pTF} stage
 
 chmod +x ./target/universal/stage/bin/plasmaml
 

@@ -18,7 +18,9 @@ lazy val commonSettings = Seq(
     "atlassian-maven" at "https://maven.atlassian.com/maven-external",
     Resolver.sonatypeRepo("public"),
     Resolver.sonatypeRepo("snapshots"),
-    Resolver.typesafeIvyRepo("releases")
+    Resolver.typesafeIvyRepo("releases"),
+    Resolver.bintrayRepo("cibotech", "public"),
+    "jitpack" at "https://jitpack.io"
   )
 )
 

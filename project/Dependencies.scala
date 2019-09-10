@@ -12,35 +12,55 @@ object Dependencies {
 
   val tfscala_version = "0.4.2-SNAPSHOT"
 
-  private def process_flag(s: String) = if(s.toLowerCase == "true" || s == "1") true else false
+  private def process_flag(s: String) =
+    if (s.toLowerCase == "true" || s == "1") true else false
 
   //Set to true if, building with Nvidia GPU support.
-  val gpuFlag: Boolean = process_flag(Option(System.getProperty("gpu")).getOrElse("false"))
+  val gpuFlag: Boolean = process_flag(
+    Option(System.getProperty("gpu")).getOrElse("false")
+  )
 
   //Set to false if using self compiled tensorflow library
-  val packagedTFFlag: Boolean = true
+  val packagedTFFlag: Boolean = process_flag(
+    Option(System.getProperty("packagedTF")).getOrElse("false")
+  )
+
+  if (packagedTFFlag)
+    println("Using system compiled TF binaries (should be in LD_LIBRARY_PATH).")
+  else println("Using pre-compiled TF binaries.")
 
   //Set to dev, if pulling DynaML master SNAPSHOT
   val status = "dev"
 
-  val dataDirectory = settingKey[File]("The directory holding the data files for running example scripts")
+  val dataDirectory = settingKey[File](
+    "The directory holding the data files for running example scripts"
+  )
 
-  val latest_dynaml_release = "v2.0-beta.1"
+  val latest_dynaml_release     = "v2.0-beta.1"
   val latest_dynaml_dev_release = "v2.0"
-  val dynaml_branch = ""
-
+  val dynaml_branch             = ""
 
   val (dynamlGroupID, dynamlArtifact, dynaMLVersion) =
-    if(status == "local") ("io.github.transcendent-ai-labs", "dynaml", s"$latest_dynaml_dev_release-SNAPSHOT")
-    else if(status == "dev") ("io.github.transcendent-ai-labs", "dynaml", s"$latest_dynaml_dev_release-SNAPSHOT")
+    if (status == "local")
+      (
+        "io.github.transcendent-ai-labs",
+        "dynaml",
+        s"$latest_dynaml_dev_release-SNAPSHOT"
+      )
+    else if (status == "dev")
+      (
+        "io.github.transcendent-ai-labs",
+        "dynaml",
+        s"$latest_dynaml_dev_release-SNAPSHOT"
+      )
     else ("io.github.transcendent-ai-labs", "dynaml", latest_dynaml_release)
 
   val platform: String = {
     // Determine platform name using code similar to javacpp
     // com.googlecode.javacpp.Loader.java line 60-84
     val jvmName = System.getProperty("java.vm.name").toLowerCase
-    var osName = System.getProperty("os.name").toLowerCase
-    var osArch = System.getProperty("os.arch").toLowerCase
+    var osName  = System.getProperty("os.name").toLowerCase
+    var osArch  = System.getProperty("os.arch").toLowerCase
     if (jvmName.startsWith("dalvik") && osName.startsWith("linux")) {
       osName = "android"
     } else if (jvmName.startsWith("robovm") && osName.startsWith("darwin")) {
@@ -54,9 +74,11 @@ object Dependencies {
         osName = osName.substring(0, spaceIndex)
       }
     }
-    if (osArch.equals("i386") || osArch.equals("i486") || osArch.equals("i586") || osArch.equals("i686")) {
+    if (osArch.equals("i386") || osArch.equals("i486") || osArch.equals("i586") || osArch
+          .equals("i686")) {
       osArch = "x86"
-    } else if (osArch.equals("amd64") || osArch.equals("x86-64") || osArch.equals("x64")) {
+    } else if (osArch.equals("amd64") || osArch.equals("x86-64") || osArch
+                 .equals("x64")) {
       osArch = "x86_64"
     } else if (osArch.startsWith("arm")) {
       osArch = "arm"
@@ -68,45 +90,58 @@ object Dependencies {
 
   val tensorflow_classifier: String = {
     val platform_splits = platform.split("-")
-    val (os, arch) = (platform_splits.head, platform_splits.last)
+    val (os, arch)      = (platform_splits.head, platform_splits.last)
 
     val tf_c =
-      if (os.contains("macosx")) "darwin-cpu-"+arch
-      else if(os.contains("linux")) {
-        if(gpuFlag) "linux-gpu-"+arch else "linux-cpu-"+arch
+      if (os.contains("macosx")) "darwin-cpu-" + arch
+      else if (os.contains("linux")) {
+        if (gpuFlag) "linux-gpu-" + arch else "linux-cpu-" + arch
       } else ""
-    println("Tensorflow-Scala Classifier: "+tf_c)
+    println("Tensorflow-Scala Classifier: " + tf_c)
     tf_c
   }
 
   val commonDependencies = Seq(
-    "org.jsoup" % "jsoup" % "1.9.1",
-    "joda-time" % "joda-time" % "2.10",
-    "org.joda" % "joda-convert" % "2.1",
-    "org.json4s" %% "json4s-native" % "3.6.2",
-    "com.typesafe.slick" %% "slick" % "3.2.3",
-    "gov.nasa.gsfc.heasarc" % "nom-tam-fits" % "1.15.2"
+    "org.jsoup"             % "jsoup"          % "1.9.1",
+    "joda-time"             % "joda-time"      % "2.10",
+    "org.joda"              % "joda-convert"   % "2.1",
+    "org.json4s"            %% "json4s-native" % "3.6.2",
+    "com.typesafe.slick"    %% "slick"         % "3.2.3",
+    "gov.nasa.gsfc.heasarc" % "nom-tam-fits"   % "1.15.2"
   )
 
   val dynaMLDependency = Seq(dynamlGroupID %% dynamlArtifact % dynaMLVersion)
-    .map(_.withExclusions(
-      Vector(
-        "org.platanios" %% "tensorflow", 
-        "org.platanios" %% "tensorflow-data",
-        "org.platanios" %% "tensorflow-jni",
-        "org.platanios" %% "tensorflow-examples",
-        "org.platanios" %% "tensorflow-api",
-        "org.platanios" %% "tensorflow-horovod"
-      )))
+    .map(
+      _.withExclusions(
+        Vector(
+          "org.platanios" %% "tensorflow",
+          "org.platanios" %% "tensorflow-data",
+          "org.platanios" %% "tensorflow-jni",
+          "org.platanios" %% "tensorflow-examples",
+          "org.platanios" %% "tensorflow-api",
+          "org.platanios" %% "tensorflow-horovod"
+        )
+      )
+    )
+
+  val tf_artifacts = if (packagedTFFlag) {
+    Seq(
+      "org.platanios"                             %% "tensorflow" % tfscala_version,
+      "org.platanios"                             %% "tensorflow-data" % tfscala_version
+    ).map(_.withExclusions(Vector("org.typelevel" %% "spire")))
+  } else {
+    Seq(
+      "org.platanios"                             %% "tensorflow" % tfscala_version classifier tensorflow_classifier,
+      "org.platanios"                             %% "tensorflow-data" % tfscala_version
+    ).map(_.withExclusions(Vector("org.typelevel" %% "spire")))
+  }
 
   val tf =
-    if(packagedTFFlag) "org.platanios" %% "tensorflow" % tfscala_version classifier tensorflow_classifier
+    if (packagedTFFlag)
+      "org.platanios"    %% "tensorflow" % tfscala_version classifier tensorflow_classifier
     else "org.platanios" %% "tensorflow" % tfscala_version
 
   val tf_examples = "org.platanios" %% "tensorflow-data" % tfscala_version
 
-  val tensorflowDependency = Seq(
-    tf,
-    tf_examples
-  ).map(_.withExclusions(Vector("org.typelevel" %% "spire")))
+  val tensorflowDependency = tf_artifacts
 }

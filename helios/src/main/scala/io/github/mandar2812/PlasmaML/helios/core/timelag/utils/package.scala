@@ -22,7 +22,7 @@ import io.github.mandar2812.dynaml.tensorflow.utils.GaussianScalerTF
 import org.platanios.tensorflow.api.learn.{Mode, StopCriteria}
 import org.platanios.tensorflow.api.learn.layers.{Activation, Layer, Loss}
 import org.platanios.tensorflow.api._
-import _root_.io.github.mandar2812.dynaml.evaluation.RegressionMetricsTF
+import _root_.io.github.mandar2812.dynaml.tensorflow.evaluation.RegressionMetricsTF
 import org.platanios.tensorflow.api.learn.hooks.Hook
 
 package object utils {

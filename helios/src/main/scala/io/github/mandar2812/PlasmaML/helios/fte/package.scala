@@ -13,7 +13,8 @@ import io.github.mandar2812.dynaml.utils.{
 }
 import io.github.mandar2812.dynaml.evaluation._
 import io.github.mandar2812.dynaml.optimization._
-import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
+import io.github.mandar2812.dynaml.tensorflow.evaluation.RegressionMetricsTF
+import io.github.mandar2812.dynaml.tensorflow.models.{TFModel, TunableTFModel}
 import io.github.mandar2812.dynaml.tensorflow.data._
 import io.github.mandar2812.dynaml.tensorflow.utils._
 import io.github.mandar2812.dynaml.tensorflow.{
@@ -40,7 +41,7 @@ import org.platanios.tensorflow.api.ops.NN.SameConvPadding
 import org.platanios.tensorflow.api.learn.Mode
 import org.platanios.tensorflow.api.ops.variables.RandomNormalInitializer
 import org.platanios.tensorflow.api._
-import _root_.io.github.mandar2812.dynaml.models.TunableTFModel.HyperParams
+import _root_.io.github.mandar2812.dynaml.tensorflow.models.TunableTFModel.HyperParams
 
 package object fte {
 

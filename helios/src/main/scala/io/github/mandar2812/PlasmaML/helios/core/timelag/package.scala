@@ -6,6 +6,7 @@ import ammonite.ops.ImplicitWd._
 import org.joda.time.DateTime
 import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.dynaml.tensorflow.data.{DataSet, TFDataSet}
+import _root_.io.github.mandar2812.dynaml.tensorflow.evaluation.RegressionMetricsTF
 import _root_.io.github.mandar2812.dynaml.tensorflow.utils._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.probability._
@@ -15,7 +16,7 @@ import _root_.io.github.mandar2812.dynaml.optimization.{
   CoupledSimulatedAnnealing,
   GridSearch
 }
-import _root_.io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
+import _root_.io.github.mandar2812.dynaml.tensorflow.models.{TFModel, TunableTFModel}
 import _root_.io.github.mandar2812.dynaml.DynaMLPipe._
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.fte

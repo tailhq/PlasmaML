@@ -6,8 +6,8 @@ import com.sksamuel.scrimage.Image
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.evaluation.RegressionMetrics
-import io.github.mandar2812.dynaml.models.{TFModel, TunableTFModel}
-import io.github.mandar2812.dynaml.evaluation.{
+import io.github.mandar2812.dynaml.tensorflow.models.{TFModel, TunableTFModel}
+import io.github.mandar2812.dynaml.tensorflow.evaluation.{
   ClassificationMetricsTF,
   RegressionMetricsTF
 }

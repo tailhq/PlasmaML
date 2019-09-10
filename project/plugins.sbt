@@ -6,7 +6,7 @@ resolvers ++= Seq(Resolver.sonatypeRepo("snapshots"))
 
 //addSbtCoursier
 
-addSbtPlugin("io.get-coursier" % "sbt-coursier" % "1.1.0-M9")
+addSbtPlugin("io.get-coursier" % "sbt-coursier" % "2.0.0-RC3-3")
 
 addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.11")
 
@@ -18,7 +18,6 @@ addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.7.0")
 
 addSbtPlugin("com.dwijnand" % "sbt-compat" % "1.2.6")
 
-addSbtPlugin("org.ensime" % "sbt-ensime" % "2.6.1")
 //addSbtPlugin("ch.epfl.scala.index" % "sbt-scaladex" % "0.1.3")
 
 addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "2.3")

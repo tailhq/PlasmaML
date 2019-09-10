@@ -4,9 +4,9 @@ import ammonite.ops._
 import io.github.mandar2812.dynaml.utils.annotation.Experimental
 import io.github.mandar2812.dynaml.DynaMLPipe._
 import io.github.mandar2812.dynaml.tensorflow._
-import io.github.mandar2812.dynaml.models._
+import io.github.mandar2812.dynaml.tensorflow.models._
 import io.github.mandar2812.dynaml.utils
-import io.github.mandar2812.dynaml.evaluation.Performance
+import io.github.mandar2812.dynaml.tensorflow.evaluation.Performance
 import io.github.mandar2812.dynaml.pipes._
 import io.github.mandar2812.dynaml.tensorflow.data.{DataSet, TFDataSet}
 
