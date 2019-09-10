@@ -3,6 +3,7 @@ import _root_.ammonite.ops._
 import _root_.spire.implicits._
 import _root_.io.github.mandar2812.dynaml.evaluation._
 import _root_.io.github.mandar2812.dynaml.tensorflow._
+import _root_.io.github.mandar2812.dynaml.tensorflow.evaluation._
 import _root_.io.github.mandar2812.dynaml.probability._
 import _root_.io.github.mandar2812.dynaml.pipes._
 import _root_.io.github.mandar2812.dynaml.DynaMLPipe
