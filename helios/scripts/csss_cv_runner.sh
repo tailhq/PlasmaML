@@ -1,8 +1,8 @@
 #! /bin/bash
 
-filepath=${1:-"data/sw_cv_dtlr.txt"}
+filepath=${2:-"data/sw_cv_dtlr.txt"}
 
-id=${2:-dtlr_cv_sw}
+id=${1:-dtlr_cv_sw}
 
 count=0
 
