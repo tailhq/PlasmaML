@@ -17,7 +17,7 @@ def main(
   test_year: Int = 2015,
   test_month: Int = 10,
   test_rotation: Int = -1,
-  network_size: Seq[Int] = Seq(50, 40, 30, 30)
+  network_size: Seq[Int] = Seq(60, 60)
 ) = {
 
   val dt = DateTime.now()
@@ -40,7 +40,7 @@ def main(
     ts_transform_output = csss.median_sw_6h,
     network_size = network_size,
     use_persistence = true,
-    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 2, i, 0f),
+    activation_func = (i: Int) => timelag.utils.getReLUAct3[Double](1, 1, i, 0f),
     hyper_optimizer = "gs",
     num_samples = 4,
     quantity = OMNIData.Quantities.V_SW,

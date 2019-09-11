@@ -11,9 +11,9 @@ import _root_.org.platanios.tensorflow.api._
 
 
 
-val cv_experiment_name = "exp_cv_gs"
+val cv_experiment_name = "csss_exp_fte_cv"
 
-val relevant_files = ls.rec ! env.summary_dir / 'csss_exp_fte_cv |? (
+val relevant_files = ls.rec ! env.summary_dir / cv_experiment_name |? (
   p => p.segments.toSeq.last.contains("test") ||
       p.segments.toSeq.last.contains("state.csv")
 )
@@ -45,12 +45,14 @@ files_grouped.foreach(cv => {
   home / 'tmp,
   "-zcvf",
   home / 'tmp / s"${cv_experiment_name}.tar.gz",
-  "exp_cv_gs"
+  cv_experiment_name
 )
 
 // Part to run locally
 //Download compressed archive having cv results
 %%('scp, s"chandork@juniper.md.cwi.nl:~/tmp/${cv_experiment_name}.tar.gz", home/'tmp)
+
+%%('tar, "zxvf", home/'tmp/s"${cv_experiment_name}.tar.gz", "-C", home/'tmp)
 
 //Get local experiment dir, after decompressing archive
 val local_exp_dir = home / 'tmp / cv_experiment_name
@@ -89,12 +91,12 @@ try {
 }
 
 
-//Generate time series reconstruction for last fold in cv
-val last_exp_scatter = read.lines ! csss
-  .scatter_plots_test(exps.last)
+//Generate time series reconstruction for the first fold in cv
+val first_exp_scatter = read.lines ! csss
+  .scatter_plots_test(exps.head)
   .last | (_.split(',').map(_.toDouble))
 
-val (ts_pred, ts_actual) = last_exp_scatter.zipWithIndex
+val (ts_pred, ts_actual) = first_exp_scatter.zipWithIndex
   .map(
     ti => ((ti._2 + ti._1.last, ti._1.head), (ti._2 + ti._1.last, ti._1(1)))
   )
@@ -128,6 +130,9 @@ legend("Predicted Speed", "Actual Speed")
 xAxis("time")
 yAxis("Solar Wind Speed (km/s)")
 unhold()
+
+os.write.over(local_exp_dir / "rec_ts_actual.csv", actual.map(x => s"${x._1},${x._2}").mkString("\n"))
+os.write.over(local_exp_dir / "rec_ts_predicted.csv", pred.map(x => s"${x._1},${x._2}").mkString("\n"))
 
 val params_enc = Encoder(
   identityPipe[Map[String, Double]],
