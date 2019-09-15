@@ -26,10 +26,10 @@ def main(
     max_iterations = csss.ext_iterations,
     max_iterations_tuning = csss.base_iterations,
     batch_size = 128,
-    num_samples = 4
+    num_samples = 4,
+    data_scaling = "hybrid",
+    use_copula = true
   )
-
-  
 
   println("Base Line Model Performance:")
   csss_fixed.results.metrics_test.get.print()
