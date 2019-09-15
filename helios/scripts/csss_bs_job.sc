@@ -14,7 +14,7 @@ import _root_.io.github.mandar2812.PlasmaML.omni.OMNIData
 def main(
   csss_job_id: String,
   exp_dir: String,
-  network_size: Seq[Int] = Seq(40, 60),
+  network_size: Seq[Int] = Seq(50, 50),
   root_dir: String = env.summary_dir.toString
 ) = {
 
