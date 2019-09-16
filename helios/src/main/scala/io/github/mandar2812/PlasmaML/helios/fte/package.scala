@@ -572,7 +572,9 @@ package object fte {
         )
 
       case Right(mm_scalers) =>
-        process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
+        process_predictions_bdv2[DenseVector[Double], ReversibleScaler[
+          DenseVector[Double]
+        ]](
           scaled_data.test_dataset,
           predictions,
           mm_scalers,
@@ -619,7 +621,9 @@ package object fte {
           )
 
         case Right(mm_scalers) =>
-          process_predictions_bdv2[DenseVector[Double], ReversibleScaler[DenseVector[Double]]](
+          process_predictions_bdv2[DenseVector[Double], ReversibleScaler[
+            DenseVector[Double]
+          ]](
             scaled_data.training_dataset,
             predictions_train,
             mm_scalers,
@@ -1100,7 +1104,6 @@ package object fte {
     deltaT: Int = 96,
     deltaTFTE: Int = 5,
     fteStep: Int = 1,
-    latitude_limit: Double = 40d,
     log_scale_fte: Boolean = false,
     log_scale_omni: Boolean = false,
     conv_flag: Boolean = false,
@@ -1471,6 +1474,16 @@ package object fte {
 
     val dt = DateTime.now()
 
+    //Dump test predictions
+    helios.write_processed_predictions(
+      pred_targets,
+      actual_targets,
+      Seq.fill(pred_targets.length)(0d),
+      tf_summary_dir / ("scatter_test-" + dt
+        .toString("YYYY-MM-dd-HH-mm") + ".csv")
+    )
+
+    //Dump performance metrics.
     helios.write_performance(
       "test_" + dt.toString("YYYY-MM-dd-HH-mm"),
       reg_metrics,
