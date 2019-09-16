@@ -1131,7 +1131,7 @@ package object fte {
 
     val experiment_config = read_exp_config(experiment / "config.json").get
 
-    val dataset = {
+    val (dataset, window_size) = {
       println("Using serialized data set")
 
       val training_data_file = (ls ! experiment |? (_.segments.toSeq.last
@@ -1139,15 +1139,31 @@ package object fte {
       val test_data_file = (ls ! experiment |? (_.segments.toSeq.last
         .contains("test_data_"))).last
 
-      read_data_set[DenseVector[Double], DenseVector[Double]](
+      val data = read_data_set[DenseVector[Double], DenseVector[Double]](
         training_data_file,
         test_data_file,
         DataPipe((xs: Array[Double]) => DenseVector(xs)),
-        DataPipe((xs: Array[Double]) => {
+        DataPipe((xs: Array[Double]) => DenseVector(xs))
+      )
+
+      val nT = data.test_dataset.data.head._2._2.length
+
+      val get_window_mid = identityPipe[DateTime] * (
+        identityPipe[DenseVector[Double]] * 
+        DataPipe((xs: DenseVector[Double]) => {
           val mid: Int = xs.length / 2
           DenseVector(xs(mid))
         })
       )
+      
+      
+      (
+        data.copy(
+          training_dataset = data.training_dataset.map(get_window_mid),
+          test_dataset = data.test_dataset.map(get_window_mid)
+        )
+      ,
+      nT)
     }
 
     val root_dir = experiment / up
@@ -1478,7 +1494,7 @@ package object fte {
     helios.write_processed_predictions(
       pred_targets,
       actual_targets,
-      Seq.fill(pred_targets.length)(0d),
+      Seq.fill(pred_targets.length)((window_size/2).toDouble),
       tf_summary_dir / ("scatter_test-" + dt
         .toString("YYYY-MM-dd-HH-mm") + ".csv")
     )
