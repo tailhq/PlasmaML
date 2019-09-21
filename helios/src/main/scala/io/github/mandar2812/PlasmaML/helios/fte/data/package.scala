@@ -497,7 +497,7 @@ package object data {
             new DateTime(s._1.getYear, 12, 31, 23, 59, 0).getDayOfYear()
           val t: Double = s._1.getDayOfYear.toDouble / num_days_year
           val xs: Seq[Double] =
-            Seq(s._1.getYear.toDouble, t, s._2.head.lon) ++ s._2.map(
+            /* Seq(s._1.getYear.toDouble, t, s._2.head.lon) ++  */s._2.map(
               _.value.get
             )
 
