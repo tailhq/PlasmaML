@@ -1769,6 +1769,89 @@ package object data {
     )
   }
 
+  def read_json_data_file[T, U](
+    test_data_file: Path,
+    load_input_pattern: DataPipe[Array[Double], T],
+    load_output_pattern: DataPipe[Array[Double], U]
+  ): ZipDataSet[DateTime, (T, U)] = {
+
+    require(
+      exists ! test_data_file,
+      "Both training and test files must exist."
+    )
+
+    val dt_format = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+
+    val read_file = DataPipe((p: Path) => read.lines ! p)
+
+    val filter_non_empty_lines = IterableDataPipe((l: String) => !l.isEmpty)
+
+    val read_json_record = IterableDataPipe((s: String) => parse(s))
+
+    val load_record = IterableDataPipe((record: JValue) => {
+
+      val pattern = try {
+        val dt = dt_format.parseDateTime(
+          record
+            .findField(p => p._1 == "timestamp")
+            .get
+            ._2
+            .values
+            .asInstanceOf[String]
+        )
+        val features = load_input_pattern(
+          record
+            .findField(p => p._1 == "inputs")
+            .get
+            ._2
+            .values
+            .asInstanceOf[List[Double]]
+            .toArray
+        )
+
+        val targets = load_output_pattern(
+          record
+            .findField(p => p._1 == "targets")
+            .get
+            ._2
+            .values
+            .asInstanceOf[List[Double]]
+            .toArray
+        )
+        Some((dt, (features, targets)))
+
+      } catch {
+        case _: Exception => None
+      }
+
+      pattern
+    })
+
+    val pipeline = read_file > filter_non_empty_lines > read_json_record > load_record
+
+    val te_data = dtfdata.dataset(pipeline(test_data_file))
+
+    val clean_test_records  = te_data.filter(_.isDefined)
+
+    val test_data_size     = te_data.size
+
+    println("\nData Read Summary")
+    println("Test: ")
+    print("Total Records = ")
+    pprint.pprintln(test_data_size)
+    print("% of Clean Records = ")
+    pprint.pprintln((clean_test_records.size.toDouble / test_data_size) * 100)
+    println()
+
+    type P = (DateTime, (T, U))
+
+    
+    clean_test_records
+      .map(DataPipe((p: Option[P]) => p.get))
+      .to_zip(identityPipe[P])
+    
+  }
+
   def fte_model_preds(
     preds: Path,
     probs: Path,

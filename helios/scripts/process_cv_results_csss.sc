@@ -20,6 +20,9 @@ val relevant_files = ls.rec ! env.summary_dir / cv_experiment_name |? (
 def get_exp_dir(p: Path) =
   p.segments.toSeq.filter(_.contains("fte_omni_mo_tl")).head
 
+def get_bs_exp_dir(p: Path) =
+  p.segments.toSeq.filter(_.startsWith("bs_fte_omni_mo_tl")).head
+
 val files_grouped = relevant_files
   .map(p => (get_exp_dir(p), p))
   .groupBy(_._1)
@@ -68,7 +71,11 @@ val local_exp_dir = home / 'tmp / cv_experiment_name
 
 //Get individual experiment dirs corresponding to each fold
 val exps = {
-  ls ! local_exp_dir |? (_.segments.toSeq.last.contains("fte_omni"))
+  ls ! local_exp_dir |? (_.segments.toSeq.last.startsWith("fte_omni"))
+}
+
+val bs_exps = {
+  ls ! local_exp_dir |? (_.segments.toSeq.last.startsWith("bs_fte_omni"))
 }
 
 //Construct over all scatter file
@@ -79,8 +86,23 @@ val scatter_file = local_exp_dir / "scatter_test.csv"
 
 os.write.over(scatter_file, scatter.mkString("\n"))
 
+val bs_scatter =
+  bs_exps.map(dir => csss.scatter_plots_test(dir).last).flatMap(read.lines !)
+
+val bs_scatter_file = local_exp_dir / "bs_scatter_test.csv"
+
+os.write.over(bs_scatter_file, bs_scatter.mkString("\n"))
+
 val metrics = new RegressionMetrics(
   scatter
+    .map(_.split(',').take(2).map(_.toDouble))
+    .toList
+    .map(p => (p.head, p.last)),
+  scatter.length
+)
+
+val bs_metrics = new RegressionMetrics(
+  bs_scatter
     .map(_.split(',').take(2).map(_.toDouble))
     .toList
     .map(p => (p.head, p.last)),
@@ -106,7 +128,8 @@ val first_exp_scatter = read.lines ! csss
 
 val (ts_pred, ts_actual) = first_exp_scatter.zipWithIndex
   .map(
-    ti => ((ti._2 + ti._1.last, ti._1.head), (ti._2 + ti._1.last, ti._1(1)))
+    ti =>
+      ((ti._2 + ti._1.last * 6, ti._1.head), (ti._2 + ti._1.last * 6, ti._1(1)))
   )
   .unzip
 
@@ -164,7 +187,8 @@ val process_ts_preds = IterableFlatMapPipe(DataPipe((exp: Path) => {
 
   val (ts_pred, ts_actual) = exp_scatter.zipWithIndex
     .map(
-      ti => ((ti._2 + ti._1.last, ti._1.head), (ti._2 + ti._1.last, ti._1(1)))
+      ti =>
+        ((ti._2 + ti._1.last * 6, ti._1.head), (ti._2 + ti._1.last, ti._1(1)))
     )
     .unzip
 
@@ -247,3 +271,38 @@ val stabilities = exps.map(exp_dir => {
     params_enc
   )
 })
+
+val metrics_rtl = {
+  val pt = exps.flatMap(exp => {
+
+    val preds_file =
+      (ls ! exp |? (_.segments.toSeq.last.contains("predictions_test"))).last
+
+    
+    val preds = read.lines ! preds_file | (
+      line => line.split(",").map(_.toDouble)
+    )
+
+    val test_data_file =
+      (ls ! exp |? (_.segments.toSeq.last.contains("test_data"))).last
+
+    val test_data =
+      fte.data
+        .read_json_data_file(
+          test_data_file,
+          identityPipe[Array[Double]],
+          identityPipe[Array[Double]]
+        )
+        .map(
+          tup2_2[DateTime, (Array[Double], Array[Double])] > tup2_2[Array[
+            Double
+          ], Array[Double]]
+        )
+        .data
+
+    preds.zip(test_data).flatMap(c => c._1.zip(c._2).toSeq).toSeq
+
+  })
+
+  new RegressionMetrics(pt.toList, pt.length)
+}
