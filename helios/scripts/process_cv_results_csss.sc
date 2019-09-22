@@ -9,19 +9,19 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 
 import _root_.org.platanios.tensorflow.api._
 
-val cv_experiment_name = "csss_exp_fte_cv"
-
-val relevant_files = ls.rec ! env.summary_dir / cv_experiment_name |? (
-  p =>
-    p.segments.toSeq.last.contains("test") ||
-      p.segments.toSeq.last.contains("state.csv")
-  )
+val cv_experiment_name = "dtlr_cv_noPhi_60_60"
 
 def get_exp_dir(p: Path) =
   p.segments.toSeq.filter(_.contains("fte_omni_mo_tl")).head
 
 def get_bs_exp_dir(p: Path) =
   p.segments.toSeq.filter(_.startsWith("bs_fte_omni_mo_tl")).head
+
+val relevant_files = ls.rec ! env.summary_dir / cv_experiment_name |? (
+  p =>
+    p.segments.toSeq.last.contains("test") ||
+      p.segments.toSeq.last.contains("state.csv")
+  )
 
 val files_grouped = relevant_files
   .map(p => (get_exp_dir(p), p))
@@ -278,7 +278,6 @@ val metrics_rtl = {
     val preds_file =
       (ls ! exp |? (_.segments.toSeq.last.contains("predictions_test"))).last
 
-    
     val preds = read.lines ! preds_file | (
       line => line.split(",").map(_.toDouble)
     )
