@@ -338,7 +338,7 @@ package object fte {
       dtflearn.model.data_ops(
         shuffleBuffer = 10,
         batchSize = miniBatch,
-        prefetchSize = 10
+        prefetchSize = 20
       )
 
     val config_to_dir = DataPipe[Map[String, Double], String](

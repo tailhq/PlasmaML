@@ -49,7 +49,7 @@ def main(
       OMNIData.Quantities.F10_7
     ),
     reg_type = "L2",
-    batch_size = 128,
+    batch_size = 256,
     max_iterations = csss.ext_iterations,
     max_iterations_tuning = csss.base_iterations,
     pdt_iterations_tuning = csss.base_it_pdt,
