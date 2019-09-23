@@ -296,8 +296,8 @@ def apply(
   val persistent_hyper_parameters = List("reg", "reg_output")
 
   val hyper_prior = Map(
-    "reg" -> UniformRV(-4.5d, -3d),
-    "reg_output" -> (if (use_copula) UniformRV(-4.5d, -3d)
+    "reg" -> UniformRV(-5d, -3d),
+    "reg_output" -> (if (use_copula) UniformRV(-5d, -3d)
                      else UniformRV(-7d, -6d)),
     "alpha"    -> UniformRV(0.75d, 2d),
     "sigma_sq" -> UniformRV(1e-5, 5d)
@@ -459,7 +459,7 @@ def apply(
     log_scale_fte = log_scale_fte,
     log_scale_omni = log_scale_omni,
     conv_flag = conv_flag,
-    fte_data_path = home / 'Downloads / 'fte,
+    fte_data_path = env.fte_data_dir,
     summary_top_dir = summary_dir,
     existing_exp = existing_exp
   )

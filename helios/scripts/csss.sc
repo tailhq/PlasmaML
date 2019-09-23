@@ -42,7 +42,7 @@ val median_sw_24h = DataPipe(
   (xs: Seq[Double]) => xs.grouped(24).map(g => dutils.median(g.toStream)).toSeq
 )
 
-val fact            = 10
+val fact            = 3
 val base_iterations = 80000
 def ext_iterations  = base_iterations * fact
 
