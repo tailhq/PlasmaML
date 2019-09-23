@@ -18,8 +18,8 @@ val data_dirs = Map(
 )
 
 val fte_data_dirs = Map(
-  "citronelle" -> root / 'home / 'Downloads / 'fte,
-  "juniper"    -> root / 'home / 'Downloads / 'fte,
+  "citronelle" -> home / 'Downloads / 'fte,
+  "juniper"    -> home / 'Downloads / 'fte,
   "tail-box" -> root / 'media / 'disk2 / 'scratch / System
     .getProperty("user.name") / 'fte
 )
