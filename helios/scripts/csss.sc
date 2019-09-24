@@ -13,6 +13,19 @@ def scatter_plots_test(summary_dir: Path) =
 def scatter_plots_train(summary_dir: Path) =
   ls ! summary_dir |? (_.segments.toSeq.last.contains("scatter_train"))
 
+def test_preds(summary_dir: Path) =
+  (ls ! summary_dir |? (_.segments.toSeq.last.contains("predictions_test")))
+
+def test_data(summary_dir: Path) = 
+  (ls ! summary_dir |? (_.segments.toSeq.last.contains("test_data")))
+
+def test_data_probs(summary_dir: Path) = 
+  (ls ! summary_dir |? (_.segments.toSeq.last.contains("probabilities_test")))
+
+def test_data_preds(summary_dir: Path) = 
+  (ls ! summary_dir |? (_.segments.toSeq.last.contains("predictions_test")))
+
+
 val script = pwd / 'helios / 'scripts / "visualise_tl.R"
 
 val time_window = (48, 72)

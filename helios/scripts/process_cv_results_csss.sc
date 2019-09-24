@@ -6,6 +6,7 @@ import _root_.io.github.mandar2812.dynaml.tensorflow._
 import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
+import org.joda.time._
 
 import _root_.org.platanios.tensorflow.api._
 
@@ -20,7 +21,8 @@ def get_bs_exp_dir(p: Path) =
 val relevant_files = ls.rec ! env.summary_dir / cv_experiment_name |? (
   p =>
     p.segments.toSeq.last.contains("test") ||
-      p.segments.toSeq.last.contains("state.csv")
+      p.segments.toSeq.last.contains("state.csv") || 
+      p.segments.toSeq.last.contains("config.json")
   )
 
 val files_grouped = relevant_files
@@ -55,19 +57,19 @@ files_grouped.foreach(cv => {
 %%(
   'scp,
   s"chandork@juniper.md.cwi.nl:~/tmp/${cv_experiment_name}.tar.gz",
-  home / 'tmp
+  env.summary_dir
 )
 
 %%(
   'tar,
   "zxvf",
-  home / 'tmp / s"${cv_experiment_name}.tar.gz",
+  env.summary_dir / s"${cv_experiment_name}.tar.gz",
   "-C",
-  home / 'tmp
+  env.summary_dir
 )
 
 //Get local experiment dir, after decompressing archive
-val local_exp_dir = home / 'tmp / cv_experiment_name
+val local_exp_dir = env.summary_dir / cv_experiment_name
 
 //Get individual experiment dirs corresponding to each fold
 val exps = {
@@ -249,10 +251,8 @@ val stabilities = exps.map(exp_dir => {
 
   val state = extract_state(exp_dir)
 
-  val preds =
-    (ls ! exp_dir |? (_.segments.toSeq.last.contains("predictions_test")))(0)
-  val probs =
-    (ls ! exp_dir |? (_.segments.toSeq.last.contains("probabilities_test")))(0)
+  val preds = csss.test_data_preds(exp_dir).head
+  val probs = csss.test_data_probs(exp_dir).head
 
   require(
     preds.segments.toSeq.last
@@ -266,8 +266,7 @@ val stabilities = exps.map(exp_dir => {
       .last
   )
 
-  val fte_data =
-    (ls ! exp_dir |? (_.segments.toSeq.last.contains("test_data"))).last
+  val fte_data = csss.test_data(exp_dir).last
 
   val triple = fte.data.fte_model_preds(preds, probs, fte_data)
 
@@ -283,15 +282,13 @@ val stabilities = exps.map(exp_dir => {
 val metrics_rtl = {
   val pt = exps.flatMap(exp => {
 
-    val preds_file =
-      (ls ! exp |? (_.segments.toSeq.last.contains("predictions_test"))).last
+    val preds_file = csss.test_preds(exp).last
 
     val preds = read.lines ! preds_file | (
       line => line.split(",").map(_.toDouble)
     )
 
-    val test_data_file =
-      (ls ! exp |? (_.segments.toSeq.last.contains("test_data"))).last
+    val test_data_file = csss.test_data(exp).last
 
     val test_data =
       fte.data
@@ -313,3 +310,10 @@ val metrics_rtl = {
 
   new RegressionMetrics(pt.toList, pt.length)
 }
+
+
+/* val metrics_readjusted = {
+  exps.map(exp => {
+
+  })
+} */

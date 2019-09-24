@@ -2,7 +2,6 @@
 library(ggplot2)
 library(reshape2)
 library(latex2exp)
-library(directlabels)
 
 args <- commandArgs(trailingOnly = TRUE)
 direc <- args[1]
