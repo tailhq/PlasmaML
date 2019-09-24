@@ -21,7 +21,7 @@ def get_bs_exp_dir(p: Path) =
 val relevant_files = ls.rec ! env.summary_dir / cv_experiment_name |? (
   p =>
     p.segments.toSeq.last.contains("test") ||
-      p.segments.toSeq.last.contains("state.csv") || 
+      p.segments.toSeq.last.contains("state.csv") ||
       p.segments.toSeq.last.contains("config.json")
   )
 
@@ -32,7 +32,7 @@ val files_grouped = relevant_files
 
 val main_dir = home / 'tmp / cv_experiment_name
 
-if(os.exists(main_dir)) rm ! main_dir
+if (os.exists(main_dir)) rm ! main_dir
 
 mkdir ! main_dir
 
@@ -314,9 +314,95 @@ val metrics_rtl = {
   new RegressionMetrics(pt.toList, pt.length)
 }
 
-
-/* val metrics_readjusted = {
+val metrics_readjusted = {
   exps.map(exp => {
 
+    //For each exp, get the test data date time stamps
+    val test_data = fte.data
+      .read_json_data_file(
+        csss.test_data(exp).last,
+        identityPipe[Array[Double]],
+        identityPipe[Array[Double]]
+      )
+      .map(
+        tup2_1[DateTime, (Array[Double], Array[Double])]
+      )
+    val (start, stop) = (test_data.data.head, test_data.data.last)
+    val config        = fte.data.read_exp_config(exp / "config.json").get.omni_config
+
+    val sw_dataset = fte.data
+      .load_solar_wind_data_bdv(start, stop)(
+        config.deltaT,
+        config.log_flag,
+        config.quantity
+      )
+
+    val solar_wind = sw_dataset
+      .map(tup2_2[DateTime, DenseVector[Double]])
+      .data
+
+    val time_limits = {
+      val dates = sw_dataset.map(tup2_1[DateTime, DenseVector[Double]]).data
+      (
+        dates.head.plusHours(config.deltaT._1),
+        dates.last.plusHours(config.deltaT._1)
+      )
+    }
+
+    val exp_scatter = read.lines ! csss
+      .scatter_plots_test(exp)
+      .last | (_.split(',').map(_.toDouble))
+
+    val (ts_pred, ts_actual) = exp_scatter
+      .zip(solar_wind)
+      .zipWithIndex
+      .map(
+        ti =>
+          (
+            (ti._2 + ti._1._1.last.toInt * 6, ti._1._1.head),
+            (ti._2, ti._1._2(0))
+          )
+      )
+      .unzip
+
+    val pred = ts_pred
+      .groupBy(_._1)
+      .mapValues(p => {
+        val v = p.map(_._2)
+        v.sum / p.length
+      })
+      .toSeq
+      .sortBy(_._1)
+
+    val actual = ts_actual
+      .groupBy(_._1)
+      .mapValues(p => {
+        val v = p.map(_._2)
+        v.sum / p.length
+      })
+      .toSeq
+      .sortBy(_._1)
+
+    line(pred)
+    hold()
+    line(actual)
+    legend("Predicted Speed", "Actual Speed")
+    xAxis("time")
+    yAxis("Solar Wind Speed (km/s)")
+    title(s"Solar Wind Predictions: ${time_limits._1} - ${time_limits._2}")
+    unhold()
+
+    val pred_df = dtfdata.dataset(pred).to_zip(identityPipe[(Int, Double)])
+
+    val actual_df =
+      dtfdata.dataset(actual).to_zip(identityPipe[(Int, Double)])
+
+    val ts_df = pred_df join actual_df
+
+    val scat = ts_df.map(tup2_2[Int, (Double, Double)]).data.toList
+    new RegressionMetrics(
+      scat,
+      scat.length
+    )
   })
-} */
+}
