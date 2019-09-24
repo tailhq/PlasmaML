@@ -31,6 +31,9 @@ val files_grouped = relevant_files
   .mapValues(_.map(_._2))
 
 val main_dir = home / 'tmp / cv_experiment_name
+
+if(os.exists(main_dir)) rm ! main_dir
+
 mkdir ! main_dir
 
 files_grouped.foreach(cv => {
