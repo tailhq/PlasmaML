@@ -9,7 +9,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 
 import _root_.org.platanios.tensorflow.api._
 
-val cv_experiment_name = "dtlr_cv_noPhi_60_60"
+val cv_experiment_name = "csss_exp_fte_cv"
 
 def get_exp_dir(p: Path) =
   p.segments.toSeq.filter(_.contains("fte_omni_mo_tl")).head
@@ -74,24 +74,21 @@ val exps = {
   ls ! local_exp_dir |? (_.segments.toSeq.last.startsWith("fte_omni"))
 }
 
-val bs_exps = {
-  ls ! local_exp_dir |? (_.segments.toSeq.last.startsWith("bs_fte_omni"))
-}
-
 //Construct over all scatter file
 val scatter =
-  exps.map(dir => csss.scatter_plots_test(dir).last).flatMap(read.lines !)
+  exps
+    .map(dir => {
+      val sc_files = csss.scatter_plots_test(dir)
+      if (sc_files.length > 0) Some(sc_files.last)
+      else None
+    })
+    .filter(_.isDefined)
+    .map(_.get)
+    .flatMap(read.lines !)
 
 val scatter_file = local_exp_dir / "scatter_test.csv"
 
 os.write.over(scatter_file, scatter.mkString("\n"))
-
-val bs_scatter =
-  bs_exps.map(dir => csss.scatter_plots_test(dir).last).flatMap(read.lines !)
-
-val bs_scatter_file = local_exp_dir / "bs_scatter_test.csv"
-
-os.write.over(bs_scatter_file, bs_scatter.mkString("\n"))
 
 val metrics = new RegressionMetrics(
   scatter
@@ -100,6 +97,17 @@ val metrics = new RegressionMetrics(
     .map(p => (p.head, p.last)),
   scatter.length
 )
+
+val bs_exps = {
+  ls ! local_exp_dir |? (_.segments.toSeq.last.startsWith("bs_fte_omni"))
+}
+
+val bs_scatter =
+  bs_exps.map(dir => csss.scatter_plots_test(dir).last).flatMap(read.lines !)
+
+val bs_scatter_file = local_exp_dir / "bs_scatter_test.csv"
+
+os.write.over(bs_scatter_file, bs_scatter.mkString("\n"))
 
 val bs_metrics = new RegressionMetrics(
   bs_scatter
