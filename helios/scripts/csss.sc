@@ -28,6 +28,8 @@ def test_data_preds(summary_dir: Path) =
 
 val script = pwd / 'helios / 'scripts / "visualise_tl.R"
 
+val script_ts_rec = pwd / 'helios / 'scripts / "visualise_ts_rec.R"
+
 val time_window = (48, 72)
 
 val avg_sw_6h = DataPipe(

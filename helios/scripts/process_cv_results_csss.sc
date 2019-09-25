@@ -7,6 +7,7 @@ import _root_.io.github.mandar2812.PlasmaML.helios.fte
 import _root_.io.github.mandar2812.PlasmaML.helios
 import _root_.io.github.mandar2812.PlasmaML.helios.core.timelag
 import org.joda.time._
+import org.joda.time.format.DateTimeFormat
 
 import _root_.org.platanios.tensorflow.api._
 
@@ -318,7 +319,7 @@ val metrics_readjusted = {
   exps.map(exp => {
 
     //For each exp, get the test data date time stamps
-    val test_data = fte.data
+    val test_data_dates = fte.data
       .read_json_data_file(
         csss.test_data(exp).last,
         identityPipe[Array[Double]],
@@ -327,43 +328,44 @@ val metrics_readjusted = {
       .map(
         tup2_1[DateTime, (Array[Double], Array[Double])]
       )
-    val (start, stop) = (test_data.data.head, test_data.data.last)
-    val config        = fte.data.read_exp_config(exp / "config.json").get.omni_config
+      .data
 
-    val sw_dataset = fte.data
+    val config = fte.data.read_exp_config(exp / "config.json").get.omni_config
+
+    val (start, stop) = (
+      test_data_dates.head.plusHours(config.deltaT._1),
+      test_data_dates.last.plusHours(config.deltaT._1 + config.deltaT._2)
+    )
+
+    val solar_wind: Seq[(DateTime, Double)] = fte.data
       .load_solar_wind_data_bdv(start, stop)(
-        config.deltaT,
+        (0, 1),
         config.log_flag,
         config.quantity
       )
-
-    val solar_wind = sw_dataset
-      .map(tup2_2[DateTime, DenseVector[Double]])
+      .map(DataPipe((p: (DateTime, DenseVector[Double])) => (p._1, p._2(0))))
       .data
+      .toSeq
 
-    val time_limits = {
-      val dates = sw_dataset.map(tup2_1[DateTime, DenseVector[Double]]).data
-      (
-        dates.head.plusHours(config.deltaT._1),
-        dates.last.plusHours(config.deltaT._1)
-      )
-    }
+    val time_limits = (start, stop)
 
     val exp_scatter = read.lines ! csss
       .scatter_plots_test(exp)
       .last | (_.split(',').map(_.toDouble))
 
-    val (ts_pred, ts_actual) = exp_scatter
-      .zip(solar_wind)
+    val ts_pred: Seq[(DateTime, Double)] = exp_scatter
+      .zip(test_data_dates)
       .zipWithIndex
       .map(
         ti =>
           (
-            (ti._2 + ti._1._1.last.toInt * 6, ti._1._1.head),
-            (ti._2, ti._1._2(0))
+            ti._1._2
+              .plusHours((ti._1._1.last.toInt * 6) + config.deltaT._1),
+            ti._1._1.head
           )
       )
-      .unzip
+
+    implicit val dateOrdering = fte.data.dateOrdering
 
     val pred = ts_pred
       .groupBy(_._1)
@@ -373,15 +375,62 @@ val metrics_readjusted = {
       })
       .toSeq
       .sortBy(_._1)
+      .map(
+        p =>
+          (
+            new Duration(start, p._1).getStandardHours().toInt,
+            p._2
+          )
+      )
 
-    val actual = ts_actual
-      .groupBy(_._1)
-      .mapValues(p => {
-        val v = p.map(_._2)
-        v.sum / p.length
-      })
-      .toSeq
-      .sortBy(_._1)
+    val interpolated_pred =
+      pred
+        .sliding(2)
+        .filter(p => p.last._1 - p.head._1 > 1)
+        .flatMap(ps => {
+          val duration = ps.last._1 - ps.head._1
+          val delta_v  = (ps.last._2 - ps.head._2) / duration.toDouble
+
+          (1 until duration.toInt)
+            .map(
+              l => (ps.head._1 + l, ps.head._2 + delta_v * l.toDouble)
+            )
+        })
+        .toSeq
+        .toIterable
+
+    val actual = solar_wind.map(
+      p =>
+        (
+          new Duration(start, p._1).getStandardHours().toInt,
+          p._2
+        )
+    )
+
+    //dump time series reconstruction
+
+    write.over(
+      exp / "ts_rec.csv",
+      (
+        pred.map(x => s"""${x._1},${x._2},"pred"""") ++
+          actual.map(x => s"""${x._1},${x._2},"actual"""")
+      ).mkString("\n")
+    )
+
+    val fmt_start = DateTimeFormat.forPattern("yyyy-MM-dd").print(start)
+    val fmt_end = DateTimeFormat.forPattern("yyyy-MM-dd").print(stop)
+
+    try {
+      %%(
+        'Rscript,
+        csss.script_ts_rec,
+        exp,
+        exp / "ts_rec.csv",
+        s"test_${fmt_start}_${fmt_end}_"
+      )
+    } catch {
+      case e: Exception => e.printStackTrace()
+    }
 
     line(pred)
     hold()
@@ -392,7 +441,16 @@ val metrics_readjusted = {
     title(s"Solar Wind Predictions: ${time_limits._1} - ${time_limits._2}")
     unhold()
 
-    val pred_df = dtfdata.dataset(pred).to_zip(identityPipe[(Int, Double)])
+    val pred_df = dtfdata
+      .dataset(pred)
+      .concatenate(dtfdata.dataset(interpolated_pred))
+      .transform(
+        DataPipe[
+          Iterable[(Int, Double)],
+          Iterable[(Int, Double)]
+        ](_.toSeq.sortBy(_._1))
+      )
+      .to_zip(identityPipe[(Int, Double)])
 
     val actual_df =
       dtfdata.dataset(actual).to_zip(identityPipe[(Int, Double)])
