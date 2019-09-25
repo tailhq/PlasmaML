@@ -21,7 +21,7 @@ palette1 <- c("firebrick3", "gray27", "forestgreen")
 ggplot(scatter_df, aes(x=time, y=Value, color=Type)) + 
   geom_point(size = 0.75) + 
   geom_line() +
-  scale_colour_manual(labels = c("Prediction", "Actual"), values=palette1) +
+  scale_colour_manual(labels = c("Actual", "Prediction"), values=palette1) +
   theme_gray(base_size = 20) +
   theme(legend.title=element_blank(), legend.position = "top") +
   ylab("km/s") +
