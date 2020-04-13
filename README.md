@@ -18,25 +18,69 @@ This is a multi-language project where the primary modelling is done in *Scala* 
 
 ### Installation
 
-**Requirements**
+#### Requirements
 
-1. [Scala](scala-lang.org)
-2. [sbt](http://www.scala-sbt.org/)
-3. [R](https://www.r-project.org/)
+1. Java Development Kit 8. 
+2. [Scala](scala-lang.org)
+3. [sbt](http://www.scala-sbt.org/)
+4. [R](https://www.r-project.org/) with the following packages:
 
-**Steps**
+    * `ggplot2`
+    * `reshape2`
+    * `latex2exp`
+    * `plyr`
+    * `gridExtra`
+    * `reshape2`
+    * `directlabels`
 
-After installing all the pre-requisites,
 
-1. Clone this project
-2. From the root directory type ```sbt```, you should see the sbt prompt.
-4. At the sbt prompt, choose appropriate sub-project ```project omni```
-5. Compile the sources ```compile```
-6. Run the scala console ```console```
+#### Steps
 
-Try an example program 
+After cloning the project, PlasmaML can be installed directly from the shell or 
+by first entering the sbt shell and building the source.
 
-```scala
-scala>TestOmniNarmax("2004/11/09/08", "2004/11/11/09", "predict")
+**From the shell**
+
+From the root directory `PlasmaML` run the build script (with configurable parameters).
+
+```bash
+./build.sh <heap size> <compile with gpu support> <use packaged tensorflow> <update bash env>
 ```
 
+For example the following builds the project with 4 GB java heap and GPU support.
+
+```bash
+./build.sh 4096m true
+```
+
+Note that for Nvidia GPU support to work, compatible versions of CUDA and cuDNN must be installed and 
+found in the `$LD_LIBRARY_PATH` environment variable see the [DynaML docs](https://transcendent-ai-labs.github.io/DynaML/installation/installation/) for more info.
+
+Use the last parameter `<update bash env>` to add the PlasmaML executable in the bash `$PATH`.
+
+The following build will use 4 GB of heap, with GPU support, precompiled tensorflow binaries and 
+adds `plasmaml` binary to the `$PATH` variable.
+
+```
+./build.sh 4096m true false true
+```
+
+**From the sbt shell**
+
+Start the sbt shell with the script `sbt-shell.sh` having the same parameters as `build.sh`
+
+```bash
+./build.sh <heap size> <compile with gpu support> <use packaged tensorflow>
+```
+
+From the sbt shell, run
+
+```
+stage
+```
+
+After building, access the PlasmaML shell like 
+
+```
+./target/universal/stage/bin/plasmaml
+```
