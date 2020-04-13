@@ -52,4 +52,5 @@ data/all_results.txt
 .metals
 .bloop
 project/.bloop
+project/metals.sbt
 .scalafmt.conf
