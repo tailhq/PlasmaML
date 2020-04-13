@@ -5,6 +5,7 @@ training tensorflow based models on solar data sets.
 
 This repo is also the home of the reference implementation of the [_Dynamic Time Lag Regression_](https://openreview.net/forum?id=SkxybANtDB) framework and its application on the solar wind prediction task.
 
+For more information on the helios API refer to the [scaladoc](https://transcendent-ai-labs.github.io/api_docs/PlasmaML/recent/helios/).
 
 ## DTLR Solar wind prediction.
 

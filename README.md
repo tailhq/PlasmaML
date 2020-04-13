@@ -84,3 +84,13 @@ After building, access the PlasmaML shell like
 ```
 ./target/universal/stage/bin/plasmaml
 ```
+
+For more information on PlasmaML and its modules, refer to the scala docs below.
+
+1. [omni](https://transcendent-ai-labs.github.io/api_docs/PlasmaML/recent/omni/io/github/mandar2812/PlasmaML/omni/index.html): Forecasting models for geomagnetic indices.
+
+2. [mag-core](https://transcendent-ai-labs.github.io/api_docs/PlasmaML/recent/mag-core/io/github/mandar2812/PlasmaML/index.html): API for Bayesian inference of radiation belt parameters.
+
+3. [helios](https://transcendent-ai-labs.github.io/api_docs/PlasmaML/recent/helios/io/github/mandar2812/PlasmaML/index.html): Machine learning models for solar wind and heliosperic data.
+
+4. [vanAllen](https://transcendent-ai-labs.github.io/api_docs/PlasmaML/recent/vanAllen/io/github/mandar2812/PlasmaML/vanAllen/index.html): Processing of van Allen probe data.
